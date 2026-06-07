@@ -1,0 +1,66 @@
+# LEARNING: docker-compose defines multiple services as a unit. "docker-compose up -d"
+# starts all of them in the background. Each service gets its own container but they
+# share a private Docker network, so they can reach each other by service name
+# (e.g. the backend will connect to Postgres at host "postgres", not "localhost").
+
+services:
+
+  # ── Postgres ──────────────────────────────────────────────────────────────
+  # LEARNING: We pass credentials as environment variables read from a .env file
+  # (never hardcoded). The volume "postgres-data" persists the database files on
+  # your host machine so data survives "docker-compose down".
+  postgres:
+    image: postgres:16-alpine
+    container_name: chatnet-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "5432:5432"   # host:container — exposes Postgres to your machine
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ── Redis ─────────────────────────────────────────────────────────────────
+  # LEARNING: Redis is used for two separate jobs in ChatNET:
+  # (1) SignalR backplane — fans out hub messages across multiple server instances.
+  # (2) Presence keys — TTL-based keys that expire automatically when a user
+  #     stops sending heartbeats, answering "is this user online right now?"
+  redis:
+    image: redis:7-alpine
+    container_name: chatnet-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ── Jaeger (distributed tracing UI) ───────────────────────────────────────
+  # LEARNING: Jaeger visualises OpenTelemetry traces — every incoming HTTP request
+  # becomes a "trace" made of nested "spans" (one per DB query, MediatR dispatch,
+  # SignalR fanout). Visit http://localhost:16686 after starting to explore them.
+  # Phase 4 wires the backend to send traces here; we run it now so it's ready.
+  jaeger:
+    image: jaegertracing/all-in-one:1.57
+    container_name: chatnet-jaeger
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "16686:16686"   # Jaeger UI
+      - "4317:4317"     # OTLP gRPC  (backend sends traces here)
+      - "4318:4318"     # OTLP HTTP  (alternative ingest endpoint)
+
+# Named volumes — Docker manages where these live on disk.
+# Data persists across "docker-compose down" but is wiped by "docker-compose down -v".
+volumes:
+  postgres-data:
+  redis-data:

@@ -1,0 +1,35 @@
+# ── Secrets ──────────────────────────────────────────────────────────────────
+.env
+
+# ── .NET ─────────────────────────────────────────────────────────────────────
+bin/
+obj/
+*.user
+*.suo
+.vs/
+*.log
+*.tmp
+
+# dotnet user-secrets live outside the project dir — nothing to ignore here,
+# but never commit appsettings.Development.json if it contains real secrets.
+appsettings.*.json
+!appsettings.json
+!appsettings.example.json
+
+# ── Node / Frontend ───────────────────────────────────────────────────────────
+node_modules/
+dist/
+.next/
+.vite/
+
+# ── OS ───────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── IDE ───────────────────────────────────────────────────────────────────────
+.idea/
+*.swp
+
+# ── Others ─────────────────────────────────────────────────────────────────
+CLAUDE.md
+ARCHITECTURE.md
