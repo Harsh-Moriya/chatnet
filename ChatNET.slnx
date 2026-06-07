@@ -1,0 +1,5 @@
+<Solution>
+  <Folder Name="/backend/">
+    <Project Path="backend/ChatNET.API/ChatNET.API.csproj" />
+  </Folder>
+</Solution>
