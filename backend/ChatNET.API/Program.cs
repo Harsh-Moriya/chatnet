@@ -1,22 +1,24 @@
+using ChatNET.API.Auth.Models;
+using ChatNET.API.Common.Persistence;
 using FluentValidation;
 using MediatR;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 using Scalar.AspNetCore;
 
-// LEARNING: WebApplication.CreateBuilder sets up the default ASP.NET Core host:
-// configuration (appsettings.json → environment variables → user-secrets in order),
-// the DI container, and Kestrel (the built-in web server). Everything between here
-// and builder.Build() is registering services — nothing runs yet.
+// WebApplication.CreateBuilder bootstraps the ASP.NET Core host. It loads configuration
+// from appsettings.json, then environment variables, then user-secrets (in that order,
+// each layer overriding the previous), sets up the DI container, and starts Kestrel.
 var builder = WebApplication.CreateBuilder(args);
 
-// ── OpenAPI (dev only) ────────────────────────────────────────────────────────
-// Generates an OpenAPI spec at /openapi/v1.json. Scalar serves a UI on top of it.
+// ##### OpenAPI #####
 builder.Services.AddOpenApi();
 
-// ── CORS ──────────────────────────────────────────────────────────────────────
-// LEARNING: AllowCredentials() is required for SignalR — the WebSocket upgrade
-// carries the auth token as a query string parameter. When credentials are enabled,
-// the origin must be explicit (AllowAnyOrigin() is forbidden by the browser spec).
-// Frontend URL comes from config so it never needs a code change between environments.
+// ##### CORS #####
+// AllowCredentials() is required for SignalR because the WebSocket upgrade passes the
+// auth token as a query parameter rather than a header. The browser spec forbids
+// AllowAnyOrigin() when credentials are enabled, so the origin must be an explicit value.
+// Reading it from config means no code change is needed when moving between environments.
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
@@ -29,79 +31,84 @@ builder.Services.AddCors(options =>
     });
 });
 
-// ── MediatR ───────────────────────────────────────────────────────────────────
-// LEARNING: MediatR scans this assembly and registers every IRequestHandler<TRequest>
-// automatically. Endpoints and Hub methods stay thin — they call _mediator.Send(command)
-// and MediatR routes to the correct handler. No giant service classes, no coupling
-// between features. Interview note: this is the Mediator pattern — decouples callers
-// from handlers so neither knows about the other.
+// ##### MediatR #####
+// Scans the assembly for every IRequestHandler<TRequest, TResponse> and registers them
+// in the DI container automatically. Endpoints and Hub methods stay thin: they call
+// _mediator.Send(command) and MediatR routes to the correct handler. Neither the caller
+// nor the handler knows the other exists, which is the Mediator pattern: it removes
+// direct coupling so features can change independently.
 builder.Services.AddMediatR(cfg =>
     cfg.RegisterServicesFromAssembly(typeof(Program).Assembly));
 
-// ── FluentValidation ─────────────────────────────────────────────────────────
-// Registers all AbstractValidator<T> classes found in this assembly.
-// A MediatR pipeline behaviour (wired in step 3) intercepts every command/query
-// before it reaches the handler and runs validation — invalid input never reaches
-// business logic.
+// ##### Validation #####
+// Registers all AbstractValidator<T> classes found in the assembly. A MediatR pipeline
+// behaviour (in Common/Behaviours) intercepts every command before the handler runs and
+// executes these validators, so business logic only ever receives valid input.
 builder.Services.AddValidatorsFromAssembly(typeof(Program).Assembly);
 
-// ── Authentication + Authorization ────────────────────────────────────────────
-// JWT bearer scheme configured in step 4 (Auth feature). Registered here so the
-// middleware pipeline order is correct from the start.
+// ##### Database #####
+builder.Services.AddDbContext<AppDbContext>(options =>
+    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+// ##### Identity #####
+// AddIdentityCore registers UserManager, RoleManager, and password hashing without
+// adding cookie authentication. This is the right choice for a JWT API — AddIdentity
+// (the alternative) would configure cookie auth that we don't use and can't easily disable.
+builder.Services.AddIdentityCore<AppUser>(options =>
+{
+    options.Password.RequiredLength = 8;
+    options.Password.RequireDigit = true;
+    options.Password.RequireLowercase = true;
+    options.Password.RequireUppercase = true;
+    options.Password.RequireNonAlphanumeric = false;
+    options.User.RequireUniqueEmail = true;
+})
+.AddRoles<IdentityRole<Guid>>()
+.AddEntityFrameworkStores<AppDbContext>()
+.AddDefaultTokenProviders();
+
+// ##### Auth #####
+// Authentication and authorization are registered here so the middleware pipeline order
+// below is correct. The JWT bearer scheme is wired in the Auth feature setup.
 builder.Services.AddAuthentication();
 builder.Services.AddAuthorization();
 
-// ── TODO: EF Core + Identity — wired in step 3 ───────────────────────────────
-// ── TODO: JwtBearer scheme — configured in step 4 ────────────────────────────
-// ── TODO: SignalR + Redis backplane — wired in Phase 2 ───────────────────────
+// ############################################################
 
-// ═════════════════════════════════════════════════════════════════════════════
 var app = builder.Build();
 
-// LEARNING: Middleware ORDER is a real architecture decision — each middleware wraps
-// every layer registered after it. The exception handler must be outermost (first)
-// so it catches errors from auth, routing, and handlers alike. Reversing auth and
-// routing silently breaks protected endpoints. Reversing CORS and auth causes
-// preflight failures. Order here is deliberate.
-// Interview note: this is the "chain of responsibility" pattern applied to HTTP.
+// Middleware order is a hard constraint, not a style choice. Each middleware wraps
+// everything registered after it, so:
+//   - The exception handler must be outermost to catch errors from every layer below.
+//   - CORS must precede auth so browser preflight OPTIONS requests are answered before
+//     the JWT middleware rejects them as unauthenticated.
+//   - Authentication must precede Authorization so HttpContext.User is populated before
+//     policy checks run against it.
+// This ordering is the chain-of-responsibility pattern applied to the HTTP pipeline.
+// Getting it wrong causes silent failures that are hard to debug.
 
-// Global exception handler — maps our exception hierarchy to ProblemDetails responses.
-// Replaced with a typed handler in step 4; this stub keeps the pipeline correct now.
 app.UseExceptionHandler("/error");
 app.Map("/error", () => Results.Problem("An unexpected error occurred."));
 
 if (app.Environment.IsDevelopment())
 {
-    // OpenAPI spec at /openapi/v1.json
     app.MapOpenApi();
-    // Scalar UI at /scalar/v1 — interactive API explorer replacing Swagger UI
+    // Scalar API explorer is available at /scalar/v1 in development
     app.MapScalarApiReference();
 }
 
 app.UseHttpsRedirection();
-
-// CORS before auth — OPTIONS preflight requests must be handled before the JWT
-// middleware rejects them as unauthenticated.
 app.UseCors("AllowFrontend");
-
-// LEARNING: UseAuthentication reads the JWT from the Authorization header and
-// populates HttpContext.User with the claims inside the token.
-// UseAuthorization then checks those claims against [Authorize] attributes/policies.
-// Authentication MUST come before Authorization — reversing them silently breaks
-// all protected endpoints with no helpful error message.
 app.UseAuthentication();
 app.UseAuthorization();
 
-// ── Endpoints ─────────────────────────────────────────────────────────────────
+// ##### Endpoints #####
 app.MapGet("/health", () => Results.Ok(new { status = "healthy" }))
    .WithTags("Health")
    .AllowAnonymous();
 
-// Auth endpoints added in step 4: POST /api/auth/register, POST /api/auth/login
-
 app.Run();
 
-// LEARNING: This partial class makes Program visible to WebApplicationFactory<Program>
-// in integration tests. Without it the test project cannot reference the app's startup
-// configuration and has to duplicate it — the partial class avoids that entirely.
+// Makes Program visible to WebApplicationFactory<Program> in integration tests without
+// requiring a separate test-specific entry point class.
 public partial class Program { }

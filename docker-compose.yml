@@ -1,14 +1,15 @@
-# LEARNING: docker-compose defines multiple services as a unit. "docker-compose up -d"
-# starts all of them in the background. Each service gets its own container but they
-# share a private Docker network, so they can reach each other by service name
-# (e.g. the backend will connect to Postgres at host "postgres", not "localhost").
+# docker-compose defines every infrastructure service as a unit.
+# "docker-compose up -d" starts them all in the background. Each service runs in its
+# own container but shares a private Docker network, so services can reach each other
+# by service name (the backend connects to Postgres at host "postgres", not "localhost").
 
 services:
 
-  # ── Postgres ──────────────────────────────────────────────────────────────
-  # LEARNING: We pass credentials as environment variables read from a .env file
-  # (never hardcoded). The volume "postgres-data" persists the database files on
-  # your host machine so data survives "docker-compose down".
+  # ##### Postgres #####
+  # Credentials come from a .env file so they are never hardcoded in source control.
+  # The named volume persists database files across restarts; without it every
+  # "docker-compose down" would wipe all data. The healthcheck lets dependent
+  # services wait until Postgres is actually accepting connections before starting.
   postgres:
     image: postgres:16-alpine
     container_name: chatnet-postgres
@@ -17,7 +18,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
-      - "5432:5432"   # host:container — exposes Postgres to your machine
+      - "5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
@@ -26,11 +27,12 @@ services:
       timeout: 5s
       retries: 5
 
-  # ── Redis ─────────────────────────────────────────────────────────────────
-  # LEARNING: Redis is used for two separate jobs in ChatNET:
-  # (1) SignalR backplane — fans out hub messages across multiple server instances.
-  # (2) Presence keys — TTL-based keys that expire automatically when a user
-  #     stops sending heartbeats, answering "is this user online right now?"
+  # ##### Redis #####
+  # Handles two separate concerns. First: the SignalR backplane, which fans out hub
+  # messages to all connected server instances so every client receives events
+  # regardless of which server they are connected to. Second: presence tracking,
+  # using TTL keys that expire automatically when a user stops sending heartbeats,
+  # so no cleanup job is needed to mark users as offline.
   redis:
     image: redis:7-alpine
     container_name: chatnet-redis
@@ -44,22 +46,34 @@ services:
       timeout: 5s
       retries: 5
 
-  # ── Jaeger (distributed tracing UI) ───────────────────────────────────────
-  # LEARNING: Jaeger visualises OpenTelemetry traces — every incoming HTTP request
-  # becomes a "trace" made of nested "spans" (one per DB query, MediatR dispatch,
-  # SignalR fanout). Visit http://localhost:16686 after starting to explore them.
-  # Phase 4 wires the backend to send traces here; we run it now so it's ready.
+  # ##### Jaeger #####
+  # Receives OpenTelemetry traces from the backend and provides a UI at
+  # http://localhost:16686. Each HTTP request becomes a trace made of spans: one
+  # per database query, MediatR dispatch, and SignalR fanout, so you can see exactly
+  # where latency comes from on any given request.
   jaeger:
     image: jaegertracing/all-in-one:1.57
     container_name: chatnet-jaeger
     environment:
       COLLECTOR_OTLP_ENABLED: "true"
     ports:
-      - "16686:16686"   # Jaeger UI
-      - "4317:4317"     # OTLP gRPC  (backend sends traces here)
-      - "4318:4318"     # OTLP HTTP  (alternative ingest endpoint)
+      - "16686:16686"   # UI
+      - "4317:4317"     # OTLP gRPC
+      - "4318:4318"     # OTLP HTTP
 
-# Named volumes — Docker manages where these live on disk.
+  # ##### Adminer #####
+  # Lightweight browser-based database UI. Open http://localhost:8080 then:
+  # System: PostgreSQL, Server: postgres, Username/Password/Database from your .env file.
+  adminer:
+    image: adminer:latest
+    container_name: chatnet-adminer
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+# Docker manages where named volumes live on disk.
 # Data persists across "docker-compose down" but is wiped by "docker-compose down -v".
 volumes:
   postgres-data:
