@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { useAuthStore } from '../features/auth/store/authStore'
 
 // Single axios instance used by every TanStack Query hook in the app.
 // baseURL defaults to /api which Vite proxies to the backend in development.
@@ -8,10 +9,10 @@ export const api = axios.create({
 })
 
 // Attach the stored JWT to every outgoing request automatically.
-// This interceptor runs before the request leaves the browser, so every hook
-// that calls api.post/get/etc gets auth headers without any per-call setup.
+// getState() reads the Zustand store outside of React — safe in module scope
+// because Zustand stores are plain objects, not hooks.
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token')
+  const token = useAuthStore.getState().token
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
   }
