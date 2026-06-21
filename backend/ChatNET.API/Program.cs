@@ -1,9 +1,17 @@
+using System.Text;
+using ChatNET.API.Auth.Login;
 using ChatNET.API.Auth.Models;
+using ChatNET.API.Auth.Register;
+using ChatNET.API.Auth.Services;
+using ChatNET.API.Common.Behaviours;
+using ChatNET.API.Common.Middleware;
 using ChatNET.API.Common.Persistence;
 using FluentValidation;
 using MediatR;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
 
 // WebApplication.CreateBuilder bootstraps the ASP.NET Core host. It loads configuration
@@ -33,17 +41,20 @@ builder.Services.AddCors(options =>
 
 // ##### MediatR #####
 // Scans the assembly for every IRequestHandler<TRequest, TResponse> and registers them
-// in the DI container automatically. Endpoints and Hub methods stay thin: they call
-// _mediator.Send(command) and MediatR routes to the correct handler. Neither the caller
-// nor the handler knows the other exists, which is the Mediator pattern: it removes
-// direct coupling so features can change independently.
+// automatically. Endpoints and Hub methods stay thin: they call _mediator.Send(command)
+// and MediatR routes to the correct handler. Neither caller nor handler knows about the
+// other, which is the Mediator pattern: it removes direct coupling between features.
+//
+// AddOpenBehavior registers ValidationBehaviour for every request type in one line.
+// Behaviours run in registration order — validation runs first before any other concern.
 builder.Services.AddMediatR(cfg =>
-    cfg.RegisterServicesFromAssembly(typeof(Program).Assembly));
+{
+    cfg.RegisterServicesFromAssembly(typeof(Program).Assembly);
+    cfg.AddOpenBehavior(typeof(ValidationBehaviour<,>));
+});
 
 // ##### Validation #####
-// Registers all AbstractValidator<T> classes found in the assembly. A MediatR pipeline
-// behaviour (in Common/Behaviours) intercepts every command before the handler runs and
-// executes these validators, so business logic only ever receives valid input.
+// Registers all AbstractValidator<T> classes found in the assembly.
 builder.Services.AddValidatorsFromAssembly(typeof(Program).Assembly);
 
 // ##### Database #####
@@ -68,10 +79,38 @@ builder.Services.AddIdentityCore<AppUser>(options =>
 .AddDefaultTokenProviders();
 
 // ##### Auth #####
-// Authentication and authorization are registered here so the middleware pipeline order
-// below is correct. The JWT bearer scheme is wired in the Auth feature setup.
-builder.Services.AddAuthentication();
+// JwtBearer middleware validates the token on every request: it decodes the JWT,
+// verifies the signature against our signing key, checks expiry, issuer, and audience,
+// then populates HttpContext.User with the claims inside the token. Endpoints marked
+// [Authorize] are gated on that user being populated correctly.
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+})
+.AddJwtBearer(options =>
+{
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuer = true,
+        ValidateAudience = true,
+        ValidateLifetime = true,
+        ValidateIssuerSigningKey = true,
+        ValidIssuer = builder.Configuration["Jwt:Issuer"],
+        ValidAudience = builder.Configuration["Jwt:Audience"],
+        IssuerSigningKey = new SymmetricSecurityKey(
+            Encoding.UTF8.GetBytes(builder.Configuration["Jwt:SigningKey"]!))
+    };
+});
+
 builder.Services.AddAuthorization();
+
+// ##### Services #####
+builder.Services.AddScoped<JwtTokenService>();
+
+// ##### Exception handling #####
+builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+builder.Services.AddProblemDetails();
 
 // ############################################################
 
@@ -85,15 +124,12 @@ var app = builder.Build();
 //   - Authentication must precede Authorization so HttpContext.User is populated before
 //     policy checks run against it.
 // This ordering is the chain-of-responsibility pattern applied to the HTTP pipeline.
-// Getting it wrong causes silent failures that are hard to debug.
 
-app.UseExceptionHandler("/error");
-app.Map("/error", () => Results.Problem("An unexpected error occurred."));
+app.UseExceptionHandler();
 
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
-    // Scalar API explorer is available at /scalar/v1 in development
     app.MapScalarApiReference();
 }
 
@@ -106,6 +142,22 @@ app.UseAuthorization();
 app.MapGet("/health", () => Results.Ok(new { status = "healthy" }))
    .WithTags("Health")
    .AllowAnonymous();
+
+var auth = app.MapGroup("/api/auth").WithTags("Auth");
+
+auth.MapPost("/register", async (RegisterCommand command, IMediator mediator) =>
+{
+    var result = await mediator.Send(command);
+    return Results.Ok(result);
+})
+.AllowAnonymous();
+
+auth.MapPost("/login", async (LoginCommand command, IMediator mediator) =>
+{
+    var result = await mediator.Send(command);
+    return Results.Ok(result);
+})
+.AllowAnonymous();
 
 app.Run();
 
