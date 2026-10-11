@@ -29,6 +29,8 @@ Under active development.
 - **One group per conversation.** A connection joins the group of every conversation its user belongs to, so the sidebar and the open chat both update live. Redis fans events out across server instances.
 - **Predictable errors.** FluentValidation runs in the MediatR pipeline, domain failures use a small exception hierarchy, and every API error, including bare 401 and 404 responses, is an RFC 7807 `ProblemDetails` response.
 - **Hardened login.** A per-address rate limit and a per-account lockout (five failures, 15 minutes) slow password guessing, and the JWT settings are validated when the app starts so a weak or missing signing key stops it immediately.
+- **Safe edges.** Every response carries browser security headers and API responses are not cacheable, HSTS is sent in production, request bodies are capped at 1 MB, tokens stop working when they expire (including on open SignalR connections), and registration is race-safe: twelve simultaneous sign-ups with one email create one account.
+- **Honest health check.** `/health` asks Postgres and Redis and answers 503 when either is down, without revealing why.
 - **Query cost is tested, not assumed.** The conversation list and message history have tests that ask Postgres how many rows the real query read, so a change that makes either scan far more data than it returns fails the build.
 - **Duplicate-proof direct chats.** A sorted `DirectKey` with a unique partial index in Postgres guarantees at most one conversation per pair of users.
 - **A browser store that merges, not overwrites.** Messages reach the screen from REST responses and from SignalR pushes, which race and sometimes deliver the same message twice. Both feed one store through actions that merge by id, so order does not matter. Your own message is shown at once as "sending" and confirmed by whichever arrives first, matched by an id the browser invents.
@@ -78,7 +80,7 @@ dotnet ef database update   # creates the schema
 dotnet run                  # http://localhost:5045
 ```
 
-In Development the OpenAPI document is served at `/openapi/v1.json`.
+In Development the OpenAPI document is served at `/openapi/v1.json` and the Scalar API reference at `/scalar/v1`; every endpoint documents its success body and its errors.
 
 ### 3. Run the frontend
 
