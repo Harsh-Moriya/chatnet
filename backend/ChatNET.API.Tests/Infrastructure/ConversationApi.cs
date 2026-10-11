@@ -1,5 +1,6 @@
 using System.Net.Http.Json;
 using System.Text.Json;
+using ChatNET.API.Messaging.Models;
 using Microsoft.EntityFrameworkCore;
 
 namespace ChatNET.API.Tests.Infrastructure;
@@ -48,4 +49,24 @@ public static class ConversationApi
         factory.ExecuteDbAsync(db => db.Users
             .Where(u => u.Id == user.Id)
             .ExecuteUpdateAsync(s => s.SetProperty(u => u.IsDeactivated, true)));
+
+    // There is no endpoint to send a message yet, so tests insert them directly. This also gives
+    // full control of timestamps and of the deleted state.
+    public static Task AddMessageAsync(
+        this ChatApiFactory factory, Guid conversationId, Guid senderId, string content,
+        DateTime createdAt, bool deleted = false) =>
+        factory.ExecuteDbAsync(async db =>
+        {
+            db.Messages.Add(new Message
+            {
+                ConversationId = conversationId,
+                SenderId = senderId,
+                Content = content,
+                CreatedAt = createdAt,
+                IsDeleted = deleted,
+                DeletedAt = deleted ? createdAt : null,
+                DeletedById = deleted ? senderId : null,
+            });
+            await db.SaveChangesAsync();
+        });
 }

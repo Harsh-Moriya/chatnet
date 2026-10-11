@@ -1,6 +1,5 @@
 using System.Text.Json;
 using ChatNET.API.Common.Persistence;
-using ChatNET.API.Messaging.Models;
 using ChatNET.API.Tests.Infrastructure;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
@@ -74,9 +73,9 @@ public class ListConversationsTests
         var withCarol = (await client.CreateDirectAsync(carol.Id)).IdOf();
 
         var start = DateTime.UtcNow.AddMinutes(-10);
-        await AddMessageAsync(withBob, alice.Id, "bob: first", start);
-        await AddMessageAsync(withBob, bob.Id, "bob: latest", start.AddMinutes(2));
-        await AddMessageAsync(withCarol, carol.Id, "carol: only", start.AddMinutes(1));
+        await _factory.AddMessageAsync(withBob, alice.Id, "bob: first", start);
+        await _factory.AddMessageAsync(withBob, bob.Id, "bob: latest", start.AddMinutes(2));
+        await _factory.AddMessageAsync(withCarol, carol.Id, "carol: only", start.AddMinutes(1));
 
         var list = await client.ListConversationsAsync();
 
@@ -96,7 +95,7 @@ public class ListConversationsTests
         var bob = await _factory.RegisterUserAsync("bob");
         using var client = _factory.CreateClientFor(alice);
         var id = (await client.CreateDirectAsync(bob.Id)).IdOf();
-        await AddMessageAsync(id, bob.Id, new string('x', 250), DateTime.UtcNow);
+        await _factory.AddMessageAsync(id, bob.Id, new string('x', 250), DateTime.UtcNow);
 
         var preview = (await client.ListConversationsAsync()).Single().GetProperty("lastMessage");
 
@@ -110,7 +109,7 @@ public class ListConversationsTests
         var bob = await _factory.RegisterUserAsync("bob");
         using var client = _factory.CreateClientFor(alice);
         var id = (await client.CreateDirectAsync(bob.Id)).IdOf();
-        await AddMessageAsync(id, bob.Id, "secret that was deleted", DateTime.UtcNow, deleted: true);
+        await _factory.AddMessageAsync(id, bob.Id, "secret that was deleted", DateTime.UtcNow, deleted: true);
 
         var preview = (await client.ListConversationsAsync()).Single().GetProperty("lastMessage");
 
@@ -169,9 +168,9 @@ public class ListConversationsTests
             {
                 var friend = await _factory.RegisterUserAsync("friend");
                 var direct = (await setup.CreateDirectAsync(friend.Id)).IdOf();
-                await AddMessageAsync(direct, friend.Id, $"hello {i}", DateTime.UtcNow);
+                await _factory.AddMessageAsync(direct, friend.Id, $"hello {i}", DateTime.UtcNow);
                 var group = (await setup.CreateGroupAsync($"Group {i}", friend.Id)).IdOf();
-                await AddMessageAsync(group, friend.Id, $"group {i}", DateTime.UtcNow);
+                await _factory.AddMessageAsync(group, friend.Id, $"group {i}", DateTime.UtcNow);
             }
         }
 
@@ -197,20 +196,4 @@ public class ListConversationsTests
         _factory.ExecuteDbAsync(db => db.Conversations
             .Where(c => c.Id == conversationId)
             .ExecuteUpdateAsync(s => s.SetProperty(c => c.UpdatedAt, updatedAt)));
-
-    private Task AddMessageAsync(Guid conversationId, Guid senderId, string content, DateTime createdAt, bool deleted = false) =>
-        _factory.ExecuteDbAsync(async db =>
-        {
-            db.Messages.Add(new Message
-            {
-                ConversationId = conversationId,
-                SenderId = senderId,
-                Content = content,
-                CreatedAt = createdAt,
-                IsDeleted = deleted,
-                DeletedAt = deleted ? createdAt : null,
-                DeletedById = deleted ? senderId : null,
-            });
-            await db.SaveChangesAsync();
-        });
 }
