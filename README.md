@@ -14,8 +14,8 @@ Under active development.
 |---|---|
 | Registration and login (ASP.NET Identity, JWT) | Implemented |
 | Conversation model: find-or-create direct chats, groups, user search | Implemented |
-| SignalR hub endpoint with Redis backplane | Wired; hub methods in progress |
-| Sending and receiving messages, typing indicators | In progress |
+| SignalR hub with Redis backplane: live groups per conversation, typing indicators, new-conversation push | Implemented |
+| Sending and receiving messages | Planned |
 | Message history with cursor pagination | Planned |
 | Online presence, read receipts, offline delivery | Planned |
 | Refresh tokens, notifications, file uploads | Planned |

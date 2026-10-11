@@ -182,6 +182,7 @@ builder.Services.AddSignalR()
 // ##### Services #####
 builder.Services.AddScoped<JwtTokenService>();
 builder.Services.AddScoped<IConversationRepository, ConversationRepository>();
+builder.Services.AddScoped<ConversationNotifier>();
 
 // ##### Rate limiting #####
 // Login and registration are limited per client address to slow down password guessing and
