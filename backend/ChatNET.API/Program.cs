@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json.Serialization;
 using ChatNET.API.Auth.Login;
 using ChatNET.API.Auth.Models;
+using ChatNET.API.Auth.RateLimiting;
 using ChatNET.API.Auth.Register;
 using ChatNET.API.Auth.Services;
 using ChatNET.API.Common.Behaviours;
@@ -15,6 +16,7 @@ using FluentValidation;
 using MediatR;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
@@ -170,6 +172,17 @@ builder.Services.AddSignalR()
 builder.Services.AddScoped<JwtTokenService>();
 builder.Services.AddScoped<IConversationRepository, ConversationRepository>();
 
+// ##### Rate limiting #####
+// Login and registration are limited per client address to slow down password guessing and
+// mass account creation. The limits come from configuration (RateLimiting:Auth) and are
+// validated at startup; the policy itself is defined in AuthRateLimiterSetup.
+builder.Services.AddOptions<AuthRateLimitOptions>()
+    .BindConfiguration(AuthRateLimitOptions.SectionName)
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+builder.Services.AddRateLimiter(_ => { });
+builder.Services.AddSingleton<IConfigureOptions<RateLimiterOptions>, AuthRateLimiterSetup>();
+
 // ##### Exception handling #####
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
@@ -208,6 +221,10 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 app.UseCors("AllowFrontend");
+
+// After CORS so browser preflight requests are answered without being counted, and before
+// authentication so over-limit requests are rejected before any password work happens.
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -216,7 +233,9 @@ app.MapGet("/health", () => Results.Ok(new { status = "healthy" }))
    .WithTags("Health")
    .AllowAnonymous();
 
-var auth = app.MapGroup("/api/auth").WithTags("Auth");
+var auth = app.MapGroup("/api/auth")
+    .WithTags("Auth")
+    .RequireRateLimiting(AuthRateLimitOptions.PolicyName);
 
 auth.MapPost("/register", async (RegisterCommand command, IMediator mediator) =>
 {
