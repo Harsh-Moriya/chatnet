@@ -1,0 +1,80 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Read-only token: CI only needs to check out code.
+permissions:
+  contents: read
+
+# A newer push to the same branch or pull request makes the older run pointless.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ##### Backend #####
+  # The integration tests start Postgres and Redis in Docker through Testcontainers.
+  # GitHub's Ubuntu runners ship with Docker, so no service containers are declared here.
+  backend:
+    name: Backend (build, test, package check)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test --configuration Release --no-build
+
+      # Fails the job when any direct or transitive NuGet package has a known vulnerability.
+      - name: Check for vulnerable packages
+        run: |
+          dotnet list package --vulnerable --include-transitive 2>&1 | tee vulnerable.txt
+          if grep -q "has the following vulnerable packages" vulnerable.txt; then
+            echo "Vulnerable packages found."
+            exit 1
+          fi
+
+  # ##### Frontend #####
+  frontend:
+    name: Frontend (lint, build, audit)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # npm ci installs exactly what the lockfile says and fails if it is out of sync.
+      - name: Install
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      # Type-checks the whole project, then bundles.
+      - name: Build
+        run: npm run build
+
+      # Only runtime dependencies: they ship to users. High severity and above fails the job.
+      - name: Audit dependencies
+        run: npm audit --omit=dev --audit-level=high
