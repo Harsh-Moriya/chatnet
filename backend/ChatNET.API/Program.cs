@@ -218,20 +218,34 @@ builder.Services.AddProblemDetails();
 // Production return the same 400 ProblemDetails.
 builder.Services.Configure<RouteHandlerOptions>(options => options.ThrowOnBadRequest = true);
 
-// ############################################################
+// ##### Request limits and HSTS #####
+// Kestrel allows 30 MB request bodies by default. The largest legitimate request here is a few
+// kilobytes (a message is at most 4,000 characters), so a larger body is refused before it is read.
+builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = 1_048_576);
+
+// Tells browsers to use https for a year once they have seen one https response. Added only
+// outside development (see UseHsts below).
+builder.Services.AddHsts(options => options.MaxAge = TimeSpan.FromDays(365));
 
 var app = builder.Build();
 
 // Middleware order is a hard constraint, not a style choice. Each middleware wraps
 // everything registered after it, so:
-//   - The exception handler must be outermost to catch errors from every layer below.
+//   - The security headers go on first, so they are on every response, and the exception handler
+//     comes next so it catches errors from every layer below.
 //   - CORS must precede auth so browser preflight OPTIONS requests are answered before
 //     the JWT middleware rejects them as unauthenticated.
 //   - Authentication must precede Authorization so HttpContext.User is populated before
 //     policy checks run against it.
 // This ordering is the chain-of-responsibility pattern applied to the HTTP pipeline.
 
+app.UseMiddleware<SecurityHeadersMiddleware>();
 app.UseExceptionHandler();
+
+// HSTS is skipped in development: a browser that remembered it for localhost would refuse every
+// other local project that does not use https. The middleware also does nothing over plain http.
+if (!app.Environment.IsDevelopment())
+    app.UseHsts();
 
 // Gives a ProblemDetails body to responses that only set a status code and nothing else:
 // 401 from authentication, 404 for an unknown route, 405, 415. It leaves responses that
