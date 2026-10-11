@@ -85,6 +85,14 @@ Vite proxies `/api` and `/hubs` to the backend, so the browser only ever talks t
 
 To try the app as two users at once, open `http://localhost:5173` for one and `http://127.0.0.1:5173` for the other; browser storage is separate per origin.
 
+## Tests
+
+Backend tests run the real API in-process against a real Postgres and a real Redis, each started in a throwaway Docker container, so Docker must be running. They never touch the development database and need no secrets or configuration.
+
+```bash
+dotnet test        # from the repository root
+```
+
 ## Project layout
 
 ```
@@ -94,6 +102,8 @@ backend/ChatNET.API/
   Conversations/   direct and group conversations, membership
   Messaging/       messages and the SignalR hub
   Common/          shared behaviours, exceptions, persistence
+backend/ChatNET.API.Tests/
+  Infrastructure/  test host (WebApplicationFactory + Testcontainers), helpers
 frontend/src/
   features/        auth, chat (one folder per feature)
   components/ui/   shared UI primitives

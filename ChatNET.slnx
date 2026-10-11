@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/backend/">
+    <Project Path="backend/ChatNET.API.Tests/ChatNET.API.Tests.csproj" />
     <Project Path="backend/ChatNET.API/ChatNET.API.csproj" />
   </Folder>
 </Solution>
