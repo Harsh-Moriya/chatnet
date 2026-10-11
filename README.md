@@ -1,5 +1,7 @@
 # ChatNET
 
+[![CI](https://github.com/Harsh-Moriya/chatnet/actions/workflows/ci.yml/badge.svg)](https://github.com/Harsh-Moriya/chatnet/actions/workflows/ci.yml)
+
 A real-time, multi-user chat application. **ASP.NET Core (.NET 10)** and **SignalR** on the backend, **React + TypeScript** on the frontend, **PostgreSQL** for storage and **Redis** for the SignalR backplane.
 
 Two kinds of conversation share one model: **direct** (1:1) and **group** (many members).
@@ -92,6 +94,8 @@ Backend tests run the real API in-process against a real Postgres and a real Red
 ```bash
 dotnet test        # from the repository root
 ```
+
+GitHub Actions runs the same tests on every push and pull request, along with the frontend lint, build and a dependency vulnerability check for both the backend and the frontend.
 
 ## Project layout
 
