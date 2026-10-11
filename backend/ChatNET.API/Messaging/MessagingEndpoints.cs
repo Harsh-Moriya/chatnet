@@ -1,4 +1,5 @@
 using ChatNET.API.Common.Auth;
+using ChatNET.API.Messaging.GetMessageHistory;
 using ChatNET.API.Messaging.SendMessage;
 using MediatR;
 
@@ -23,6 +24,12 @@ public static class MessagingEndpoints
                 conversationId, http.User.GetUserId(), body.Content, body.ClientMessageId));
 
             return Results.Json(result, statusCode: StatusCodes.Status201Created);
+        });
+
+        messages.MapGet("/", async (Guid conversationId, HttpContext http, IMediator mediator) =>
+        {
+            var result = await mediator.Send(new GetMessageHistoryQuery(conversationId, http.User.GetUserId()));
+            return Results.Ok(result);
         });
 
         return app;

@@ -61,6 +61,9 @@ public sealed class BarrierConversationRepository : IConversationRepository
     public Task<bool> IsActiveMemberAsync(Guid conversationId, Guid userId, CancellationToken cancellationToken) =>
         _inner.IsActiveMemberAsync(conversationId, userId, cancellationToken);
 
+    public Task<DateTime?> GetActiveMemberJoinedAtAsync(Guid conversationId, Guid userId, CancellationToken cancellationToken) =>
+        _inner.GetActiveMemberJoinedAtAsync(conversationId, userId, cancellationToken);
+
     public Task<List<Guid>> GetActiveMemberIdsAsync(Guid conversationId, CancellationToken cancellationToken) =>
         _inner.GetActiveMemberIdsAsync(conversationId, cancellationToken);
 

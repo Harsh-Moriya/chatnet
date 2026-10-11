@@ -72,6 +72,12 @@ public class ConversationRepository : IConversationRepository
             m => m.ConversationId == conversationId && m.UserId == userId && m.LeftAt == null,
             cancellationToken);
 
+    public Task<DateTime?> GetActiveMemberJoinedAtAsync(Guid conversationId, Guid userId, CancellationToken cancellationToken)
+        => _db.ConversationMembers
+            .Where(m => m.ConversationId == conversationId && m.UserId == userId && m.LeftAt == null)
+            .Select(m => (DateTime?)m.JoinedAt)
+            .FirstOrDefaultAsync(cancellationToken);
+
     public Task<List<Guid>> GetActiveMemberIdsAsync(Guid conversationId, CancellationToken cancellationToken)
         => _db.ConversationMembers
             .Where(m => m.ConversationId == conversationId && m.LeftAt == null)

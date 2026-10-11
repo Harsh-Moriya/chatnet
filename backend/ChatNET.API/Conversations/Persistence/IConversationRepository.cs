@@ -19,6 +19,10 @@ public interface IConversationRepository
 
     Task<bool> IsActiveMemberAsync(Guid conversationId, Guid userId, CancellationToken cancellationToken);
 
+    // When the user joined, if they are an active member; null if they are not in the conversation
+    // or have left it. Doubles as the membership check for features that also need the join time.
+    Task<DateTime?> GetActiveMemberJoinedAtAsync(Guid conversationId, Guid userId, CancellationToken cancellationToken);
+
     Task<List<Guid>> GetActiveMemberIdsAsync(Guid conversationId, CancellationToken cancellationToken);
 
     Task<List<Guid>> GetActiveConversationIdsForUserAsync(Guid userId, CancellationToken cancellationToken);
