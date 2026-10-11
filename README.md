@@ -26,7 +26,8 @@ Under active development.
 - **Vertical slices.** Each feature owns its endpoint, MediatR handler, validator and data access in one folder, instead of spreading across technical layers.
 - **REST writes, SignalR pushes.** Clients send messages with a REST call; the server saves the message, then pushes it to the conversation's SignalR group. Loading data and confirming changes are REST; live updates are SignalR.
 - **One group per conversation.** A connection joins the group of every conversation its user belongs to, so the sidebar and the open chat both update live. Redis fans events out across server instances.
-- **Predictable errors.** FluentValidation runs in the MediatR pipeline, domain failures use a small exception hierarchy, and every API error is an RFC 7807 `ProblemDetails` response.
+- **Predictable errors.** FluentValidation runs in the MediatR pipeline, domain failures use a small exception hierarchy, and every API error, including bare 401 and 404 responses, is an RFC 7807 `ProblemDetails` response.
+- **Hardened login.** A per-address rate limit and a per-account lockout (five failures, 15 minutes) slow password guessing, and the JWT settings are validated when the app starts so a weak or missing signing key stops it immediately.
 - **Duplicate-proof direct chats.** A sorted `DirectKey` with a unique partial index in Postgres guarantees at most one conversation per pair of users.
 
 ## Tech stack
