@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json.Serialization;
 using ChatNET.API.Auth.Login;
 using ChatNET.API.Auth.Models;
 using ChatNET.API.Auth.Register;
@@ -23,6 +24,13 @@ using StackExchange.Redis;
 // from appsettings.json, then environment variables, then user-secrets (in that order,
 // each layer overriding the previous), sets up the DI container, and starts Kestrel.
 var builder = WebApplication.CreateBuilder(args);
+
+// ##### JSON #####
+// Enums are sent as names ("Direct") instead of numbers (0). A number means nothing to a
+// client and changes meaning if the enum is ever reordered. This setting covers REST
+// requests and responses; SignalR has its own, set below.
+builder.Services.ConfigureHttpJsonOptions(options =>
+    options.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 
 // ##### OpenAPI #####
 builder.Services.AddOpenApi();
@@ -135,6 +143,8 @@ builder.Services.AddAuthorization();
 // connections it holds. Without it, a message only reaches clients on the same instance
 // as the sender. The prefix keeps this app's channels apart from anything else in Redis.
 builder.Services.AddSignalR()
+    .AddJsonProtocol(options =>
+        options.PayloadSerializerOptions.Converters.Add(new JsonStringEnumConverter()))
     .AddStackExchangeRedis(
         builder.Configuration.GetConnectionString("Redis")
             ?? throw new InvalidOperationException("ConnectionStrings:Redis is not configured."),
@@ -147,6 +157,12 @@ builder.Services.AddScoped<IConversationRepository, ConversationRepository>();
 // ##### Exception handling #####
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
+
+// By default a request that cannot be bound (bad JSON, missing parameter) throws only in
+// Development; in Production the framework quietly writes an empty 400. Throwing in every
+// environment sends these requests through GlobalExceptionHandler, so Development and
+// Production return the same 400 ProblemDetails.
+builder.Services.Configure<RouteHandlerOptions>(options => options.ThrowOnBadRequest = true);
 
 // ############################################################
 

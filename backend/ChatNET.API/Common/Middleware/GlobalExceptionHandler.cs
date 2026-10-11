@@ -2,6 +2,7 @@ using ChatNET.API.Common.Exceptions;
 using FluentValidation;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.WebUtilities;
 
 namespace ChatNET.API.Common.Middleware;
 
@@ -32,6 +33,12 @@ public class GlobalExceptionHandler : IExceptionHandler
             ForbiddenException     => (StatusCodes.Status403Forbidden,         "Forbidden"),
             ConflictException      => (StatusCodes.Status409Conflict,          "Conflict"),
             ValidationException    => (StatusCodes.Status400BadRequest,        "Validation Failed"),
+
+            // Thrown by the framework when the request cannot be bound: bad JSON, an empty
+            // body, a value that is not a valid GUID, a missing required query parameter.
+            // It carries its own status code (400, or 413 for an oversized body).
+            BadHttpRequestException bad => (bad.StatusCode, ReasonPhrases.GetReasonPhrase(bad.StatusCode)),
+
             _                      => (StatusCodes.Status500InternalServerError, "An unexpected error occurred")
         };
 
@@ -49,9 +56,24 @@ public class GlobalExceptionHandler : IExceptionHandler
         {
             Status = status,
             Title = title,
-            Detail = status == StatusCodes.Status500InternalServerError
-                ? "An unexpected error occurred. Please try again later."
-                : exception.Message
+            Detail = exception switch
+            {
+                _ when status == StatusCodes.Status500InternalServerError
+                    => "An unexpected error occurred. Please try again later.",
+
+                // The framework's own message names the internal parameter and type that
+                // failed to bind, which a client has no use for; it is logged above instead.
+                BadHttpRequestException
+                    => "The request could not be read. Check the URL, query string and JSON body.",
+
+                // ValidationException.Message is a multi-line dump ("Validation failed: --
+                // Field: message Severity: Error"). The detail is shown to users as is, so it
+                // is rebuilt as plain sentences; the per-field breakdown stays in "errors".
+                ValidationException validation
+                    => string.Join(" ", validation.Errors.Select(e => e.ErrorMessage).Distinct()),
+
+                _ => exception.Message
+            }
         };
 
         // Validation errors include per-field detail so the frontend can highlight fields.
