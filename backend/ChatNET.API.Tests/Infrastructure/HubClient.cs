@@ -70,6 +70,15 @@ public sealed class HubClient : IAsyncDisposable
 
         var client = new HubClient(connection);
         await connection.StartAsync();
+
+        // StartAsync can return before the server has finished OnConnectedAsync (the handshake is
+        // answered first), so a test that pushed straight away could beat the group joins. The
+        // server handles a connection's invocations only after OnConnectedAsync completes, so one
+        // round trip is a reliable "ready" signal. Stopping typing in a conversation nobody is in
+        // is a harmless no-op, which makes it a suitable ping. A connection the server refuses
+        // never gets this far.
+        await connection.InvokeAsync("StopTyping", Guid.Empty);
+
         return client;
     }
 
