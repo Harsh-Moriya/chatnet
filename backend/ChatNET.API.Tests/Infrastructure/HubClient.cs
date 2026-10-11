@@ -92,6 +92,23 @@ public sealed class HubClient : IAsyncDisposable
 
     public Task StopAsync() => _connection.StopAsync();
 
+    // True if the server (or the network) closed the connection within the timeout. The test
+    // connection has no automatic reconnect, so a close is final and reported at once.
+    public async Task<bool> WaitForCloseAsync(TimeSpan timeout)
+    {
+        var closed = new TaskCompletionSource();
+        _connection.Closed += _ =>
+        {
+            closed.TrySetResult();
+            return Task.CompletedTask;
+        };
+
+        if (_connection.State == HubConnectionState.Disconnected)
+            return true;
+
+        return await Task.WhenAny(closed.Task, Task.Delay(timeout)) == closed.Task;
+    }
+
     public Task<JsonElement> WaitForMessageAsync(Guid conversationId, TimeSpan? timeout = null) =>
         WaitAsync(_messages, m => m.GetProperty("conversationId").GetGuid() == conversationId, timeout);
 

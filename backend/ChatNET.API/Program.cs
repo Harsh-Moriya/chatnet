@@ -142,6 +142,11 @@ builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationSc
             ValidateAudience = true,
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
+
+            // The default tolerance for clock differences is five minutes, which would keep an expired
+            // token working for five more. One server issues and checks these tokens, so only a small
+            // allowance is needed.
+            ClockSkew = TimeSpan.FromSeconds(30),
             ValidIssuer = jwt.Issuer,
             ValidAudience = jwt.Audience,
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwt.SigningKey))
@@ -275,7 +280,10 @@ app.MapUserEndpoints();
 app.MapConversationEndpoints();
 app.MapMessagingEndpoints();
 
-app.MapHub<ChatHub>("/hubs/chat");
+// A token is checked once, when the connection is made. Without this an open connection would keep
+// receiving messages long after its token expired; with it the server closes the connection at the
+// token's expiry and the client has to reconnect with a valid one.
+app.MapHub<ChatHub>("/hubs/chat", options => options.CloseOnAuthenticationExpiration = true);
 
 app.Run();
 
