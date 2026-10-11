@@ -57,8 +57,3 @@ export interface TypingUser {
 }
 
 export type ConnectionStatus = 'connecting' | 'connected' | 'reconnecting' | 'disconnected'
-
-export interface SendMessageRequest {
-  content: string
-  clientMessageId: string
-}
