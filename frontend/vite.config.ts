@@ -1,9 +1,15 @@
-import { defineConfig } from 'vite'
+import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  // Tests cover logic only (stores, event handlers, timers), so they run in plain Node with no
+  // DOM. Components are checked in a real browser.
+  test: {
+    environment: 'node',
+    include: ['src/**/*.test.ts'],
+  },
   server: {
     proxy: {
       // Forwards any /api request to the backend during development.
