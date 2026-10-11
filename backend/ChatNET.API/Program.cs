@@ -16,6 +16,7 @@ using MediatR;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
 using StackExchange.Redis;
@@ -96,44 +97,59 @@ builder.Services.AddIdentityCore<AppUser>(options =>
 // verifies the signature against our signing key, checks expiry, issuer, and audience,
 // then populates HttpContext.User with the claims inside the token. Endpoints marked
 // [Authorize] are gated on that user being populated correctly.
+//
+// The JWT settings are bound to JwtOptions and validated when the host starts, so a missing
+// or short signing key stops the app immediately with a clear message. Both token creation
+// (JwtTokenService) and validation below read the same object.
+builder.Services.AddOptions<JwtOptions>()
+    .BindConfiguration(JwtOptions.SectionName)
+    .ValidateOnStart();
+builder.Services.AddSingleton<IValidateOptions<JwtOptions>, JwtOptionsValidator>();
+
 builder.Services.AddAuthentication(options =>
 {
     options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
     options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
 })
-.AddJwtBearer(options =>
-{
-    options.TokenValidationParameters = new TokenValidationParameters
-    {
-        ValidateIssuer = true,
-        ValidateAudience = true,
-        ValidateLifetime = true,
-        ValidateIssuerSigningKey = true,
-        ValidIssuer = builder.Configuration["Jwt:Issuer"],
-        ValidAudience = builder.Configuration["Jwt:Audience"],
-        IssuerSigningKey = new SymmetricSecurityKey(
-            Encoding.UTF8.GetBytes(builder.Configuration["Jwt:SigningKey"]!))
-    };
+.AddJwtBearer();
 
-    // Browsers cannot set an Authorization header on a WebSocket upgrade request, so the
-    // SignalR client sends the token as ?access_token=. It is accepted only on the hub
-    // path, which keeps tokens out of query strings on every other endpoint.
-    options.Events = new JwtBearerEvents
+// Configured through the options system (instead of inside AddJwtBearer) so it can use the
+// validated JwtOptions once the service provider exists.
+builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
+    .Configure<IOptions<JwtOptions>>((bearer, jwtOptions) =>
     {
-        OnMessageReceived = context =>
+        var jwt = jwtOptions.Value;
+
+        bearer.TokenValidationParameters = new TokenValidationParameters
         {
-            var accessToken = context.Request.Query["access_token"];
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = jwt.Issuer,
+            ValidAudience = jwt.Audience,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwt.SigningKey))
+        };
 
-            if (!string.IsNullOrEmpty(accessToken)
-                && context.HttpContext.Request.Path.StartsWithSegments("/hubs/chat"))
+        // Browsers cannot set an Authorization header on a WebSocket upgrade request, so the
+        // SignalR client sends the token as ?access_token=. It is accepted only on the hub
+        // path, which keeps tokens out of query strings on every other endpoint.
+        bearer.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
             {
-                context.Token = accessToken;
-            }
+                var accessToken = context.Request.Query["access_token"];
 
-            return Task.CompletedTask;
-        }
-    };
-});
+                if (!string.IsNullOrEmpty(accessToken)
+                    && context.HttpContext.Request.Path.StartsWithSegments("/hubs/chat"))
+                {
+                    context.Token = accessToken;
+                }
+
+                return Task.CompletedTask;
+            }
+        };
+    });
 
 builder.Services.AddAuthorization();
 

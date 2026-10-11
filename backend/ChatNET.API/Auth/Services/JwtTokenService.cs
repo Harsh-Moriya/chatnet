@@ -2,17 +2,18 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using ChatNET.API.Auth.Models;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 
 namespace ChatNET.API.Auth.Services;
 
 public class JwtTokenService
 {
-    private readonly IConfiguration _config;
+    private readonly JwtOptions _options;
 
-    public JwtTokenService(IConfiguration config)
+    public JwtTokenService(IOptions<JwtOptions> options)
     {
-        _config = config;
+        _options = options.Value;
     }
 
     public string GenerateToken(AppUser user)
@@ -28,14 +29,13 @@ public class JwtTokenService
             new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
         };
 
-        var signingKey = new SymmetricSecurityKey(
-            Encoding.UTF8.GetBytes(_config["Jwt:SigningKey"]!));
+        var signingKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_options.SigningKey));
 
         var token = new JwtSecurityToken(
-            issuer: _config["Jwt:Issuer"],
-            audience: _config["Jwt:Audience"],
+            issuer: _options.Issuer,
+            audience: _options.Audience,
             claims: claims,
-            expires: DateTime.UtcNow.AddDays(_config.GetValue<int>("Jwt:ExpiryDays", 7)),
+            expires: DateTime.UtcNow.AddDays(_options.ExpiryDays),
             signingCredentials: new SigningCredentials(signingKey, SecurityAlgorithms.HmacSha256)
         );
 
