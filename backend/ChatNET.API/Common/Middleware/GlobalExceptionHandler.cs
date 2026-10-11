@@ -66,6 +66,12 @@ public class GlobalExceptionHandler : IExceptionHandler
                 BadHttpRequestException
                     => "The request could not be read. Check the URL, query string and JSON body.",
 
+                // ValidationException.Message is a multi-line dump ("Validation failed: --
+                // Field: message Severity: Error"). The detail is shown to users as is, so it
+                // is rebuilt as plain sentences; the per-field breakdown stays in "errors".
+                ValidationException validation
+                    => string.Join(" ", validation.Errors.Select(e => e.ErrorMessage).Distinct()),
+
                 _ => exception.Message
             }
         };
