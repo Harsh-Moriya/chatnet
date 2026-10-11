@@ -1,6 +1,7 @@
 using ChatNET.API.Common.Auth;
 using ChatNET.API.Conversations.CreateDirect;
 using ChatNET.API.Conversations.CreateGroup;
+using ChatNET.API.Conversations.GetConversation;
 using ChatNET.API.Conversations.GetMyConversations;
 using MediatR;
 
@@ -21,6 +22,12 @@ public static class ConversationEndpoints
         conversations.MapGet("/", async (HttpContext http, IMediator mediator) =>
         {
             var result = await mediator.Send(new GetMyConversationsQuery(http.User.GetUserId()));
+            return Results.Ok(result);
+        });
+
+        conversations.MapGet("/{conversationId:guid}", async (Guid conversationId, HttpContext http, IMediator mediator) =>
+        {
+            var result = await mediator.Send(new GetConversationQuery(conversationId, http.User.GetUserId()));
             return Results.Ok(result);
         });
 
