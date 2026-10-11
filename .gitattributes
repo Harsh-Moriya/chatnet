@@ -1,0 +1,14 @@
+# ##### Line endings #####
+# Text is stored as LF in the repository and checked out as LF on every platform,
+# regardless of each developer's core.autocrlf setting. This keeps diffs free of
+# line-ending noise and stops git warning about LF/CRLF on every add.
+* text=auto eol=lf
+
+# ##### Binary files #####
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
