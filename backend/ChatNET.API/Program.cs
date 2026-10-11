@@ -39,10 +39,14 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 builder.Services.AddOpenApi();
 
 // ##### CORS #####
-// AllowCredentials() is required for SignalR because the WebSocket upgrade passes the
-// auth token as a query parameter rather than a header. The browser spec forbids
-// AllowAnyOrigin() when credentials are enabled, so the origin must be an explicit value.
-// Reading it from config means no code change is needed when moving between environments.
+// The SignalR browser client sends its negotiate request with credentials by default
+// (withCredentials: true), and a browser only accepts a credentialed cross-origin response
+// when the server answers with Access-Control-Allow-Credentials: true. That is why
+// AllowCredentials() is set, even though authentication uses a bearer token and no cookie.
+// The browser spec forbids AllowAnyOrigin() together with credentials, so the origin must be
+// an explicit value. Reading it from config means no code change is needed when moving
+// between environments. In development the Vite proxy makes requests same-origin, so CORS is
+// only exercised when the frontend and API are served from different origins.
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
