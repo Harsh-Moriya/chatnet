@@ -179,6 +179,11 @@ var app = builder.Build();
 
 app.UseExceptionHandler();
 
+// Gives a ProblemDetails body to responses that only set a status code and nothing else:
+// 401 from authentication, 404 for an unknown route, 405, 415. It leaves responses that
+// already have a body (everything the exception handler writes) alone.
+app.UseStatusCodePages();
+
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
