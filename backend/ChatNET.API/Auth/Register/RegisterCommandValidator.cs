@@ -17,12 +17,16 @@ public class RegisterCommandValidator : AbstractValidator<RegisterCommand>
             .NotEmpty()
             .MaximumLength(100);
 
+        // 254 is the longest email address RFC 5321 allows. The password limit stops a single request
+        // from asking the server to hash an enormous value.
         RuleFor(x => x.Email)
             .NotEmpty()
-            .EmailAddress();
+            .EmailAddress()
+            .MaximumLength(254);
 
         RuleFor(x => x.Password)
             .NotEmpty()
-            .MinimumLength(8);
+            .MinimumLength(8)
+            .MaximumLength(128);
     }
 }
