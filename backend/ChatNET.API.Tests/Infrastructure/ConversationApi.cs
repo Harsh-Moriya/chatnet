@@ -50,8 +50,9 @@ public static class ConversationApi
             .Where(u => u.Id == user.Id)
             .ExecuteUpdateAsync(s => s.SetProperty(u => u.IsDeactivated, true)));
 
-    // There is no endpoint to send a message yet, so tests insert them directly. This also gives
-    // full control of timestamps and of the deleted state.
+    // Inserts a message straight into the database. The send endpoint always stamps the current
+    // time and cannot produce a deleted message, so tests that need control of the timestamp or
+    // of the deleted state, or that need thousands of messages, arrange them here.
     public static Task AddMessageAsync(
         this ChatApiFactory factory, Guid conversationId, Guid senderId, string content,
         DateTime createdAt, bool deleted = false) =>
@@ -67,6 +68,31 @@ public static class ConversationApi
                 DeletedAt = deleted ? createdAt : null,
                 DeletedById = deleted ? senderId : null,
             });
+            await db.SaveChangesAsync();
+        });
+
+    // History only shows messages sent since a member joined, and a conversation made by a test has
+    // "just now" as its join time. Tests that arrange messages with past timestamps first move the
+    // join time of every member back, so those messages count as sent after they joined.
+    public static Task BackdateJoinAsync(this ChatApiFactory factory, Guid conversationId) =>
+        factory.ExecuteDbAsync(db => db.ConversationMembers
+            .Where(m => m.ConversationId == conversationId)
+            .ExecuteUpdateAsync(s => s.SetProperty(m => m.JoinedAt, DateTime.UtcNow.AddDays(-1))));
+
+    // Inserts "count" messages with content "{prefix} 0", "{prefix} 1" and so on, one step apart
+    // starting at firstAt, in a single save.
+    public static Task AddMessagesAsync(
+        this ChatApiFactory factory, Guid conversationId, Guid senderId, int count,
+        DateTime firstAt, TimeSpan step, string prefix = "message") =>
+        factory.ExecuteDbAsync(async db =>
+        {
+            db.Messages.AddRange(Enumerable.Range(0, count).Select(i => new Message
+            {
+                ConversationId = conversationId,
+                SenderId = senderId,
+                Content = $"{prefix} {i}",
+                CreatedAt = firstAt + i * step,
+            }));
             await db.SaveChangesAsync();
         });
 }

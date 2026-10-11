@@ -10,7 +10,9 @@ using ChatNET.API.Common.Middleware;
 using ChatNET.API.Common.Persistence;
 using ChatNET.API.Conversations;
 using ChatNET.API.Conversations.Persistence;
+using ChatNET.API.Messaging;
 using ChatNET.API.Messaging.Hubs;
+using ChatNET.API.Messaging.Persistence;
 using ChatNET.API.Users;
 using FluentValidation;
 using MediatR;
@@ -182,6 +184,7 @@ builder.Services.AddSignalR()
 // ##### Services #####
 builder.Services.AddScoped<JwtTokenService>();
 builder.Services.AddScoped<IConversationRepository, ConversationRepository>();
+builder.Services.AddScoped<IMessageRepository, MessageRepository>();
 builder.Services.AddScoped<ConversationNotifier>();
 
 // ##### Rate limiting #####
@@ -265,6 +268,7 @@ auth.MapPost("/login", async (LoginCommand command, IMediator mediator) =>
 
 app.MapUserEndpoints();
 app.MapConversationEndpoints();
+app.MapMessagingEndpoints();
 
 app.MapHub<ChatHub>("/hubs/chat");
 

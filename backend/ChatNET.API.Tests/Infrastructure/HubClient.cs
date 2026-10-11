@@ -95,6 +95,10 @@ public sealed class HubClient : IAsyncDisposable
     public Task<JsonElement> WaitForMessageAsync(Guid conversationId, TimeSpan? timeout = null) =>
         WaitAsync(_messages, m => m.GetProperty("conversationId").GetGuid() == conversationId, timeout);
 
+    public Task<JsonElement> WaitForMessageAsync(Guid conversationId, Guid messageId, TimeSpan? timeout = null) =>
+        WaitAsync(_messages, m => m.GetProperty("conversationId").GetGuid() == conversationId
+                                  && m.GetProperty("id").GetGuid() == messageId, timeout);
+
     public Task<TypingEvent> WaitForTypingAsync(Func<TypingEvent, bool> match, TimeSpan? timeout = null) =>
         WaitAsync(_typing, match, timeout);
 
