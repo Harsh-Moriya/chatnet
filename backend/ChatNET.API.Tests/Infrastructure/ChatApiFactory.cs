@@ -55,11 +55,16 @@ public sealed class ChatApiFactory : WebApplicationFactory<Program>, IAsyncLifet
 
     // Registers a brand new user through the public API and returns their identity and token.
     // Every call uses unique credentials, so tests never collide and need no cleanup.
-    public async Task<TestUser> RegisterUserAsync(string prefix = "user")
+    public Task<TestUser> RegisterUserAsync(string prefix = "user")
     {
         var suffix = Guid.NewGuid().ToString("N")[..10];
-        var userName = $"{prefix}_{suffix}";
-        var displayName = $"{prefix} {suffix}";
+        return RegisterUserAsync($"{prefix}_{suffix}", $"{prefix} {suffix}");
+    }
+
+    // For tests that need to control the names, for example to search for them. The caller is
+    // responsible for keeping the user name unique.
+    public async Task<TestUser> RegisterUserAsync(string userName, string displayName)
+    {
         var email = $"{userName}@example.test";
 
         // Satisfies the Identity rules (length, upper, lower, digit) with random content.
@@ -82,6 +87,21 @@ public sealed class ChatApiFactory : WebApplicationFactory<Program>, IAsyncLifet
         var client = CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", user.Token);
         return client;
+    }
+
+    // Direct database access for arranging states the API cannot produce yet (a deactivated
+    // user, a member who left, existing messages) and for asserting on what was stored.
+    // Each call gets its own DbContext, as a request would.
+    public async Task ExecuteDbAsync(Func<AppDbContext, Task> action)
+    {
+        using var scope = Services.CreateScope();
+        await action(scope.ServiceProvider.GetRequiredService<AppDbContext>());
+    }
+
+    public async Task<T> QueryDbAsync<T>(Func<AppDbContext, Task<T>> query)
+    {
+        using var scope = Services.CreateScope();
+        return await query(scope.ServiceProvider.GetRequiredService<AppDbContext>());
     }
 
     // Fails fast if the running app is not using the test containers. A mistake here would mean
