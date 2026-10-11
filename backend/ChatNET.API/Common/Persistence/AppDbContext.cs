@@ -27,7 +27,7 @@ public class AppDbContext : IdentityDbContext<AppUser, IdentityRole<Guid>, Guid>
         base.OnModelCreating(builder);
 
         // Discovers and applies every IEntityTypeConfiguration<T> class in this assembly
-        // automatically. Adding a new configuration file is sufficient — no registration needed here.
+        // automatically. Adding a new configuration file is sufficient; no registration needed here.
         builder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
     }
 }

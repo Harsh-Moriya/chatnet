@@ -1,7 +1,7 @@
 namespace ChatNET.API.Common.Exceptions;
 
 /// <summary>
-/// Authentication failed — invalid credentials or missing token. Maps to HTTP 401.
+/// Authentication failed: invalid credentials or missing token. Maps to HTTP 401.
 /// </summary>
 public sealed class UnauthorizedException : ChatNETException
 {

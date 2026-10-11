@@ -1,7 +1,7 @@
-# ── Secrets ──────────────────────────────────────────────────────────────────
+# ##### Secrets #####
 .env
 
-# ── .NET ─────────────────────────────────────────────────────────────────────
+# ##### .NET #####
 bin/
 obj/
 *.user
@@ -10,28 +10,29 @@ obj/
 *.log
 *.tmp
 
-# dotnet user-secrets live outside the project dir — nothing to ignore here,
+# dotnet user-secrets live outside the project dir; nothing to ignore here,
 # but never commit appsettings.Development.json if it contains real secrets.
 appsettings.*.json
 !appsettings.json
 !appsettings.example.json
 
-# ── Node / Frontend ───────────────────────────────────────────────────────────
+# ##### Node / Frontend #####
 node_modules/
 dist/
 .next/
 .vite/
 
-# ── OS ───────────────────────────────────────────────────────────────────────
+# ##### OS #####
 .DS_Store
 Thumbs.db
 
-# ── IDE ───────────────────────────────────────────────────────────────────────
+# ##### IDE #####
 .idea/
 *.swp
 
-# ── Others ─────────────────────────────────────────────────────────────────
+# ##### Local working docs #####
 CLAUDE.md
 ARCHITECTURE.md
-.claude/
 SESSION_LOG.md
+docs/notes/
+.claude/

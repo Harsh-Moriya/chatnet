@@ -6,6 +6,10 @@ using ChatNET.API.Auth.Services;
 using ChatNET.API.Common.Behaviours;
 using ChatNET.API.Common.Middleware;
 using ChatNET.API.Common.Persistence;
+using ChatNET.API.Conversations;
+using ChatNET.API.Conversations.Persistence;
+using ChatNET.API.Messaging.Hubs;
+using ChatNET.API.Users;
 using FluentValidation;
 using MediatR;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -13,6 +17,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
+using StackExchange.Redis;
 
 // WebApplication.CreateBuilder bootstraps the ASP.NET Core host. It loads configuration
 // from appsettings.json, then environment variables, then user-secrets (in that order,
@@ -46,7 +51,7 @@ builder.Services.AddCors(options =>
 // other, which is the Mediator pattern: it removes direct coupling between features.
 //
 // AddOpenBehavior registers ValidationBehaviour for every request type in one line.
-// Behaviours run in registration order — validation runs first before any other concern.
+// Behaviours run in registration order; validation runs first before any other concern.
 builder.Services.AddMediatR(cfg =>
 {
     cfg.RegisterServicesFromAssembly(typeof(Program).Assembly);
@@ -63,7 +68,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 
 // ##### Identity #####
 // AddIdentityCore registers UserManager, RoleManager, and password hashing without
-// adding cookie authentication. This is the right choice for a JWT API — AddIdentity
+// adding cookie authentication. This is the right choice for a JWT API; AddIdentity
 // (the alternative) would configure cookie auth that we don't use and can't easily disable.
 builder.Services.AddIdentityCore<AppUser>(options =>
 {
@@ -101,12 +106,43 @@ builder.Services.AddAuthentication(options =>
         IssuerSigningKey = new SymmetricSecurityKey(
             Encoding.UTF8.GetBytes(builder.Configuration["Jwt:SigningKey"]!))
     };
+
+    // Browsers cannot set an Authorization header on a WebSocket upgrade request, so the
+    // SignalR client sends the token as ?access_token=. It is accepted only on the hub
+    // path, which keeps tokens out of query strings on every other endpoint.
+    options.Events = new JwtBearerEvents
+    {
+        OnMessageReceived = context =>
+        {
+            var accessToken = context.Request.Query["access_token"];
+
+            if (!string.IsNullOrEmpty(accessToken)
+                && context.HttpContext.Request.Path.StartsWithSegments("/hubs/chat"))
+            {
+                context.Token = accessToken;
+            }
+
+            return Task.CompletedTask;
+        }
+    };
 });
 
 builder.Services.AddAuthorization();
 
+// ##### SignalR #####
+// The Redis backplane makes group and user sends work across server instances: when one
+// instance sends to a group it publishes to Redis, and every instance delivers to the
+// connections it holds. Without it, a message only reaches clients on the same instance
+// as the sender. The prefix keeps this app's channels apart from anything else in Redis.
+builder.Services.AddSignalR()
+    .AddStackExchangeRedis(
+        builder.Configuration.GetConnectionString("Redis")
+            ?? throw new InvalidOperationException("ConnectionStrings:Redis is not configured."),
+        options => options.Configuration.ChannelPrefix = RedisChannel.Literal("chatnet"));
+
 // ##### Services #####
 builder.Services.AddScoped<JwtTokenService>();
+builder.Services.AddScoped<IConversationRepository, ConversationRepository>();
 
 // ##### Exception handling #####
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
@@ -158,6 +194,11 @@ auth.MapPost("/login", async (LoginCommand command, IMediator mediator) =>
     return Results.Ok(result);
 })
 .AllowAnonymous();
+
+app.MapUserEndpoints();
+app.MapConversationEndpoints();
+
+app.MapHub<ChatHub>("/hubs/chat");
 
 app.Run();
 

@@ -6,7 +6,7 @@ namespace ChatNET.API.Common.Behaviours;
 // A MediatR pipeline behaviour runs in the same way ASP.NET Core middleware runs:
 // each behaviour wraps the next step and can short-circuit before it. This one
 // intercepts every command/query, runs all registered validators for it, and throws
-// if any fail — so no handler ever receives invalid input.
+// if any fail, so no handler ever receives invalid input.
 //
 // MediatR calls behaviours in registration order. This one should be registered first
 // so validation always runs before any other cross-cutting concern (e.g. logging).

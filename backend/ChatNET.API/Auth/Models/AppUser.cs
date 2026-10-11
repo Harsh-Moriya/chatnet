@@ -6,7 +6,7 @@ namespace ChatNET.API.Auth.Models;
 // PasswordHash, and security-related columns. We add only the app-specific fields.
 public class AppUser : IdentityUser<Guid>
 {
-    // Human-readable name shown in the UI. Not unique — two users can share a display name.
+    // Human-readable name shown in the UI. Not unique; two users can share a display name.
     // UserName (from Identity) is the unique login handle used for @mentions.
     public string DisplayName { get; set; } = string.Empty;
 

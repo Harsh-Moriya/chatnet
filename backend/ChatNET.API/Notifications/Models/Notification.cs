@@ -8,7 +8,7 @@ public class Notification
     public Guid Id { get; set; }
     public Guid UserId { get; set; }
 
-    // Who triggered the notification — stored here so "John sent a message" can be
+    // Who triggered the notification; stored here so "John sent a message" can be
     // displayed without a separate query to look up the actor.
     public Guid ActorId { get; set; }
 
