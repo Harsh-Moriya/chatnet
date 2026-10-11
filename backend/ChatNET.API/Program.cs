@@ -148,6 +148,12 @@ builder.Services.AddScoped<IConversationRepository, ConversationRepository>();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
 
+// By default a request that cannot be bound (bad JSON, missing parameter) throws only in
+// Development; in Production the framework quietly writes an empty 400. Throwing in every
+// environment sends these requests through GlobalExceptionHandler, so Development and
+// Production return the same 400 ProblemDetails.
+builder.Services.Configure<RouteHandlerOptions>(options => options.ThrowOnBadRequest = true);
+
 // ############################################################
 
 var app = builder.Build();
