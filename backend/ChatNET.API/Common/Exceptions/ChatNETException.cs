@@ -5,7 +5,7 @@ namespace ChatNET.API.Common.Exceptions;
 /// Never throw this directly — use a specific subtype so the global
 /// exception handler can map it to the correct HTTP status code.
 /// </summary>
-public abstract class ChatAppException : Exception
+public abstract class ChatNETException : Exception
 {
-    protected ChatAppException(string message) : base(message) { }
+    protected ChatNETException(string message) : base(message) { }
 }

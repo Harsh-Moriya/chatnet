@@ -1,14 +1,22 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { AuthPage } from './features/auth/components/AuthPage'
 import { ProtectedRoute } from './components/ProtectedRoute'
+import { GuestRoute } from './components/GuestRoute'
 
 export default function App() {
   return (
     <Routes>
-      <Route path="/auth" element={<AuthPage />} />
-
       <Route
         path="/"
+        element={
+          <GuestRoute>
+            <AuthPage />
+          </GuestRoute>
+        }
+      />
+
+      <Route
+        path="/chat"
         element={
           <ProtectedRoute>
             <p className="p-4 text-gray-500">Chat shell, coming soon</p>

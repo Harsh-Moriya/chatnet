@@ -18,3 +18,18 @@ api.interceptors.request.use((config) => {
   }
   return config
 })
+
+// A 401 on a request that carried a token means the token expired or is no
+// longer valid. Clearing the store flips isAuthenticated, and ProtectedRoute
+// redirects to the login page. The error is still rethrown so callers can react.
+// A 401 from a failed login has no stored token, so it is left alone.
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (axios.isAxiosError(error) && error.response?.status === 401) {
+      const { token, clearAuth } = useAuthStore.getState()
+      if (token) clearAuth()
+    }
+    return Promise.reject(error)
+  }
+)

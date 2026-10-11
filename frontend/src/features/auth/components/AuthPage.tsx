@@ -44,7 +44,7 @@ export function AuthPage() {
 
   function handleSuccess(response: AuthResponse) {
     setAuth(response)
-    navigate('/')
+    navigate('/chat')
   }
 
   function toggleMode() {
