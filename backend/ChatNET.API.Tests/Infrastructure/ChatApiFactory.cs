@@ -36,6 +36,10 @@ public sealed class ChatApiFactory : WebApplicationFactory<Program>, IAsyncLifet
         Environment.SetEnvironmentVariable("ConnectionStrings__Redis", _redis.GetConnectionString());
         Environment.SetEnvironmentVariable("Jwt__SigningKey", Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)));
 
+        // Effectively disables the login and registration rate limit for ordinary tests, which
+        // register many users from one address. Rate limit tests build a host with a tight limit.
+        Environment.SetEnvironmentVariable("RateLimiting__Auth__PermitLimit", "1000000");
+
         AssertUsingTestContainers();
 
         using var scope = Services.CreateScope();

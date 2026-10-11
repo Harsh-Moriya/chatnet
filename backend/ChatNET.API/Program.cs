@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json.Serialization;
 using ChatNET.API.Auth.Login;
 using ChatNET.API.Auth.Models;
+using ChatNET.API.Auth.RateLimiting;
 using ChatNET.API.Auth.Register;
 using ChatNET.API.Auth.Services;
 using ChatNET.API.Common.Behaviours;
@@ -15,7 +16,9 @@ using FluentValidation;
 using MediatR;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
 using StackExchange.Redis;
@@ -36,10 +39,14 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 builder.Services.AddOpenApi();
 
 // ##### CORS #####
-// AllowCredentials() is required for SignalR because the WebSocket upgrade passes the
-// auth token as a query parameter rather than a header. The browser spec forbids
-// AllowAnyOrigin() when credentials are enabled, so the origin must be an explicit value.
-// Reading it from config means no code change is needed when moving between environments.
+// The SignalR browser client sends its negotiate request with credentials by default
+// (withCredentials: true), and a browser only accepts a credentialed cross-origin response
+// when the server answers with Access-Control-Allow-Credentials: true. That is why
+// AllowCredentials() is set, even though authentication uses a bearer token and no cookie.
+// The browser spec forbids AllowAnyOrigin() together with credentials, so the origin must be
+// an explicit value. Reading it from config means no code change is needed when moving
+// between environments. In development the Vite proxy makes requests same-origin, so CORS is
+// only exercised when the frontend and API are served from different origins.
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
@@ -86,6 +93,13 @@ builder.Services.AddIdentityCore<AppUser>(options =>
     options.Password.RequireUppercase = true;
     options.Password.RequireNonAlphanumeric = false;
     options.User.RequireUniqueEmail = true;
+
+    // Five wrong passwords in a row lock the account for 15 minutes. The window is short so
+    // that someone locking a victim out on purpose only ever costs them 15 minutes, and the
+    // per-address rate limit on /api/auth/* makes doing that repeatedly impractical.
+    options.Lockout.AllowedForNewUsers = true;
+    options.Lockout.MaxFailedAccessAttempts = 5;
+    options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
 })
 .AddRoles<IdentityRole<Guid>>()
 .AddEntityFrameworkStores<AppDbContext>()
@@ -96,44 +110,59 @@ builder.Services.AddIdentityCore<AppUser>(options =>
 // verifies the signature against our signing key, checks expiry, issuer, and audience,
 // then populates HttpContext.User with the claims inside the token. Endpoints marked
 // [Authorize] are gated on that user being populated correctly.
+//
+// The JWT settings are bound to JwtOptions and validated when the host starts, so a missing
+// or short signing key stops the app immediately with a clear message. Both token creation
+// (JwtTokenService) and validation below read the same object.
+builder.Services.AddOptions<JwtOptions>()
+    .BindConfiguration(JwtOptions.SectionName)
+    .ValidateOnStart();
+builder.Services.AddSingleton<IValidateOptions<JwtOptions>, JwtOptionsValidator>();
+
 builder.Services.AddAuthentication(options =>
 {
     options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
     options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
 })
-.AddJwtBearer(options =>
-{
-    options.TokenValidationParameters = new TokenValidationParameters
-    {
-        ValidateIssuer = true,
-        ValidateAudience = true,
-        ValidateLifetime = true,
-        ValidateIssuerSigningKey = true,
-        ValidIssuer = builder.Configuration["Jwt:Issuer"],
-        ValidAudience = builder.Configuration["Jwt:Audience"],
-        IssuerSigningKey = new SymmetricSecurityKey(
-            Encoding.UTF8.GetBytes(builder.Configuration["Jwt:SigningKey"]!))
-    };
+.AddJwtBearer();
 
-    // Browsers cannot set an Authorization header on a WebSocket upgrade request, so the
-    // SignalR client sends the token as ?access_token=. It is accepted only on the hub
-    // path, which keeps tokens out of query strings on every other endpoint.
-    options.Events = new JwtBearerEvents
+// Configured through the options system (instead of inside AddJwtBearer) so it can use the
+// validated JwtOptions once the service provider exists.
+builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
+    .Configure<IOptions<JwtOptions>>((bearer, jwtOptions) =>
     {
-        OnMessageReceived = context =>
+        var jwt = jwtOptions.Value;
+
+        bearer.TokenValidationParameters = new TokenValidationParameters
         {
-            var accessToken = context.Request.Query["access_token"];
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = jwt.Issuer,
+            ValidAudience = jwt.Audience,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwt.SigningKey))
+        };
 
-            if (!string.IsNullOrEmpty(accessToken)
-                && context.HttpContext.Request.Path.StartsWithSegments("/hubs/chat"))
+        // Browsers cannot set an Authorization header on a WebSocket upgrade request, so the
+        // SignalR client sends the token as ?access_token=. It is accepted only on the hub
+        // path, which keeps tokens out of query strings on every other endpoint.
+        bearer.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
             {
-                context.Token = accessToken;
-            }
+                var accessToken = context.Request.Query["access_token"];
 
-            return Task.CompletedTask;
-        }
-    };
-});
+                if (!string.IsNullOrEmpty(accessToken)
+                    && context.HttpContext.Request.Path.StartsWithSegments("/hubs/chat"))
+                {
+                    context.Token = accessToken;
+                }
+
+                return Task.CompletedTask;
+            }
+        };
+    });
 
 builder.Services.AddAuthorization();
 
@@ -153,6 +182,17 @@ builder.Services.AddSignalR()
 // ##### Services #####
 builder.Services.AddScoped<JwtTokenService>();
 builder.Services.AddScoped<IConversationRepository, ConversationRepository>();
+
+// ##### Rate limiting #####
+// Login and registration are limited per client address to slow down password guessing and
+// mass account creation. The limits come from configuration (RateLimiting:Auth) and are
+// validated at startup; the policy itself is defined in AuthRateLimiterSetup.
+builder.Services.AddOptions<AuthRateLimitOptions>()
+    .BindConfiguration(AuthRateLimitOptions.SectionName)
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+builder.Services.AddRateLimiter(_ => { });
+builder.Services.AddSingleton<IConfigureOptions<RateLimiterOptions>, AuthRateLimiterSetup>();
 
 // ##### Exception handling #####
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
@@ -192,6 +232,10 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 app.UseCors("AllowFrontend");
+
+// After CORS so browser preflight requests are answered without being counted, and before
+// authentication so over-limit requests are rejected before any password work happens.
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -200,7 +244,9 @@ app.MapGet("/health", () => Results.Ok(new { status = "healthy" }))
    .WithTags("Health")
    .AllowAnonymous();
 
-var auth = app.MapGroup("/api/auth").WithTags("Auth");
+var auth = app.MapGroup("/api/auth")
+    .WithTags("Auth")
+    .RequireRateLimiting(AuthRateLimitOptions.PolicyName);
 
 auth.MapPost("/register", async (RegisterCommand command, IMediator mediator) =>
 {

@@ -34,6 +34,7 @@ public class GlobalExceptionHandler : IExceptionHandler
             UnauthorizedException  => (StatusCodes.Status401Unauthorized,      "Unauthorized"),
             ForbiddenException     => (StatusCodes.Status403Forbidden,         "Forbidden"),
             ConflictException      => (StatusCodes.Status409Conflict,          "Conflict"),
+            TooManyAttemptsException => (StatusCodes.Status429TooManyRequests, "Too Many Requests"),
             ValidationException    => (StatusCodes.Status400BadRequest,        "Validation Failed"),
 
             // Thrown by the framework when the request cannot be bound: bad JSON, an empty
@@ -53,6 +54,9 @@ public class GlobalExceptionHandler : IExceptionHandler
                 exception.GetType().Name, exception.Message);
 
         httpContext.Response.StatusCode = status;
+
+        if (exception is TooManyAttemptsException tooMany)
+            httpContext.Response.Headers.RetryAfter = ((int)Math.Ceiling(tooMany.RetryAfter.TotalSeconds)).ToString();
 
         var problem = new ProblemDetails
         {
