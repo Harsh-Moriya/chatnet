@@ -23,6 +23,11 @@ export interface ChatConnectionDeps {
   // Called after the connection came back from a drop and is ready. Events sent during the gap
   // were lost, so this is where REST data is reloaded.
   onReconnected: () => void
+  // Whether the token has expired. The server closes a connection at its token's expiry and refuses
+  // a new one made with it, so retrying can never succeed.
+  isSessionExpired: () => boolean
+  // Called once, when the session turns out to have expired. The caller signs the user out.
+  onSessionExpired: () => void
   retryDelay?: (failedAttempts: number) => number
 }
 
@@ -49,11 +54,22 @@ export function connectChat(hub: ChatHub, deps: ChatConnectionDeps): ChatConnect
   let retryTimer: ReturnType<typeof setTimeout> | undefined
   let wakeRetry: (() => void) | undefined
   let disposed = false
+  let sessionEnded = false
   // Bumped each time the connection state changes. A readiness check that finishes after the
   // connection dropped again must not report "connected".
   let epoch = 0
 
   const chat = () => useChatStore.getState()
+
+  // Reports an expired session, once. Not after dispose(): closing the connection ourselves also raises
+  // the close event, and that is not the session ending.
+  function endSessionIfExpired(): boolean {
+    if (disposed || sessionEnded || !deps.isSessionExpired()) return false
+
+    sessionEnded = true
+    deps.onSessionExpired()
+    return true
+  }
 
   // ##### Handlers #####
   // Handlers use block bodies and return nothing. The SignalR JavaScript client treats a returned
@@ -96,6 +112,7 @@ export function connectChat(hub: ChatHub, deps: ChatConnectionDeps): ChatConnect
   hub.onreconnecting(() => {
     epoch++
     chat().setConnection('reconnecting')
+    endSessionIfExpired()
   })
 
   hub.onreconnected(() => {
@@ -108,6 +125,7 @@ export function connectChat(hub: ChatHub, deps: ChatConnectionDeps): ChatConnect
     epoch++
     // Closing is also how dispose() ends the connection, and that is not a loss.
     if (!disposed) chat().setConnection('disconnected')
+    endSessionIfExpired()
   })
 
   async function becomeReady(): Promise<boolean> {
@@ -137,6 +155,8 @@ export function connectChat(hub: ChatHub, deps: ChatConnectionDeps): ChatConnect
         if (disposed) return
 
         chat().setConnection('disconnected')
+        if (endSessionIfExpired()) return
+
         await pause(retryDelay(attempt))
         continue
       }

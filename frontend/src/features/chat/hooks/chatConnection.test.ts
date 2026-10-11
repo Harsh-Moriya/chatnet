@@ -118,15 +118,18 @@ function conversation(id: string): Conversation {
 
 const RETRY_DELAYS = [100, 200, 400]
 
-function setup(options: { hub?: FakeHub } = {}) {
+function setup(options: { hub?: FakeHub; sessionExpired?: () => boolean } = {}) {
   const hub = options.hub ?? new FakeHub()
   const onReconnected = vi.fn()
+  const onSessionExpired = vi.fn()
   const connection = connectChat(hub, {
     getUserId: () => 'me',
     onReconnected,
+    isSessionExpired: options.sessionExpired ?? (() => false),
+    onSessionExpired,
     retryDelay: (attempt) => RETRY_DELAYS[Math.min(attempt, RETRY_DELAYS.length - 1)],
   })
-  return { hub, connection, onReconnected }
+  return { hub, connection, onReconnected, onSessionExpired }
 }
 
 // Lets promise callbacks run, and any timers due now.
@@ -489,5 +492,89 @@ describe('dispose', () => {
     expect(hub.stops).toBe(1)
     // The cancelled timer did not fire, so the entry added by hand is still there.
     expect(store().typing.c1).toHaveLength(1)
+  })
+})
+
+// ##### The session ending #####
+// The server closes a connection when its token expires, and refuses a new one made with it. Trying
+// again with the same token can never work, so the client ends the session instead of retrying for ever.
+
+describe('an expired session', () => {
+  it('ends the session instead of retrying when a first connect fails', async () => {
+    const hub = new FakeHub()
+    hub.startOutcomes = [new Error('401'), new Error('401'), undefined]
+
+    const { onSessionExpired } = setup({ hub, sessionExpired: () => true })
+    await flush()
+    await vi.advanceTimersByTimeAsync(60_000)
+
+    expect(onSessionExpired).toHaveBeenCalledTimes(1)
+    expect(hub.startAttempts).toBe(1)
+  })
+
+  it('keeps retrying a failed first connect while the session is still valid', async () => {
+    const hub = new FakeHub()
+    hub.startOutcomes = [new Error('down'), undefined]
+
+    const { onSessionExpired } = setup({ hub, sessionExpired: () => false })
+    await flush()
+    await vi.advanceTimersByTimeAsync(RETRY_DELAYS[0])
+
+    expect(hub.startAttempts).toBe(2)
+    expect(onSessionExpired).not.toHaveBeenCalled()
+  })
+
+  it('ends the session when the connection starts to drop and the token has expired', async () => {
+    let expired = false
+    const { hub, onSessionExpired } = setup({ sessionExpired: () => expired })
+    await flush()
+
+    expired = true
+    hub.fireReconnecting()
+
+    expect(onSessionExpired).toHaveBeenCalledTimes(1)
+  })
+
+  it('ends the session when the library gives up and the token has expired', async () => {
+    let expired = false
+    const { hub, onSessionExpired } = setup({ sessionExpired: () => expired })
+    await flush()
+
+    expired = true
+    hub.fireClosed()
+
+    expect(onSessionExpired).toHaveBeenCalledTimes(1)
+    expect(store().connection).toBe('disconnected')
+  })
+
+  it('reports it once even though a drop is followed by a close', async () => {
+    const { hub, onSessionExpired } = setup({ sessionExpired: () => true })
+    await flush()
+
+    hub.fireReconnecting()
+    hub.fireClosed()
+    hub.fireClosed()
+
+    expect(onSessionExpired).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not end the session for a drop while the token is still valid', async () => {
+    const { hub, onSessionExpired } = setup({ sessionExpired: () => false })
+    await flush()
+
+    hub.fireReconnecting()
+    hub.fireClosed()
+
+    expect(onSessionExpired).not.toHaveBeenCalled()
+  })
+
+  it('says nothing after being disposed, because disposing closes the connection too', async () => {
+    const { connection, onSessionExpired } = setup({ sessionExpired: () => true })
+    await flush()
+
+    connection.dispose()
+    await flush()
+
+    expect(onSessionExpired).not.toHaveBeenCalled()
   })
 })
