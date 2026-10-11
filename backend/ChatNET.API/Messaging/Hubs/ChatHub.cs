@@ -22,6 +22,11 @@ public class ChatHub : Hub<IChatClient>
     private const string NotAMember = "You are not a member of this conversation.";
 
     private const string JoinedKey = "joined-conversations";
+    private const string TypingKey = "typing-started-at";
+
+    // The shortest time between two delivered "typing" events from one connection in one
+    // conversation. A client should send one every couple of seconds while someone types.
+    private static readonly TimeSpan TypingInterval = TimeSpan.FromSeconds(1);
 
     private readonly IConversationRepository _conversations;
     private readonly ILogger<ChatHub> _logger;
@@ -74,15 +79,45 @@ public class ChatHub : Hub<IChatClient>
 
     // Client-callable. Tells the other members of the conversation this user is typing.
     // Typing state is ephemeral, so this touches neither the database nor MediatR.
-    public Task StartTyping(Guid conversationId)
+    //
+    // The event is sent to everyone in the conversation's group, so the sender must really be in it:
+    // otherwise anyone who knew a conversation ID could push "X is typing" into a private
+    // conversation. The check uses the set of conversations this connection joined (no query).
+    // Typing is also limited to one event per interval per conversation, so a misbehaving client
+    // cannot turn each keystroke into a message to every member.
+    public async Task StartTyping(Guid conversationId)
     {
-        return Task.CompletedTask;
+        if (!JoinedConversations().ContainsKey(conversationId))
+            throw new HubException(NotAMember);
+
+        var now = Environment.TickCount64;
+        var lastSent = TypingStartedAt();
+
+        if (lastSent.TryGetValue(conversationId, out var previous) && now - previous < TypingInterval.TotalMilliseconds)
+            return;
+
+        lastSent[conversationId] = now;
+
+        await Clients.OthersInGroup(ChatGroups.Conversation(conversationId))
+            .UserTyping(conversationId, Context.User!.GetUserId(), DisplayName(), true);
     }
 
-    public Task StopTyping(Guid conversationId)
+    // Never throttled, and it resets the clock, so typing again straight after stopping is
+    // delivered. Stopping in a conversation this connection is not in is a harmless no-op: there
+    // is nothing to stop, and failing would only add noise for a clean-up call.
+    public async Task StopTyping(Guid conversationId)
     {
-        return Task.CompletedTask;
+        if (!JoinedConversations().ContainsKey(conversationId))
+            return;
+
+        TypingStartedAt().TryRemove(conversationId, out _);
+
+        await Clients.OthersInGroup(ChatGroups.Conversation(conversationId))
+            .UserTyping(conversationId, Context.User!.GetUserId(), DisplayName(), false);
     }
+
+    // Taken from the token, never from the client, so nobody can type under another name.
+    private string DisplayName() => Context.User!.FindFirst("display_name")?.Value ?? "Someone";
 
     // Adding the same connection to the same group twice is harmless: a group is a set.
     private async Task JoinGroupAsync(Guid conversationId)
@@ -102,6 +137,19 @@ public class ChatHub : Hub<IChatClient>
 
         var created = new ConcurrentDictionary<Guid, byte>();
         Context.Items[JoinedKey] = created;
+        return created;
+    }
+
+    // When this connection last had a "typing" event delivered, per conversation (a monotonic
+    // millisecond clock, so a change of system time cannot affect it). Bounded by the number of
+    // conversations the connection joined.
+    private ConcurrentDictionary<Guid, long> TypingStartedAt()
+    {
+        if (Context.Items.TryGetValue(TypingKey, out var existing))
+            return (ConcurrentDictionary<Guid, long>)existing!;
+
+        var created = new ConcurrentDictionary<Guid, long>();
+        Context.Items[TypingKey] = created;
         return created;
     }
 }
