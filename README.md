@@ -15,8 +15,8 @@ Under active development.
 | Registration and login (ASP.NET Identity, JWT) | Implemented |
 | Conversation model: find-or-create direct chats, groups, user search | Implemented |
 | SignalR hub with Redis backplane: live groups per conversation, typing indicators, new-conversation push | Implemented |
-| Sending and receiving messages | Planned |
-| Message history with cursor pagination | Planned |
+| Sending messages (REST) with live delivery to the conversation over SignalR, and the latest 50 messages as history | Implemented |
+| Loading older messages with cursor pagination | Planned |
 | Online presence, read receipts, offline delivery | Planned |
 | Refresh tokens, notifications, file uploads | Planned |
 | Structured logging, tracing, deployment | Planned |
@@ -28,6 +28,7 @@ Under active development.
 - **One group per conversation.** A connection joins the group of every conversation its user belongs to, so the sidebar and the open chat both update live. Redis fans events out across server instances.
 - **Predictable errors.** FluentValidation runs in the MediatR pipeline, domain failures use a small exception hierarchy, and every API error, including bare 401 and 404 responses, is an RFC 7807 `ProblemDetails` response.
 - **Hardened login.** A per-address rate limit and a per-account lockout (five failures, 15 minutes) slow password guessing, and the JWT settings are validated when the app starts so a weak or missing signing key stops it immediately.
+- **Query cost is tested, not assumed.** The conversation list and message history have tests that ask Postgres how many rows the real query read, so a change that makes either scan far more data than it returns fails the build.
 - **Duplicate-proof direct chats.** A sorted `DirectKey` with a unique partial index in Postgres guarantees at most one conversation per pair of users.
 
 ## Tech stack
