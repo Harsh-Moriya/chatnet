@@ -26,10 +26,16 @@ public class LoginHandler : IRequestHandler<LoginCommand, AuthResponse>
     {
         var user = await _userManager.FindByEmailAsync(request.Email);
 
-        // Deliberately return the same error whether the email doesn't exist or the
-        // password is wrong. Separate messages would let an attacker enumerate valid emails.
+        // Deliberately return the same error whether the email does not exist or the password is
+        // wrong. Separate messages would let an attacker enumerate valid emails.
         if (user is null)
+        {
+            // Checking a password takes real time, and skipping it here would make an unknown email
+            // answer measurably faster than a wrong password: the same enumeration through timing.
+            // Verifying against a throwaway hash costs the same as a real check.
+            _userManager.PasswordHasher.VerifyHashedPassword(new AppUser(), DummyHash.Value, request.Password);
             throw new UnauthorizedException("Invalid email or password.");
+        }
 
         // Checked before the password so a locked account cannot be probed: while locked, even
         // the right password is refused and no guess is evaluated.
@@ -57,6 +63,12 @@ public class LoginHandler : IRequestHandler<LoginCommand, AuthResponse>
         var token = _jwtTokenService.GenerateToken(user);
 
         return new AuthResponse(token, user.Id.ToString(), user.UserName!, user.DisplayName);
+    }
+
+    // Made once, with the default hasher, so it has the same cost as a real user's hash.
+    private static class DummyHash
+    {
+        public static readonly string Value = new PasswordHasher<AppUser>().HashPassword(new AppUser(), "not-a-real-password");
     }
 
     private async Task<TooManyAttemptsException> LockedOutAsync(AppUser user)

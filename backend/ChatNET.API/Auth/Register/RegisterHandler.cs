@@ -1,8 +1,13 @@
 using ChatNET.API.Auth.Models;
 using ChatNET.API.Auth.Services;
 using ChatNET.API.Common.Exceptions;
+using ChatNET.API.Common.Persistence;
+using FluentValidation;
+using FluentValidation.Results;
 using MediatR;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace ChatNET.API.Auth.Register;
 
@@ -10,11 +15,19 @@ public class RegisterHandler : IRequestHandler<RegisterCommand, AuthResponse>
 {
     private readonly UserManager<AppUser> _userManager;
     private readonly JwtTokenService _jwtTokenService;
+    private readonly AppDbContext _db;
+    private readonly ILogger<RegisterHandler> _logger;
 
-    public RegisterHandler(UserManager<AppUser> userManager, JwtTokenService jwtTokenService)
+    public RegisterHandler(
+        UserManager<AppUser> userManager,
+        JwtTokenService jwtTokenService,
+        AppDbContext db,
+        ILogger<RegisterHandler> logger)
     {
         _userManager = userManager;
         _jwtTokenService = jwtTokenService;
+        _db = db;
+        _logger = logger;
     }
 
     public async Task<AuthResponse> Handle(RegisterCommand request, CancellationToken cancellationToken)
@@ -23,22 +36,53 @@ public class RegisterHandler : IRequestHandler<RegisterCommand, AuthResponse>
         {
             UserName = request.UserName,
             Email = request.Email,
-            DisplayName = request.DisplayName,
+            DisplayName = request.DisplayName.Trim(),
         };
 
-        var result = await _userManager.CreateAsync(user, request.Password);
+        // Identity checks "is this email taken?" and then inserts, and nothing in the database stops
+        // two accounts sharing an email (its email index is not unique). Requests that arrive
+        // together would all pass the check. A transaction-scoped advisory lock on the email makes
+        // them go one at a time: the second waits for the first to commit, then sees its account.
+        // The lock is released by the commit or rollback, and registrations for different emails
+        // never wait for each other.
+        await using var transaction = await _db.Database.BeginTransactionAsync(cancellationToken);
+
+        var lockKey = _userManager.NormalizeEmail(request.Email);
+        await _db.Database.ExecuteSqlInterpolatedAsync(
+            $"SELECT pg_advisory_xact_lock(hashtextextended({lockKey}, 0))", cancellationToken);
+
+        IdentityResult result;
+        try
+        {
+            result = await _userManager.CreateAsync(user, request.Password);
+        }
+        catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
+        {
+            // The user name index is unique, so of several requests for one name the others fail
+            // here instead of in Identity's check.
+            _logger.LogInformation("Registration lost a race for a user name");
+            throw new ConflictException($"Username '{request.UserName}' is already taken.");
+        }
 
         if (!result.Succeeded)
-        {
-            // Identity returns structured errors (DuplicateUserName, PasswordTooShort, etc.).
-            // We surface them as a single conflict message; the validator already caught
-            // format issues, so these are domain-level conflicts (e.g. username taken).
-            var errors = string.Join(" ", result.Errors.Select(e => e.Description));
-            throw new ConflictException(errors);
-        }
+            throw FailureFor(result);
+
+        await transaction.CommitAsync(cancellationToken);
 
         var token = _jwtTokenService.GenerateToken(user);
 
         return new AuthResponse(token, user.Id.ToString(), user.UserName!, user.DisplayName);
+    }
+
+    // A password that breaks an account rule is a mistake in the request, so it is reported like any
+    // other validation failure, on the Password field. A name or email that is already taken is a
+    // clash with existing data, which is a conflict.
+    private static Exception FailureFor(IdentityResult result)
+    {
+        var passwordProblems = result.Errors.Where(e => e.Code.StartsWith("Password", StringComparison.Ordinal)).ToList();
+        if (passwordProblems.Count > 0)
+            return new ValidationException(passwordProblems.Select(e => new ValidationFailure("Password", e.Description)));
+
+        return new ConflictException(string.Join(" ", result.Errors.Select(e => e.Description)));
     }
 }

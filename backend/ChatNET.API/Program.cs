@@ -1,12 +1,13 @@
 using System.Text;
 using System.Text.Json.Serialization;
-using ChatNET.API.Auth.Login;
+using ChatNET.API.Auth;
 using ChatNET.API.Auth.Models;
 using ChatNET.API.Auth.RateLimiting;
-using ChatNET.API.Auth.Register;
 using ChatNET.API.Auth.Services;
 using ChatNET.API.Common.Behaviours;
+using ChatNET.API.Common.Health;
 using ChatNET.API.Common.Middleware;
+using ChatNET.API.Common.OpenApi;
 using ChatNET.API.Common.Persistence;
 using ChatNET.API.Conversations;
 using ChatNET.API.Conversations.Persistence;
@@ -38,7 +39,7 @@ builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 
 // ##### OpenAPI #####
-builder.Services.AddOpenApi();
+builder.Services.AddOpenApi(options => options.AddSchemaTransformer(EnumSchemaTransformer.Transform));
 
 // ##### CORS #####
 // The SignalR browser client sends its negotiate request with credentials by default
@@ -141,6 +142,11 @@ builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationSc
             ValidateAudience = true,
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
+
+            // The default tolerance for clock differences is five minutes, which would keep an expired
+            // token working for five more. One server issues and checks these tokens, so only a small
+            // allowance is needed.
+            ClockSkew = TimeSpan.FromSeconds(30),
             ValidIssuer = jwt.Issuer,
             ValidAudience = jwt.Audience,
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwt.SigningKey))
@@ -198,6 +204,15 @@ builder.Services.AddOptions<AuthRateLimitOptions>()
 builder.Services.AddRateLimiter(_ => { });
 builder.Services.AddSingleton<IConfigureOptions<RateLimiterOptions>, AuthRateLimiterSetup>();
 
+// ##### Health #####
+// /health reports whether this instance can reach what it depends on. Each check is cut off after
+// three seconds so a dependency that hangs reads as down instead of hanging the probe.
+builder.Services.AddSingleton(provider =>
+    new RedisHealthCheck(provider.GetRequiredService<IConfiguration>().GetConnectionString("Redis")!));
+builder.Services.AddHealthChecks()
+    .AddCheck<PostgresHealthCheck>("postgres", timeout: TimeSpan.FromSeconds(3))
+    .AddCheck<RedisHealthCheck>("redis", timeout: TimeSpan.FromSeconds(3));
+
 // ##### Exception handling #####
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
@@ -208,20 +223,34 @@ builder.Services.AddProblemDetails();
 // Production return the same 400 ProblemDetails.
 builder.Services.Configure<RouteHandlerOptions>(options => options.ThrowOnBadRequest = true);
 
-// ############################################################
+// ##### Request limits and HSTS #####
+// Kestrel allows 30 MB request bodies by default. The largest legitimate request here is a few
+// kilobytes (a message is at most 4,000 characters), so a larger body is refused before it is read.
+builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = 1_048_576);
+
+// Tells browsers to use https for a year once they have seen one https response. Added only
+// outside development (see UseHsts below).
+builder.Services.AddHsts(options => options.MaxAge = TimeSpan.FromDays(365));
 
 var app = builder.Build();
 
 // Middleware order is a hard constraint, not a style choice. Each middleware wraps
 // everything registered after it, so:
-//   - The exception handler must be outermost to catch errors from every layer below.
+//   - The security headers go on first, so they are on every response, and the exception handler
+//     comes next so it catches errors from every layer below.
 //   - CORS must precede auth so browser preflight OPTIONS requests are answered before
 //     the JWT middleware rejects them as unauthenticated.
 //   - Authentication must precede Authorization so HttpContext.User is populated before
 //     policy checks run against it.
 // This ordering is the chain-of-responsibility pattern applied to the HTTP pipeline.
 
+app.UseMiddleware<SecurityHeadersMiddleware>();
 app.UseExceptionHandler();
+
+// HSTS is skipped in development: a browser that remembered it for localhost would refuse every
+// other local project that does not use https. The middleware also does nothing over plain http.
+if (!app.Environment.IsDevelopment())
+    app.UseHsts();
 
 // Gives a ProblemDetails body to responses that only set a status code and nothing else:
 // 401 from authentication, 404 for an unknown route, 405, 415. It leaves responses that
@@ -244,33 +273,17 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 // ##### Endpoints #####
-app.MapGet("/health", () => Results.Ok(new { status = "healthy" }))
-   .WithTags("Health")
-   .AllowAnonymous();
+app.MapHealthEndpoints();
 
-var auth = app.MapGroup("/api/auth")
-    .WithTags("Auth")
-    .RequireRateLimiting(AuthRateLimitOptions.PolicyName);
-
-auth.MapPost("/register", async (RegisterCommand command, IMediator mediator) =>
-{
-    var result = await mediator.Send(command);
-    return Results.Ok(result);
-})
-.AllowAnonymous();
-
-auth.MapPost("/login", async (LoginCommand command, IMediator mediator) =>
-{
-    var result = await mediator.Send(command);
-    return Results.Ok(result);
-})
-.AllowAnonymous();
-
+app.MapAuthEndpoints();
 app.MapUserEndpoints();
 app.MapConversationEndpoints();
 app.MapMessagingEndpoints();
 
-app.MapHub<ChatHub>("/hubs/chat");
+// A token is checked once, when the connection is made. Without this an open connection would keep
+// receiving messages long after its token expired; with it the server closes the connection at the
+// token's expiry and the client has to reconnect with a valid one.
+app.MapHub<ChatHub>("/hubs/chat", options => options.CloseOnAuthenticationExpiration = true);
 
 app.Run();
 

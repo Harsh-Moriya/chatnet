@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { createChatConnection } from '../../../lib/signalr'
+import { isTokenExpired } from '../../../lib/jwt'
 import { useAuthStore } from '../../auth/store/authStore'
 import { useChatStore } from '../store/chatStore'
 import { connectChat, type ChatConnection } from './chatConnection'
@@ -27,6 +28,12 @@ export function useSignalR() {
     const opening = setTimeout(() => {
       connection = connectChat(createChatConnection(), {
         getUserId: () => useAuthStore.getState().user?.userId ?? null,
+
+        isSessionExpired: () => isTokenExpired(useAuthStore.getState().token),
+
+        // Clearing the session sends the user to the sign-in page, which unmounts the chat and closes
+        // this connection.
+        onSessionExpired: () => useAuthStore.getState().clearAuth(),
 
         // Events sent while the connection was down were lost. Marking the cached data stale and
         // reloading what is on screen puts the REST state back in charge. This is a connection

@@ -1,4 +1,5 @@
 using ChatNET.API.Common.Auth;
+using ChatNET.API.Common.OpenApi;
 using ChatNET.API.Users.SearchUsers;
 using MediatR;
 
@@ -16,7 +17,8 @@ public static class UserEndpoints
         {
             var result = await mediator.Send(new SearchUsersQuery(http.User.GetUserId(), query));
             return Results.Ok(result);
-        });
+        })
+        .Returns<List<UserSummaryDto>>(StatusCodes.Status200OK, StatusCodes.Status400BadRequest, StatusCodes.Status401Unauthorized);
 
         return app;
     }

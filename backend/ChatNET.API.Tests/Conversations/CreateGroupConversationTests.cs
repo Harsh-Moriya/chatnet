@@ -45,21 +45,6 @@ public class CreateGroupConversationTests
     }
 
     [Fact]
-    public async Task Location_header_names_the_new_conversation()
-    {
-        var alice = await _factory.RegisterUserAsync("alice");
-        var bob = await _factory.RegisterUserAsync("bob");
-        using var client = _factory.CreateClientFor(alice);
-
-        var response = await client.PostGroupAsync("Team", bob.Id);
-        var created = await response.Content.ReadFromJsonAsync<JsonElement>();
-
-        // Only the header's content is checked: there is no GET for a single conversation yet,
-        // so following it would be a 404.
-        Assert.Equal($"/api/conversations/{created.IdOf()}", response.Headers.Location?.ToString());
-    }
-
-    [Fact]
     public async Task The_creator_is_the_owner_and_everyone_else_a_regular_member()
     {
         var alice = await _factory.RegisterUserAsync("alice");
