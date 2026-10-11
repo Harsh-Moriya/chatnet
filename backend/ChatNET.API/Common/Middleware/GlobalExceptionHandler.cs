@@ -15,10 +15,12 @@ namespace ChatNET.API.Common.Middleware;
 public class GlobalExceptionHandler : IExceptionHandler
 {
     private readonly ILogger<GlobalExceptionHandler> _logger;
+    private readonly IProblemDetailsService _problemDetails;
 
-    public GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logger)
+    public GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logger, IProblemDetailsService problemDetails)
     {
         _logger = logger;
+        _problemDetails = problemDetails;
     }
 
     public async ValueTask<bool> TryHandleAsync(
@@ -86,7 +88,14 @@ public class GlobalExceptionHandler : IExceptionHandler
                     g => g.Select(e => e.ErrorMessage).ToArray());
         }
 
-        await httpContext.Response.WriteAsJsonAsync(problem, cancellationToken);
-        return true;
+        // The framework's problem details writer is also what produces the body for bare status
+        // codes (see UseStatusCodePages), so every error response is written the same way:
+        // application/problem+json, with a type URI and a traceId added.
+        return await _problemDetails.TryWriteAsync(new ProblemDetailsContext
+        {
+            HttpContext = httpContext,
+            ProblemDetails = problem,
+            Exception = exception,
+        });
     }
 }
