@@ -64,8 +64,9 @@ services:
   # ##### Adminer #####
   # Lightweight browser-based database UI. Open http://localhost:8080 then:
   # System: PostgreSQL, Server: postgres, Username/Password/Database from your .env file.
+  # The tag is pinned so every machine runs the same image; "latest" changes silently.
   adminer:
-    image: adminer:latest
+    image: adminer:5.4.2
     container_name: chatnet-adminer
     ports:
       - "8080:8080"
