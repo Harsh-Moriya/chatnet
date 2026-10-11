@@ -1,9 +1,8 @@
 using System.Text;
 using System.Text.Json.Serialization;
-using ChatNET.API.Auth.Login;
+using ChatNET.API.Auth;
 using ChatNET.API.Auth.Models;
 using ChatNET.API.Auth.RateLimiting;
-using ChatNET.API.Auth.Register;
 using ChatNET.API.Auth.Services;
 using ChatNET.API.Common.Behaviours;
 using ChatNET.API.Common.Middleware;
@@ -248,24 +247,7 @@ app.MapGet("/health", () => Results.Ok(new { status = "healthy" }))
    .WithTags("Health")
    .AllowAnonymous();
 
-var auth = app.MapGroup("/api/auth")
-    .WithTags("Auth")
-    .RequireRateLimiting(AuthRateLimitOptions.PolicyName);
-
-auth.MapPost("/register", async (RegisterCommand command, IMediator mediator) =>
-{
-    var result = await mediator.Send(command);
-    return Results.Ok(result);
-})
-.AllowAnonymous();
-
-auth.MapPost("/login", async (LoginCommand command, IMediator mediator) =>
-{
-    var result = await mediator.Send(command);
-    return Results.Ok(result);
-})
-.AllowAnonymous();
-
+app.MapAuthEndpoints();
 app.MapUserEndpoints();
 app.MapConversationEndpoints();
 app.MapMessagingEndpoints();
