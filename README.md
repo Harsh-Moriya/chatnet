@@ -16,6 +16,7 @@ Under active development.
 | Conversation model: find-or-create direct chats, groups, user search | Implemented |
 | SignalR hub with Redis backplane: live groups per conversation, typing indicators, new-conversation push | Implemented |
 | Sending messages (REST) with live delivery to the conversation over SignalR, and the latest 50 messages as history | Implemented |
+| Chat interface: conversation list, message view, composer, new direct or group chat, typing indicators, optimistic sending with retry, reconnecting | Implemented |
 | Loading older messages with cursor pagination | Planned |
 | Online presence, read receipts, offline delivery | Planned |
 | Refresh tokens, notifications, file uploads | Planned |
@@ -30,6 +31,8 @@ Under active development.
 - **Hardened login.** A per-address rate limit and a per-account lockout (five failures, 15 minutes) slow password guessing, and the JWT settings are validated when the app starts so a weak or missing signing key stops it immediately.
 - **Query cost is tested, not assumed.** The conversation list and message history have tests that ask Postgres how many rows the real query read, so a change that makes either scan far more data than it returns fails the build.
 - **Duplicate-proof direct chats.** A sorted `DirectKey` with a unique partial index in Postgres guarantees at most one conversation per pair of users.
+- **A browser store that merges, not overwrites.** Messages reach the screen from REST responses and from SignalR pushes, which race and sometimes deliver the same message twice. Both feed one store through actions that merge by id, so order does not matter. Your own message is shown at once as "sending" and confirmed by whichever arrives first, matched by an id the browser invents.
+- **Logic you can test without a browser.** The hub wiring, ordering, reconciliation and typing timers are plain TypeScript tested in Node with a fake hub and fake timers; the tests were checked by breaking each rule on purpose.
 
 ## Tech stack
 
@@ -87,17 +90,18 @@ npm run dev                 # http://localhost:5173
 
 Vite proxies `/api` and `/hubs` to the backend, so the browser only ever talks to port 5173.
 
-To try the app as two users at once, open `http://localhost:5173` for one and `http://127.0.0.1:5173` for the other; browser storage is separate per origin.
+To try the app as two users at once, open `http://localhost:5173` for one and `http://[::1]:5173` (or `http://127.0.0.1:5173` if your Vite server answers there) for the other; browser storage is separate per origin.
 
 ## Tests
 
 Backend tests run the real API in-process against a real Postgres and a real Redis, each started in a throwaway Docker container, so Docker must be running. They never touch the development database and need no secrets or configuration.
 
 ```bash
-dotnet test        # from the repository root
+dotnet test        # backend, from the repository root
+cd frontend && npm test    # frontend logic tests (Vitest, no browser needed)
 ```
 
-GitHub Actions runs the same tests on every push and pull request, along with the frontend lint, build and a dependency vulnerability check for both the backend and the frontend.
+GitHub Actions runs both on every push and pull request, along with the frontend lint, build and a dependency vulnerability check for both the backend and the frontend.
 
 ## Project layout
 
