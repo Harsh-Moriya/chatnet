@@ -1,5 +1,7 @@
 using ChatNET.API.Common.Auth;
+using ChatNET.API.Common.OpenApi;
 using ChatNET.API.Messaging.GetMessageHistory;
+using ChatNET.API.Messaging.Models;
 using ChatNET.API.Messaging.SendMessage;
 using MediatR;
 
@@ -24,13 +26,17 @@ public static class MessagingEndpoints
                 conversationId, http.User.GetUserId(), body.Content, body.ClientMessageId));
 
             return Results.Json(result, statusCode: StatusCodes.Status201Created);
-        });
+        })
+        .Returns<MessageDto>(
+            StatusCodes.Status201Created, StatusCodes.Status400BadRequest, StatusCodes.Status401Unauthorized,
+            StatusCodes.Status403Forbidden);
 
         messages.MapGet("/", async (Guid conversationId, HttpContext http, IMediator mediator) =>
         {
             var result = await mediator.Send(new GetMessageHistoryQuery(conversationId, http.User.GetUserId()));
             return Results.Ok(result);
-        });
+        })
+        .Returns<List<MessageDto>>(StatusCodes.Status200OK, StatusCodes.Status401Unauthorized, StatusCodes.Status403Forbidden);
 
         return app;
     }

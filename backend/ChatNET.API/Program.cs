@@ -6,6 +6,7 @@ using ChatNET.API.Auth.RateLimiting;
 using ChatNET.API.Auth.Services;
 using ChatNET.API.Common.Behaviours;
 using ChatNET.API.Common.Middleware;
+using ChatNET.API.Common.OpenApi;
 using ChatNET.API.Common.Persistence;
 using ChatNET.API.Conversations;
 using ChatNET.API.Conversations.Persistence;
@@ -37,7 +38,7 @@ builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 
 // ##### OpenAPI #####
-builder.Services.AddOpenApi();
+builder.Services.AddOpenApi(options => options.AddSchemaTransformer(EnumSchemaTransformer.Transform));
 
 // ##### CORS #####
 // The SignalR browser client sends its negotiate request with credentials by default
