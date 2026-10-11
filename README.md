@@ -1,0 +1,101 @@
+# ChatNET
+
+A real-time, multi-user chat application. **ASP.NET Core (.NET 10)** and **SignalR** on the backend, **React + TypeScript** on the frontend, **PostgreSQL** for storage and **Redis** for the SignalR backplane.
+
+Two kinds of conversation share one model: **direct** (1:1) and **group** (many members).
+
+## Status
+
+Under active development.
+
+| Area | State |
+|---|---|
+| Registration and login (ASP.NET Identity, JWT) | Implemented |
+| Conversation model: find-or-create direct chats, groups, user search | Implemented |
+| SignalR hub endpoint with Redis backplane | Wired; hub methods in progress |
+| Sending and receiving messages, typing indicators | In progress |
+| Message history with cursor pagination | Planned |
+| Online presence, read receipts, offline delivery | Planned |
+| Refresh tokens, notifications, file uploads | Planned |
+| Structured logging, tracing, deployment | Planned |
+
+## How it is built
+
+- **Vertical slices.** Each feature owns its endpoint, MediatR handler, validator and data access in one folder, instead of spreading across technical layers.
+- **REST writes, SignalR pushes.** Clients send messages with a REST call; the server saves the message, then pushes it to the conversation's SignalR group. Loading data and confirming changes are REST; live updates are SignalR.
+- **One group per conversation.** A connection joins the group of every conversation its user belongs to, so the sidebar and the open chat both update live. Redis fans events out across server instances.
+- **Predictable errors.** FluentValidation runs in the MediatR pipeline, domain failures use a small exception hierarchy, and every API error is an RFC 7807 `ProblemDetails` response.
+- **Duplicate-proof direct chats.** A sorted `DirectKey` with a unique partial index in Postgres guarantees at most one conversation per pair of users.
+
+## Tech stack
+
+| Layer | Technology |
+|---|---|
+| Frontend | React 19, TypeScript, Vite, Tailwind CSS 4, Zustand, TanStack Query, React Router, `@microsoft/signalr` |
+| Backend | ASP.NET Core Minimal API and SignalR, MediatR, FluentValidation, EF Core |
+| Database | PostgreSQL 16 |
+| Real-time and cache | SignalR with a Redis 7 backplane |
+| Auth | ASP.NET Core Identity, JWT bearer |
+| Local infrastructure | Docker Compose (Postgres, Redis, Jaeger, Adminer) |
+
+## Getting started
+
+### Prerequisites
+
+- [.NET 10 SDK](https://dotnet.microsoft.com/download)
+- A current [Node.js](https://nodejs.org) LTS
+- [Docker](https://www.docker.com/products/docker-desktop)
+- The EF Core CLI: `dotnet tool install --global dotnet-ef`
+
+### 1. Start the infrastructure
+
+```bash
+cp .env.example .env        # then set a strong POSTGRES_PASSWORD in .env
+docker-compose up -d
+```
+
+This starts Postgres (5432), Redis (6379), Jaeger (16686) and Adminer (8080).
+
+### 2. Configure and run the backend
+
+Secrets are stored with `dotnet user-secrets`, never in files that are committed.
+
+```bash
+cd backend/ChatNET.API
+
+dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Host=localhost;Port=5432;Database=chatnet;Username=chatnet_user;Password=<POSTGRES_PASSWORD from .env>"
+dotnet user-secrets set "ConnectionStrings:Redis" "localhost:6379"
+dotnet user-secrets set "Jwt:SigningKey" "$(openssl rand -base64 32)"
+
+dotnet ef database update   # creates the schema
+dotnet run                  # http://localhost:5045
+```
+
+In Development the OpenAPI document is served at `/openapi/v1.json`.
+
+### 3. Run the frontend
+
+```bash
+cd frontend
+npm install
+npm run dev                 # http://localhost:5173
+```
+
+Vite proxies `/api` and `/hubs` to the backend, so the browser only ever talks to port 5173.
+
+To try the app as two users at once, open `http://localhost:5173` for one and `http://127.0.0.1:5173` for the other; browser storage is separate per origin.
+
+## Project layout
+
+```
+backend/ChatNET.API/
+  Auth/            registration, login, JWT
+  Users/           user search
+  Conversations/   direct and group conversations, membership
+  Messaging/       messages and the SignalR hub
+  Common/          shared behaviours, exceptions, persistence
+frontend/src/
+  features/        auth, chat (one folder per feature)
+  components/ui/   shared UI primitives
+  lib/             API client, query client
+```
