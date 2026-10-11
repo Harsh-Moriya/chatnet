@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using ChatNET.API.Common.Auth;
+using ChatNET.API.Conversations;
 using ChatNET.API.Conversations.Persistence;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
@@ -16,11 +17,6 @@ namespace ChatNET.API.Messaging.Hubs;
 [Authorize]
 public class ChatHub : Hub<IChatClient>
 {
-    // Sent to the client verbatim (a HubException message is the only error text SignalR forwards).
-    // It is deliberately the same for a conversation that does not exist and one the user is not
-    // in, so the hub cannot be used to find out which conversation IDs are real.
-    private const string NotAMember = "You are not a member of this conversation.";
-
     private const string JoinedKey = "joined-conversations";
     private const string TypingKey = "typing-started-at";
 
@@ -71,7 +67,7 @@ public class ChatHub : Hub<IChatClient>
                 "User {UserId} tried to join conversation {ConversationId} without being an active member",
                 userId, conversationId);
 
-            throw new HubException(NotAMember);
+            throw new HubException(ConversationErrors.NotAMember);
         }
 
         await JoinGroupAsync(conversationId);
@@ -88,7 +84,7 @@ public class ChatHub : Hub<IChatClient>
     public async Task StartTyping(Guid conversationId)
     {
         if (!JoinedConversations().ContainsKey(conversationId))
-            throw new HubException(NotAMember);
+            throw new HubException(ConversationErrors.NotAMember);
 
         var now = Environment.TickCount64;
         var lastSent = TypingStartedAt();

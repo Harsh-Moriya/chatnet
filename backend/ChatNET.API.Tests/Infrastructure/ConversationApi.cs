@@ -50,8 +50,9 @@ public static class ConversationApi
             .Where(u => u.Id == user.Id)
             .ExecuteUpdateAsync(s => s.SetProperty(u => u.IsDeactivated, true)));
 
-    // There is no endpoint to send a message yet, so tests insert them directly. This also gives
-    // full control of timestamps and of the deleted state.
+    // Inserts a message straight into the database. The send endpoint always stamps the current
+    // time and cannot produce a deleted message, so tests that need control of the timestamp or
+    // of the deleted state, or that need thousands of messages, arrange them here.
     public static Task AddMessageAsync(
         this ChatApiFactory factory, Guid conversationId, Guid senderId, string content,
         DateTime createdAt, bool deleted = false) =>
