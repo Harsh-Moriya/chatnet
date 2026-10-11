@@ -82,12 +82,17 @@ export const useChatStore = create<ChatState>()((set) => ({
     })),
 
   // Merges by id, with the loaded copy winning, and re-sorts. A message pushed while the request
-  // was in flight is kept; a message in both is kept once.
+  // was in flight is kept; a message in both is kept once. History never carries the id a tab
+  // invented for its own message, so the one already known is kept: it is what the list uses to
+  // recognise the message as the same element it showed before.
   seedMessages: (conversationId, loaded) =>
     set((state) => {
       const merged = new Map<string, Message>()
       for (const message of state.messages[conversationId] ?? []) merged.set(message.id, message)
-      for (const message of loaded) merged.set(message.id, message)
+      for (const message of loaded) {
+        const clientMessageId = message.clientMessageId ?? merged.get(message.id)?.clientMessageId ?? null
+        merged.set(message.id, { ...message, clientMessageId })
+      }
 
       return { messages: { ...state.messages, [conversationId]: [...merged.values()].sort(byTime) } }
     }),

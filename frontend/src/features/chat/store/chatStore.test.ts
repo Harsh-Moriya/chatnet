@@ -77,6 +77,14 @@ describe('seedMessages', () => {
     expect(ids(store().messages.c1)).toEqual(['before', 'both'])
   })
 
+  it('keeps the client id of a message when a history load returns it without one', () => {
+    store().receiveMessage(message({ id: 'm', clientMessageId: 'p1' }))
+
+    store().seedMessages('c1', [message({ id: 'm', clientMessageId: null })])
+
+    expect(store().messages.c1[0].clientMessageId).toBe('p1')
+  })
+
   it('lets the server copy win when a message changed (for example it was deleted)', () => {
     store().receiveMessage(message({ id: 'm', content: 'secret' }))
 
