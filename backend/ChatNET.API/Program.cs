@@ -5,6 +5,7 @@ using ChatNET.API.Auth.Models;
 using ChatNET.API.Auth.RateLimiting;
 using ChatNET.API.Auth.Services;
 using ChatNET.API.Common.Behaviours;
+using ChatNET.API.Common.Health;
 using ChatNET.API.Common.Middleware;
 using ChatNET.API.Common.OpenApi;
 using ChatNET.API.Common.Persistence;
@@ -198,6 +199,15 @@ builder.Services.AddOptions<AuthRateLimitOptions>()
 builder.Services.AddRateLimiter(_ => { });
 builder.Services.AddSingleton<IConfigureOptions<RateLimiterOptions>, AuthRateLimiterSetup>();
 
+// ##### Health #####
+// /health reports whether this instance can reach what it depends on. Each check is cut off after
+// three seconds so a dependency that hangs reads as down instead of hanging the probe.
+builder.Services.AddSingleton(provider =>
+    new RedisHealthCheck(provider.GetRequiredService<IConfiguration>().GetConnectionString("Redis")!));
+builder.Services.AddHealthChecks()
+    .AddCheck<PostgresHealthCheck>("postgres", timeout: TimeSpan.FromSeconds(3))
+    .AddCheck<RedisHealthCheck>("redis", timeout: TimeSpan.FromSeconds(3));
+
 // ##### Exception handling #####
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
@@ -244,9 +254,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 // ##### Endpoints #####
-app.MapGet("/health", () => Results.Ok(new { status = "healthy" }))
-   .WithTags("Health")
-   .AllowAnonymous();
+app.MapHealthEndpoints();
 
 app.MapAuthEndpoints();
 app.MapUserEndpoints();

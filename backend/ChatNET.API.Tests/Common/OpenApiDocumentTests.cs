@@ -118,7 +118,9 @@ public class OpenApiDocumentTests
     {
         var operation = await OperationAsync("get", "/health");
 
-        Assert.True(operation.GetProperty("responses").TryGetProperty("200", out _));
+        var responses = operation.GetProperty("responses");
+        Assert.True(responses.TryGetProperty("200", out _));
+        Assert.True(responses.TryGetProperty("503", out _), "A failing dependency answers 503, which a monitor needs to know.");
     }
 
     private async Task<JsonElement> OperationAsync(string method, string path)
