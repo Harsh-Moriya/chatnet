@@ -13,15 +13,18 @@ public class CreateGroupHandler : IRequestHandler<CreateGroupCommand, Conversati
     private readonly IConversationRepository _conversations;
     private readonly UserManager<AppUser> _userManager;
     private readonly ILogger<CreateGroupHandler> _logger;
+    private readonly ConversationNotifier _notifier;
 
     public CreateGroupHandler(
         IConversationRepository conversations,
         UserManager<AppUser> userManager,
-        ILogger<CreateGroupHandler> logger)
+        ILogger<CreateGroupHandler> logger,
+        ConversationNotifier notifier)
     {
         _conversations = conversations;
         _userManager = userManager;
         _logger = logger;
+        _notifier = notifier;
     }
 
     public async Task<ConversationDto> Handle(CreateGroupCommand request, CancellationToken cancellationToken)
@@ -71,7 +74,11 @@ public class CreateGroupHandler : IRequestHandler<CreateGroupCommand, Conversati
             "Group conversation {ConversationId} created by {UserId} with {MemberCount} members",
             conversation.Id, request.UserId, memberIds.Count + 1);
 
-        var dto = await _conversations.GetForViewerAsync(conversation.Id, request.UserId, cancellationToken);
-        return dto ?? throw new NotFoundException("Conversation", conversation.Id);
+        var dto = await _conversations.GetForViewerAsync(conversation.Id, request.UserId, cancellationToken)
+                  ?? throw new NotFoundException("Conversation", conversation.Id);
+
+        await _notifier.NotifyCreatedAsync(dto, request.UserId, [request.UserId, .. memberIds], cancellationToken);
+
+        return dto;
     }
 }

@@ -14,15 +14,18 @@ public class CreateDirectHandler : IRequestHandler<CreateDirectCommand, Conversa
     private readonly IConversationRepository _conversations;
     private readonly UserManager<AppUser> _userManager;
     private readonly ILogger<CreateDirectHandler> _logger;
+    private readonly ConversationNotifier _notifier;
 
     public CreateDirectHandler(
         IConversationRepository conversations,
         UserManager<AppUser> userManager,
-        ILogger<CreateDirectHandler> logger)
+        ILogger<CreateDirectHandler> logger,
+        ConversationNotifier notifier)
     {
         _conversations = conversations;
         _userManager = userManager;
         _logger = logger;
+        _notifier = notifier;
     }
 
     public async Task<ConversationDto> Handle(CreateDirectCommand request, CancellationToken cancellationToken)
@@ -34,6 +37,7 @@ public class CreateDirectHandler : IRequestHandler<CreateDirectCommand, Conversa
         var directKey = DirectKey.For(request.UserId, request.OtherUserId);
 
         var conversation = await _conversations.GetDirectByKeyAsync(directKey, cancellationToken);
+        var createdByThisRequest = false;
 
         if (conversation is null)
         {
@@ -55,6 +59,7 @@ public class CreateDirectHandler : IRequestHandler<CreateDirectCommand, Conversa
             if (await _conversations.TryAddDirectAsync(created, cancellationToken))
             {
                 conversation = created;
+                createdByThisRequest = true;
                 _logger.LogInformation(
                     "Direct conversation {ConversationId} created by {UserId}", created.Id, request.UserId);
             }
@@ -67,7 +72,15 @@ public class CreateDirectHandler : IRequestHandler<CreateDirectCommand, Conversa
             }
         }
 
-        var dto = await _conversations.GetForViewerAsync(conversation.Id, request.UserId, cancellationToken);
-        return dto ?? throw new NotFoundException("Conversation", conversation.Id);
+        var dto = await _conversations.GetForViewerAsync(conversation.Id, request.UserId, cancellationToken)
+                  ?? throw new NotFoundException("Conversation", conversation.Id);
+
+        // Only the request that created the conversation announces it. A repeated call finds the
+        // existing one, and a request that lost a race returns the winner's, which the winner
+        // announces.
+        if (createdByThisRequest)
+            await _notifier.NotifyCreatedAsync(dto, request.UserId, [request.UserId, request.OtherUserId], cancellationToken);
+
+        return dto;
     }
 }
