@@ -2,7 +2,7 @@ import { type ButtonHTMLAttributes, type ReactNode } from 'react'
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'primary' | 'ghost'
-  size?: 'md' | 'sm'
+  size?: 'md' | 'sm' | 'icon'
   isLoading?: boolean
   fullWidth?: boolean
   children: ReactNode
@@ -32,6 +32,7 @@ export function Button({
   const sizes = {
     md: 'h-10 px-4 text-sm',
     sm: 'h-8 px-3 text-xs',
+    icon: 'h-9 w-9 shrink-0 p-0',
   }
 
   return (
