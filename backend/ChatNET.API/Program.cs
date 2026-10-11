@@ -89,6 +89,13 @@ builder.Services.AddIdentityCore<AppUser>(options =>
     options.Password.RequireUppercase = true;
     options.Password.RequireNonAlphanumeric = false;
     options.User.RequireUniqueEmail = true;
+
+    // Five wrong passwords in a row lock the account for 15 minutes. The window is short so
+    // that someone locking a victim out on purpose only ever costs them 15 minutes, and the
+    // per-address rate limit on /api/auth/* makes doing that repeatedly impractical.
+    options.Lockout.AllowedForNewUsers = true;
+    options.Lockout.MaxFailedAccessAttempts = 5;
+    options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
 })
 .AddRoles<IdentityRole<Guid>>()
 .AddEntityFrameworkStores<AppDbContext>()
