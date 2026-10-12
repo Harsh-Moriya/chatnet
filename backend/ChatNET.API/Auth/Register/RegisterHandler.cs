@@ -58,10 +58,10 @@ public class RegisterHandler : IRequestHandler<RegisterCommand, AuthResponse>
         }
         catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
         {
-            // The user name index is unique, so of several requests for one name the others fail
-            // here instead of in Identity's check.
-            _logger.LogInformation("Registration lost a race for a user name");
-            throw new ConflictException($"Username '{request.UserName}' is already taken.");
+            // The user name and email indexes are unique, so of several requests for one name or email
+            // the others fail here instead of in Identity's check.
+            _logger.LogInformation("Registration lost a race for a user name or email");
+            throw new ConflictException("That username or email is already taken.");
         }
 
         if (!result.Succeeded)
