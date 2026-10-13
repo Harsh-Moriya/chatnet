@@ -19,12 +19,23 @@ public static class MessageApi
         return await response.Content.ReadFromJsonAsync<JsonElement>();
     }
 
-    public static Task<HttpResponseMessage> GetHistoryResponseAsync(this HttpClient client, Guid conversationId) =>
-        client.GetAsync($"/api/conversations/{conversationId}/messages");
-
-    public static async Task<List<JsonElement>> GetHistoryAsync(this HttpClient client, Guid conversationId)
+    // "before" asks for the page of older messages that ends just above that message; "after" for the
+    // page of newer messages that starts just below it. Neither means the latest page.
+    public static Task<HttpResponseMessage> GetHistoryResponseAsync(
+        this HttpClient client, Guid conversationId, Guid? before = null, Guid? after = null)
     {
-        var response = await client.GetHistoryResponseAsync(conversationId);
+        var query = new List<string>();
+        if (before is { } b) query.Add($"before={b}");
+        if (after is { } a) query.Add($"after={a}");
+
+        var suffix = query.Count == 0 ? "" : "?" + string.Join("&", query);
+        return client.GetAsync($"/api/conversations/{conversationId}/messages{suffix}");
+    }
+
+    public static async Task<List<JsonElement>> GetHistoryAsync(
+        this HttpClient client, Guid conversationId, Guid? before = null, Guid? after = null)
+    {
+        var response = await client.GetHistoryResponseAsync(conversationId, before, after);
         response.EnsureSuccessStatusCode();
         var history = await response.Content.ReadFromJsonAsync<JsonElement>();
         return history.EnumerateArray().ToList();

@@ -31,12 +31,19 @@ public static class MessagingEndpoints
             StatusCodes.Status201Created, StatusCodes.Status400BadRequest, StatusCodes.Status401Unauthorized,
             StatusCodes.Status403Forbidden);
 
-        messages.MapGet("/", async (Guid conversationId, HttpContext http, IMediator mediator) =>
+        // Returns at most one page (50), oldest first. Without a cursor it is the latest page;
+        // "before" is the id of the oldest message the caller has, and returns the page just older;
+        // "after" is the id of the newest message the caller has, and returns the page just newer.
+        messages.MapGet("/", async (
+            Guid conversationId, Guid? before, Guid? after, HttpContext http, IMediator mediator) =>
         {
-            var result = await mediator.Send(new GetMessageHistoryQuery(conversationId, http.User.GetUserId()));
+            var result = await mediator.Send(
+                new GetMessageHistoryQuery(conversationId, http.User.GetUserId(), before, after));
             return Results.Ok(result);
         })
-        .Returns<List<MessageDto>>(StatusCodes.Status200OK, StatusCodes.Status401Unauthorized, StatusCodes.Status403Forbidden);
+        .Returns<List<MessageDto>>(
+            StatusCodes.Status200OK, StatusCodes.Status400BadRequest, StatusCodes.Status401Unauthorized,
+            StatusCodes.Status403Forbidden);
 
         return app;
     }

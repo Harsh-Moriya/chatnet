@@ -29,7 +29,7 @@ public class OpenApiDocumentTests
         ("post", "/api/conversations/direct", "200", "ConversationDto", "400,401,404"),
         ("post", "/api/conversations/group", "201", "ConversationDto", "400,401,404,409"),
         ("post", "/api/conversations/{conversationId}/messages", "201", "MessageDto", "400,401,403"),
-        ("get", "/api/conversations/{conversationId}/messages", "200", "MessageDto[]", "401,403"),
+        ("get", "/api/conversations/{conversationId}/messages", "200", "MessageDto[]", "400,401,403"),
     ];
 
     public static IEnumerable<object[]> Successes => All.Select(o => new object[] { o.Method, o.Path, o.Status, o.Schema });
