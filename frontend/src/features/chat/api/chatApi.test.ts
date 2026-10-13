@@ -137,6 +137,70 @@ describe('loading a conversation\'s history', () => {
     expect(store().messages.c1.map((m) => m.id)).toEqual(['old', 'pushed'])
   })
 
+  it('asks for the latest page when no cursor is given', async () => {
+    store().setConnection('connected')
+    const get = vi.spyOn(api, 'get').mockResolvedValue(respond([]))
+
+    await fetchMessages('c1')
+
+    expect(get.mock.calls[0][1]).toMatchObject({ params: { before: undefined, after: undefined } })
+  })
+
+  it('asks for the page before a message and hands over the cancel signal', async () => {
+    store().setConnection('connected')
+    const get = vi.spyOn(api, 'get').mockResolvedValue(respond([]))
+    const controller = new AbortController()
+
+    await fetchMessages('c1', { before: 'oldest-known', signal: controller.signal })
+
+    expect(get.mock.calls[0][1]).toMatchObject({
+      params: { before: 'oldest-known', after: undefined },
+      signal: controller.signal,
+    })
+  })
+
+  it('asks for the page after a message', async () => {
+    store().setConnection('connected')
+    const get = vi.spyOn(api, 'get').mockResolvedValue(respond([]))
+
+    await fetchMessages('c1', { after: 'newest-known' })
+
+    expect(get.mock.calls[0][1]).toMatchObject({ params: { before: undefined, after: 'newest-known' } })
+  })
+
+  it('adds an older page above the messages already shown, in order', async () => {
+    store().setConnection('connected')
+    store().seedMessages('c1', [
+      message({ id: 'c', createdAt: '2026-10-11T10:00:30Z' }),
+      message({ id: 'd', createdAt: '2026-10-11T10:00:40Z' }),
+    ])
+    vi.spyOn(api, 'get').mockResolvedValue(
+      respond([
+        message({ id: 'a', createdAt: '2026-10-11T10:00:10Z' }),
+        message({ id: 'b', createdAt: '2026-10-11T10:00:20Z' }),
+      ]),
+    )
+
+    await fetchMessages('c1', { before: 'c' })
+
+    expect(store().messages.c1.map((m) => m.id)).toEqual(['a', 'b', 'c', 'd'])
+  })
+
+  it('does not duplicate a message that two pages both contain', async () => {
+    store().setConnection('connected')
+    store().seedMessages('c1', [message({ id: 'b', createdAt: '2026-10-11T10:00:20Z' })])
+    vi.spyOn(api, 'get').mockResolvedValue(
+      respond([
+        message({ id: 'a', createdAt: '2026-10-11T10:00:10Z' }),
+        message({ id: 'b', createdAt: '2026-10-11T10:00:20Z' }),
+      ]),
+    )
+
+    await fetchMessages('c1', { before: 'b' })
+
+    expect(store().messages.c1.map((m) => m.id)).toEqual(['a', 'b'])
+  })
+
   it('leaves the store alone when the request fails', async () => {
     store().setConnection('connected')
     store().receiveMessage(message({ id: 'kept' }))

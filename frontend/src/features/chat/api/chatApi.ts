@@ -29,10 +29,25 @@ export async function fetchConversations(signal?: AbortSignal): Promise<Conversa
   return data
 }
 
-export async function fetchMessages(conversationId: string, signal?: AbortSignal): Promise<Message[]> {
+// One page of a conversation's history, oldest message first: the latest page, or with `before` the
+// page just older than that message id (what the reader scrolls back to), or with `after` the page
+// just newer than it.
+export interface MessagePageOptions {
+  before?: string
+  after?: string
+  signal?: AbortSignal
+}
+
+export async function fetchMessages(
+  conversationId: string,
+  { before, after, signal }: MessagePageOptions = {},
+): Promise<Message[]> {
   await waitForConnection(signal)
 
-  const { data } = await api.get<Message[]>(`/conversations/${conversationId}/messages`, { signal })
+  const { data } = await api.get<Message[]>(`/conversations/${conversationId}/messages`, {
+    params: { before, after },
+    signal,
+  })
   chat().seedMessages(conversationId, data)
   return data
 }
