@@ -1,3 +1,4 @@
+import { useCallback } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { AlertCircle, LoaderCircle } from 'lucide-react'
 import { getApiError } from '../../../lib/errors'
@@ -7,7 +8,7 @@ import { useChatStore } from '../store/chatStore'
 import type { Conversation } from '../types'
 import { ChatHeader } from './ChatHeader'
 import { MessageComposer } from './MessageComposer'
-import { MessageList } from './MessageList'
+import { MessageList, type OlderMessages } from './MessageList'
 import { TypingIndicator } from './TypingIndicator'
 
 // The route element for /chat/:conversationId. It finds the conversation in the store (which the
@@ -51,6 +52,18 @@ export function ConversationView() {
 
 function ConversationPane({ conversation }: { conversation: Conversation }) {
   const history = useMessages(conversation.id)
+  const { fetchNextPage } = history
+  const loadOlder = useCallback(() => void fetchNextPage(), [fetchNextPage])
+
+  // A failure to load an older page is shown at the top of the list, next to its "Try again", and
+  // is not the failure of the conversation as a whole.
+  const olderFailed = history.isFetchNextPageError
+  const older: OlderMessages = {
+    hasMore: history.hasNextPage,
+    isLoading: history.isFetchingNextPage,
+    error: olderFailed ? getApiError(history.error) : null,
+    onLoad: loadOlder,
+  }
 
   return (
     <>
@@ -58,8 +71,9 @@ function ConversationPane({ conversation }: { conversation: Conversation }) {
       <MessageList
         conversation={conversation}
         isLoading={history.isPending}
-        errorMessage={history.isError ? getApiError(history.error) : null}
+        errorMessage={history.isError && !olderFailed ? getApiError(history.error) : null}
         onRetry={() => void history.refetch()}
+        older={older}
       />
       <TypingIndicator conversationId={conversation.id} />
       <MessageComposer conversationId={conversation.id} />

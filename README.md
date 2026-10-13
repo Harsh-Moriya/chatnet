@@ -17,7 +17,7 @@ Under active development.
 | SignalR hub with Redis backplane: live groups per conversation, typing indicators, new-conversation push | Implemented |
 | Sending messages (REST) with live delivery to the conversation over SignalR, and the latest 50 messages as history | Implemented |
 | Chat interface: conversation list, message view, composer, new direct or group chat, typing indicators, optimistic sending with retry, reconnecting | Implemented |
-| Loading older messages with cursor pagination | Planned |
+| Scrolling back through older messages (cursor pagination, oldest-first pages of 50) | Implemented |
 | Online presence, read receipts, offline delivery | Planned |
 | Refresh tokens, notifications, file uploads | Planned |
 | Structured logging, tracing, deployment | Planned |
