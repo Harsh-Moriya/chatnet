@@ -19,7 +19,8 @@ Under active development.
 | Chat interface: conversation list, message view, composer, new direct or group chat, typing indicators, optimistic sending with retry, reconnecting | Implemented |
 | Scrolling back through older messages (cursor pagination, oldest-first pages of 50) | Implemented |
 | Catching up on messages missed while disconnected, with no gaps | Implemented |
-| Online presence, read receipts, unread counts | Planned |
+| Unread counts, marking a conversation read, read receipts ("Seen") | Implemented |
+| Online presence | Planned |
 | Refresh tokens, notifications, file uploads | Planned |
 | Structured logging, tracing, deployment | Planned |
 

@@ -76,7 +76,13 @@ export function connectChat(hub: ChatHub, deps: ChatConnectionDeps): ChatConnect
   // value as the reply to the server and logs an error when none was asked for.
 
   hub.on('ReceiveMessage', (message: Message) => {
-    chat().receiveMessage(message)
+    chat().receiveMessage(message, deps.getUserId() ?? undefined)
+  })
+
+  // Someone read a conversation up to readAt. For the signed-in user this is another tab of theirs
+  // (or this one, a moment after it asked), so their own unread count follows.
+  hub.on('MessageRead', (conversationId: string, userId: string, readAt: string) => {
+    chat().applyRead(conversationId, userId, readAt, deps.getUserId() ?? undefined)
   })
 
   hub.on('AddedToConversation', (conversation: Conversation) => {

@@ -46,5 +46,7 @@ public sealed class ThrowingHubContext : IHubContext<ChatHub, IChatClient>
         public Task UserTyping(Guid conversationId, Guid userId, string displayName, bool isTyping) => throw Failure();
 
         public Task AddedToConversation(ConversationDto conversation) => throw Failure();
+
+        public Task MessageRead(Guid conversationId, Guid userId, DateTime readAt) => throw Failure();
     }
 }

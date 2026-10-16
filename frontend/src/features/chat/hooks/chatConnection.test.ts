@@ -113,7 +113,7 @@ function message(id: string, overrides: Partial<Message> = {}): Message {
 }
 
 function conversation(id: string): Conversation {
-  return { id, type: 'Direct', name: 'Bob', avatarUrl: null, updatedAt: '2026-10-11T09:00:00Z', lastMessage: null }
+  return { id, type: 'Direct', name: 'Bob', avatarUrl: null, updatedAt: '2026-10-11T09:00:00Z', lastMessage: null, unreadCount: 0 }
 }
 
 const RETRY_DELAYS = [100, 200, 400]
@@ -160,7 +160,7 @@ describe('event handlers', () => {
 
     const start = hub.calls.indexOf('start')
     expect(start).toBeGreaterThan(-1)
-    for (const event of ['ReceiveMessage', 'AddedToConversation', 'UserTyping']) {
+    for (const event of ['ReceiveMessage', 'AddedToConversation', 'UserTyping', 'MessageRead']) {
       const registered = hub.calls.indexOf(`on:${event}`)
       expect(registered, event).toBeGreaterThan(-1)
       expect(registered, event).toBeLessThan(start)
@@ -176,6 +176,7 @@ describe('event handlers', () => {
     expect(hub.emit('ReceiveMessage', message('m1'))).toBeUndefined()
     expect(hub.emit('AddedToConversation', conversation('c9'))).toBeUndefined()
     expect(hub.emit('UserTyping', 'c1', 'bob', 'Bob', true)).toBeUndefined()
+    expect(hub.emit('MessageRead', 'c1', 'bob', '2026-10-11T10:00:00Z')).toBeUndefined()
   })
 
   it('puts a pushed message into the store', async () => {
@@ -184,6 +185,35 @@ describe('event handlers', () => {
     hub.emit('ReceiveMessage', message('m1'))
 
     expect(store().messages.c1.map((m) => m.id)).toEqual(['m1'])
+  })
+
+  it('counts a pushed message from someone else as unread, and one from the signed-in user as read', async () => {
+    const { hub } = await connected()
+    store().seedConversations([{ ...conversation('c1'), unreadCount: 1 }])
+
+    hub.emit('ReceiveMessage', message('m1', { senderId: 'bob', createdAt: '2026-10-11T10:00:01Z' }))
+    expect(store().conversations.c1.unreadCount).toBe(2)
+
+    hub.emit('ReceiveMessage', message('m2', { senderId: 'me', createdAt: '2026-10-11T10:00:02Z' }))
+    expect(store().conversations.c1.unreadCount).toBe(0)
+  })
+
+  it('records who read a conversation, and lowers the signed-in user\x27s own count when they read in another tab', async () => {
+    const { hub } = await connected()
+    store().seedConversations([
+      { ...conversation('c1'), unreadCount: 2, lastMessage: { senderId: 'bob', content: 'x', createdAt: '2026-10-11T10:00:05Z' } },
+    ])
+    store().seedMembers('c1', [
+      { userId: 'me', displayName: 'Me', avatarUrl: null, role: 'Member', lastReadAt: null },
+      { userId: 'bob', displayName: 'Bob', avatarUrl: null, role: 'Member', lastReadAt: null },
+    ])
+
+    hub.emit('MessageRead', 'c1', 'bob', '2026-10-11T10:00:04Z')
+    expect(store().members.c1.find((m) => m.userId === 'bob')?.lastReadAt).toBe('2026-10-11T10:00:04Z')
+    expect(store().conversations.c1.unreadCount).toBe(2)
+
+    hub.emit('MessageRead', 'c1', 'me', '2026-10-11T10:00:05Z')
+    expect(store().conversations.c1.unreadCount).toBe(0)
   })
 
   it('adds an announced conversation and joins it, which is the only way to receive its messages', async () => {

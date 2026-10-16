@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { sortedConversations, useChatStore } from './chatStore'
-import type { Conversation, Message, PendingMessage } from '../types'
+import type { Conversation, Member, Message, PendingMessage } from '../types'
 
 const store = () => useChatStore.getState()
 
@@ -23,6 +23,7 @@ function conversation(overrides: Partial<Conversation> & { id: string }): Conver
     avatarUrl: null,
     updatedAt: '2026-10-11T09:00:00Z',
     lastMessage: null,
+    unreadCount: 0,
     ...overrides,
   }
 }
@@ -479,5 +480,245 @@ describe('connection and reset', () => {
     expect(store().messages).toEqual({})
     expect(store().pending).toEqual({})
     expect(store().typing).toEqual({})
+    expect(store().members).toEqual({})
+  })
+})
+
+// ##### Read state #####
+
+function member(userId: string, lastReadAt: string | null): Member {
+  return { userId, displayName: userId, avatarUrl: null, role: 'Member', lastReadAt }
+}
+
+const unread = (id = 'c1') => store().conversations[id].unreadCount
+const readBy = (userId: string, id = 'c1') => store().members[id]?.find((m) => m.userId === userId)?.lastReadAt
+
+describe('unread counts', () => {
+  beforeEach(() => {
+    store().seedConversations([
+      conversation({
+        id: 'c1',
+        unreadCount: 2,
+        lastMessage: { senderId: 'bob', content: 'x', createdAt: '2026-10-11T10:00:00Z' },
+      }),
+    ])
+  })
+
+  it('go up by one for each new message from someone else', () => {
+    store().receiveMessage(message({ id: 'a', createdAt: '2026-10-11T10:00:01Z' }), 'me')
+    store().receiveMessage(message({ id: 'b', createdAt: '2026-10-11T10:00:02Z' }), 'me')
+
+    expect(unread()).toBe(4)
+  })
+
+  it('do not go up twice for a message that arrives by push and again in a history load', () => {
+    const arrival = message({ id: 'a', createdAt: '2026-10-11T10:00:01Z' })
+
+    store().receiveMessage(arrival, 'me')
+    store().receiveMessage(arrival, 'me')
+
+    expect(unread()).toBe(3)
+  })
+
+  it('are not changed by a history load, which is not news', () => {
+    store().seedMessages('c1', [message({ id: 'old', createdAt: '2026-10-11T09:00:00Z' })])
+
+    expect(unread()).toBe(2)
+  })
+
+  it('are left alone when the caller does not say who the signed-in user is', () => {
+    store().receiveMessage(message({ id: 'a', createdAt: '2026-10-11T10:00:01Z' }))
+
+    expect(unread()).toBe(2)
+  })
+
+  it('clear when you send a message, because sending counts as reading', () => {
+    store().receiveMessage(message({ id: 'mine', senderId: 'me', createdAt: '2026-10-11T10:00:05Z' }), 'me')
+
+    expect(unread()).toBe(0)
+  })
+
+  it('keep only the messages from others that are after yours', () => {
+    store().receiveMessage(message({ id: 'later', senderId: 'bob', createdAt: '2026-10-11T10:00:09Z' }), 'me')
+    expect(unread()).toBe(3)
+
+    store().receiveMessage(message({ id: 'mine', senderId: 'me', createdAt: '2026-10-11T10:00:05Z' }), 'me')
+
+    // Only the message from Bob at :09 is after yours.
+    expect(unread()).toBe(1)
+  })
+
+  it('are not invented for a conversation the sidebar does not know', () => {
+    store().receiveMessage(message({ id: 'x', conversationId: 'unknown' }), 'me')
+
+    expect(store().conversations.unknown).toBeUndefined()
+  })
+
+  it('come from the server when the list is loaded again', () => {
+    store().seedConversations([
+      conversation({
+        id: 'c1',
+        unreadCount: 0,
+        lastMessage: { senderId: 'bob', content: 'x', createdAt: '2026-10-11T10:00:00Z' },
+      }),
+    ])
+
+    expect(unread()).toBe(0)
+  })
+})
+
+describe('applying a read', () => {
+  beforeEach(() => {
+    store().seedConversations([
+      conversation({
+        id: 'c1',
+        unreadCount: 3,
+        updatedAt: '2026-10-11T10:00:03Z',
+        lastMessage: { senderId: 'bob', content: 'x', createdAt: '2026-10-11T10:00:03Z' },
+      }),
+    ])
+    store().seedMessages('c1', [
+      message({ id: 'm1', createdAt: '2026-10-11T10:00:01Z' }),
+      message({ id: 'm2', createdAt: '2026-10-11T10:00:02Z' }),
+      message({ id: 'm3', createdAt: '2026-10-11T10:00:03Z' }),
+    ])
+    store().seedMembers('c1', [member('me', null), member('bob', null)])
+  })
+
+  it('clears your own count when you read up to the newest message, whichever tab did it', () => {
+    store().applyRead('c1', 'me', '2026-10-11T10:00:03Z', 'me')
+
+    expect(unread()).toBe(0)
+  })
+
+  it('leaves only the messages after the read position unread when you read partway', () => {
+    store().applyRead('c1', 'me', '2026-10-11T10:00:01Z', 'me')
+
+    expect(unread()).toBe(2)
+  })
+
+  it('does not count your own messages as unread after a partial read', () => {
+    store().receiveMessage(message({ id: 'm4', senderId: 'bob', createdAt: '2026-10-11T10:00:04Z' }), 'me')
+    store().seedMessages('c1', [message({ id: 'own', senderId: 'me', createdAt: '2026-10-11T10:00:02.5Z' })])
+
+    store().applyRead('c1', 'me', '2026-10-11T10:00:01Z', 'me')
+
+    // m2, m3 and m4 are Bob's and after :01; "own" is yours.
+    expect(unread()).toBe(3)
+  })
+
+  it('never raises the count', () => {
+    store().applyRead('c1', 'me', '2026-10-11T10:00:00Z', 'me')
+
+    expect(unread()).toBe(3)
+  })
+
+  // Two tabs, or pushes arriving out of order: a read of an older message can reach this tab after
+  // a read of a newer one. It must not make the messages read in between unread again.
+  it('does not raise the count when an older read arrives after a newer one', () => {
+    store().applyRead('c1', 'me', '2026-10-11T10:00:02Z', 'me')
+    expect(unread()).toBe(1)
+
+    store().applyRead('c1', 'me', '2026-10-11T10:00:01Z', 'me')
+
+    expect(unread()).toBe(1)
+  })
+
+  it('counts nothing when the conversation has no unread messages to begin with', () => {
+    store().applyRead('c1', 'me', '2026-10-11T10:00:03Z', 'me')
+    const before = store()
+
+    store().applyRead('c1', 'me', '2026-10-11T10:00:01Z', 'me')
+
+    expect(unread()).toBe(0)
+    expect(store().conversations).toBe(before.conversations)
+  })
+
+  it('records where another member has read to', () => {
+    store().applyRead('c1', 'bob', '2026-10-11T10:00:02Z', 'me')
+
+    expect(readBy('bob')).toBe('2026-10-11T10:00:02Z')
+  })
+
+  it('does not change your count when someone else reads', () => {
+    store().applyRead('c1', 'bob', '2026-10-11T10:00:03Z', 'me')
+
+    expect(unread()).toBe(3)
+  })
+
+  it('never moves a member\'s read position backwards', () => {
+    store().applyRead('c1', 'bob', '2026-10-11T10:00:03Z', 'me')
+
+    store().applyRead('c1', 'bob', '2026-10-11T10:00:01Z', 'me')
+
+    expect(readBy('bob')).toBe('2026-10-11T10:00:03Z')
+  })
+
+  it('compares positions by value, not as text', () => {
+    store().applyRead('c1', 'bob', '2026-10-11T10:00:03.5Z', 'me')
+
+    store().applyRead('c1', 'bob', '2026-10-11T10:00:03Z', 'me')
+
+    expect(readBy('bob')).toBe('2026-10-11T10:00:03.5Z')
+  })
+
+  it('ignores a member it does not know and a conversation it has not loaded', () => {
+    const before = store()
+
+    store().applyRead('c1', 'stranger', '2026-10-11T10:00:03Z', 'me')
+    store().applyRead('nowhere', 'bob', '2026-10-11T10:00:03Z', 'me')
+
+    expect(store()).toBe(before)
+  })
+
+  it('does not tell anyone anything when it changes nothing', () => {
+    store().applyRead('c1', 'bob', '2026-10-11T10:00:02Z', 'me')
+    const before = store()
+
+    store().applyRead('c1', 'bob', '2026-10-11T10:00:02Z', 'me')
+
+    expect(store()).toBe(before)
+  })
+})
+
+describe('members', () => {
+  it('are stored per conversation', () => {
+    store().seedMembers('c1', [member('me', null), member('bob', '2026-10-11T10:00:01Z')])
+
+    expect(store().members.c1.map((m) => m.userId)).toEqual(['me', 'bob'])
+  })
+
+  it('keep a read position that arrived by push while the list was being loaded', () => {
+    store().seedMembers('c1', [member('bob', null)])
+    store().applyRead('c1', 'bob', '2026-10-11T10:00:05Z', 'me')
+
+    store().seedMembers('c1', [member('bob', '2026-10-11T10:00:02Z')])
+
+    expect(readBy('bob')).toBe('2026-10-11T10:00:05Z')
+  })
+
+  it('take a newer position from the server over an older one held', () => {
+    store().seedMembers('c1', [member('bob', '2026-10-11T10:00:02Z')])
+
+    store().seedMembers('c1', [member('bob', '2026-10-11T10:00:09Z')])
+
+    expect(readBy('bob')).toBe('2026-10-11T10:00:09Z')
+  })
+
+  it('follow the server for who is in the conversation', () => {
+    store().seedMembers('c1', [member('me', null), member('bob', null)])
+
+    store().seedMembers('c1', [member('me', null), member('cat', null)])
+
+    expect(store().members.c1.map((m) => m.userId)).toEqual(['me', 'cat'])
+  })
+
+  it('treat a message from a member as proof that they have read up to it', () => {
+    store().seedMembers('c1', [member('me', null), member('bob', null)])
+
+    store().receiveMessage(message({ id: 'a', senderId: 'bob', createdAt: '2026-10-11T10:00:07Z' }))
+
+    expect(readBy('bob')).toBe('2026-10-11T10:00:07Z')
+    expect(readBy('me')).toBeNull()
   })
 })

@@ -1,7 +1,8 @@
-import { AlertCircle, Clock, RotateCw } from 'lucide-react'
+import { AlertCircle, CheckCheck, Clock, RotateCw } from 'lucide-react'
 import { Button } from '../../../components/ui/Button'
 import { cn } from '../../../lib/cn'
 import { formatClock } from '../../../lib/format'
+import type { Seen } from '../readState'
 
 interface MessageBubbleProps {
   own: boolean
@@ -12,6 +13,8 @@ interface MessageBubbleProps {
   content: string | null
   // Absent while the message is unconfirmed.
   createdAt?: string
+  // Set on the reader's newest message once someone has read it.
+  seen?: Seen
   status?: 'sending' | 'failed'
   error?: string | null
   onRetry?: () => void
@@ -24,6 +27,7 @@ export function MessageBubble({
   senderName,
   content,
   createdAt,
+  seen,
   status,
   error,
   onRetry,
@@ -71,6 +75,13 @@ export function MessageBubble({
           )}
         </p>
       </div>
+
+      {seen && (
+        <p className="mt-0.5 flex items-center gap-1 px-1 text-[11px] text-slate-400" title={seen.title}>
+          <CheckCheck className="h-3 w-3" aria-hidden="true" />
+          {seen.label}
+        </p>
+      )}
 
       {failed && (
         <div className="mt-1 flex flex-wrap items-center justify-end gap-x-2 gap-y-1 text-xs text-red-500" role="alert">

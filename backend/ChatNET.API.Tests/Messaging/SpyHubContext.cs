@@ -66,5 +66,7 @@ public sealed class SpyHubContext : IHubContext<ChatHub, IChatClient>
             throw new NotSupportedException();
 
         public Task AddedToConversation(ConversationDto conversation) => throw new NotSupportedException();
+
+        public Task MessageRead(Guid conversationId, Guid userId, DateTime readAt) => throw new NotSupportedException();
     }
 }

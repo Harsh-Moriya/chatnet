@@ -26,4 +26,11 @@ public interface IConversationRepository
     Task<List<Guid>> GetActiveMemberIdsAsync(Guid conversationId, CancellationToken cancellationToken);
 
     Task<List<Guid>> GetActiveConversationIdsForUserAsync(Guid userId, CancellationToken cancellationToken);
+
+    // Moves an active member's read position to readAt, only if that is later than where it is.
+    // Returns whether it moved, so callers announce a change only when there was one.
+    Task<bool> AdvanceLastReadAsync(Guid conversationId, Guid userId, DateTime readAt, CancellationToken cancellationToken);
+
+    // The active members, earliest joiner first, each with how far they have read.
+    Task<List<MemberDto>> GetActiveMembersAsync(Guid conversationId, CancellationToken cancellationToken);
 }

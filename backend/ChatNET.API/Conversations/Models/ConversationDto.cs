@@ -1,14 +1,16 @@
 namespace ChatNET.API.Conversations.Models;
 
 // Name is resolved per viewer: for a Direct conversation it is the other participant's
-// display name, for a Group it is the group name.
+// display name, for a Group it is the group name. UnreadCount is per viewer too: the messages
+// other people sent since the viewer last read the conversation, at most ConversationRepository's cap.
 public record ConversationDto(
     Guid Id,
     ConversationType Type,
     string Name,
     string? AvatarUrl,
     DateTime UpdatedAt,
-    LastMessageDto? LastMessage
+    LastMessageDto? LastMessage,
+    int UnreadCount
 );
 
 // Content is null when the last message was deleted. It is truncated to a preview length.

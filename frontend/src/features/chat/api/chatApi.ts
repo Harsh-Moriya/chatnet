@@ -3,7 +3,7 @@ import { getApiError } from '../../../lib/errors'
 import { newClientMessageId } from '../../../lib/uuid'
 import { useChatStore } from '../store/chatStore'
 import { waitForConnection } from '../store/waitForConnection'
-import type { Conversation, Message, UserSummary } from '../types'
+import type { Conversation, Member, Message, UserSummary } from '../types'
 
 // Every REST call the chat makes. Plain functions, so they can be tested without React; the hooks
 // in this folder only hand them to TanStack Query. REST loads data and confirms changes, SignalR
@@ -52,6 +52,16 @@ export async function fetchMessages(
   return data
 }
 
+// The people in a conversation and how far each has read. Read positions are pushed too, so this
+// waits for the connection like the other loads.
+export async function fetchMembers(conversationId: string, signal?: AbortSignal): Promise<Member[]> {
+  await waitForConnection(signal)
+
+  const { data } = await api.get<Member[]>(`/conversations/${conversationId}/members`, { signal })
+  chat().seedMembers(conversationId, data)
+  return data
+}
+
 // Search results are not pushed over the connection, so there is nothing to wait for.
 export async function searchUsers(query: string, signal?: AbortSignal): Promise<UserSummary[]> {
   const { data } = await api.get<UserSummary[]>('/users', { params: { query }, signal })
@@ -73,6 +83,19 @@ export async function createGroup(name: string, memberIds: string[]): Promise<Co
   const { data } = await api.post<Conversation>('/conversations/group', { name, memberIds })
   chat().addConversation(data)
   return data
+}
+
+// ##### Reading #####
+
+// Tells the server the signed-in user has read up to and including this message. Once it accepts,
+// the position is applied here at once rather than waiting for the push of it, which also reaches
+// this tab; applying it twice changes nothing. A failure is the caller's to handle: the count stays,
+// so the next change that makes marking worthwhile tries again.
+export async function markRead(conversationId: string, messageId: string, selfId: string): Promise<void> {
+  await api.post(`/conversations/${conversationId}/read`, { messageId })
+
+  const message = chat().messages[conversationId]?.find((m) => m.id === messageId)
+  if (message) chat().applyRead(conversationId, selfId, message.createdAt, selfId)
 }
 
 // ##### Sending #####
@@ -118,7 +141,8 @@ async function post(conversationId: string, clientMessageId: string, content: st
       { content, clientMessageId },
       { timeout: SEND_TIMEOUT_MS },
     )
-    chat().receiveMessage(data)
+    // The response to a send is the sender's own message, so its sender is the signed-in user.
+    chat().receiveMessage(data, data.senderId)
   } catch (error) {
     // A message the push already confirmed is no longer unconfirmed, and failing an unknown id
     // does nothing, so a lost response cannot turn a delivered message into a failed one.
