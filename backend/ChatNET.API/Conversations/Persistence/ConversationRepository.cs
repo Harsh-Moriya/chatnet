@@ -113,6 +113,14 @@ public class ConversationRepository : IConversationRepository
         return updated > 0;
     }
 
+    public Task<List<MemberDto>> GetActiveMembersAsync(Guid conversationId, CancellationToken cancellationToken)
+        => _db.ConversationMembers
+            .AsNoTracking()
+            .Where(m => m.ConversationId == conversationId && m.LeftAt == null)
+            .OrderBy(m => m.JoinedAt).ThenBy(m => m.UserId)
+            .Select(m => new MemberDto(m.UserId, m.User.DisplayName, m.User.AvatarUrl, m.Role, m.LastReadAt))
+            .ToListAsync(cancellationToken);
+
     // ##### Conversation list and detail queries #####
     // Written as SQL by hand because the obvious LINQ form is slow. EF Core translates "latest
     // message of each conversation" to ROW_NUMBER() over the messages of EVERY conversation and only

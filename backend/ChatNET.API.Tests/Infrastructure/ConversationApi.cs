@@ -47,6 +47,17 @@ public static class ConversationApi
         response.EnsureSuccessStatusCode();
     }
 
+    public static Task<HttpResponseMessage> GetMembersResponseAsync(this HttpClient client, Guid conversationId) =>
+        client.GetAsync($"/api/conversations/{conversationId}/members");
+
+    public static async Task<List<JsonElement>> GetMembersAsync(this HttpClient client, Guid conversationId)
+    {
+        var response = await client.GetMembersResponseAsync(conversationId);
+        response.EnsureSuccessStatusCode();
+        var members = await response.Content.ReadFromJsonAsync<JsonElement>();
+        return members.EnumerateArray().ToList();
+    }
+
     // The unread count of one conversation as the caller sees it in their list.
     public static async Task<int> UnreadInListAsync(this HttpClient client, Guid conversationId) =>
         (await client.ListConversationsAsync()).Single(c => c.IdOf() == conversationId).UnreadOf();

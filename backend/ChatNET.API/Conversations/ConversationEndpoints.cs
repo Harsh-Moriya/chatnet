@@ -3,6 +3,7 @@ using ChatNET.API.Common.OpenApi;
 using ChatNET.API.Conversations.CreateDirect;
 using ChatNET.API.Conversations.CreateGroup;
 using ChatNET.API.Conversations.GetConversation;
+using ChatNET.API.Conversations.GetMembers;
 using ChatNET.API.Conversations.GetMyConversations;
 using ChatNET.API.Conversations.MarkRead;
 using ChatNET.API.Conversations.Models;
@@ -66,6 +67,14 @@ public static class ConversationEndpoints
         })
         .ReturnsNoContent(
             StatusCodes.Status400BadRequest, StatusCodes.Status401Unauthorized, StatusCodes.Status403Forbidden);
+
+        conversations.MapGet("/{conversationId:guid}/members", async (
+            Guid conversationId, HttpContext http, IMediator mediator) =>
+        {
+            var result = await mediator.Send(new GetMembersQuery(conversationId, http.User.GetUserId()));
+            return Results.Ok(result);
+        })
+        .Returns<List<MemberDto>>(StatusCodes.Status200OK, StatusCodes.Status401Unauthorized, StatusCodes.Status403Forbidden);
 
         return app;
     }
