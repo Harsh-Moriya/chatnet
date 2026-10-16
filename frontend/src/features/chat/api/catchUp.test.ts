@@ -276,7 +276,7 @@ describe('catching up on all conversations', () => {
     store().seedMessages('c1', range(0, 3, 'c1'))
     store().seedMessages('c2', range(0, 3, 'c2'))
     store().seedConversations([
-      { id: 'c3', type: 'Direct', name: 'Never opened', avatarUrl: null, updatedAt: '2026-10-11T09:00:00Z', lastMessage: null },
+      { id: 'c3', type: 'Direct', name: 'Never opened', avatarUrl: null, updatedAt: '2026-10-11T09:00:00Z', lastMessage: null, unreadCount: 0 },
     ])
     const urls: string[] = []
     vi.spyOn(api, 'get').mockImplementation(async (url) => {

@@ -11,6 +11,9 @@ export interface Conversation {
   avatarUrl: string | null
   updatedAt: string
   lastMessage: LastMessage | null
+  // Messages from other people since you last read it. Counted by the server up to a cap
+  // (UNREAD_CAP), then increased here by each message that arrives.
+  unreadCount: number
 }
 
 export interface LastMessage {
@@ -42,6 +45,16 @@ export interface PendingMessage {
   createdAt: string
   status: 'sending' | 'failed'
   error: string | null
+}
+
+// A person in a conversation and how far they have read: they have seen every message sent at or
+// before `lastReadAt`. Null until they have read or sent something.
+export interface Member {
+  userId: string
+  displayName: string
+  avatarUrl: string | null
+  role: 'Owner' | 'Admin' | 'Member'
+  lastReadAt: string | null
 }
 
 export interface UserSummary {

@@ -2,13 +2,15 @@ import { AxiosError, type AxiosResponse } from 'axios'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { api } from '../../../lib/api'
 import { useChatStore } from '../store/chatStore'
-import type { Conversation, Message, UserSummary } from '../types'
+import type { Conversation, Member, Message, UserSummary } from '../types'
 import {
   createDirect,
   createGroup,
   dismissMessage,
   fetchConversations,
+  fetchMembers,
   fetchMessages,
+  markRead,
   retryMessage,
   searchUsers,
   sendMessage,
@@ -50,7 +52,7 @@ function message(overrides: Partial<Message> & { id: string }): Message {
 }
 
 function conversation(id: string): Conversation {
-  return { id, type: 'Direct', name: 'Bob', avatarUrl: null, updatedAt: '2026-10-11T09:00:00Z', lastMessage: null }
+  return { id, type: 'Direct', name: 'Bob', avatarUrl: null, updatedAt: '2026-10-11T09:00:00Z', lastMessage: null, unreadCount: 0 }
 }
 
 const flush = () => new Promise<void>((resolve) => setTimeout(resolve, 0))
@@ -423,5 +425,128 @@ describe('retrying and dismissing', () => {
     dismissMessage('c1', failed.clientMessageId)
 
     expect(store().pending.c1).toEqual([])
+  })
+})
+
+// ##### Members and reading #####
+
+function member(userId: string, lastReadAt: string | null = null): Member {
+  return { userId, displayName: userId, avatarUrl: null, role: 'Member', lastReadAt }
+}
+
+describe('loading the members of a conversation', () => {
+  it('waits for the live connection before asking the server', async () => {
+    const get = vi.spyOn(api, 'get').mockResolvedValue(respond([member('me')]))
+
+    const loading = fetchMembers('c1')
+    await flush()
+    expect(get).not.toHaveBeenCalled()
+
+    store().setConnection('connected')
+    await loading
+    expect(get.mock.calls[0][0]).toBe('/conversations/c1/members')
+  })
+
+  it('puts the members in the store and returns them', async () => {
+    store().setConnection('connected')
+    vi.spyOn(api, 'get').mockResolvedValue(respond([member('me'), member('bob', '2026-10-11T10:00:00Z')]))
+
+    const members = await fetchMembers('c1')
+
+    expect(members.map((m) => m.userId)).toEqual(['me', 'bob'])
+    expect(store().members.c1.map((m) => m.userId)).toEqual(['me', 'bob'])
+  })
+
+  it('leaves the store alone when the request fails', async () => {
+    store().setConnection('connected')
+    store().seedMembers('c1', [member('kept')])
+    vi.spyOn(api, 'get').mockRejectedValue(failure(403, 'You are not a member of this conversation.'))
+
+    await expect(fetchMembers('c1')).rejects.toThrow()
+
+    expect(store().members.c1.map((m) => m.userId)).toEqual(['kept'])
+  })
+})
+
+describe('telling the server a conversation was read', () => {
+  function withUnread() {
+    store().seedConversations([
+      {
+        ...conversation('c1'),
+        unreadCount: 2,
+        lastMessage: { senderId: 'bob', content: 'x', createdAt: '2026-10-11T10:00:02Z' },
+      },
+    ])
+    store().seedMessages('c1', [
+      message({ id: 'm1', senderId: 'bob', createdAt: '2026-10-11T10:00:01Z' }),
+      message({ id: 'm2', senderId: 'bob', createdAt: '2026-10-11T10:00:02Z' }),
+    ])
+  }
+
+  it('posts the id of the message read up to', async () => {
+    withUnread()
+    const post = vi.spyOn(api, 'post').mockResolvedValue(respond(undefined))
+
+    await markRead('c1', 'm2', 'me')
+
+    expect(post).toHaveBeenCalledWith('/conversations/c1/read', { messageId: 'm2' })
+  })
+
+  it('clears the count once the server has accepted it, without waiting for the push', async () => {
+    withUnread()
+    vi.spyOn(api, 'post').mockResolvedValue(respond(undefined))
+
+    await markRead('c1', 'm2', 'me')
+
+    expect(store().conversations.c1.unreadCount).toBe(0)
+  })
+
+  it('keeps the count while the server has not accepted it', async () => {
+    withUnread()
+    const response = deferred<AxiosResponse<undefined>>()
+    vi.spyOn(api, 'post').mockReturnValue(response.promise)
+
+    const reading = markRead('c1', 'm2', 'me')
+
+    expect(store().conversations.c1.unreadCount).toBe(2)
+    response.resolve(respond(undefined))
+    await reading
+  })
+
+  it('keeps the count and reports the failure when the server refuses', async () => {
+    withUnread()
+    vi.spyOn(api, 'post').mockRejectedValue(failure(403, 'You are not a member of this conversation.'))
+
+    await expect(markRead('c1', 'm2', 'me')).rejects.toThrow()
+
+    expect(store().conversations.c1.unreadCount).toBe(2)
+  })
+
+  it('only partly lowers the count when the message was not the newest', async () => {
+    withUnread()
+    vi.spyOn(api, 'post').mockResolvedValue(respond(undefined))
+
+    await markRead('c1', 'm1', 'me')
+
+    expect(store().conversations.c1.unreadCount).toBe(1)
+  })
+})
+
+describe('sending a message counts as reading', () => {
+  it('clears the unread count of the conversation', async () => {
+    store().seedConversations([
+      {
+        ...conversation('c1'),
+        unreadCount: 3,
+        lastMessage: { senderId: 'bob', content: 'x', createdAt: '2026-10-11T09:59:00Z' },
+      },
+    ])
+    vi.spyOn(api, 'post').mockResolvedValue(
+      respond(message({ id: 'real', senderId: 'me', createdAt: '2026-10-11T10:00:00Z' })),
+    )
+
+    await sendMessage('c1', 'on my way')
+
+    expect(store().conversations.c1.unreadCount).toBe(0)
   })
 })
