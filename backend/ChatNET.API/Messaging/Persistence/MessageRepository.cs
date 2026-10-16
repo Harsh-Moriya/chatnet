@@ -37,6 +37,19 @@ public class MessageRepository : IMessageRepository
         _db.Conversations.Attach(conversation);
         _db.Entry(conversation).Property(c => c.UpdatedAt).IsModified = true;
 
+        // Sending counts as reading: whoever sends has seen the conversation up to their message. The
+        // same stub trick moves the sender's read position, in the same transaction. Besides being
+        // what people expect, it keeps the unread count cheap, because the sender's own messages
+        // never accumulate after their read position for the count to step over.
+        var sender = new ConversationMember
+        {
+            ConversationId = message.ConversationId,
+            UserId = message.SenderId,
+            LastReadAt = message.CreatedAt,
+        };
+        _db.ConversationMembers.Attach(sender);
+        _db.Entry(sender).Property(m => m.LastReadAt).IsModified = true;
+
         await _db.SaveChangesAsync(cancellationToken);
     }
 

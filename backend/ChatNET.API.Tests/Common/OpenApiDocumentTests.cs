@@ -30,6 +30,7 @@ public class OpenApiDocumentTests
         ("post", "/api/conversations/group", "201", "ConversationDto", "400,401,404,409"),
         ("post", "/api/conversations/{conversationId}/messages", "201", "MessageDto", "400,401,403"),
         ("get", "/api/conversations/{conversationId}/messages", "200", "MessageDto[]", "400,401,403"),
+        ("post", "/api/conversations/{conversationId}/read", "204", "", "400,401,403"),
     ];
 
     public static IEnumerable<object[]> Successes => All.Select(o => new object[] { o.Method, o.Path, o.Status, o.Schema });
@@ -42,7 +43,16 @@ public class OpenApiDocumentTests
     {
         var operation = await OperationAsync(method, path);
 
-        var content = operation.GetProperty("responses").GetProperty(status).GetProperty("content");
+        var success = operation.GetProperty("responses").GetProperty(status);
+
+        // An empty schema name means the success response has no body at all (204).
+        if (schema.Length == 0)
+        {
+            Assert.False(success.TryGetProperty("content", out _), $"{method} {path} documents a body for {status}.");
+            return;
+        }
+
+        var content = success.GetProperty("content");
         var body = content.GetProperty("application/json").GetProperty("schema");
 
         var isArray = schema.EndsWith("[]");

@@ -17,4 +17,9 @@ public interface IChatClient
     // Sent to users who are added to a conversation while already connected, because
     // their open connections are not yet in that conversation's group.
     Task AddedToConversation(ConversationDto conversation);
+
+    // A member read the conversation up to and including every message sent at or before readAt.
+    // Sent to the whole conversation, the reader's own other tabs included, after the new position
+    // is stored; it is only sent when the position moved.
+    Task MessageRead(Guid conversationId, Guid userId, DateTime readAt);
 }

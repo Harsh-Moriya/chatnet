@@ -87,6 +87,57 @@ public class ConversationListPlanTests
         }
     }
 
+    // The unread count is part of the list query. However many messages are unread, it must stop at
+    // the cap instead of counting them all: a conversation with thousands of unread messages would
+    // otherwise make every sidebar load read thousands of rows.
+    [Fact]
+    public async Task The_unread_count_reads_about_the_cap_of_messages_however_many_are_unread()
+    {
+        const int unread = 6000;
+        var recorder = new CommandRecorder();
+        using var host = _factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+            services.ConfigureDbContext<AppDbContext>(options => options.AddInterceptors(recorder))));
+        var alice = await _factory.RegisterUserAsync("alice");
+        var bob = await _factory.RegisterUserAsync("bob");
+        using var setup = _factory.CreateClientFor(alice);
+        var conversation = (await setup.CreateDirectAsync(bob.Id)).IdOf();
+        await _factory.BackdateJoinAsync(conversation);
+        await _factory.ExecuteDbAsync(async db =>
+        {
+            await db.Database.ExecuteSqlInterpolatedAsync($@"
+                INSERT INTO ""Messages"" (""Id"", ""ConversationId"", ""SenderId"", ""Content"", ""CreatedAt"")
+                SELECT gen_random_uuid(), {conversation}, {bob.Id}, 'unread', now() - (s * interval '1 second')
+                FROM generate_series(1, {unread}) s");
+            await db.Database.ExecuteSqlRawAsync(@"ANALYZE ""Messages""");
+        });
+
+        try
+        {
+            using var client = host.CreateClient();
+            client.DefaultRequestHeaders.Authorization =
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", alice.Token);
+            recorder.Clear();
+            var list = await client.ListConversationsAsync();
+
+            // The plan only means something for a query that gives the right answer.
+            Assert.Equal(100, list.Single(c => c.IdOf() == conversation).UnreadOf());
+
+            var listQuery = Assert.Single(recorder.Commands);
+            var rowsRead = await _factory.QueryDbAsync(db =>
+                QueryPlan.RowsReadFromTableAsync(db, listQuery, "Messages"));
+
+            // The count reads its cap (100) and the preview reads one more. Counting everything
+            // would be 6,000.
+            Assert.True(rowsRead <= 150,
+                $"The list query read {rowsRead} Messages rows for a conversation with {unread} unread messages.");
+        }
+        finally
+        {
+            await _factory.ExecuteDbAsync(db => db.Database.ExecuteSqlInterpolatedAsync(
+                $@"DELETE FROM ""Messages"" WHERE ""ConversationId"" = {conversation}"));
+        }
+    }
+
     // Bulk insert with generate_series is far faster than going through the API, and ANALYZE
     // refreshes the statistics so the planner sees the real table sizes, as it would in production.
     private Task SeedUnrelatedMessagesAsync(string tag, Guid ownerId) =>

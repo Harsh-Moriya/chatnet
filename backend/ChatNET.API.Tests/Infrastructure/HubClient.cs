@@ -8,6 +8,8 @@ namespace ChatNET.API.Tests.Infrastructure;
 
 public sealed record TypingEvent(Guid ConversationId, Guid UserId, string DisplayName, bool IsTyping);
 
+public sealed record ReadEvent(Guid ConversationId, Guid UserId, DateTime ReadAt);
+
 // A real SignalR client talking to the in-memory test server over WebSockets, as a browser would:
 // it negotiates over HTTP and then upgrades to a WebSocket, passing the token in the query string.
 // Every event the server pushes is recorded so a test can wait for it, or check that none came.
@@ -23,6 +25,7 @@ public sealed class HubClient : IAsyncDisposable
     private readonly ConcurrentQueue<JsonElement> _messages = new();
     private readonly ConcurrentQueue<TypingEvent> _typing = new();
     private readonly ConcurrentQueue<JsonElement> _added = new();
+    private readonly ConcurrentQueue<ReadEvent> _reads = new();
 
     private HubClient(HubConnection connection)
     {
@@ -33,6 +36,8 @@ public sealed class HubClient : IAsyncDisposable
         _connection.On<Guid, Guid, string, bool>("UserTyping", (conversationId, userId, displayName, isTyping) =>
             _typing.Enqueue(new TypingEvent(conversationId, userId, displayName, isTyping)));
         _connection.On<JsonElement>("AddedToConversation", conversation => _added.Enqueue(conversation));
+        _connection.On<Guid, Guid, DateTime>("MessageRead", (conversationId, userId, readAt) =>
+            _reads.Enqueue(new ReadEvent(conversationId, userId, readAt)));
     }
 
     public HubConnectionState State => _connection.State;
@@ -42,6 +47,8 @@ public sealed class HubClient : IAsyncDisposable
     public IReadOnlyList<TypingEvent> TypingEvents => _typing.ToArray();
 
     public IReadOnlyList<JsonElement> AddedToConversation => _added.ToArray();
+
+    public IReadOnlyList<ReadEvent> ReadEvents => _reads.ToArray();
 
     public static Task<HubClient> ConnectAsync(WebApplicationFactory<Program> host, TestUser user) =>
         ConnectAsync(host, user.Token);
@@ -122,6 +129,9 @@ public sealed class HubClient : IAsyncDisposable
     public Task<JsonElement> WaitForAddedAsync(Guid conversationId, TimeSpan? timeout = null) =>
         WaitAsync(_added, c => c.GetProperty("id").GetGuid() == conversationId, timeout);
 
+    public Task<ReadEvent> WaitForReadAsync(Func<ReadEvent, bool> match, TimeSpan? timeout = null) =>
+        WaitAsync(_reads, match, timeout);
+
     // Listens for a short while and reports whether any matching event arrived. Used to prove an
     // event was NOT delivered; the quiet period keeps such tests fast but not instant.
     public async Task<bool> ReceivedMessageAsync(Guid conversationId)
@@ -140,6 +150,12 @@ public sealed class HubClient : IAsyncDisposable
     {
         await Task.Delay(QuietPeriod);
         return _added.Any(c => c.GetProperty("id").GetGuid() == conversationId);
+    }
+
+    public async Task<bool> ReceivedReadAsync(Func<ReadEvent, bool> match)
+    {
+        await Task.Delay(QuietPeriod);
+        return _reads.Any(match);
     }
 
     public ValueTask DisposeAsync() => _connection.DisposeAsync();

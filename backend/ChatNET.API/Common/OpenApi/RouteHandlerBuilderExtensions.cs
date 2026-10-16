@@ -10,7 +10,18 @@ public static class RouteHandlerBuilderExtensions
         this RouteHandlerBuilder builder, int successStatus, params int[] errorStatuses)
     {
         builder.Produces<TBody>(successStatus);
+        return DocumentErrors(builder, errorStatuses);
+    }
 
+    // The same for an endpoint whose success is 204 No Content.
+    public static RouteHandlerBuilder ReturnsNoContent(this RouteHandlerBuilder builder, params int[] errorStatuses)
+    {
+        builder.Produces(StatusCodes.Status204NoContent);
+        return DocumentErrors(builder, errorStatuses);
+    }
+
+    private static RouteHandlerBuilder DocumentErrors(RouteHandlerBuilder builder, int[] errorStatuses)
+    {
         foreach (var status in errorStatuses)
         {
             if (status == StatusCodes.Status400BadRequest)

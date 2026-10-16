@@ -9,6 +9,10 @@ public class ConversationRepository : IConversationRepository
 {
     private const int PreviewLength = 100;
 
+    // The unread count stops here, so the cost of a conversation does not grow with how far behind
+    // the member is. Clients show it as "99+".
+    public const int UnreadCap = 100;
+
     private readonly AppDbContext _db;
 
     public ConversationRepository(AppDbContext db)
@@ -50,7 +54,8 @@ public class ConversationRepository : IConversationRepository
             .SqlQueryRaw<ConversationRow>(
                 ConversationSelect + ForOneConversation,
                 new NpgsqlParameter("viewerId", viewerId),
-                new NpgsqlParameter("conversationId", conversationId))
+                new NpgsqlParameter("conversationId", conversationId),
+                new NpgsqlParameter("unreadCap", UnreadCap))
             .ToListAsync(cancellationToken);
 
         return rows.Select(ToDto).FirstOrDefault();
@@ -61,7 +66,8 @@ public class ConversationRepository : IConversationRepository
         var rows = await _db.Database
             .SqlQueryRaw<ConversationRow>(
                 ConversationSelect + ForActiveMemberNewestFirst,
-                new NpgsqlParameter("viewerId", userId))
+                new NpgsqlParameter("viewerId", userId),
+                new NpgsqlParameter("unreadCap", UnreadCap))
             .ToListAsync(cancellationToken);
 
         return rows.Select(ToDto).ToList();
@@ -90,6 +96,23 @@ public class ConversationRepository : IConversationRepository
             .Select(m => m.ConversationId)
             .ToListAsync(cancellationToken);
 
+    // One UPDATE that carries its own "only if it moves forward" condition. Two requests racing for
+    // the same member both reach the row, Postgres makes the second wait for the first and then
+    // checks the condition against the value the first wrote, so the position can never go back
+    // and no lock or transaction is needed in the application.
+    public async Task<bool> AdvanceLastReadAsync(
+        Guid conversationId, Guid userId, DateTime readAt, CancellationToken cancellationToken)
+    {
+        var updated = await _db.ConversationMembers
+            .Where(m => m.ConversationId == conversationId
+                        && m.UserId == userId
+                        && m.LeftAt == null
+                        && (m.LastReadAt == null || m.LastReadAt < readAt))
+            .ExecuteUpdateAsync(s => s.SetProperty(m => m.LastReadAt, readAt), cancellationToken);
+
+        return updated > 0;
+    }
+
     // ##### Conversation list and detail queries #####
     // Written as SQL by hand because the obvious LINQ form is slow. EF Core translates "latest
     // message of each conversation" to ROW_NUMBER() over the messages of EVERY conversation and only
@@ -100,6 +123,11 @@ public class ConversationRepository : IConversationRepository
     // EF cannot express a lateral join in LINQ. Only constants are concatenated below; every value
     // reaches the database as a parameter. A test checks how many Messages rows the query reads.
     // The reasoning and measurements are in note 08.
+    //
+    // The unread count is a correlated subquery over the same index: the messages of this conversation
+    // since the viewer read it (or since they joined), from other people, counted by a query that
+    // stops at @unreadCap rows. The viewer's own messages cannot pile up in front of the count, because
+    // sending moves the sender's read position to the message (MessageRepository.AddAsync).
     private const string ConversationSelect = """
         SELECT c."Id"        AS "Id",
                c."Type"      AS "Type",
@@ -115,8 +143,18 @@ public class ConversationRepository : IConversationRepository
                c."UpdatedAt" AS "UpdatedAt",
                lm."SenderId" AS "LastMessageSenderId",
                CASE WHEN lm."IsDeleted" THEN NULL ELSE lm."Content" END AS "LastMessageContent",
-               lm."CreatedAt" AS "LastMessageCreatedAt"
+               lm."CreatedAt" AS "LastMessageCreatedAt",
+               (SELECT COUNT(*)::int
+                FROM (SELECT 1
+                      FROM "Messages" um
+                      WHERE um."ConversationId" = c."Id"
+                        AND um."CreatedAt" >= mine."JoinedAt"
+                        AND um."CreatedAt" > COALESCE(mine."LastReadAt", '-infinity'::timestamptz)
+                        AND um."SenderId" <> @viewerId
+                      LIMIT @unreadCap) AS counted) AS "UnreadCount"
         FROM "Conversations" c
+        JOIN "ConversationMembers" mine
+          ON mine."ConversationId" = c."Id" AND mine."UserId" = @viewerId
         LEFT JOIN LATERAL (
             SELECT m."SenderId", m."Content", m."IsDeleted", m."CreatedAt"
             FROM "Messages" m
@@ -127,10 +165,7 @@ public class ConversationRepository : IConversationRepository
         """;
 
     private const string ForActiveMemberNewestFirst = """
-         WHERE EXISTS (SELECT 1 FROM "ConversationMembers" mine
-                       WHERE mine."ConversationId" = c."Id"
-                         AND mine."UserId" = @viewerId
-                         AND mine."LeftAt" IS NULL)
+         WHERE mine."LeftAt" IS NULL
          ORDER BY c."UpdatedAt" DESC
         """;
 
@@ -145,7 +180,7 @@ public class ConversationRepository : IConversationRepository
             : null;
 
         return new ConversationDto(
-            row.Id, Enum.Parse<ConversationType>(row.Type), row.Name ?? "Unknown", row.AvatarUrl, row.UpdatedAt, last);
+            row.Id, Enum.Parse<ConversationType>(row.Type), row.Name ?? "Unknown", row.AvatarUrl, row.UpdatedAt, last, row.UnreadCount);
     }
 
     private static string? Truncate(string? content)
@@ -163,5 +198,6 @@ public class ConversationRepository : IConversationRepository
         public Guid? LastMessageSenderId { get; set; }
         public string? LastMessageContent { get; set; }
         public DateTime? LastMessageCreatedAt { get; set; }
+        public int UnreadCount { get; set; }
     }
 }

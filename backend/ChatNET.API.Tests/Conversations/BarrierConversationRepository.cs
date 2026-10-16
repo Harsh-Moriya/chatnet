@@ -69,4 +69,8 @@ public sealed class BarrierConversationRepository : IConversationRepository
 
     public Task<List<Guid>> GetActiveConversationIdsForUserAsync(Guid userId, CancellationToken cancellationToken) =>
         _inner.GetActiveConversationIdsForUserAsync(userId, cancellationToken);
+
+    public Task<bool> AdvanceLastReadAsync(
+        Guid conversationId, Guid userId, DateTime readAt, CancellationToken cancellationToken) =>
+        _inner.AdvanceLastReadAsync(conversationId, userId, readAt, cancellationToken);
 }

@@ -36,7 +36,31 @@ public static class ConversationApi
         return list.EnumerateArray().ToList();
     }
 
+    // Tells the server the caller has read the conversation up to and including that message.
+    public static Task<HttpResponseMessage> MarkReadResponseAsync(
+        this HttpClient client, Guid conversationId, Guid messageId) =>
+        client.PostAsJsonAsync($"/api/conversations/{conversationId}/read", new { messageId });
+
+    public static async Task MarkReadAsync(this HttpClient client, Guid conversationId, Guid messageId)
+    {
+        var response = await client.MarkReadResponseAsync(conversationId, messageId);
+        response.EnsureSuccessStatusCode();
+    }
+
+    // The unread count of one conversation as the caller sees it in their list.
+    public static async Task<int> UnreadInListAsync(this HttpClient client, Guid conversationId) =>
+        (await client.ListConversationsAsync()).Single(c => c.IdOf() == conversationId).UnreadOf();
+
     public static Guid IdOf(this JsonElement conversation) => conversation.GetProperty("id").GetGuid();
+
+    public static int UnreadOf(this JsonElement conversation) => conversation.GetProperty("unreadCount").GetInt32();
+
+    // The stored read position of a member: null until they have read or sent something.
+    public static Task<DateTime?> LastReadAtAsync(this ChatApiFactory factory, Guid conversationId, Guid userId) =>
+        factory.QueryDbAsync(db => db.ConversationMembers
+            .Where(m => m.ConversationId == conversationId && m.UserId == userId)
+            .Select(m => m.LastReadAt)
+            .SingleAsync());
 
     public static async Task<List<JsonElement>> SearchUsersAsync(this HttpClient client, string query)
     {

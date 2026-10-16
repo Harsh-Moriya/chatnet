@@ -188,7 +188,7 @@ public class CreateDirectConversationTests
         var created = await client.CreateDirectAsync(bob.Id);
 
         var fields = created.EnumerateObject().Select(p => p.Name).Order().ToArray();
-        Assert.Equal(new[] { "avatarUrl", "id", "lastMessage", "name", "type", "updatedAt" }, fields);
+        Assert.Equal(new[] { "avatarUrl", "id", "lastMessage", "name", "type", "unreadCount", "updatedAt" }, fields);
         Assert.Equal(JsonValueKind.Null, created.GetProperty("lastMessage").ValueKind);
         Assert.EndsWith("Z", created.GetProperty("updatedAt").GetString());
     }
