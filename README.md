@@ -18,7 +18,8 @@ Under active development.
 | Sending messages (REST) with live delivery to the conversation over SignalR, and the latest 50 messages as history | Implemented |
 | Chat interface: conversation list, message view, composer, new direct or group chat, typing indicators, optimistic sending with retry, reconnecting | Implemented |
 | Scrolling back through older messages (cursor pagination, oldest-first pages of 50) | Implemented |
-| Online presence, read receipts, offline delivery | Planned |
+| Catching up on messages missed while disconnected, with no gaps | Implemented |
+| Online presence, read receipts, unread counts | Planned |
 | Refresh tokens, notifications, file uploads | Planned |
 | Structured logging, tracing, deployment | Planned |
 
