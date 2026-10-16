@@ -110,6 +110,35 @@ describe('seedMessages', () => {
   })
 })
 
+describe('clearMessages', () => {
+  it('forgets the confirmed messages of one conversation and no other', () => {
+    store().seedMessages('c1', [message({ id: 'a' })])
+    store().seedMessages('c2', [message({ id: 'b', conversationId: 'c2' })])
+
+    store().clearMessages('c1')
+
+    expect(store().messages.c1).toBeUndefined()
+    expect(ids(store().messages.c2)).toEqual(['b'])
+  })
+
+  it('keeps the unconfirmed messages of that conversation', () => {
+    store().seedMessages('c1', [message({ id: 'a' })])
+    store().addPending(pending('p1'))
+
+    store().clearMessages('c1')
+
+    expect(store().pending.c1.map((p) => p.clientMessageId)).toEqual(['p1'])
+  })
+
+  it('does not tell anyone the state changed when there was nothing to clear', () => {
+    const before = store()
+
+    store().clearMessages('never-loaded')
+
+    expect(store()).toBe(before)
+  })
+})
+
 // ##### Receiving a message #####
 
 describe('receiveMessage', () => {

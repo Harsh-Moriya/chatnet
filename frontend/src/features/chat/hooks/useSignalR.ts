@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { createChatConnection } from '../../../lib/signalr'
+import { catchUpAll } from '../api/catchUp'
 import { isTokenExpired } from '../../../lib/jwt'
 import { useAuthStore } from '../../auth/store/authStore'
 import { useChatStore } from '../store/chatStore'
@@ -35,12 +36,17 @@ export function useSignalR() {
         // this connection.
         onSessionExpired: () => useAuthStore.getState().clearAuth(),
 
-        // Events sent while the connection was down were lost. Marking the cached data stale and
-        // reloading what is on screen puts the REST state back in charge. This is a connection
-        // event, not a message event, so it does not break the rule against reloading on pushes.
+        // Events sent while the connection was down were lost, so REST puts the state back in
+        // charge. The list is reloaded; every conversation that was loaded asks the server for the
+        // messages after its newest one (a conversation too far behind is reset and loads afresh).
+        // This is a connection event, not a message event, so it does not break the rule against
+        // reloading on pushes.
         onReconnected: () => {
           void queryClient.invalidateQueries({ queryKey: ['conversations'] })
-          void queryClient.invalidateQueries({ queryKey: ['messages'] })
+          void catchUpAll({
+            onTooFarBehind: (conversationId) =>
+              void queryClient.resetQueries({ queryKey: ['messages', conversationId] }),
+          })
         },
       })
 
