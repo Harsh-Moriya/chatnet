@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { AlertCircle, LoaderCircle } from 'lucide-react'
 import { getApiError } from '../../../lib/errors'
 import { useConversations } from '../api/useConversations'
+import { useMembers } from '../api/useMembers'
 import { useMessages } from '../api/useMessages'
 import { useChatStore } from '../store/chatStore'
 import type { Conversation } from '../types'
@@ -52,6 +53,9 @@ export function ConversationView() {
 
 function ConversationPane({ conversation }: { conversation: Conversation }) {
   const history = useMessages(conversation.id)
+  // Loaded for who has read what; the members land in the store, which the list reads. A failure only
+  // means no "seen" marks, so it shows nothing.
+  useMembers(conversation.id)
   const { fetchNextPage } = history
   const loadOlder = useCallback(() => void fetchNextPage(), [fetchNextPage])
 

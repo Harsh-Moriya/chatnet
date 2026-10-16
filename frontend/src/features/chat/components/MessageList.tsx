@@ -1,10 +1,12 @@
-import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
-import { AlertCircle, LoaderCircle } from 'lucide-react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { AlertCircle, ChevronDown, LoaderCircle } from 'lucide-react'
 import { Button } from '../../../components/ui/Button'
 import { useNow } from '../../../lib/useNow'
 import { useAuth } from '../../auth/hooks/useAuth'
 import { dismissMessage, retryMessage } from '../api/chatApi'
 import { scrollTopAfterPrepend, wasPrepended } from '../history'
+import { useMarkRead } from '../hooks/useMarkRead'
+import { seenFor, unreadLabel } from '../readState'
 import { useChatStore } from '../store/chatStore'
 import { buildTimeline } from '../timeline'
 import type { Conversation, Message, PendingMessage } from '../types'
@@ -59,13 +61,31 @@ export function MessageList({ conversation, isLoading, errorMessage, onRetry, ol
   // interrupted. A message the reader just sent always scrolls into view.
   const scroller = useRef<HTMLDivElement>(null)
   const atBottom = useRef(true)
+  // The same fact as a value that can change what is drawn (the jump button) and when the server
+  // is told the conversation was read. Setting it to what it already is does not render again.
+  const [isAtBottom, setIsAtBottom] = useState(true)
 
   function handleScroll() {
     const element = scroller.current
     if (element) {
       atBottom.current = element.scrollHeight - element.scrollTop - element.clientHeight < BOTTOM_THRESHOLD
+      setIsAtBottom(atBottom.current)
     }
   }
+
+  function jumpToNewest() {
+    const element = scroller.current
+    if (element) element.scrollTop = element.scrollHeight
+  }
+
+  useMarkRead(conversation.id, isAtBottom)
+
+  // The "seen" mark under the reader's newest message.
+  const members = useChatStore((state) => state.members[conversation.id])
+  const seen = useMemo(
+    () => seenFor(messages, members, user?.userId ?? '', conversation.type === 'Group'),
+    [messages, members, user?.userId, conversation.type],
+  )
 
   // The first message and the content height as of the previous render. When the first message
   // changes, older messages were added above the reader; browsers would let the content jump down by
@@ -202,9 +222,21 @@ export function MessageList({ conversation, isLoading, errorMessage, onRetry, ol
             senderName={item.showSender ? item.message.senderDisplayName : undefined}
             content={item.message.content}
             createdAt={item.message.createdAt}
+            seen={seen?.messageId === item.message.id ? seen : undefined}
           />
         )
       })}
+
+      {/* Zero height, so it takes no room at the end of the messages; it stays pinned to the bottom edge
+          of the visible area while the reader is further up. */}
+      {!isAtBottom && conversation.unreadCount > 0 && (
+        <div className="sticky bottom-3 flex h-0 justify-center">
+          <Button size="sm" className="-translate-y-full shadow-md" onClick={jumpToNewest}>
+            <ChevronDown className="h-4 w-4" />
+            {unreadLabel(conversation.unreadCount)} new {conversation.unreadCount === 1 ? 'message' : 'messages'}
+          </Button>
+        </div>
+      )}
     </div>
   )
 }

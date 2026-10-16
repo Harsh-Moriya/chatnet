@@ -38,11 +38,13 @@ export function useSignalR() {
 
         // Events sent while the connection was down were lost, so REST puts the state back in
         // charge. The list is reloaded; every conversation that was loaded asks the server for the
-        // messages after its newest one (a conversation too far behind is reset and loads afresh).
+        // messages after its newest one (a conversation too far behind is reset and loads afresh), and
+        // the read positions of the members are loaded again, because their pushes were lost too.
         // This is a connection event, not a message event, so it does not break the rule against
         // reloading on pushes.
         onReconnected: () => {
           void queryClient.invalidateQueries({ queryKey: ['conversations'] })
+          void queryClient.invalidateQueries({ queryKey: ['members'] })
           void catchUpAll({
             onTooFarBehind: (conversationId) =>
               void queryClient.resetQueries({ queryKey: ['messages', conversationId] }),
