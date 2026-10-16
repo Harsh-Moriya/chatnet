@@ -31,6 +31,7 @@ interface ChatState {
   seedConversations: (conversations: Conversation[]) => void
   addConversation: (conversation: Conversation) => void
   seedMessages: (conversationId: string, messages: Message[]) => void
+  clearMessages: (conversationId: string) => void
   receiveMessage: (message: Message) => void
   addPending: (message: PendingMessage) => void
   failPending: (conversationId: string, clientMessageId: string, error: string) => void
@@ -95,6 +96,17 @@ export const useChatStore = create<ChatState>()((set) => ({
       }
 
       return { messages: { ...state.messages, [conversationId]: [...merged.values()].sort(byTime) } }
+    }),
+
+  // Forgets a conversation's confirmed messages, so it counts as not loaded and its history is
+  // fetched afresh. Unconfirmed messages stay: they are this tab's own and not on the server yet.
+  clearMessages: (conversationId) =>
+    set((state) => {
+      if (!(conversationId in state.messages)) return state
+
+      const next = { ...state.messages }
+      delete next[conversationId]
+      return { messages: next }
     }),
 
   // Called for the push of every message and for the response to this tab's own send, so the same
