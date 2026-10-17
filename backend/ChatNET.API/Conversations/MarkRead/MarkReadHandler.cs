@@ -9,7 +9,7 @@ using Microsoft.AspNetCore.SignalR;
 
 namespace ChatNET.API.Conversations.MarkRead;
 
-public class MarkReadHandler : IRequestHandler<MarkReadCommand>
+public class MarkReadHandler : IRequestHandler<MarkReadCommand, Unit>
 {
     public const string UnknownMessage = "Unknown message.";
 
@@ -30,7 +30,7 @@ public class MarkReadHandler : IRequestHandler<MarkReadCommand>
         _logger = logger;
     }
 
-    public async Task Handle(MarkReadCommand request, CancellationToken cancellationToken)
+    public async Task<Unit> Handle(MarkReadCommand request, CancellationToken cancellationToken)
     {
         var joinedAt = await _conversations.GetActiveMemberJoinedAtAsync(
             request.ConversationId, request.UserId, cancellationToken);
@@ -58,13 +58,14 @@ public class MarkReadHandler : IRequestHandler<MarkReadCommand>
         // A read that changes nothing (a repeat, or an older message than the one already read) is
         // not worth telling anyone about.
         if (!moved)
-            return;
+            return Unit.Value;
 
         _logger.LogInformation(
             "User {UserId} read conversation {ConversationId} up to message {MessageId}",
             request.UserId, request.ConversationId, request.MessageId);
 
         await PushAsync(request.ConversationId, request.UserId, message.Value.CreatedAt);
+        return Unit.Value;
     }
 
     // After the new position is stored, so nobody is told about a position that was not saved. The
