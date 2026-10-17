@@ -205,6 +205,25 @@ public class MarkReadTests
         Assert.Equal(HttpStatusCode.BadRequest, notAGuid.StatusCode);
     }
 
+    // The status alone cannot tell the validator from the handler: both answer 400. The text can. An
+    // empty id is refused by the validator before the handler runs, with the validator's own message
+    // and the field it concerns, so a client can mark the field.
+    [Fact]
+    public async Task An_empty_message_id_is_refused_by_the_validator_and_names_the_field()
+    {
+        var (alice, _, conversation) = await DirectChatAsync();
+        using var client = _factory.CreateClientFor(alice);
+
+        var response = await client.MarkReadResponseAsync(conversation, Guid.Empty);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var problem = await response.ReadProblemAsync();
+        Assert.Equal("Validation Failed", problem.Title);
+        Assert.NotEqual("Unknown message.", problem.Detail);
+        Assert.True(problem.Root.GetProperty("errors").TryGetProperty("MessageId", out _),
+            "The validation error should be reported on the MessageId field.");
+    }
+
     // ##### Who may read #####
 
     [Fact]

@@ -53,6 +53,7 @@ public class ConversationListPlanTests
             };
             foreach (var id in ids)
             {
+                await _factory.BackdateJoinAsync(id);
                 await _factory.AddMessageAsync(id, bob.Id, "older", DateTime.UtcNow.AddMinutes(-2));
                 await _factory.AddMessageAsync(id, bob.Id, "newer", DateTime.UtcNow.AddMinutes(-1));
             }

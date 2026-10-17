@@ -132,6 +132,9 @@ public class ConversationRepository : IConversationRepository
     // reaches the database as a parameter. A test checks how many Messages rows the query reads.
     // The reasoning and measurements are in note 08.
     //
+    // Both the preview and the count only look at messages sent since the viewer joined, the same
+    // window history uses (D-90), so nothing from before they joined shows up in the sidebar.
+    //
     // The unread count is a correlated subquery over the same index: the messages of this conversation
     // since the viewer read it (or since they joined), from other people, counted by a query that
     // stops at @unreadCap rows. The viewer's own messages cannot pile up in front of the count, because
@@ -167,6 +170,7 @@ public class ConversationRepository : IConversationRepository
             SELECT m."SenderId", m."Content", m."IsDeleted", m."CreatedAt"
             FROM "Messages" m
             WHERE m."ConversationId" = c."Id"
+              AND m."CreatedAt" >= mine."JoinedAt"
             ORDER BY m."CreatedAt" DESC
             LIMIT 1
         ) lm ON TRUE
