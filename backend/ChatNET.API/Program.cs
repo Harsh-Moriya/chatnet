@@ -297,6 +297,7 @@ app.MapAuthEndpoints();
 app.MapUserEndpoints();
 app.MapConversationEndpoints();
 app.MapMessagingEndpoints();
+app.MapPresenceEndpoints();
 
 // A token is checked once, when the connection is made. Without this an open connection would keep
 // receiving messages long after its token expired; with it the server closes the connection at the
