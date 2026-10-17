@@ -18,6 +18,11 @@ namespace ChatNET.API.Presence;
 // "offline" is still online as far as anyone is concerned, and a snapshot taken then agrees with
 // the events everybody else has seen.
 //
+// A third key per user, the closing key, is a plain value that exists only while that wait runs: it
+// is written with an expiry of the grace period when the user's last connection closes, so Redis
+// itself keeps the clock. Whoever comes to finish the user finds it there and leaves them alone, and
+// because every close rewrites it, the wait is always counted from the most recent close.
+//
 // Each script reads the time from Redis (TIME) so that servers with slightly different clocks agree
 // on what has expired. The @names are filled in by StackExchange.Redis.
 internal static class PresenceScripts
@@ -40,12 +45,13 @@ internal static class PresenceScripts
         return { added, now }
         """;
 
-    // A connection went away (when given), or the sweeper or a grace timer is checking on a user.
-    // Returns { outcome ; Redis time } where the outcome is
+    // A connection went away (when connectionId is given, with the grace to wait), or the sweeper or a
+    // grace timer is checking on a user (no connection, no grace). Returns
+    // { outcome ; Redis time ; milliseconds left of the wait } where the outcome is
     //   0 the user still has a live connection (their expiring score is set to the newest entry),
-    //   1 they have none, finish was asked for, and this call removed them: the one to announce it,
-    //   2 they have none and finish was not asked for: left in place, to be finished later,
-    //   3 they have none, finish was asked for, but someone else already removed them.
+    //   1 they have none, no wait is running, and this call removed them: the one to announce it,
+    //   2 they have none and a wait is running: left in place, the third value is what is left of it,
+    //   3 they have none, no wait is running, but someone else already removed them.
     // Removing the user from the expiring set is the single decision that makes exactly one caller
     // the announcer, however many race.
     public const string Settle = Now + """
@@ -55,13 +61,15 @@ internal static class PresenceScripts
         local newest = redis.call('ZREVRANGE', @userKey, 0, 0, 'WITHSCORES')
         if #newest > 0 then
             redis.call('ZADD', @expiringKey, newest[2], @userId)
-            return { 0, now }
+            return { 0, now, 0 }
         end
-        if @finish == '1' then
-            if redis.call('ZREM', @expiringKey, @userId) == 1 then return { 1, now } end
-            return { 3, now }
+        if tonumber(@graceMs) > 0 then
+            redis.call('SET', @closingKey, '1', 'PX', @graceMs)
         end
-        return { 2, now }
+        local left = redis.call('PTTL', @closingKey)
+        if left > 0 then return { 2, now, left } end
+        if redis.call('ZREM', @expiringKey, @userId) == 1 then return { 1, now, 0 } end
+        return { 3, now, 0 }
         """;
 
     // Users in the expiring set whose newest entry has expired: { Redis time, id, score, id, score ... }.

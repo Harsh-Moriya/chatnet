@@ -50,17 +50,25 @@ public sealed class PresenceStore : IPresenceStore
         return replies.Select(r => ToTouchResult((long[])r!)).ToList();
     }
 
-    public async Task<SettleResult> SettleAsync(
-        Guid userId, string? connectionId, bool finish, CancellationToken cancellationToken)
+    public Task<SettleResult> CloseAsync(
+        Guid userId, string connectionId, TimeSpan grace, CancellationToken cancellationToken) =>
+        SettleAsync(userId, connectionId, (long)grace.TotalMilliseconds, cancellationToken);
+
+    public Task<SettleResult> FinishAsync(Guid userId, CancellationToken cancellationToken) =>
+        SettleAsync(userId, connectionId: string.Empty, graceMs: 0, cancellationToken);
+
+    private async Task<SettleResult> SettleAsync(
+        Guid userId, string connectionId, long graceMs, CancellationToken cancellationToken)
     {
         var db = await _redis.GetDatabaseAsync();
         var reply = (long[]?)await SettleScript.EvaluateAsync(db, new
         {
             userKey = UserKey(userId),
             expiringKey = ExpiringKey,
+            closingKey = ClosingKey(userId),
             userId = userId.ToString(),
-            connectionId = connectionId ?? string.Empty,
-            finish = finish ? "1" : "0",
+            connectionId,
+            graceMs,
         }).WaitAsync(cancellationToken);
 
         var outcome = reply![0] switch
@@ -71,7 +79,7 @@ public sealed class PresenceStore : IPresenceStore
             _ => SettleOutcome.AlreadyOffline,
         };
 
-        return new SettleResult(outcome, FromMilliseconds(reply[1]));
+        return new SettleResult(outcome, FromMilliseconds(reply[1]), TimeSpan.FromMilliseconds(reply[2]));
     }
 
     public async Task<ExpiredUsers> GetExpiredAsync(int max, CancellationToken cancellationToken)
@@ -135,6 +143,8 @@ public sealed class PresenceStore : IPresenceStore
     };
 
     private static RedisKey UserKey(Guid userId) => $"{KeyPrefix}user:{userId}";
+
+    private static RedisKey ClosingKey(Guid userId) => $"{KeyPrefix}closing:{userId}";
 
     private static TouchResult ToTouchResult(long[] reply) => new(reply[0] == 1, FromMilliseconds(reply[1]));
 

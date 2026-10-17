@@ -84,8 +84,7 @@ public sealed class PresenceService
 
             // With no grace the user is taken offline here. With a grace period they are left in place, and
             // if this was their last connection a timer finishes the job later unless they are back.
-            var settled = await _store.SettleAsync(
-                userId, connectionId, finish: _options.OfflineGrace == TimeSpan.Zero, step.Token);
+            var settled = await _store.CloseAsync(userId, connectionId, _options.OfflineGrace, step.Token);
 
             switch (settled.Outcome)
             {
@@ -94,7 +93,7 @@ public sealed class PresenceService
                     break;
 
                 case SettleOutcome.NoConnectionsLeft:
-                    _ = FinishAfterGraceAsync(userId);
+                    _ = FinishAfterWaitAsync(userId, settled.Wait);
                     break;
             }
         }
@@ -108,17 +107,32 @@ public sealed class PresenceService
 
     // Not awaited by anyone, so it handles its own failures. If the server stops during the wait the user
     // stays in Redis until their entries expire and a sweep (on any server) takes them offline.
-    private async Task FinishAfterGraceAsync(Guid userId)
+    //
+    // Several closes can start a timer for one user, here or on another server, and the wait counts from
+    // the last close. A timer that wakes while a later close's wait is still running is told how long is
+    // left and sleeps again, so it never takes the user offline early.
+    private async Task FinishAfterWaitAsync(Guid userId, TimeSpan wait)
     {
         try
         {
-            await Task.Delay(_options.OfflineGrace, _lifetime.ApplicationStopping);
+            while (true)
+            {
+                await Task.Delay(wait, _lifetime.ApplicationStopping);
 
-            using var step = StepToken();
-            var settled = await _store.SettleAsync(userId, connectionId: null, finish: true, step.Token);
+                using var step = StepToken();
+                var settled = await _store.FinishAsync(userId, step.Token);
 
-            if (settled.Outcome == SettleOutcome.WentOffline)
-                await AnnounceAsync(userId, isOnline: false, settled.At, lastSeenAt: settled.At, step.Token);
+                if (settled.Outcome == SettleOutcome.NoConnectionsLeft)
+                {
+                    wait = settled.Wait;
+                    continue;
+                }
+
+                if (settled.Outcome == SettleOutcome.WentOffline)
+                    await AnnounceAsync(userId, isOnline: false, settled.At, lastSeenAt: settled.At, step.Token);
+
+                return;
+            }
         }
         catch (OperationCanceledException) when (_lifetime.ApplicationStopping.IsCancellationRequested)
         {
@@ -162,7 +176,7 @@ public sealed class PresenceService
 
             foreach (var user in expired.Users)
             {
-                var settled = await _store.SettleAsync(user.UserId, connectionId: null, finish: true, step.Token);
+                var settled = await _store.FinishAsync(user.UserId, step.Token);
 
                 if (settled.Outcome == SettleOutcome.WentOffline)
                     await AnnounceAsync(user.UserId, isOnline: false, settled.At, user.LastActiveAt, step.Token);

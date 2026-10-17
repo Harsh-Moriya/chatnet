@@ -216,6 +216,64 @@ public class PresenceHubTests
         await oldTab.DisposeAsync();
     }
 
+    // Found by closing and reopening a tab twice in a row in a browser: each close starts a timer, and
+    // the first one used to take the user offline while the second close's wait was still running.
+    [Fact]
+    public async Task The_wait_is_counted_from_the_last_close_when_connections_open_and_close_in_between()
+    {
+        var (alice, bob) = await FriendsAsync();
+        using var host = HostWith(o => o.OfflineGrace = TimeSpan.FromSeconds(1));
+        await using var bobClient = await HubClient.ConnectAsync(host, bob);
+        var firstTab = await HubClient.ConnectAsync(host, alice);
+        await bobClient.WaitForPresenceAsync(alice.Id, isOnline: true);
+
+        await firstTab.StopAsync();
+        var secondTab = await HubClient.ConnectAsync(host, alice);
+        await Task.Delay(400);
+        var sinceLastClose = System.Diagnostics.Stopwatch.StartNew();
+        await secondTab.StopAsync();
+
+        // 750 ms on is past the end of the first close's wait and inside the second's.
+        await Task.Delay(750);
+        var earlyEnough = OfflineEventsAbout(bobClient, alice).Count;
+        await bobClient.WaitForPresenceAsync(alice.Id, isOnline: false, TimeSpan.FromSeconds(4));
+        var announcedAfter = sinceLastClose.Elapsed;
+        await Task.Delay(600);
+
+        Assert.Equal(0, earlyEnough);
+        Assert.True(announcedAfter >= TimeSpan.FromMilliseconds(900), $"Offline was announced {announcedAfter} after the last close.");
+        Assert.Single(OfflineEventsAbout(bobClient, alice));
+        await firstTab.DisposeAsync();
+        await secondTab.DisposeAsync();
+    }
+
+    // The store can answer "a wait is still running" to a timer that woke up (a later close restarted
+    // it, or the timer woke a hair early). The timer must sleep for what is left and try again, not
+    // give up: nothing else would take the user offline until their entries expire.
+    [Fact]
+    public async Task A_timer_told_that_a_wait_is_still_running_sleeps_for_the_rest_and_finishes()
+    {
+        var (alice, bob) = await FriendsAsync();
+        var store = new WaitOnceStore(_factory.Services.GetRequiredService<IPresenceStore>());
+        using var host = HostWith(o => o.OfflineGrace = TimeSpan.FromMilliseconds(200), services =>
+        {
+            services.RemoveAll<IPresenceStore>();
+            services.AddSingleton<IPresenceStore>(store);
+        });
+        await using var bobClient = await HubClient.ConnectAsync(host, bob);
+        var aliceClient = await HubClient.ConnectAsync(host, alice);
+        await bobClient.WaitForPresenceAsync(alice.Id, isOnline: true);
+
+        await aliceClient.StopAsync();
+        await bobClient.WaitForPresenceAsync(alice.Id, isOnline: false, TimeSpan.FromSeconds(4));
+
+        var calls = store.FinishCalls;
+        Assert.Equal(2, calls.Count);
+        Assert.True(calls[1] - calls[0] >= WaitOnceStore.Wait - TimeSpan.FromMilliseconds(50),
+            $"The timer asked again after {calls[1] - calls[0]}, not after the {WaitOnceStore.Wait} it was told to wait.");
+        await aliceClient.DisposeAsync();
+    }
+
     [Fact]
     public async Task Offline_is_announced_after_the_wait_and_not_before()
     {
@@ -460,6 +518,11 @@ public class PresenceHubTests
             services?.Invoke(s);
         }));
 
+    private static List<JsonElement> OfflineEventsAbout(HubClient client, TestUser user) =>
+        client.PresenceEvents
+            .Where(p => p.GetProperty("userId").GetGuid() == user.Id && !p.GetProperty("isOnline").GetBoolean())
+            .ToList();
+
     private static async Task WaitUntilAsync(Func<bool> condition)
     {
         var deadline = DateTime.UtcNow.AddSeconds(5);
@@ -486,8 +549,11 @@ public class PresenceHubTests
         public Task<ExpiredUsers> GetExpiredAsync(int max, CancellationToken cancellationToken) =>
             Task.FromResult(new ExpiredUsers(DateTime.UtcNow, [new ExpiredUser(_user, DateTime.UtcNow.AddMinutes(-2))]));
 
-        public Task<SettleResult> SettleAsync(Guid userId, string? connectionId, bool finish, CancellationToken cancellationToken) =>
+        public Task<SettleResult> FinishAsync(Guid userId, CancellationToken cancellationToken) =>
             Task.FromResult(new SettleResult(SettleOutcome.AlreadyOffline, DateTime.UtcNow));
+
+        public Task<SettleResult> CloseAsync(Guid userId, string connectionId, TimeSpan grace, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
 
         public Task<TouchResult> TouchAsync(Guid userId, string connectionId, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
@@ -498,6 +564,60 @@ public class PresenceHubTests
 
         public Task<PresenceSnapshot> GetSnapshotAsync(IReadOnlyCollection<Guid> userIds, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
+    }
+
+    // A store that answers the first request to finish a user with "a wait is still running, for another
+    // 300 ms" and notes when it was asked; everything else is the real store.
+    private sealed class WaitOnceStore : IPresenceStore
+    {
+        public static readonly TimeSpan Wait = TimeSpan.FromMilliseconds(300);
+
+        private readonly IPresenceStore _real;
+        private readonly List<DateTime> _finishCalls = [];
+
+        public WaitOnceStore(IPresenceStore real)
+        {
+            _real = real;
+        }
+
+        public IReadOnlyList<DateTime> FinishCalls
+        {
+            get
+            {
+                lock (_finishCalls)
+                    return _finishCalls.ToList();
+            }
+        }
+
+        public Task<SettleResult> FinishAsync(Guid userId, CancellationToken cancellationToken)
+        {
+            bool first;
+            lock (_finishCalls)
+            {
+                _finishCalls.Add(DateTime.UtcNow);
+                first = _finishCalls.Count == 1;
+            }
+
+            return first
+                ? Task.FromResult(new SettleResult(SettleOutcome.NoConnectionsLeft, DateTime.UtcNow, Wait))
+                : _real.FinishAsync(userId, cancellationToken);
+        }
+
+        public Task<SettleResult> CloseAsync(Guid userId, string connectionId, TimeSpan grace, CancellationToken cancellationToken)
+            => _real.CloseAsync(userId, connectionId, grace, cancellationToken);
+
+        public Task<TouchResult> TouchAsync(Guid userId, string connectionId, CancellationToken cancellationToken)
+            => _real.TouchAsync(userId, connectionId, cancellationToken);
+
+        public Task<IReadOnlyList<TouchResult>> TouchManyAsync(
+            IReadOnlyList<(Guid UserId, string ConnectionId)> connections, CancellationToken cancellationToken)
+            => _real.TouchManyAsync(connections, cancellationToken);
+
+        public Task<ExpiredUsers> GetExpiredAsync(int max, CancellationToken cancellationToken)
+            => _real.GetExpiredAsync(max, cancellationToken);
+
+        public Task<PresenceSnapshot> GetSnapshotAsync(IReadOnlyCollection<Guid> userIds, CancellationToken cancellationToken)
+            => _real.GetSnapshotAsync(userIds, cancellationToken);
     }
 
     // A store that fails like an unreachable Redis until told it is healthy again, then behaves like the
@@ -525,8 +645,11 @@ public class PresenceHubTests
             IReadOnlyList<(Guid UserId, string ConnectionId)> connections, CancellationToken cancellationToken)
             => Real.TouchManyAsync(connections, cancellationToken);
 
-        public Task<SettleResult> SettleAsync(Guid userId, string? connectionId, bool finish, CancellationToken cancellationToken)
-            => Real.SettleAsync(userId, connectionId, finish, cancellationToken);
+        public Task<SettleResult> CloseAsync(Guid userId, string connectionId, TimeSpan grace, CancellationToken cancellationToken)
+            => Real.CloseAsync(userId, connectionId, grace, cancellationToken);
+
+        public Task<SettleResult> FinishAsync(Guid userId, CancellationToken cancellationToken)
+            => Real.FinishAsync(userId, cancellationToken);
 
         public Task<ExpiredUsers> GetExpiredAsync(int max, CancellationToken cancellationToken)
             => Real.GetExpiredAsync(max, cancellationToken);

@@ -14,6 +14,9 @@ public class PresenceStoreTests
 {
     private static readonly TimeSpan Ttl = TimeSpan.FromSeconds(1);
 
+    // A wait long enough that it is still running when a test checks, for tests that are not about its end.
+    private static readonly TimeSpan Grace = TimeSpan.FromSeconds(30);
+
     private readonly ChatApiFactory _factory;
 
     public PresenceStoreTests(ChatApiFactory factory)
@@ -103,7 +106,7 @@ public class PresenceStoreTests
         await store.TouchAsync(user, "tab-1", default);
         await store.TouchAsync(user, "tab-2", default);
 
-        var closed = await store.SettleAsync(user, "tab-1", finish: true, default);
+        var closed = await store.CloseAsync(user, "tab-1", TimeSpan.Zero, default);
 
         Assert.Equal(SettleOutcome.StillOnline, closed.Outcome);
     }
@@ -115,8 +118,8 @@ public class PresenceStoreTests
         var user = Guid.NewGuid();
         await store.TouchAsync(user, "tab-1", default);
 
-        var first = await store.SettleAsync(user, "tab-1", finish: true, default);
-        var again = await store.SettleAsync(user, "tab-1", finish: true, default);
+        var first = await store.CloseAsync(user, "tab-1", TimeSpan.Zero, default);
+        var again = await store.CloseAsync(user, "tab-1", TimeSpan.Zero, default);
 
         Assert.Equal(SettleOutcome.WentOffline, first.Outcome);
         Assert.Equal(SettleOutcome.AlreadyOffline, again.Outcome);
@@ -132,7 +135,7 @@ public class PresenceStoreTests
         await store.TouchAsync(user, "tab-1", default);
 
         var results = await Task.WhenAll(Enumerable.Range(0, 30)
-            .Select(_ => Task.Run(() => store.SettleAsync(user, "tab-1", finish: true, default))));
+            .Select(_ => Task.Run(() => store.CloseAsync(user, "tab-1", TimeSpan.Zero, default))));
 
         Assert.Equal(1, results.Count(r => r.Outcome == SettleOutcome.WentOffline));
         Assert.Equal(29, results.Count(r => r.Outcome == SettleOutcome.AlreadyOffline));
@@ -147,7 +150,7 @@ public class PresenceStoreTests
         await one.TouchAsync(user, "tab-1", default);
 
         var results = await Task.WhenAll(Enumerable.Range(0, 20)
-            .Select(i => Task.Run(() => (i % 2 == 0 ? one : two).SettleAsync(user, "tab-1", finish: true, default))));
+            .Select(i => Task.Run(() => (i % 2 == 0 ? one : two).CloseAsync(user, "tab-1", TimeSpan.Zero, default))));
 
         Assert.Equal(1, results.Count(r => r.Outcome == SettleOutcome.WentOffline));
     }
@@ -155,19 +158,92 @@ public class PresenceStoreTests
     // ##### The wait before offline #####
 
     [Fact]
-    public async Task A_user_who_is_left_pending_stays_online_until_it_is_finished()
+    public async Task A_user_who_is_left_waiting_stays_online_until_the_wait_is_over()
+    {
+        var store = NewStore();
+        var user = Guid.NewGuid();
+        var grace = TimeSpan.FromMilliseconds(600);
+        await store.TouchAsync(user, "tab-1", default);
+
+        var closed = await store.CloseAsync(user, "tab-1", grace, default);
+        var tooEarly = await store.FinishAsync(user, default);
+        var duringWait = await store.GetSnapshotAsync([user], default);
+
+        await Task.Delay(grace + TimeSpan.FromMilliseconds(200));
+        var finished = await store.FinishAsync(user, default);
+        var afterWait = await store.GetSnapshotAsync([user], default);
+
+        Assert.Equal(SettleOutcome.NoConnectionsLeft, closed.Outcome);
+        Assert.InRange(closed.Wait, TimeSpan.FromMilliseconds(1), grace);
+        Assert.Equal(SettleOutcome.NoConnectionsLeft, tooEarly.Outcome);
+        Assert.InRange(tooEarly.Wait, TimeSpan.FromMilliseconds(1), grace);
+        Assert.Contains(user, duringWait.Online);
+        Assert.Equal(SettleOutcome.WentOffline, finished.Outcome);
+        Assert.DoesNotContain(user, afterWait.Online);
+    }
+
+    // The case the browser check found: two closes in quick succession leave two timers, and the first
+    // one wakes while the second close's wait is still running. It must not take the user offline.
+    [Fact]
+    public async Task A_later_close_restarts_the_wait_so_an_earlier_timer_cannot_cut_it_short()
+    {
+        var store = NewStore();
+        var user = Guid.NewGuid();
+        var grace = TimeSpan.FromSeconds(1);
+        await store.TouchAsync(user, "tab-1", default);
+
+        var sinceFirstClose = System.Diagnostics.Stopwatch.StartNew();
+        await store.CloseAsync(user, "tab-1", grace, default);
+        await Task.Delay(TimeSpan.FromMilliseconds(400));
+        await store.TouchAsync(user, "tab-2", default);
+        await store.CloseAsync(user, "tab-2", grace, default);
+
+        // Past the end of the first wait, inside the second.
+        await Task.Delay(grace - sinceFirstClose.Elapsed + TimeSpan.FromMilliseconds(150));
+        var firstTimer = await store.FinishAsync(user, default);
+        var duringSecondWait = await store.GetSnapshotAsync([user], default);
+
+        // Past the end of the second.
+        await Task.Delay(firstTimer.Wait + TimeSpan.FromMilliseconds(200));
+        var secondTimer = await store.FinishAsync(user, default);
+
+        Assert.Equal(SettleOutcome.NoConnectionsLeft, firstTimer.Outcome);
+        Assert.Contains(user, duringSecondWait.Online);
+        Assert.Equal(SettleOutcome.WentOffline, secondTimer.Outcome);
+    }
+
+    [Fact]
+    public async Task Only_one_of_several_timers_for_a_user_announces_them_offline()
+    {
+        var store = NewStore();
+        var user = Guid.NewGuid();
+        var grace = TimeSpan.FromMilliseconds(400);
+        await store.TouchAsync(user, "tab-1", default);
+        await store.CloseAsync(user, "tab-1", grace, default);
+        await Task.Delay(grace + TimeSpan.FromMilliseconds(200));
+
+        var results = await Task.WhenAll(Enumerable.Range(0, 8).Select(_ => Task.Run(() => store.FinishAsync(user, default))));
+
+        Assert.Single(results, r => r.Outcome == SettleOutcome.WentOffline);
+        Assert.All(results.Where(r => r.Outcome != SettleOutcome.WentOffline), r => Assert.Equal(SettleOutcome.AlreadyOffline, r.Outcome));
+    }
+
+    // A user the sweeper finds (their entries expired) whose last connection closed a moment ago is
+    // still in the wait; the timer that close started will finish them.
+    [Fact]
+    public async Task The_sweeper_leaves_a_user_who_is_in_a_running_wait()
     {
         var store = NewStore();
         var user = Guid.NewGuid();
         await store.TouchAsync(user, "tab-1", default);
+        await WaitForExpiryAsync();
+        await store.CloseAsync(user, "tab-1", Grace, default);
 
-        var closed = await store.SettleAsync(user, "tab-1", finish: false, default);
-        var snapshot = await store.GetSnapshotAsync([user], default);
-        var finished = await store.SettleAsync(user, null, finish: true, default);
+        var found = await store.GetExpiredAsync(1000, default);
+        var swept = await store.FinishAsync(user, default);
 
-        Assert.Equal(SettleOutcome.NoConnectionsLeft, closed.Outcome);
-        Assert.Contains(user, snapshot.Online);
-        Assert.Equal(SettleOutcome.WentOffline, finished.Outcome);
+        Assert.Contains(found.Users, u => u.UserId == user);
+        Assert.Equal(SettleOutcome.NoConnectionsLeft, swept.Outcome);
     }
 
     // The page refresh: the old connection closes, a new one opens before the wait is over. Nobody
@@ -178,10 +254,10 @@ public class PresenceStoreTests
         var store = NewStore();
         var user = Guid.NewGuid();
         await store.TouchAsync(user, "tab-1", default);
-        await store.SettleAsync(user, "tab-1", finish: false, default);
+        await store.CloseAsync(user, "tab-1", Grace, default);
 
         var reconnected = await store.TouchAsync(user, "tab-2", default);
-        var finished = await store.SettleAsync(user, null, finish: true, default);
+        var finished = await store.FinishAsync(user, default);
 
         Assert.False(reconnected.CameOnline);
         Assert.Equal(SettleOutcome.StillOnline, finished.Outcome);
@@ -193,7 +269,7 @@ public class PresenceStoreTests
         var store = NewStore();
         var user = Guid.NewGuid();
         await store.TouchAsync(user, "tab-1", default);
-        await store.SettleAsync(user, "tab-1", finish: true, default);
+        await store.CloseAsync(user, "tab-1", TimeSpan.Zero, default);
 
         var back = await store.TouchAsync(user, "tab-2", default);
 
@@ -227,8 +303,8 @@ public class PresenceStoreTests
         await WaitForExpiryAsync();
 
         var results = await Task.WhenAll(
-            Task.Run(() => one.SettleAsync(user, null, finish: true, default)),
-            Task.Run(() => two.SettleAsync(user, null, finish: true, default)));
+            Task.Run(() => one.FinishAsync(user, default)),
+            Task.Run(() => two.FinishAsync(user, default)));
 
         Assert.Equal(1, results.Count(r => r.Outcome == SettleOutcome.WentOffline));
     }
@@ -272,7 +348,7 @@ public class PresenceStoreTests
         await store.TouchAsync(user, "older", default);
         await Task.Delay(500);
         await store.TouchAsync(user, "newer", default);
-        await store.SettleAsync(user, "newer", finish: true, default);
+        await store.CloseAsync(user, "newer", TimeSpan.Zero, default);
 
         // The older entry expires 1 second after it was written, 0.5 seconds from now. Had the score
         // stayed at the newer entry's expiry the user would not be listed until 1 second from now.
@@ -302,7 +378,7 @@ public class PresenceStoreTests
         var user = Guid.NewGuid();
         await store.TouchAsync(user, "tab-1", default);
 
-        var checkedBySweeper = await store.SettleAsync(user, null, finish: true, default);
+        var checkedBySweeper = await store.FinishAsync(user, default);
 
         Assert.Equal(SettleOutcome.StillOnline, checkedBySweeper.Outcome);
     }
@@ -318,7 +394,7 @@ public class PresenceStoreTests
         var neverSeen = Guid.NewGuid();
         await store.TouchAsync(online, "tab-1", default);
         await store.TouchAsync(wentOffline, "tab-1", default);
-        await store.SettleAsync(wentOffline, "tab-1", finish: true, default);
+        await store.CloseAsync(wentOffline, "tab-1", TimeSpan.Zero, default);
 
         var snapshot = await store.GetSnapshotAsync([online, wentOffline, neverSeen], default);
 
@@ -344,7 +420,7 @@ public class PresenceStoreTests
         var user = Guid.NewGuid();
 
         var touched = await store.TouchAsync(user, "tab-1", default);
-        var settled = await store.SettleAsync(user, "tab-1", finish: true, default);
+        var settled = await store.CloseAsync(user, "tab-1", TimeSpan.Zero, default);
         var touchedAgain = await store.TouchAsync(user, "tab-2", default);
         var snapshot = await store.GetSnapshotAsync([user], default);
 
