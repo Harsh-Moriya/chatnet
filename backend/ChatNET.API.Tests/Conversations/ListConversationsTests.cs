@@ -1,3 +1,4 @@
+using System.Net.Http.Json;
 using System.Text.Json;
 using ChatNET.API.Common.Persistence;
 using ChatNET.API.Tests.Infrastructure;
@@ -71,6 +72,8 @@ public class ListConversationsTests
         using var client = _factory.CreateClientFor(alice);
         var withBob = (await client.CreateDirectAsync(bob.Id)).IdOf();
         var withCarol = (await client.CreateDirectAsync(carol.Id)).IdOf();
+        await _factory.BackdateJoinAsync(withBob);
+        await _factory.BackdateJoinAsync(withCarol);
 
         var start = DateTime.UtcNow.AddMinutes(-10);
         await _factory.AddMessageAsync(withBob, alice.Id, "bob: first", start);
@@ -117,6 +120,43 @@ public class ListConversationsTests
         // as deleted never reveals its content. The row itself survives, so the preview still exists.
         Assert.Equal(JsonValueKind.Null, preview.GetProperty("content").ValueKind);
         Assert.Equal(bob.Id, preview.GetProperty("senderId").GetGuid());
+    }
+
+    // History and the unread count only cover messages sent since a member joined (D-90). The
+    // preview is made of a message too, so it must follow the same rule: otherwise a late joiner could
+    // read the last thing said before they arrived in the sidebar even though history hides it.
+    [Fact]
+    public async Task The_preview_never_shows_a_message_from_before_the_member_joined()
+    {
+        var alice = await _factory.RegisterUserAsync("alice");
+        var bob = await _factory.RegisterUserAsync("bob");
+        var carol = await _factory.RegisterUserAsync("carol");
+        using var aliceClient = _factory.CreateClientFor(alice);
+        using var carolClient = _factory.CreateClientFor(carol);
+        var onlyBefore = (await aliceClient.CreateGroupAsync("Only before", bob.Id, carol.Id)).IdOf();
+        var both = (await aliceClient.CreateGroupAsync("Before and after", bob.Id, carol.Id)).IdOf();
+        var joined = DateTime.UtcNow.AddMinutes(-30);
+        foreach (var group in new[] { onlyBefore, both })
+        {
+            await _factory.BackdateJoinAsync(group);
+            await _factory.ExecuteDbAsync(db => db.ConversationMembers
+                .Where(m => m.ConversationId == group && m.UserId == carol.Id)
+                .ExecuteUpdateAsync(s => s.SetProperty(m => m.JoinedAt, joined)));
+            await _factory.AddMessageAsync(group, bob.Id, "said before carol joined", joined.AddMinutes(-10));
+        }
+        await _factory.AddMessageAsync(both, bob.Id, "said after carol joined", joined.AddMinutes(10));
+
+        var forCarol = await carolClient.ListConversationsAsync();
+        var forAlice = await aliceClient.ListConversationsAsync();
+        var single = await carolClient.GetFromJsonAsync<JsonElement>($"/api/conversations/{onlyBefore}");
+
+        Assert.Equal(JsonValueKind.Null, forCarol.Single(c => c.IdOf() == onlyBefore).GetProperty("lastMessage").ValueKind);
+        Assert.Equal("said after carol joined",
+            forCarol.Single(c => c.IdOf() == both).GetProperty("lastMessage").GetProperty("content").GetString());
+        Assert.Equal(JsonValueKind.Null, single.GetProperty("lastMessage").ValueKind);
+        // The member who was there from the start still sees the latest message of each.
+        Assert.Equal("said before carol joined",
+            forAlice.Single(c => c.IdOf() == onlyBefore).GetProperty("lastMessage").GetProperty("content").GetString());
     }
 
     [Fact]
