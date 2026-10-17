@@ -122,6 +122,31 @@ public class ListConversationsTests
         Assert.Equal(bob.Id, preview.GetProperty("senderId").GetGuid());
     }
 
+    // The other person of a direct chat is who the client shows presence for. Like the name, it is
+    // resolved per viewer; a group has no single other person.
+    [Fact]
+    public async Task A_direct_conversation_carries_the_other_persons_id_for_each_viewer_and_a_group_carries_none()
+    {
+        var alice = await _factory.RegisterUserAsync("alice");
+        var bob = await _factory.RegisterUserAsync("bob");
+        var carol = await _factory.RegisterUserAsync("carol");
+        using var aliceClient = _factory.CreateClientFor(alice);
+        using var bobClient = _factory.CreateClientFor(bob);
+        var created = await aliceClient.CreateDirectAsync(bob.Id);
+        var direct = created.IdOf();
+        var group = (await aliceClient.CreateGroupAsync("Team", bob.Id, carol.Id)).IdOf();
+
+        var forAlice = await aliceClient.ListConversationsAsync();
+        var forBob = await bobClient.ListConversationsAsync();
+        var single = await bobClient.GetFromJsonAsync<JsonElement>($"/api/conversations/{direct}");
+
+        Assert.Equal(bob.Id, created.GetProperty("otherUserId").GetGuid());
+        Assert.Equal(bob.Id, forAlice.Single(c => c.IdOf() == direct).GetProperty("otherUserId").GetGuid());
+        Assert.Equal(alice.Id, forBob.Single(c => c.IdOf() == direct).GetProperty("otherUserId").GetGuid());
+        Assert.Equal(alice.Id, single.GetProperty("otherUserId").GetGuid());
+        Assert.Equal(JsonValueKind.Null, forAlice.Single(c => c.IdOf() == group).GetProperty("otherUserId").ValueKind);
+    }
+
     // History and the unread count only cover messages sent since a member joined (D-90). The
     // preview is made of a message too, so it must follow the same rule: otherwise a late joiner could
     // read the last thing said before they arrived in the sidebar even though history hides it.

@@ -142,15 +142,9 @@ public class ConversationRepository : IConversationRepository
     private const string ConversationSelect = """
         SELECT c."Id"        AS "Id",
                c."Type"      AS "Type",
-               CASE WHEN c."Type" = 'Direct'
-                    THEN (SELECT u."DisplayName"
-                          FROM "ConversationMembers" cm
-                          JOIN "AspNetUsers" u ON u."Id" = cm."UserId"
-                          WHERE cm."ConversationId" = c."Id" AND cm."UserId" <> @viewerId
-                          LIMIT 1)
-                    ELSE c."Name"
-               END           AS "Name",
+               CASE WHEN c."Type" = 'Direct' THEN other."DisplayName" ELSE c."Name" END AS "Name",
                c."AvatarUrl" AS "AvatarUrl",
+               other."UserId" AS "OtherUserId",
                c."UpdatedAt" AS "UpdatedAt",
                lm."SenderId" AS "LastMessageSenderId",
                CASE WHEN lm."IsDeleted" THEN NULL ELSE lm."Content" END AS "LastMessageContent",
@@ -166,6 +160,14 @@ public class ConversationRepository : IConversationRepository
         FROM "Conversations" c
         JOIN "ConversationMembers" mine
           ON mine."ConversationId" = c."Id" AND mine."UserId" = @viewerId
+        LEFT JOIN LATERAL (
+            SELECT cm."UserId", u."DisplayName"
+            FROM "ConversationMembers" cm
+            JOIN "AspNetUsers" u ON u."Id" = cm."UserId"
+            WHERE c."Type" = 'Direct'
+              AND cm."ConversationId" = c."Id" AND cm."UserId" <> @viewerId
+            LIMIT 1
+        ) other ON TRUE
         LEFT JOIN LATERAL (
             SELECT m."SenderId", m."Content", m."IsDeleted", m."CreatedAt"
             FROM "Messages" m
@@ -192,7 +194,8 @@ public class ConversationRepository : IConversationRepository
             : null;
 
         return new ConversationDto(
-            row.Id, Enum.Parse<ConversationType>(row.Type), row.Name ?? "Unknown", row.AvatarUrl, row.UpdatedAt, last, row.UnreadCount);
+            row.Id, Enum.Parse<ConversationType>(row.Type), row.Name ?? "Unknown", row.AvatarUrl, row.UpdatedAt, last,
+            row.UnreadCount, row.OtherUserId);
     }
 
     private static string? Truncate(string? content)
@@ -211,5 +214,6 @@ public class ConversationRepository : IConversationRepository
         public string? LastMessageContent { get; set; }
         public DateTime? LastMessageCreatedAt { get; set; }
         public int UnreadCount { get; set; }
+        public Guid? OtherUserId { get; set; }
     }
 }
