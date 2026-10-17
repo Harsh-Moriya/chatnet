@@ -159,8 +159,21 @@ public sealed class PresenceService
 
         for (var i = 0; i < held.Count; i++)
         {
+            var (userId, connectionId) = held[i];
+
+            // The list was made before Redis ran the renewal, and a connection can close in between. The
+            // close forgets the connection first and only then tells Redis, so if Redis ran the close
+            // before the renewal, the connection is already gone from the dictionary by now. The renewal
+            // then wrote back an entry for a connection that no longer exists; closing it again removes
+            // it, and the user is not announced online on the strength of it.
+            if (!_connections.ContainsKey(connectionId))
+            {
+                await DisconnectedAsync(userId, connectionId);
+                continue;
+            }
+
             if (results[i].CameOnline)
-                await AnnounceAsync(held[i].UserId, isOnline: true, results[i].At, lastSeenAt: null, step.Token);
+                await AnnounceAsync(userId, isOnline: true, results[i].At, lastSeenAt: null, step.Token);
         }
     }
 
