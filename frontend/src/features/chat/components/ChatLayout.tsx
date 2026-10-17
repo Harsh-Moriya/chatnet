@@ -1,5 +1,6 @@
 import { Outlet, useMatch } from 'react-router-dom'
 import { cn } from '../../../lib/cn'
+import { useContactPresence } from '../api/useContactPresence'
 import { Sidebar } from './Sidebar'
 
 // Two panes side by side on a wide screen. On a phone there is room for one: the list, or the open
@@ -7,6 +8,10 @@ import { Sidebar } from './Sidebar'
 // scroll position while a conversation is open.
 export function ChatLayout() {
   const conversationOpen = useMatch('/chat/:conversationId') !== null
+
+  // Who is online, for the dots in the list and the line under a conversation's name. Loaded here, once
+  // for the whole chat; the changes after that arrive as pushes.
+  useContactPresence()
 
   return (
     <div className="flex h-dvh bg-slate-50">

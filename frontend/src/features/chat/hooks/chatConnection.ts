@@ -1,5 +1,6 @@
 import { reconnectDelay } from '../../../lib/signalr'
 import { useChatStore } from '../store/chatStore'
+import type { Presence } from '../../presence/types'
 import type { Conversation, Message } from '../types'
 
 // Everything that connects the SignalR hub to the chat store, as plain functions with no React so it
@@ -28,6 +29,8 @@ export interface ChatConnectionDeps {
   isSessionExpired: () => boolean
   // Called once, when the session turns out to have expired. The caller signs the user out.
   onSessionExpired: () => void
+  // Called with every presence change pushed by the server (someone came online or went offline).
+  onPresenceChanged: (presence: Presence) => void
   retryDelay?: (failedAttempts: number) => number
 }
 
@@ -83,6 +86,10 @@ export function connectChat(hub: ChatHub, deps: ChatConnectionDeps): ChatConnect
   // (or this one, a moment after it asked), so their own unread count follows.
   hub.on('MessageRead', (conversationId: string, userId: string, readAt: string) => {
     chat().applyRead(conversationId, userId, readAt, deps.getUserId() ?? undefined)
+  })
+
+  hub.on('PresenceChanged', (presence: Presence) => {
+    deps.onPresenceChanged(presence)
   })
 
   hub.on('AddedToConversation', (conversation: Conversation) => {

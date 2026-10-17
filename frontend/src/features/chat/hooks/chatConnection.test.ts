@@ -113,7 +113,7 @@ function message(id: string, overrides: Partial<Message> = {}): Message {
 }
 
 function conversation(id: string): Conversation {
-  return { id, type: 'Direct', name: 'Bob', avatarUrl: null, updatedAt: '2026-10-11T09:00:00Z', lastMessage: null, unreadCount: 0 }
+  return { id, type: 'Direct', name: 'Bob', avatarUrl: null, updatedAt: '2026-10-11T09:00:00Z', lastMessage: null, unreadCount: 0, otherUserId: null }
 }
 
 const RETRY_DELAYS = [100, 200, 400]
@@ -122,14 +122,16 @@ function setup(options: { hub?: FakeHub; sessionExpired?: () => boolean } = {}) 
   const hub = options.hub ?? new FakeHub()
   const onReconnected = vi.fn()
   const onSessionExpired = vi.fn()
+  const onPresenceChanged = vi.fn()
   const connection = connectChat(hub, {
     getUserId: () => 'me',
     onReconnected,
     isSessionExpired: options.sessionExpired ?? (() => false),
     onSessionExpired,
+    onPresenceChanged,
     retryDelay: (attempt) => RETRY_DELAYS[Math.min(attempt, RETRY_DELAYS.length - 1)],
   })
-  return { hub, connection, onReconnected, onSessionExpired }
+  return { hub, connection, onReconnected, onSessionExpired, onPresenceChanged }
 }
 
 // Lets promise callbacks run, and any timers due now.
@@ -160,7 +162,7 @@ describe('event handlers', () => {
 
     const start = hub.calls.indexOf('start')
     expect(start).toBeGreaterThan(-1)
-    for (const event of ['ReceiveMessage', 'AddedToConversation', 'UserTyping', 'MessageRead']) {
+    for (const event of ['ReceiveMessage', 'AddedToConversation', 'UserTyping', 'MessageRead', 'PresenceChanged']) {
       const registered = hub.calls.indexOf(`on:${event}`)
       expect(registered, event).toBeGreaterThan(-1)
       expect(registered, event).toBeLessThan(start)
@@ -177,6 +179,7 @@ describe('event handlers', () => {
     expect(hub.emit('AddedToConversation', conversation('c9'))).toBeUndefined()
     expect(hub.emit('UserTyping', 'c1', 'bob', 'Bob', true)).toBeUndefined()
     expect(hub.emit('MessageRead', 'c1', 'bob', '2026-10-11T10:00:00Z')).toBeUndefined()
+    expect(hub.emit('PresenceChanged', { userId: 'bob', isOnline: true, lastSeenAt: null, at: '2026-10-11T10:00:00Z' })).toBeUndefined()
   })
 
   it('puts a pushed message into the store', async () => {
@@ -214,6 +217,16 @@ describe('event handlers', () => {
 
     hub.emit('MessageRead', 'c1', 'me', '2026-10-11T10:00:05Z')
     expect(store().conversations.c1.unreadCount).toBe(0)
+  })
+
+  it('hands a presence change to whoever owns the connection, unchanged', async () => {
+    const { hub, onPresenceChanged } = await connected()
+    const change = { userId: 'bob', isOnline: false, lastSeenAt: '2026-10-11T10:00:00Z', at: '2026-10-11T10:00:00Z' }
+
+    hub.emit('PresenceChanged', change)
+
+    expect(onPresenceChanged).toHaveBeenCalledTimes(1)
+    expect(onPresenceChanged).toHaveBeenCalledWith(change)
   })
 
   it('adds an announced conversation and joins it, which is the only way to receive its messages', async () => {
