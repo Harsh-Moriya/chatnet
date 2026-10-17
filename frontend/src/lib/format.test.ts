@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatClock, formatDayLabel, formatListTime } from './format'
+import { formatClock, formatDayLabel, formatLastSeen, formatListTime } from './format'
 
 // All timestamps here are built in local time (new Date(y, m, d, h, min)) and converted to the ISO
 // strings the API sends, so the tests give the same answer in any time zone. "Now" is Sunday
@@ -7,8 +7,8 @@ import { formatClock, formatDayLabel, formatListTime } from './format'
 const NOW = new Date(2026, 9, 11, 15, 0)
 const LOCALE = 'en-US'
 
-const at = (year: number, month: number, day: number, hour = 12, minute = 0) =>
-  new Date(year, month - 1, day, hour, minute).toISOString()
+const at = (year: number, month: number, day: number, hour = 12, minute = 0, second = 0) =>
+  new Date(year, month - 1, day, hour, minute, second).toISOString()
 
 // The space before AM and PM is a narrow no-break space in newer Unicode data, and \s matches it.
 describe('formatClock', () => {
@@ -56,5 +56,52 @@ describe('formatListTime', () => {
     expect(formatListTime(at(2026, 10, 5), NOW, LOCALE)).toBe('Mon')
     expect(formatListTime(at(2026, 10, 4), NOW, LOCALE)).toBe('Oct 4')
     expect(formatListTime(at(2025, 10, 4), NOW, LOCALE)).toBe('Oct 4, 2025')
+  })
+})
+
+describe('formatLastSeen', () => {
+  it('says just now for the last minute', () => {
+    expect(formatLastSeen(at(2026, 10, 11, 14, 59, 30), NOW, LOCALE)).toBe('just now')
+    expect(formatLastSeen(at(2026, 10, 11, 15, 0), NOW, LOCALE)).toBe('just now')
+  })
+
+  // Two servers' clocks can disagree by a little, so a time can look like it is from the future.
+  it('treats a time slightly in the future as just now', () => {
+    expect(formatLastSeen(at(2026, 10, 11, 15, 2), NOW, LOCALE)).toBe('just now')
+  })
+
+  it('counts minutes for the last hour', () => {
+    expect(formatLastSeen(at(2026, 10, 11, 14, 59), NOW, LOCALE)).toBe('1 min ago')
+    expect(formatLastSeen(at(2026, 10, 11, 14, 58), NOW, LOCALE)).toBe('2 min ago')
+    expect(formatLastSeen(at(2026, 10, 11, 14, 1), NOW, LOCALE)).toBe('59 min ago')
+  })
+
+  it('gives the time of day for earlier today', () => {
+    expect(formatLastSeen(at(2026, 10, 11, 14, 0), NOW, LOCALE)).toMatch(/^today at 2:00\sPM$/)
+    expect(formatLastSeen(at(2026, 10, 11, 0, 5), NOW, LOCALE)).toMatch(/^today at 12:05\sAM$/)
+  })
+
+  it('names yesterday and changes day at local midnight', () => {
+    expect(formatLastSeen(at(2026, 10, 10, 23, 59), NOW, LOCALE)).toMatch(/^yesterday at 11:59\sPM$/)
+
+    // 01:30 is more than an hour after both: the one before midnight is yesterday, the one after is today.
+    const earlyMorning = new Date(2026, 9, 11, 1, 30)
+    expect(formatLastSeen(at(2026, 10, 10, 23, 55), earlyMorning, LOCALE)).toMatch(/^yesterday at 11:55\sPM$/)
+    expect(formatLastSeen(at(2026, 10, 11, 0, 10), earlyMorning, LOCALE)).toMatch(/^today at 12:10\sAM$/)
+  })
+
+  it('counts minutes across midnight while the last hour has not passed', () => {
+    const justAfterMidnight = new Date(2026, 9, 11, 0, 5)
+
+    expect(formatLastSeen(at(2026, 10, 10, 23, 55), justAfterMidnight, LOCALE)).toBe('10 min ago')
+  })
+
+  it('names the weekday for the rest of the past week', () => {
+    expect(formatLastSeen(at(2026, 10, 8, 12, 0), NOW, LOCALE)).toMatch(/^Thursday at 12:00\sPM$/)
+  })
+
+  it('gives a date from a week ago, with the year only when it differs', () => {
+    expect(formatLastSeen(at(2026, 10, 4, 12, 0), NOW, LOCALE)).toBe('Oct 4')
+    expect(formatLastSeen(at(2025, 10, 4, 12, 0), NOW, LOCALE)).toBe('Oct 4, 2025')
   })
 })
