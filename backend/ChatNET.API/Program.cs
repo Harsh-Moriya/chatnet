@@ -14,6 +14,7 @@ using ChatNET.API.Conversations.Persistence;
 using ChatNET.API.Messaging;
 using ChatNET.API.Messaging.Hubs;
 using ChatNET.API.Messaging.Persistence;
+using ChatNET.API.Presence;
 using ChatNET.API.Users;
 using FluentValidation;
 using MediatR;
@@ -192,6 +193,18 @@ builder.Services.AddScoped<JwtTokenService>();
 builder.Services.AddScoped<IConversationRepository, ConversationRepository>();
 builder.Services.AddScoped<IMessageRepository, MessageRepository>();
 builder.Services.AddScoped<ConversationNotifier>();
+
+// ##### Presence #####
+// Who is online lives in Redis (see PresenceScripts). The settings are validated when the host starts,
+// and one Redis connection is shared by everything that needs presence.
+builder.Services.AddOptions<PresenceOptions>()
+    .BindConfiguration(PresenceOptions.SectionName)
+    .ValidateOnStart();
+builder.Services.AddSingleton<IValidateOptions<PresenceOptions>, PresenceOptionsValidator>();
+builder.Services.AddSingleton(provider => new RedisConnection(
+    provider.GetRequiredService<IConfiguration>().GetConnectionString("Redis")
+        ?? throw new InvalidOperationException("ConnectionStrings:Redis is not configured.")));
+builder.Services.AddSingleton<IPresenceStore, PresenceStore>();
 
 // ##### Rate limiting #####
 // Login and registration are limited per client address to slow down password guessing and
