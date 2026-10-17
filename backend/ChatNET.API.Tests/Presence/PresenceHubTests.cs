@@ -339,6 +339,40 @@ public class PresenceHubTests
         await aliceClient.DisposeAsync();
     }
 
+    // A refresh lists the connections it holds when it starts, and Redis runs the renewal a moment later.
+    // A connection that closes in between must not be written back by that renewal: nobody would be
+    // connected, yet the user would be announced online again and stay online until the entry expired.
+    [Fact]
+    public async Task A_refresh_in_flight_when_a_connection_closes_does_not_bring_the_user_back_online()
+    {
+        var (alice, bob) = await FriendsAsync();
+        var store = new GatedRenewalStore(_factory.Services.GetRequiredService<IPresenceStore>());
+        using var host = HostWith(_ => { }, services =>
+        {
+            services.RemoveAll<IPresenceStore>();
+            services.AddSingleton<IPresenceStore>(store);
+        });
+        await using var bobClient = await HubClient.ConnectAsync(host, bob);
+        var aliceClient = await HubClient.ConnectAsync(host, alice);
+        await bobClient.WaitForPresenceAsync(alice.Id, isOnline: true);
+
+        store.HoldNextRenewal();
+        var refresh = host.Services.GetRequiredService<PresenceRefreshService>().RunOnceAsync(default);
+        await store.RenewalIsWaiting.WaitAsync(TimeSpan.FromSeconds(5));
+        await aliceClient.StopAsync();
+        await bobClient.WaitForPresenceAsync(alice.Id, isOnline: false);
+
+        store.ReleaseRenewal();
+        await refresh;
+        await Task.Delay(500);
+
+        var about = bobClient.PresenceEvents.Where(p => p.GetProperty("userId").GetGuid() == alice.Id).ToList();
+        var snapshot = await host.Services.GetRequiredService<IPresenceStore>().GetSnapshotAsync([alice.Id], default);
+        Assert.False(about[^1].GetProperty("isOnline").GetBoolean(), "The last thing contacts heard about the user was that they came back online.");
+        Assert.DoesNotContain(alice.Id, snapshot.Online);
+        await aliceClient.DisposeAsync();
+    }
+
     // A server that dies leaves its entries behind. Two surviving servers both find them and both try
     // to take the user offline; exactly one does, so exactly one announcement is made.
     [Fact]
@@ -564,6 +598,60 @@ public class PresenceHubTests
 
         public Task<PresenceSnapshot> GetSnapshotAsync(IReadOnlyCollection<Guid> userIds, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
+    }
+
+    // A store that holds the next batch renewal back until released, so a test can do something while a
+    // refresh has listed its connections and not yet reached Redis. Everything else is the real store.
+    private sealed class GatedRenewalStore : IPresenceStore
+    {
+        private readonly IPresenceStore _real;
+        private TaskCompletionSource? _arrived;
+        private TaskCompletionSource? _release;
+        private TaskCompletionSource? _gate;
+
+        public GatedRenewalStore(IPresenceStore real)
+        {
+            _real = real;
+        }
+
+        public void HoldNextRenewal()
+        {
+            _arrived = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            _release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            _gate = _release;
+        }
+
+        public Task RenewalIsWaiting => _arrived!.Task;
+
+        public void ReleaseRenewal() => _release!.SetResult();
+
+        public async Task<IReadOnlyList<TouchResult>> TouchManyAsync(
+            IReadOnlyList<(Guid UserId, string ConnectionId)> connections, CancellationToken cancellationToken)
+        {
+            var gate = Interlocked.Exchange(ref _gate, null);
+            if (gate is not null)
+            {
+                _arrived!.SetResult();
+                await gate.Task;
+            }
+
+            return await _real.TouchManyAsync(connections, cancellationToken);
+        }
+
+        public Task<TouchResult> TouchAsync(Guid userId, string connectionId, CancellationToken cancellationToken)
+            => _real.TouchAsync(userId, connectionId, cancellationToken);
+
+        public Task<SettleResult> CloseAsync(Guid userId, string connectionId, TimeSpan grace, CancellationToken cancellationToken)
+            => _real.CloseAsync(userId, connectionId, grace, cancellationToken);
+
+        public Task<SettleResult> FinishAsync(Guid userId, CancellationToken cancellationToken)
+            => _real.FinishAsync(userId, cancellationToken);
+
+        public Task<ExpiredUsers> GetExpiredAsync(int max, CancellationToken cancellationToken)
+            => _real.GetExpiredAsync(max, cancellationToken);
+
+        public Task<PresenceSnapshot> GetSnapshotAsync(IReadOnlyCollection<Guid> userIds, CancellationToken cancellationToken)
+            => _real.GetSnapshotAsync(userIds, cancellationToken);
     }
 
     // A store that answers the first request to finish a user with "a wait is still running, for another
