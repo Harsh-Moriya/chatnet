@@ -50,3 +50,20 @@ export function formatListTime(iso: string, now: Date, locale?: string): string 
   if (days < 7) return then.toLocaleDateString(locale, { weekday: 'short' })
   return shortDate(then, now, locale)
 }
+
+// When someone was last seen, to follow "Last seen": "just now", "5 min ago", "today at 2:15 PM",
+// "yesterday at 2:15 PM", "Thursday at 2:15 PM", then a date. A time slightly ahead of this browser's
+// clock (the server's can run ahead) reads as just now.
+export function formatLastSeen(iso: string, now: Date, locale?: string): string {
+  const then = new Date(iso)
+  const minutes = Math.floor((now.getTime() - then.getTime()) / 60_000)
+
+  if (minutes < 1) return 'just now'
+  if (minutes < 60) return `${minutes} min ago`
+
+  const days = daysAgo(then, now)
+  if (days === 0) return `today at ${formatClock(iso, locale)}`
+  if (days === 1) return `yesterday at ${formatClock(iso, locale)}`
+  if (days < 7) return `${then.toLocaleDateString(locale, { weekday: 'long' })} at ${formatClock(iso, locale)}`
+  return shortDate(then, now, locale)
+}

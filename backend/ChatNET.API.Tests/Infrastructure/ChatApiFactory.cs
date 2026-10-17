@@ -40,6 +40,13 @@ public sealed class ChatApiFactory : WebApplicationFactory<Program>, IAsyncLifet
         // register many users from one address. Rate limit tests build a host with a tight limit.
         Environment.SetEnvironmentVariable("RateLimiting__Auth__PermitLimit", "1000000");
 
+        // Presence timers are set so they never fire by themselves while other tests run: the refresh loop
+        // ticks once an hour, entries last three, and a user is taken offline at once when their last
+        // connection closes. Tests of those behaviours build a host with the values they need.
+        Environment.SetEnvironmentVariable("Presence__RefreshInterval", "01:00:00");
+        Environment.SetEnvironmentVariable("Presence__Ttl", "03:00:00");
+        Environment.SetEnvironmentVariable("Presence__OfflineGrace", "00:00:00");
+
         AssertUsingTestContainers();
 
         using var scope = Services.CreateScope();

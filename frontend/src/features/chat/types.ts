@@ -14,6 +14,8 @@ export interface Conversation {
   // Messages from other people since you last read it. Counted by the server up to a cap
   // (UNREAD_CAP), then increased here by each message that arrives.
   unreadCount: number
+  // The other person of a direct conversation, whose presence is shown for it; null for a group.
+  otherUserId: string | null
 }
 
 export interface LastMessage {

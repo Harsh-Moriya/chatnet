@@ -14,6 +14,8 @@ using ChatNET.API.Conversations.Persistence;
 using ChatNET.API.Messaging;
 using ChatNET.API.Messaging.Hubs;
 using ChatNET.API.Messaging.Persistence;
+using ChatNET.API.Presence;
+using ChatNET.API.Presence.Persistence;
 using ChatNET.API.Users;
 using FluentValidation;
 using MediatR;
@@ -193,6 +195,22 @@ builder.Services.AddScoped<IConversationRepository, ConversationRepository>();
 builder.Services.AddScoped<IMessageRepository, MessageRepository>();
 builder.Services.AddScoped<ConversationNotifier>();
 
+// ##### Presence #####
+// Who is online lives in Redis (see PresenceScripts). The settings are validated when the host starts,
+// and one Redis connection is shared by everything that needs presence.
+builder.Services.AddOptions<PresenceOptions>()
+    .BindConfiguration(PresenceOptions.SectionName)
+    .ValidateOnStart();
+builder.Services.AddSingleton<IValidateOptions<PresenceOptions>, PresenceOptionsValidator>();
+builder.Services.AddSingleton(provider => new RedisConnection(
+    provider.GetRequiredService<IConfiguration>().GetConnectionString("Redis")
+        ?? throw new InvalidOperationException("ConnectionStrings:Redis is not configured.")));
+builder.Services.AddSingleton<IPresenceStore, PresenceStore>();
+builder.Services.AddSingleton<PresenceService>();
+builder.Services.AddSingleton<PresenceRefreshService>();
+builder.Services.AddHostedService(provider => provider.GetRequiredService<PresenceRefreshService>());
+builder.Services.AddScoped<IPresenceRepository, PresenceRepository>();
+
 // ##### Rate limiting #####
 // Login and registration are limited per client address to slow down password guessing and
 // mass account creation. The limits come from configuration (RateLimiting:Auth) and are
@@ -279,6 +297,7 @@ app.MapAuthEndpoints();
 app.MapUserEndpoints();
 app.MapConversationEndpoints();
 app.MapMessagingEndpoints();
+app.MapPresenceEndpoints();
 
 // A token is checked once, when the connection is made. Without this an open connection would keep
 // receiving messages long after its token expired; with it the server closes the connection at the

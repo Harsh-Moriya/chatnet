@@ -20,7 +20,7 @@ Under active development.
 | Scrolling back through older messages (cursor pagination, oldest-first pages of 50) | Implemented |
 | Catching up on messages missed while disconnected, with no gaps | Implemented |
 | Unread counts, marking a conversation read, read receipts ("Seen") | Implemented |
-| Online presence | Planned |
+| Online presence: a dot on direct chats, "N online" in groups, "last seen", correct across several server instances | Implemented |
 | Refresh tokens, notifications, file uploads | Planned |
 | Structured logging, tracing, deployment | Planned |
 
@@ -34,6 +34,7 @@ Under active development.
 - **Safe edges.** Every response carries browser security headers and API responses are not cacheable, HSTS is sent in production, request bodies are capped at 1 MB, tokens stop working when they expire (including on open SignalR connections), and registration is race-safe: twelve simultaneous sign-ups with one email create one account.
 - **Honest health check.** `/health` asks Postgres and Redis and answers 503 when either is down, without revealing why.
 - **Query cost is tested, not assumed.** The conversation list and message history have tests that ask Postgres how many rows the real query read, so a change that makes either scan far more data than it returns fails the build.
+- **Presence that survives several servers.** Who is online lives in Redis and changes only through Lua scripts, so two servers cannot interleave their steps. Every event carries Redis's own clock, which settles which of two reports is newer. Each server renews the connections it holds, so browsers send no heartbeats, and a server that dies is noticed when its entries expire. A short wait before "offline" keeps a page refresh from flashing the person offline, and only the contacts of a user are told anything.
 - **Duplicate-proof direct chats.** A sorted `DirectKey` with a unique partial index in Postgres guarantees at most one conversation per pair of users.
 - **A browser store that merges, not overwrites.** Messages reach the screen from REST responses and from SignalR pushes, which race and sometimes deliver the same message twice. Both feed one store through actions that merge by id, so order does not matter. Your own message is shown at once as "sending" and confirmed by whichever arrives first, matched by an id the browser invents.
 - **Logic you can test without a browser.** The hub wiring, ordering, reconciliation and typing timers are plain TypeScript tested in Node with a fake hub and fake timers; the tests were checked by breaking each rule on purpose.

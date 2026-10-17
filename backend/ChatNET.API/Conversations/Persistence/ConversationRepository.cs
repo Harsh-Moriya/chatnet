@@ -96,6 +96,15 @@ public class ConversationRepository : IConversationRepository
             .Select(m => m.ConversationId)
             .ToListAsync(cancellationToken);
 
+    public Task<List<Guid>> GetContactIdsAsync(Guid userId, CancellationToken cancellationToken)
+        => (from mine in _db.ConversationMembers
+            join other in _db.ConversationMembers on mine.ConversationId equals other.ConversationId
+            where mine.UserId == userId && mine.LeftAt == null
+                  && other.UserId != userId && other.LeftAt == null
+            select other.UserId)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
     // One UPDATE that carries its own "only if it moves forward" condition. Two requests racing for
     // the same member both reach the row, Postgres makes the second wait for the first and then
     // checks the condition against the value the first wrote, so the position can never go back
@@ -142,15 +151,9 @@ public class ConversationRepository : IConversationRepository
     private const string ConversationSelect = """
         SELECT c."Id"        AS "Id",
                c."Type"      AS "Type",
-               CASE WHEN c."Type" = 'Direct'
-                    THEN (SELECT u."DisplayName"
-                          FROM "ConversationMembers" cm
-                          JOIN "AspNetUsers" u ON u."Id" = cm."UserId"
-                          WHERE cm."ConversationId" = c."Id" AND cm."UserId" <> @viewerId
-                          LIMIT 1)
-                    ELSE c."Name"
-               END           AS "Name",
+               CASE WHEN c."Type" = 'Direct' THEN other."DisplayName" ELSE c."Name" END AS "Name",
                c."AvatarUrl" AS "AvatarUrl",
+               other."UserId" AS "OtherUserId",
                c."UpdatedAt" AS "UpdatedAt",
                lm."SenderId" AS "LastMessageSenderId",
                CASE WHEN lm."IsDeleted" THEN NULL ELSE lm."Content" END AS "LastMessageContent",
@@ -166,6 +169,14 @@ public class ConversationRepository : IConversationRepository
         FROM "Conversations" c
         JOIN "ConversationMembers" mine
           ON mine."ConversationId" = c."Id" AND mine."UserId" = @viewerId
+        LEFT JOIN LATERAL (
+            SELECT cm."UserId", u."DisplayName"
+            FROM "ConversationMembers" cm
+            JOIN "AspNetUsers" u ON u."Id" = cm."UserId"
+            WHERE c."Type" = 'Direct'
+              AND cm."ConversationId" = c."Id" AND cm."UserId" <> @viewerId
+            LIMIT 1
+        ) other ON TRUE
         LEFT JOIN LATERAL (
             SELECT m."SenderId", m."Content", m."IsDeleted", m."CreatedAt"
             FROM "Messages" m
@@ -192,7 +203,8 @@ public class ConversationRepository : IConversationRepository
             : null;
 
         return new ConversationDto(
-            row.Id, Enum.Parse<ConversationType>(row.Type), row.Name ?? "Unknown", row.AvatarUrl, row.UpdatedAt, last, row.UnreadCount);
+            row.Id, Enum.Parse<ConversationType>(row.Type), row.Name ?? "Unknown", row.AvatarUrl, row.UpdatedAt, last,
+            row.UnreadCount, row.OtherUserId);
     }
 
     private static string? Truncate(string? content)
@@ -211,5 +223,6 @@ public class ConversationRepository : IConversationRepository
         public string? LastMessageContent { get; set; }
         public DateTime? LastMessageCreatedAt { get; set; }
         public int UnreadCount { get; set; }
+        public Guid? OtherUserId { get; set; }
     }
 }

@@ -48,5 +48,7 @@ public sealed class ThrowingHubContext : IHubContext<ChatHub, IChatClient>
         public Task AddedToConversation(ConversationDto conversation) => throw Failure();
 
         public Task MessageRead(Guid conversationId, Guid userId, DateTime readAt) => throw Failure();
+
+        public Task PresenceChanged(ChatNET.API.Presence.PresenceDto presence) => throw Failure();
     }
 }

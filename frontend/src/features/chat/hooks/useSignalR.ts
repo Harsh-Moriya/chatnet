@@ -4,6 +4,7 @@ import { createChatConnection } from '../../../lib/signalr'
 import { catchUpAll } from '../api/catchUp'
 import { isTokenExpired } from '../../../lib/jwt'
 import { useAuthStore } from '../../auth/store/authStore'
+import { usePresenceStore } from '../../presence/store/presenceStore'
 import { useChatStore } from '../store/chatStore'
 import { connectChat, type ChatConnection } from './chatConnection'
 
@@ -36,15 +37,19 @@ export function useSignalR() {
         // this connection.
         onSessionExpired: () => useAuthStore.getState().clearAuth(),
 
+        // Someone who shares a conversation with this user came online or went offline.
+        onPresenceChanged: (presence) => usePresenceStore.getState().apply(presence),
+
         // Events sent while the connection was down were lost, so REST puts the state back in
         // charge. The list is reloaded; every conversation that was loaded asks the server for the
         // messages after its newest one (a conversation too far behind is reset and loads afresh), and
-        // the read positions of the members are loaded again, because their pushes were lost too.
+        // the read positions of the members and who is online are loaded again, because their pushes were lost too.
         // This is a connection event, not a message event, so it does not break the rule against
         // reloading on pushes.
         onReconnected: () => {
           void queryClient.invalidateQueries({ queryKey: ['conversations'] })
           void queryClient.invalidateQueries({ queryKey: ['members'] })
+          void queryClient.invalidateQueries({ queryKey: ['presence'] })
           void catchUpAll({
             onTooFarBehind: (conversationId) =>
               void queryClient.resetQueries({ queryKey: ['messages', conversationId] }),

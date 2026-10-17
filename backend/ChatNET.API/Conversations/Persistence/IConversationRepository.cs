@@ -27,6 +27,10 @@ public interface IConversationRepository
 
     Task<List<Guid>> GetActiveConversationIdsForUserAsync(Guid userId, CancellationToken cancellationToken);
 
+    // Everyone who shares an active conversation with this user: the people who may see their presence,
+    // and whose presence they may see. Never includes the user, never a member who left.
+    Task<List<Guid>> GetContactIdsAsync(Guid userId, CancellationToken cancellationToken);
+
     // Moves an active member's read position to readAt, only if that is later than where it is.
     // Returns whether it moved, so callers announce a change only when there was one.
     Task<bool> AdvanceLastReadAsync(Guid conversationId, Guid userId, DateTime readAt, CancellationToken cancellationToken);

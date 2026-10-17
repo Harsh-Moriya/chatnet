@@ -2,6 +2,7 @@ import { NavLink } from 'react-router-dom'
 import { Avatar } from '../../../components/ui/Avatar'
 import { cn } from '../../../lib/cn'
 import { formatListTime } from '../../../lib/format'
+import { usePresenceStore } from '../../presence/store/presenceStore'
 import { useChatStore } from '../store/chatStore'
 import { unreadLabel } from '../readState'
 import { typingLabel } from '../typingLabel'
@@ -18,6 +19,13 @@ export function ConversationListItem({ conversation, currentUserId, now }: Conve
   const last = conversation.lastMessage
   const unread = conversation.unreadCount > 0
 
+  // A direct chat shows whether the other person is online. A group has no single person to show, so
+  // its dot is left out; the header says how many are online. The selector returns a boolean, so the
+  // row re-renders only when this one person comes or goes.
+  const online = usePresenceStore((state) =>
+    conversation.otherUserId !== null && state.byUser[conversation.otherUserId]?.isOnline === true,
+  )
+
   return (
     <li>
       <NavLink
@@ -31,7 +39,12 @@ export function ConversationListItem({ conversation, currentUserId, now }: Conve
       >
         {({ isActive }) => (
           <>
-            <Avatar name={conversation.name} src={conversation.avatarUrl} isGroup={conversation.type === 'Group'} />
+            <Avatar
+              name={conversation.name}
+              src={conversation.avatarUrl}
+              isGroup={conversation.type === 'Group'}
+              online={online}
+            />
 
             <div className="min-w-0 flex-1">
               <div className="flex items-baseline justify-between gap-2">

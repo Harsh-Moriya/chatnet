@@ -24,6 +24,7 @@ function conversation(overrides: Partial<Conversation> & { id: string }): Conver
     updatedAt: '2026-10-11T09:00:00Z',
     lastMessage: null,
     unreadCount: 0,
+    otherUserId: null,
     ...overrides,
   }
 }
