@@ -7,6 +7,8 @@ interface AvatarProps {
   size?: 'sm' | 'md'
   // A group shows a people icon instead of initials.
   isGroup?: boolean
+  // A green dot on the corner. The dot is a picture; the text for a screen reader is inside it.
+  online?: boolean
 }
 
 // Colours stay inside the design tokens (blue, sky, slate). The same name always gets the same one,
@@ -33,14 +35,12 @@ function colourFor(name: string): string {
   return PALETTE[hash % PALETTE.length]
 }
 
-export function Avatar({ name, src, size = 'md', isGroup = false }: AvatarProps) {
+export function Avatar({ name, src, size = 'md', isGroup = false, online = false }: AvatarProps) {
   const box = size === 'md' ? 'h-10 w-10 text-sm' : 'h-8 w-8 text-xs'
 
-  if (src) {
-    return <img src={src} alt="" className={cn('shrink-0 rounded-full object-cover', box)} />
-  }
-
-  return (
+  const face = src ? (
+    <img src={src} alt="" className={cn('shrink-0 rounded-full object-cover', box)} />
+  ) : (
     <div
       aria-hidden="true"
       className={cn(
@@ -51,5 +51,21 @@ export function Avatar({ name, src, size = 'md', isGroup = false }: AvatarProps)
     >
       {isGroup ? <Users className={size === 'md' ? 'h-5 w-5' : 'h-4 w-4'} /> : initials(name)}
     </div>
+  )
+
+  if (!online) return face
+
+  return (
+    <span className="relative inline-flex shrink-0">
+      {face}
+      <span
+        className={cn(
+          'absolute bottom-0 right-0 rounded-full bg-emerald-500 ring-2 ring-white',
+          size === 'md' ? 'h-3 w-3' : 'h-2.5 w-2.5',
+        )}
+      >
+        <span className="sr-only">Online</span>
+      </span>
+    </span>
   )
 }
