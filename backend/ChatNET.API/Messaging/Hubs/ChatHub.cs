@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using ChatNET.API.Common.Auth;
 using ChatNET.API.Conversations;
 using ChatNET.API.Conversations.Persistence;
+using ChatNET.API.Presence;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 
@@ -25,11 +26,13 @@ public class ChatHub : Hub<IChatClient>
     private static readonly TimeSpan TypingInterval = TimeSpan.FromSeconds(1);
 
     private readonly IConversationRepository _conversations;
+    private readonly PresenceService _presence;
     private readonly ILogger<ChatHub> _logger;
 
-    public ChatHub(IConversationRepository conversations, ILogger<ChatHub> logger)
+    public ChatHub(IConversationRepository conversations, PresenceService presence, ILogger<ChatHub> logger)
     {
         _conversations = conversations;
+        _presence = presence;
         _logger = logger;
     }
 
@@ -51,7 +54,20 @@ public class ChatHub : Hub<IChatClient>
             "Connection {ConnectionId} of user {UserId} joined {ConversationCount} conversations",
             Context.ConnectionId, userId, conversationIds.Count);
 
+        // After the groups, so the connection is fully usable whatever happens to presence: recording it
+        // cannot fail the connection (the service logs and drops its own failures).
+        await _presence.ConnectedAsync(userId, Context.ConnectionId);
+
         await base.OnConnectedAsync();
+    }
+
+    // Runs when a connection closes, however it closed (the user left, the network dropped, the token
+    // expired). A server that dies never gets here; its connections stop being renewed and expire.
+    public override async Task OnDisconnectedAsync(Exception? exception)
+    {
+        await _presence.DisconnectedAsync(Context.User!.GetUserId(), Context.ConnectionId);
+
+        await base.OnDisconnectedAsync(exception);
     }
 
     // Client-callable. Adds this connection to a conversation's group, for conversations the user

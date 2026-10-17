@@ -96,6 +96,15 @@ public class ConversationRepository : IConversationRepository
             .Select(m => m.ConversationId)
             .ToListAsync(cancellationToken);
 
+    public Task<List<Guid>> GetContactIdsAsync(Guid userId, CancellationToken cancellationToken)
+        => (from mine in _db.ConversationMembers
+            join other in _db.ConversationMembers on mine.ConversationId equals other.ConversationId
+            where mine.UserId == userId && mine.LeftAt == null
+                  && other.UserId != userId && other.LeftAt == null
+            select other.UserId)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
     // One UPDATE that carries its own "only if it moves forward" condition. Two requests racing for
     // the same member both reach the row, Postgres makes the second wait for the first and then
     // checks the condition against the value the first wrote, so the position can never go back

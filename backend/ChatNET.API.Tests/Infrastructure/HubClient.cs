@@ -26,6 +26,7 @@ public sealed class HubClient : IAsyncDisposable
     private readonly ConcurrentQueue<TypingEvent> _typing = new();
     private readonly ConcurrentQueue<JsonElement> _added = new();
     private readonly ConcurrentQueue<ReadEvent> _reads = new();
+    private readonly ConcurrentQueue<JsonElement> _presence = new();
 
     private HubClient(HubConnection connection)
     {
@@ -38,6 +39,7 @@ public sealed class HubClient : IAsyncDisposable
         _connection.On<JsonElement>("AddedToConversation", conversation => _added.Enqueue(conversation));
         _connection.On<Guid, Guid, DateTime>("MessageRead", (conversationId, userId, readAt) =>
             _reads.Enqueue(new ReadEvent(conversationId, userId, readAt)));
+        _connection.On<JsonElement>("PresenceChanged", presence => _presence.Enqueue(presence));
     }
 
     public HubConnectionState State => _connection.State;
@@ -49,6 +51,8 @@ public sealed class HubClient : IAsyncDisposable
     public IReadOnlyList<JsonElement> AddedToConversation => _added.ToArray();
 
     public IReadOnlyList<ReadEvent> ReadEvents => _reads.ToArray();
+
+    public IReadOnlyList<JsonElement> PresenceEvents => _presence.ToArray();
 
     public static Task<HubClient> ConnectAsync(WebApplicationFactory<Program> host, TestUser user) =>
         ConnectAsync(host, user.Token);
@@ -132,6 +136,11 @@ public sealed class HubClient : IAsyncDisposable
     public Task<ReadEvent> WaitForReadAsync(Func<ReadEvent, bool> match, TimeSpan? timeout = null) =>
         WaitAsync(_reads, match, timeout);
 
+    // The next presence change about this user (online or offline, as asked).
+    public Task<JsonElement> WaitForPresenceAsync(Guid userId, bool isOnline, TimeSpan? timeout = null) =>
+        WaitAsync(_presence, p => p.GetProperty("userId").GetGuid() == userId
+                                  && p.GetProperty("isOnline").GetBoolean() == isOnline, timeout);
+
     // Listens for a short while and reports whether any matching event arrived. Used to prove an
     // event was NOT delivered; the quiet period keeps such tests fast but not instant.
     public async Task<bool> ReceivedMessageAsync(Guid conversationId)
@@ -156,6 +165,21 @@ public sealed class HubClient : IAsyncDisposable
     {
         await Task.Delay(QuietPeriod);
         return _reads.Any(match);
+    }
+
+    // Listens for a short while and reports whether any presence change about this user arrived.
+    public async Task<bool> ReceivedPresenceAsync(Guid userId)
+    {
+        await Task.Delay(QuietPeriod);
+        return _presence.Any(p => p.GetProperty("userId").GetGuid() == userId);
+    }
+
+    // The same, for a change to offline only.
+    public async Task<bool> ReceivedPresenceOfflineAsync(Guid userId)
+    {
+        await Task.Delay(QuietPeriod);
+        return _presence.Any(p => p.GetProperty("userId").GetGuid() == userId
+                                  && !p.GetProperty("isOnline").GetBoolean());
     }
 
     public ValueTask DisposeAsync() => _connection.DisposeAsync();

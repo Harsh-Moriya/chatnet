@@ -70,6 +70,9 @@ public sealed class BarrierConversationRepository : IConversationRepository
     public Task<List<Guid>> GetActiveConversationIdsForUserAsync(Guid userId, CancellationToken cancellationToken) =>
         _inner.GetActiveConversationIdsForUserAsync(userId, cancellationToken);
 
+    public Task<List<Guid>> GetContactIdsAsync(Guid userId, CancellationToken cancellationToken) =>
+        _inner.GetContactIdsAsync(userId, cancellationToken);
+
     public Task<bool> AdvanceLastReadAsync(
         Guid conversationId, Guid userId, DateTime readAt, CancellationToken cancellationToken) =>
         _inner.AdvanceLastReadAsync(conversationId, userId, readAt, cancellationToken);

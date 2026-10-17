@@ -1,5 +1,6 @@
 using ChatNET.API.Conversations.Models;
 using ChatNET.API.Messaging.Models;
+using ChatNET.API.Presence;
 
 namespace ChatNET.API.Messaging.Hubs;
 
@@ -22,4 +23,9 @@ public interface IChatClient
     // Sent to the whole conversation, the reader's own other tabs included, after the new position
     // is stored; it is only sent when the position moved.
     Task MessageRead(Guid conversationId, Guid userId, DateTime readAt);
+
+    // Someone who shares a conversation with the receiver came online or went offline. Sent to the
+    // people who may see their presence (and nobody else), once per change: a second tab or a page
+    // refresh is not a change.
+    Task PresenceChanged(PresenceDto presence);
 }

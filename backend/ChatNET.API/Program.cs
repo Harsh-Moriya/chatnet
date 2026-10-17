@@ -15,6 +15,7 @@ using ChatNET.API.Messaging;
 using ChatNET.API.Messaging.Hubs;
 using ChatNET.API.Messaging.Persistence;
 using ChatNET.API.Presence;
+using ChatNET.API.Presence.Persistence;
 using ChatNET.API.Users;
 using FluentValidation;
 using MediatR;
@@ -205,6 +206,10 @@ builder.Services.AddSingleton(provider => new RedisConnection(
     provider.GetRequiredService<IConfiguration>().GetConnectionString("Redis")
         ?? throw new InvalidOperationException("ConnectionStrings:Redis is not configured.")));
 builder.Services.AddSingleton<IPresenceStore, PresenceStore>();
+builder.Services.AddSingleton<PresenceService>();
+builder.Services.AddSingleton<PresenceRefreshService>();
+builder.Services.AddHostedService(provider => provider.GetRequiredService<PresenceRefreshService>());
+builder.Services.AddScoped<IPresenceRepository, PresenceRepository>();
 
 // ##### Rate limiting #####
 // Login and registration are limited per client address to slow down password guessing and
