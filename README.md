@@ -22,7 +22,8 @@ Under active development.
 | Unread counts, marking a conversation read, read receipts ("Seen") | Implemented |
 | Online presence: a dot on direct chats, "N online" in groups, "last seen", correct across several server instances | Implemented |
 | Refresh tokens, notifications, file uploads | Planned |
-| Structured logging, tracing, deployment | Planned |
+| Structured logging (JSON in production) and tracing (OpenTelemetry, viewed in Jaeger) | Implemented |
+| Deployment | Planned |
 
 ## How it is built
 
@@ -48,6 +49,7 @@ Under active development.
 | Database | PostgreSQL 16 |
 | Real-time and cache | SignalR with a Redis 7 backplane |
 | Auth | ASP.NET Core Identity, JWT bearer |
+| Observability | Serilog (structured logs), OpenTelemetry traces viewed in Jaeger |
 | Local infrastructure | Docker Compose (Postgres, Redis, Jaeger, Adminer) |
 
 ## Getting started
@@ -84,6 +86,8 @@ dotnet run                  # http://localhost:5045
 ```
 
 In Development the OpenAPI document is served at `/openapi/v1.json` and the Scalar API reference at `/scalar/v1`; every endpoint documents its success body and its errors.
+
+To see traces, set `OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317` before `dotnet run` and open Jaeger at http://localhost:16686. With the variable unset nothing is exported. Logs go to the console: readable lines in Development, one JSON object per line in any other environment.
 
 ### 3. Run the frontend
 
