@@ -24,11 +24,6 @@ export interface ChatConnectionDeps {
   // Called after the connection came back from a drop and is ready. Events sent during the gap
   // were lost, so this is where REST data is reloaded.
   onReconnected: () => void
-  // Whether the token has expired. The server closes a connection at its token's expiry and refuses
-  // a new one made with it, so retrying can never succeed.
-  isSessionExpired: () => boolean
-  // Called once, when the session turns out to have expired. The caller signs the user out.
-  onSessionExpired: () => void
   // Called with every presence change pushed by the server (someone came online or went offline).
   onPresenceChanged: (presence: Presence) => void
   retryDelay?: (failedAttempts: number) => number
@@ -57,22 +52,11 @@ export function connectChat(hub: ChatHub, deps: ChatConnectionDeps): ChatConnect
   let retryTimer: ReturnType<typeof setTimeout> | undefined
   let wakeRetry: (() => void) | undefined
   let disposed = false
-  let sessionEnded = false
   // Bumped each time the connection state changes. A readiness check that finishes after the
   // connection dropped again must not report "connected".
   let epoch = 0
 
   const chat = () => useChatStore.getState()
-
-  // Reports an expired session, once. Not after dispose(): closing the connection ourselves also raises
-  // the close event, and that is not the session ending.
-  function endSessionIfExpired(): boolean {
-    if (disposed || sessionEnded || !deps.isSessionExpired()) return false
-
-    sessionEnded = true
-    deps.onSessionExpired()
-    return true
-  }
 
   // ##### Handlers #####
   // Handlers use block bodies and return nothing. The SignalR JavaScript client treats a returned
@@ -125,7 +109,6 @@ export function connectChat(hub: ChatHub, deps: ChatConnectionDeps): ChatConnect
   hub.onreconnecting(() => {
     epoch++
     chat().setConnection('reconnecting')
-    endSessionIfExpired()
   })
 
   hub.onreconnected(() => {
@@ -134,11 +117,16 @@ export function connectChat(hub: ChatHub, deps: ChatConnectionDeps): ChatConnect
     })
   })
 
+  // The library reconnects by itself after a connection drops, but not after a close it counts as final.
+  // The server ends a connection that way when its access token runs out. The access token factory
+  // renews the session when the connection starts again, so starting again is the whole remedy. Closing
+  // is also how dispose() ends the connection, and that is not a loss.
   hub.onclose(() => {
     epoch++
-    // Closing is also how dispose() ends the connection, and that is not a loss.
-    if (!disposed) chat().setConnection('disconnected')
-    endSessionIfExpired()
+    if (disposed) return
+
+    chat().setConnection('disconnected')
+    void connect({ afterLoss: true })
   })
 
   async function becomeReady(): Promise<boolean> {
@@ -157,25 +145,42 @@ export function connectChat(hub: ChatHub, deps: ChatConnectionDeps): ChatConnect
     return true
   }
 
-  // The first connect is retried here because the library's automatic reconnect only applies to a
-  // connection that already worked.
-  async function start() {
-    for (let attempt = 0; !disposed; attempt++) {
-      try {
-        await hub.start()
-      } catch {
-        // Also what a start abandoned by dispose() ends in, which is not worth reporting.
-        if (disposed) return
+  // Connects, and keeps trying until it does. The library only retries a connection that already worked,
+  // so the first connect, and a connect after the library let go of a closed one, are retried here.
+  // After a loss, whatever the server pushed in the meantime was missed, so the owner is told once the
+  // connection is ready, as it is after any reconnect.
+  let connecting = false
 
-        chat().setConnection('disconnected')
-        if (endSessionIfExpired()) return
+  async function connect({ afterLoss }: { afterLoss: boolean }) {
+    if (connecting) return
+    connecting = true
+    let holdingGuard = true
 
-        await pause(retryDelay(attempt))
-        continue
+    try {
+      for (let attempt = 0; !disposed; attempt++) {
+        try {
+          await hub.start()
+        } catch {
+          // Also what a start abandoned by dispose() ends in, which is not worth reporting.
+          if (disposed) return
+
+          chat().setConnection('disconnected')
+          await pause(retryDelay(attempt))
+          continue
+        }
+
+        // Started. The guard is only for the attempts: a close during the readiness check below must be
+        // able to start the next connect.
+        connecting = false
+        holdingGuard = false
+
+        const ready = await becomeReady()
+        if (ready && afterLoss) deps.onReconnected()
+        return
       }
-
-      await becomeReady()
-      return
+    } finally {
+      // Only if it is still this call's: another connect may have started during the readiness check.
+      if (holdingGuard) connecting = false
     }
   }
 
@@ -186,7 +191,7 @@ export function connectChat(hub: ChatHub, deps: ChatConnectionDeps): ChatConnect
     })
   }
 
-  void start()
+  void connect({ afterLoss: false })
 
   return {
     // Typing signals are best effort. When the connection is down, or the server refuses, nothing

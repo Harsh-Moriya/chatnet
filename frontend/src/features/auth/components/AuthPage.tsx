@@ -1,11 +1,13 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Navigate } from 'react-router-dom'
 import { MessagesSquare } from 'lucide-react'
 import { LoginForm } from './LoginForm'
 import { RegisterForm } from './RegisterForm'
 import { useLogin } from '../api/useLogin'
 import { useRegister } from '../api/useRegister'
 import { getApiError } from '../../../lib/errors'
+import { SessionLoading } from '../../../components/SessionLoading'
+import { useAuth } from '../hooks/useAuth'
 import { useAuthStore } from '../store/authStore'
 import type { AuthResponse } from '../types'
 
@@ -37,14 +39,14 @@ function BrandPanel() {
 
 export function AuthPage() {
   const [mode, setMode] = useState<'login' | 'register'>('login')
-  const navigate = useNavigate()
-  const { setAuth } = useAuthStore()
+  const { isAuthenticated, isResolving } = useAuth()
+  const setAuth = useAuthStore((state) => state.setAuth)
   const loginMutation = useLogin()
   const registerMutation = useRegister()
 
+  // Signing in flips the store, and the redirect below takes the person to the chat.
   function handleSuccess(response: AuthResponse) {
     setAuth(response)
-    navigate('/chat')
   }
 
   function toggleMode() {
@@ -52,6 +54,11 @@ export function AuthPage() {
     loginMutation.reset()
     registerMutation.reset()
   }
+
+  // Someone who still has a working session (a reload, a second tab, the address typed in again) has no
+  // use for the form. Until that is known, showing it would flash the wrong page.
+  if (isResolving) return <SessionLoading />
+  if (isAuthenticated) return <Navigate to="/chat" replace />
 
   return (
     <div className="min-h-screen flex">

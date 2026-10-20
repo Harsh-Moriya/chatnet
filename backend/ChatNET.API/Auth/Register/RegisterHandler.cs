@@ -11,26 +11,29 @@ using Npgsql;
 
 namespace ChatNET.API.Auth.Register;
 
-public class RegisterHandler : IRequestHandler<RegisterCommand, AuthResponse>
+public class RegisterHandler : IRequestHandler<RegisterCommand, AuthResult>
 {
     private readonly UserManager<AppUser> _userManager;
     private readonly JwtTokenService _jwtTokenService;
+    private readonly RefreshTokenIssuer _refreshTokens;
     private readonly AppDbContext _db;
     private readonly ILogger<RegisterHandler> _logger;
 
     public RegisterHandler(
         UserManager<AppUser> userManager,
         JwtTokenService jwtTokenService,
+        RefreshTokenIssuer refreshTokens,
         AppDbContext db,
         ILogger<RegisterHandler> logger)
     {
         _userManager = userManager;
         _jwtTokenService = jwtTokenService;
+        _refreshTokens = refreshTokens;
         _db = db;
         _logger = logger;
     }
 
-    public async Task<AuthResponse> Handle(RegisterCommand request, CancellationToken cancellationToken)
+    public async Task<AuthResult> Handle(RegisterCommand request, CancellationToken cancellationToken)
     {
         var user = new AppUser
         {
@@ -67,11 +70,12 @@ public class RegisterHandler : IRequestHandler<RegisterCommand, AuthResponse>
         if (!result.Succeeded)
             throw FailureFor(result);
 
+        // Stored in the same transaction, so there is never an account whose first sign-in has no session.
+        var refreshToken = await _refreshTokens.StartSessionAsync(user.Id, cancellationToken);
+
         await transaction.CommitAsync(cancellationToken);
 
-        var token = _jwtTokenService.GenerateToken(user);
-
-        return new AuthResponse(token, user.Id.ToString(), user.UserName!, user.DisplayName);
+        return new AuthResult(AuthResponse.For(user, _jwtTokenService.GenerateToken(user)), refreshToken);
     }
 
     // A password that breaks an account rule is a mistake in the request, so it is reported like any

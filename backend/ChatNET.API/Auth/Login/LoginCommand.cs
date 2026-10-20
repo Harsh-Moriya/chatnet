@@ -6,4 +6,4 @@ namespace ChatNET.API.Auth.Login;
 public record LoginCommand(
     string Email,
     string Password
-) : IRequest<AuthResponse>;
+) : IRequest<AuthResult>;

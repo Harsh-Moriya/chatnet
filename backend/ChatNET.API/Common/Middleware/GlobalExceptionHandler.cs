@@ -1,3 +1,5 @@
+using ChatNET.API.Auth;
+using ChatNET.API.Auth.Refresh;
 using ChatNET.API.Common.Exceptions;
 using FluentValidation;
 using Microsoft.AspNetCore.Diagnostics;
@@ -57,6 +59,11 @@ public class GlobalExceptionHandler : IExceptionHandler
 
         if (exception is TooManyAttemptsException tooMany)
             httpContext.Response.Headers.RetryAfter = ((int)Math.Ceiling(tooMany.RetryAfter.TotalSeconds)).ToString();
+
+        // Set here and not in the endpoint: the exception handler middleware clears the response before it
+        // calls this, so a header set earlier would be lost.
+        if (exception is SessionRejectedException { ClearCookie: true })
+            RefreshCookie.Clear(httpContext.Response);
 
         var problem = new ProblemDetails
         {

@@ -3,14 +3,13 @@ import { LogOut, SquarePen } from 'lucide-react'
 import { Avatar } from '../../../components/ui/Avatar'
 import { Button } from '../../../components/ui/Button'
 import { useAuth } from '../../auth/hooks/useAuth'
-import { useAuthStore } from '../../auth/store/authStore'
+import { session } from '../../auth/session'
 import { ConnectionBanner } from './ConnectionBanner'
 import { ConversationList } from './ConversationList'
 import { NewConversationDialog } from './NewConversationDialog'
 
 export function Sidebar() {
   const { user } = useAuth()
-  const clearAuth = useAuthStore((state) => state.clearAuth)
   const [dialogOpen, setDialogOpen] = useState(false)
 
   return (
@@ -28,7 +27,7 @@ export function Sidebar() {
           <Button variant="ghost" size="icon" aria-label="New conversation" onClick={() => setDialogOpen(true)}>
             <SquarePen className="h-5 w-5" />
           </Button>
-          <Button variant="ghost" size="icon" aria-label="Sign out" onClick={clearAuth}>
+          <Button variant="ghost" size="icon" aria-label="Sign out" onClick={() => void session.signOut()}>
             <LogOut className="h-5 w-5" />
           </Button>
         </div>

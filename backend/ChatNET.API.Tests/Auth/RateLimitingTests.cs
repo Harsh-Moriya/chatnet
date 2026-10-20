@@ -2,6 +2,8 @@ using System.Net;
 using System.Net.Http.Json;
 using ChatNET.API.Tests.Infrastructure;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
@@ -102,9 +104,73 @@ public class RateLimitingTests
         }
     }
 
+    // Renewing a session must never use up the allowance for signing in, or the other way round.
+    [Fact]
+    public async Task Refreshing_has_its_own_limit_separate_from_signing_in()
+    {
+        using var host = HostWith(new Dictionary<string, string?>
+        {
+            ["RateLimiting:Auth:PermitLimit"] = "2",
+            ["RateLimiting:Refresh:PermitLimit"] = "3",
+        });
+        using var client = host.CreateCookielessClient();
+
+        for (var i = 0; i < 3; i++)
+            Assert.Equal(HttpStatusCode.Unauthorized, (await client.RefreshAsync(cookie: null)).StatusCode);
+
+        var blocked = await client.RefreshAsync(cookie: null);
+        Assert.Equal(HttpStatusCode.TooManyRequests, blocked.StatusCode);
+        Assert.Contains("Retry-After", blocked.Headers.Select(h => h.Key));
+
+        // Signing in still has its full allowance.
+        Assert.Equal(HttpStatusCode.Unauthorized, (await WrongLoginAsync(client)).StatusCode);
+    }
+
+    [Fact]
+    public async Task Exhausting_the_login_limit_does_not_stop_a_session_from_being_renewed()
+    {
+        using var host = HostWithLimit(permitLimit: 1);
+        using var client = host.CreateCookielessClient();
+        await WrongLoginAsync(client);
+        Assert.Equal(HttpStatusCode.TooManyRequests, (await WrongLoginAsync(client)).StatusCode);
+
+        var refresh = await client.RefreshAsync(cookie: null);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, refresh.StatusCode);
+    }
+
+    [Fact]
+    public async Task Signing_out_shares_the_refresh_limit()
+    {
+        using var host = HostWith(new Dictionary<string, string?> { ["RateLimiting:Refresh:PermitLimit"] = "2" });
+        using var client = host.CreateCookielessClient();
+
+        await client.LogoutAsync(cookie: null);
+        await client.LogoutAsync(cookie: null);
+
+        Assert.Equal(HttpStatusCode.TooManyRequests, (await client.LogoutAsync(cookie: null)).StatusCode);
+    }
+
+    // A route added to the auth group later would otherwise be open to unlimited attempts unless
+    // somebody remembered to limit it. Each route must name a policy.
+    [Fact]
+    public void Every_auth_endpoint_has_a_rate_limit_policy()
+    {
+        var endpoints = _factory.Services.GetRequiredService<EndpointDataSource>().Endpoints
+            .OfType<RouteEndpoint>()
+            .Where(e => e.RoutePattern.RawText?.StartsWith("/api/auth/", StringComparison.Ordinal) == true)
+            .ToList();
+
+        Assert.True(endpoints.Count >= 4, "Expected at least register, login, refresh and logout.");
+        Assert.All(endpoints, e =>
+            Assert.True(e.Metadata.GetMetadata<EnableRateLimitingAttribute>() is not null, $"{e.RoutePattern.RawText} has no rate limit."));
+    }
+
     [Theory]
     [InlineData("RateLimiting:Auth:PermitLimit", "0")]
     [InlineData("RateLimiting:Auth:WindowSeconds", "0")]
+    [InlineData("RateLimiting:Refresh:PermitLimit", "0")]
+    [InlineData("RateLimiting:Refresh:WindowSeconds", "0")]
     public void Startup_fails_when_the_limit_settings_are_not_positive(string key, string value)
     {
         using var host = HostWith(new Dictionary<string, string?> { [key] = value });

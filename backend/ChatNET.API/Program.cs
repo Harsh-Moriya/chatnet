@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json.Serialization;
 using ChatNET.API.Auth;
 using ChatNET.API.Auth.Models;
+using ChatNET.API.Auth.Persistence;
 using ChatNET.API.Auth.RateLimiting;
 using ChatNET.API.Auth.Services;
 using ChatNET.API.Common.Behaviours;
@@ -27,6 +28,7 @@ using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
@@ -222,6 +224,13 @@ try
 
     // ##### Services #####
     builder.Services.AddScoped<JwtTokenService>();
+    builder.Services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
+    builder.Services.AddScoped<RefreshTokenIssuer>();
+    builder.Services.AddHostedService<RefreshTokenCleanupService>();
+    // The clock the application's own logic reads, so a test can move it. The access token itself is
+    // issued and checked against the system clock.
+    builder.Services.TryAddSingleton(TimeProvider.System);
+
     builder.Services.AddScoped<IConversationRepository, ConversationRepository>();
     builder.Services.AddScoped<IMessageRepository, MessageRepository>();
     builder.Services.AddScoped<ConversationNotifier>();
@@ -248,6 +257,10 @@ try
     // validated at startup; the policy itself is defined in AuthRateLimiterSetup.
     builder.Services.AddOptions<AuthRateLimitOptions>()
         .BindConfiguration(AuthRateLimitOptions.SectionName)
+        .ValidateDataAnnotations()
+        .ValidateOnStart();
+    builder.Services.AddOptions<RefreshRateLimitOptions>()
+        .BindConfiguration(RefreshRateLimitOptions.SectionName)
         .ValidateDataAnnotations()
         .ValidateOnStart();
     builder.Services.AddRateLimiter(_ => { });

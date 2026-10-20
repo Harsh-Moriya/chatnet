@@ -1,6 +1,5 @@
 import { HubConnectionBuilder, LogLevel, type HubConnection } from '@microsoft/signalr'
-import { useAuthStore } from '../features/auth/store/authStore'
-import { isTokenExpired } from './jwt'
+import { session } from '../features/auth/session'
 
 // Same idea as the API base URL in api.ts: relative in development (Vite proxies /hubs to the
 // backend, with WebSocket support), overridable for a build that talks to another origin.
@@ -13,26 +12,20 @@ export function reconnectDelay(failedAttempts: number): number {
   return [0, 2000, 5000, 10000][failedAttempts] ?? 30000
 }
 
-// The delay before the next reconnect attempt, or null to stop. Once the token has expired the server
-// will refuse every attempt, so retrying only fills the log and leaves the user looking at a banner;
-// stopping hands the decision to the caller, which signs the user out.
-export function nextRetryDelay(failedAttempts: number, sessionExpired: boolean): number | null {
-  return sessionExpired ? null : reconnectDelay(failedAttempts)
-}
-
 // Builds the connection without starting it, so the caller can register its event handlers first.
 // A handler registered after start() can miss an event that arrives straight away.
 export function createChatConnection(): HubConnection {
   return (
     new HubConnectionBuilder()
       // Called for the negotiate request and again for the WebSocket, where the token travels in
-      // the query string because a browser cannot set headers on a WebSocket upgrade. It reads the
-      // store every time, so a reconnect after a new login uses the new token.
-      .withUrl(HUB_URL, { accessTokenFactory: () => useAuthStore.getState().token ?? '' })
+      // the query string because a browser cannot set headers on a WebSocket upgrade. It asks the
+      // session manager every time, so a connection made after the access token ran out (the server
+      // closes a connection at its token's expiry) gets a renewed one. When the session cannot be
+      // renewed it is ended, the user is signed out and the chat, with this connection, goes away.
+      .withUrl(HUB_URL, { accessTokenFactory: async () => (await session.getAccessToken()) ?? '' })
       // Applies after a connection that worked has dropped. The first connect is retried by hand.
       .withAutomaticReconnect({
-        nextRetryDelayInMilliseconds: (context) =>
-          nextRetryDelay(context.previousRetryCount, isTokenExpired(useAuthStore.getState().token)),
+        nextRetryDelayInMilliseconds: (context) => reconnectDelay(context.previousRetryCount),
       })
       .configureLogging(LogLevel.Warning)
       .build()

@@ -4,16 +4,17 @@ using Microsoft.Extensions.Options;
 
 namespace ChatNET.API.Auth.RateLimiting;
 
-// Defines the "auth" rate limit policy. It is an IConfigureOptions so the numbers come from the
-// validated AuthRateLimitOptions; AddRateLimiter's own callback cannot reach dependency
-// injection.
+// Defines the "auth" and "refresh" rate limit policies. It is an IConfigureOptions so the numbers come
+// from the validated options classes; AddRateLimiter's own callback cannot reach dependency injection.
 public sealed class AuthRateLimiterSetup : IConfigureOptions<RateLimiterOptions>
 {
-    private readonly AuthRateLimitOptions _limits;
+    private readonly AuthRateLimitOptions _authLimits;
+    private readonly RefreshRateLimitOptions _refreshLimits;
 
-    public AuthRateLimiterSetup(IOptions<AuthRateLimitOptions> limits)
+    public AuthRateLimiterSetup(IOptions<AuthRateLimitOptions> authLimits, IOptions<RefreshRateLimitOptions> refreshLimits)
     {
-        _limits = limits.Value;
+        _authLimits = authLimits.Value;
+        _refreshLimits = refreshLimits.Value;
     }
 
     public void Configure(RateLimiterOptions options)
@@ -24,20 +25,26 @@ public sealed class AuthRateLimiterSetup : IConfigureOptions<RateLimiterOptions>
         // A fixed window is simple and cheap; its known weakness is that a client can use the
         // end of one window and the start of the next, briefly doubling the rate. For
         // brute-force protection that is acceptable, and account lockout covers the rest.
-        options.AddPolicy(AuthRateLimitOptions.PolicyName, httpContext =>
+        AddPolicy(options, AuthRateLimitOptions.PolicyName, _authLimits.PermitLimit, _authLimits.WindowSeconds);
+
+        // A separate counter, so a session being renewed never uses up the allowance for signing in.
+        AddPolicy(options, RefreshRateLimitOptions.PolicyName, _refreshLimits.PermitLimit, _refreshLimits.WindowSeconds);
+
+        options.OnRejected = WriteRejectionAsync;
+    }
+
+    private static void AddPolicy(RateLimiterOptions options, string name, int permitLimit, int windowSeconds)
+        => options.AddPolicy(name, httpContext =>
             RateLimitPartition.GetFixedWindowLimiter(
                 httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
                 _ => new FixedWindowRateLimiterOptions
                 {
-                    PermitLimit = _limits.PermitLimit,
-                    Window = TimeSpan.FromSeconds(_limits.WindowSeconds),
+                    PermitLimit = permitLimit,
+                    Window = TimeSpan.FromSeconds(windowSeconds),
 
                     // Requests over the limit are rejected at once instead of queued.
                     QueueLimit = 0,
                 }));
-
-        options.OnRejected = WriteRejectionAsync;
-    }
 
     // Answers with the same ProblemDetails shape as every other error, plus a Retry-After header
     // so well-behaved clients know when to try again.

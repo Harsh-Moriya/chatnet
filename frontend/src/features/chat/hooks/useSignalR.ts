@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { createChatConnection } from '../../../lib/signalr'
 import { catchUpAll } from '../api/catchUp'
-import { isTokenExpired } from '../../../lib/jwt'
 import { useAuthStore } from '../../auth/store/authStore'
 import { usePresenceStore } from '../../presence/store/presenceStore'
 import { useChatStore } from '../store/chatStore'
@@ -30,12 +29,6 @@ export function useSignalR() {
     const opening = setTimeout(() => {
       connection = connectChat(createChatConnection(), {
         getUserId: () => useAuthStore.getState().user?.userId ?? null,
-
-        isSessionExpired: () => isTokenExpired(useAuthStore.getState().token),
-
-        // Clearing the session sends the user to the sign-in page, which unmounts the chat and closes
-        // this connection.
-        onSessionExpired: () => useAuthStore.getState().clearAuth(),
 
         // Someone who shares a conversation with this user came online or went offline.
         onPresenceChanged: (presence) => usePresenceStore.getState().apply(presence),

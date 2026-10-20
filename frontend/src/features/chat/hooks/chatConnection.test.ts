@@ -118,20 +118,17 @@ function conversation(id: string): Conversation {
 
 const RETRY_DELAYS = [100, 200, 400]
 
-function setup(options: { hub?: FakeHub; sessionExpired?: () => boolean } = {}) {
+function setup(options: { hub?: FakeHub } = {}) {
   const hub = options.hub ?? new FakeHub()
   const onReconnected = vi.fn()
-  const onSessionExpired = vi.fn()
   const onPresenceChanged = vi.fn()
   const connection = connectChat(hub, {
     getUserId: () => 'me',
     onReconnected,
-    isSessionExpired: options.sessionExpired ?? (() => false),
-    onSessionExpired,
     onPresenceChanged,
     retryDelay: (attempt) => RETRY_DELAYS[Math.min(attempt, RETRY_DELAYS.length - 1)],
   })
-  return { hub, connection, onReconnected, onSessionExpired, onPresenceChanged }
+  return { hub, connection, onReconnected, onPresenceChanged }
 }
 
 // Lets promise callbacks run, and any timers due now.
@@ -460,7 +457,7 @@ describe('connection events', () => {
     expect(onReconnected).not.toHaveBeenCalled()
   })
 
-  it('shows disconnected when the connection closes for good', async () => {
+  it('shows disconnected the moment the connection closes', async () => {
     const { hub } = await connected()
 
     hub.fireClosed()
@@ -538,86 +535,93 @@ describe('dispose', () => {
   })
 })
 
-// ##### The session ending #####
-// The server closes a connection when its token expires, and refuses a new one made with it. Trying
-// again with the same token can never work, so the client ends the session instead of retrying for ever.
+// ##### The server closing the connection #####
+// The server closes a connection when its access token runs out. The library does not reconnect after
+// that kind of close, so the client starts again by itself. The access token factory renews the session
+// as part of starting, so nothing here has to know about tokens.
 
-describe('an expired session', () => {
-  it('ends the session instead of retrying when a first connect fails', async () => {
-    const hub = new FakeHub()
-    hub.startOutcomes = [new Error('401'), new Error('401'), undefined]
+describe('a connection the server closed', () => {
+  it('starts again by itself and is connected once the round trip answers', async () => {
+    const { hub } = await connected()
 
-    const { onSessionExpired } = setup({ hub, sessionExpired: () => true })
+    hub.fireClosed()
+    expect(store().connection).toBe('disconnected')
     await flush()
-    await vi.advanceTimersByTimeAsync(60_000)
-
-    expect(onSessionExpired).toHaveBeenCalledTimes(1)
-    expect(hub.startAttempts).toBe(1)
-  })
-
-  it('keeps retrying a failed first connect while the session is still valid', async () => {
-    const hub = new FakeHub()
-    hub.startOutcomes = [new Error('down'), undefined]
-
-    const { onSessionExpired } = setup({ hub, sessionExpired: () => false })
-    await flush()
-    await vi.advanceTimersByTimeAsync(RETRY_DELAYS[0])
 
     expect(hub.startAttempts).toBe(2)
-    expect(onSessionExpired).not.toHaveBeenCalled()
+    expect(store().connection).toBe('connected')
   })
 
-  it('ends the session when the connection starts to drop and the token has expired', async () => {
-    let expired = false
-    const { hub, onSessionExpired } = setup({ sessionExpired: () => expired })
-    await flush()
+  it('tells the owner to reload, because what the server pushed in the gap was missed', async () => {
+    const { hub, onReconnected } = await connected()
+    expect(onReconnected).not.toHaveBeenCalled()
 
-    expired = true
-    hub.fireReconnecting()
-
-    expect(onSessionExpired).toHaveBeenCalledTimes(1)
-  })
-
-  it('ends the session when the library gives up and the token has expired', async () => {
-    let expired = false
-    const { hub, onSessionExpired } = setup({ sessionExpired: () => expired })
-    await flush()
-
-    expired = true
     hub.fireClosed()
-
-    expect(onSessionExpired).toHaveBeenCalledTimes(1)
-    expect(store().connection).toBe('disconnected')
-  })
-
-  it('reports it once even though a drop is followed by a close', async () => {
-    const { hub, onSessionExpired } = setup({ sessionExpired: () => true })
     await flush()
 
-    hub.fireReconnecting()
-    hub.fireClosed()
-    hub.fireClosed()
-
-    expect(onSessionExpired).toHaveBeenCalledTimes(1)
+    expect(onReconnected).toHaveBeenCalledTimes(1)
   })
 
-  it('does not end the session for a drop while the token is still valid', async () => {
-    const { hub, onSessionExpired } = setup({ sessionExpired: () => false })
-    await flush()
+  it('keeps trying with growing delays while the server cannot be reached', async () => {
+    const { hub, onReconnected } = await connected()
+    hub.startOutcomes = [new Error('down'), new Error('down')]
 
-    hub.fireReconnecting()
     hub.fireClosed()
+    await flush()
+    expect(hub.startAttempts).toBe(2)
+    await vi.advanceTimersByTimeAsync(RETRY_DELAYS[0])
+    expect(hub.startAttempts).toBe(3)
+    await vi.advanceTimersByTimeAsync(RETRY_DELAYS[1])
 
-    expect(onSessionExpired).not.toHaveBeenCalled()
+    expect(hub.startAttempts).toBe(4)
+    expect(store().connection).toBe('connected')
+    expect(onReconnected).toHaveBeenCalledTimes(1)
   })
 
-  it('says nothing after being disposed, because disposing closes the connection too', async () => {
-    const { connection, onSessionExpired } = setup({ sessionExpired: () => true })
+  it('starts only one new connection when several closes arrive together', async () => {
+    const { hub } = await connected()
+
+    hub.fireClosed()
+    hub.fireClosed()
     await flush()
+
+    expect(hub.startAttempts).toBe(2)
+  })
+
+  // The check that the connection is usable can take a moment, and the server may close it again in that
+  // time. That close must not be swallowed by the attempt that was still finishing.
+  it('starts again when the connection closes while it was still being checked', async () => {
+    const ping = deferred()
+    const hub = new FakeHub()
+    hub.invokeImpl = () => ping.promise
+    setup({ hub })
+    await flush()
+    expect(hub.startAttempts).toBe(1)
+
+    hub.fireClosed()
+    await flush()
+
+    expect(hub.startAttempts).toBe(2)
+  })
+
+  it('does not start again after being disposed, although disposing closes the connection', async () => {
+    const { hub, connection } = await connected()
 
     connection.dispose()
     await flush()
 
-    expect(onSessionExpired).not.toHaveBeenCalled()
+    expect(hub.startAttempts).toBe(1)
+  })
+
+  it('stops trying once disposed in the middle of a restart', async () => {
+    const { hub, connection } = await connected()
+    hub.startOutcomes = [new Error('down'), new Error('down'), new Error('down')]
+    hub.fireClosed()
+    await flush()
+
+    connection.dispose()
+    await vi.advanceTimersByTimeAsync(60_000)
+
+    expect(hub.startAttempts).toBe(2)
   })
 })
