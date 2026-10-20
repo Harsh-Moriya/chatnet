@@ -53,4 +53,9 @@ public class RefreshTokenRepository : IRefreshTokenRepository
         => _db.RefreshTokens
             .Where(t => t.FamilyId == familyId && t.RevokedAt == null)
             .ExecuteUpdateAsync(s => s.SetProperty(t => t.RevokedAt, now), cancellationToken);
+
+    public Task<int> DeleteExpiredBeforeAsync(DateTime expiredBefore, CancellationToken cancellationToken)
+        => _db.RefreshTokens
+            .Where(t => t.ExpiresAt < expiredBefore)
+            .ExecuteDeleteAsync(cancellationToken);
 }

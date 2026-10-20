@@ -16,4 +16,7 @@ public interface IRefreshTokenRepository
 
     // Revokes every token of the family that is still usable.
     Task RevokeFamilyAsync(Guid familyId, DateTime now, CancellationToken cancellationToken);
+
+    // Removes tokens that expired before the given moment. Returns how many.
+    Task<int> DeleteExpiredBeforeAsync(DateTime expiredBefore, CancellationToken cancellationToken);
 }
