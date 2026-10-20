@@ -445,7 +445,7 @@ public class MarkReadTests
 
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
         Assert.Equal(sent.GetProperty("createdAt").GetDateTime(), await _factory.LastReadAtAsync(conversation, alice.Id));
-        Assert.Single(capture.Entries, e => e.StartsWith("[Warning]") && e.Contains(conversation.ToString()));
+        Assert.Single(capture.Entries, e => e.StartsWith("[Warning]") && e.Contains("MarkReadHandler") && e.Contains(conversation.ToString()));
         Assert.DoesNotContain(capture.Entries, e => e.Contains(secret));
     }
 
