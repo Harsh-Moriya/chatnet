@@ -37,8 +37,14 @@ public sealed class JwtOptionsValidator : IValidateOptions<JwtOptions>
                 failures.Add($"Jwt:SigningKey is only {keyBytes} bytes long. {KeyHint}");
         }
 
-        if (options.ExpiryDays <= 0)
-            failures.Add("Jwt:ExpiryDays must be greater than zero.");
+        if (options.AccessTokenMinutes <= 0)
+            failures.Add("Jwt:AccessTokenMinutes must be greater than zero.");
+
+        if (options.RefreshTokenDays <= 0)
+            failures.Add("Jwt:RefreshTokenDays must be greater than zero.");
+
+        if (options.RefreshReuseGraceSeconds < 0)
+            failures.Add("Jwt:RefreshReuseGraceSeconds must not be negative.");
 
         return failures.Count == 0
             ? ValidateOptionsResult.Success

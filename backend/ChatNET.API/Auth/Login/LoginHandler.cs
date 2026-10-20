@@ -6,23 +6,26 @@ using Microsoft.AspNetCore.Identity;
 
 namespace ChatNET.API.Auth.Login;
 
-public class LoginHandler : IRequestHandler<LoginCommand, AuthResponse>
+public class LoginHandler : IRequestHandler<LoginCommand, AuthResult>
 {
     private readonly UserManager<AppUser> _userManager;
     private readonly JwtTokenService _jwtTokenService;
+    private readonly RefreshTokenIssuer _refreshTokens;
     private readonly ILogger<LoginHandler> _logger;
 
     public LoginHandler(
         UserManager<AppUser> userManager,
         JwtTokenService jwtTokenService,
+        RefreshTokenIssuer refreshTokens,
         ILogger<LoginHandler> logger)
     {
         _userManager = userManager;
         _jwtTokenService = jwtTokenService;
+        _refreshTokens = refreshTokens;
         _logger = logger;
     }
 
-    public async Task<AuthResponse> Handle(LoginCommand request, CancellationToken cancellationToken)
+    public async Task<AuthResult> Handle(LoginCommand request, CancellationToken cancellationToken)
     {
         var user = await _userManager.FindByEmailAsync(request.Email);
 
@@ -60,9 +63,10 @@ public class LoginHandler : IRequestHandler<LoginCommand, AuthResponse>
         if (user.IsDeactivated)
             throw new ForbiddenException("This account has been deactivated.");
 
-        var token = _jwtTokenService.GenerateToken(user);
+        var accessToken = _jwtTokenService.GenerateToken(user);
+        var refreshToken = await _refreshTokens.StartSessionAsync(user.Id, cancellationToken);
 
-        return new AuthResponse(token, user.Id.ToString(), user.UserName!, user.DisplayName);
+        return new AuthResult(AuthResponse.For(user, accessToken), refreshToken);
     }
 
     // Made once, with the default hasher, so it has the same cost as a real user's hash.

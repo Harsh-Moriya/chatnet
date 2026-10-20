@@ -8,4 +8,4 @@ public record RegisterCommand(
     string DisplayName,
     string Email,
     string Password
-) : IRequest<AuthResponse>;
+) : IRequest<AuthResult>;

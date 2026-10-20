@@ -51,14 +51,29 @@ public class JwtConfigurationTests
         Assert.Contains(setting, message);
     }
 
-    [Fact]
-    public void Startup_fails_when_the_token_lifetime_is_not_positive()
+    [Theory]
+    [InlineData("Jwt:AccessTokenMinutes", "0")]
+    [InlineData("Jwt:AccessTokenMinutes", "-5")]
+    [InlineData("Jwt:RefreshTokenDays", "0")]
+    [InlineData("Jwt:RefreshReuseGraceSeconds", "-1")]
+    public void Startup_fails_when_a_token_lifetime_is_not_valid(string setting, string value)
     {
-        using var factory = WithSetting("Jwt:ExpiryDays", "0");
+        using var factory = WithSetting(setting, value);
 
         var message = StartupFailureMessage(factory);
 
-        Assert.Contains("Jwt:ExpiryDays", message);
+        Assert.Contains(setting, message);
+    }
+
+    [Fact]
+    public async Task A_grace_period_of_zero_is_allowed()
+    {
+        using var factory = WithSetting("Jwt:RefreshReuseGraceSeconds", "0");
+        using var client = factory.CreateClient();
+
+        var health = await client.GetAsync("/health");
+
+        Assert.Equal(HttpStatusCode.OK, health.StatusCode);
     }
 
     [Fact]
