@@ -51,11 +51,13 @@ services:
   # http://localhost:16686. Each HTTP request becomes a trace made of spans: one
   # per database query, MediatR dispatch, and SignalR fanout, so you can see exactly
   # where latency comes from on any given request.
+  #
+  # Jaeger 2 accepts OTLP out of the box. Point the backend at it by setting
+  # OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317 before dotnet run; with that
+  # variable unset nothing is exported.
   jaeger:
-    image: jaegertracing/all-in-one:1.57
+    image: jaegertracing/jaeger:2.22.0
     container_name: chatnet-jaeger
-    environment:
-      COLLECTOR_OTLP_ENABLED: "true"
     ports:
       - "16686:16686"   # UI
       - "4317:4317"     # OTLP gRPC

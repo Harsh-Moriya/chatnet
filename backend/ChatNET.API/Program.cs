@@ -8,6 +8,7 @@ using ChatNET.API.Common.Behaviours;
 using ChatNET.API.Common.Health;
 using ChatNET.API.Common.Logging;
 using ChatNET.API.Common.Middleware;
+using ChatNET.API.Common.Observability;
 using ChatNET.API.Common.OpenApi;
 using ChatNET.API.Common.Persistence;
 using ChatNET.API.Conversations;
@@ -41,14 +42,16 @@ try
     // each layer overriding the previous), sets up the DI container, and starts Kestrel.
     var builder = WebApplication.CreateBuilder(args);
 
-    // ##### Logging #####
+    // ##### Logging and tracing #####
     // Serilog replaces the built-in logger so every log line is structured. Levels come from the
-    // "Serilog" section of configuration.
+    // "Serilog" section of configuration. Tracing is set up next to it because the two are meant to be
+    // read together: Serilog stamps each log event with the trace and span it was written in.
     // writeToProviders (see UseChatNetLogging) forwards every event to the other logger providers, and the
     // host registers a console provider by default. Left in place it would print each line a second time
     // in the framework's own format.
     builder.Logging.ClearProviders();
     builder.Host.UseChatNetLogging();
+    builder.Services.AddChatNetTracing(builder.Configuration);
 
     // ##### JSON #####
     // Enums are sent as names ("Direct") instead of numbers (0). A number means nothing to a
@@ -87,11 +90,13 @@ try
     // and MediatR routes to the correct handler. Neither caller nor handler knows about the
     // other, which is the Mediator pattern: it removes direct coupling between features.
     //
-    // AddOpenBehavior registers ValidationBehaviour for every request type in one line.
-    // Behaviours run in registration order; validation runs first before any other concern.
+    // AddOpenBehavior registers a behaviour for every request type in one line. Behaviours run in
+    // registration order, so the first one registered is the outermost. Tracing is first so its span
+    // also covers validation; validation comes before any handler logic.
     builder.Services.AddMediatR(cfg =>
     {
         cfg.RegisterServicesFromAssembly(typeof(Program).Assembly);
+        cfg.AddOpenBehavior(typeof(TracingBehaviour<,>));
         cfg.AddOpenBehavior(typeof(ValidationBehaviour<,>));
     });
 
