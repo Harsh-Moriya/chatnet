@@ -14,6 +14,12 @@ public class Message
     public string? Content { get; set; }
 
     public DateTime CreatedAt { get; set; }
+
+    // The UUID the sending client made up for its optimistic copy, kept so that sending the same message
+    // again (a retry after a timeout, a double click) finds the first one instead of creating a second.
+    // Null for a message sent without one. Unique per conversation and sender, see MessageConfiguration.
+    public Guid? ClientMessageId { get; set; }
+
     public int EditCount { get; set; }
     public DateTime? EditedAt { get; set; }
 
