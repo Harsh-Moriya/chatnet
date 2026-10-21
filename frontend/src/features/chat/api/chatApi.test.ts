@@ -382,6 +382,33 @@ describe('retrying and dismissing', () => {
     expect(store().messages.c1.map((m) => m.id)).toEqual(['real'])
   })
 
+  // The first attempt reached the server and only its answer was lost. The retry is told so: the stored
+  // message comes back with 200 instead of 201. A client does not look at which, and the message must
+  // replace the unconfirmed copy and appear once.
+  it('treats the stored message returned for a repeat as the confirmation, like a new one', async () => {
+    const failed = await failedMessage()
+    const stored = message({ id: 'stored', content: 'Hello', clientMessageId: failed.clientMessageId })
+    vi.spyOn(api, 'post').mockResolvedValue({ data: stored, status: 200 } as AxiosResponse<Message>)
+
+    await retryMessage('c1', failed.clientMessageId)
+
+    expect(store().pending.c1).toEqual([])
+    expect(store().messages.c1.map((m) => m.id)).toEqual(['stored'])
+  })
+
+  it('shows the message once when the retry is answered after the push and after a history load', async () => {
+    const failed = await failedMessage()
+    const stored = message({ id: 'stored', content: 'Hello', clientMessageId: failed.clientMessageId })
+    store().receiveMessage(stored, 'me')
+    store().seedMessages('c1', [stored])
+    vi.spyOn(api, 'post').mockResolvedValue({ data: stored, status: 200 } as AxiosResponse<Message>)
+
+    await retryMessage('c1', failed.clientMessageId)
+
+    expect(store().messages.c1.map((m) => m.id)).toEqual(['stored'])
+    expect(store().pending.c1).toEqual([])
+  })
+
   it('shows it as sending again while the retry is in flight', async () => {
     const failed = await failedMessage()
     vi.spyOn(api, 'post').mockReturnValue(new Promise(() => {}))

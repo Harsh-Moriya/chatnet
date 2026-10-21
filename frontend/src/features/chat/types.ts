@@ -33,7 +33,8 @@ export interface Message {
   // Null for a deleted message: it keeps its place in the timeline but has no text.
   content: string | null
   createdAt: string
-  // Set on the response to your own send and on the push of it; null in history loads.
+  // The id the sender's tab invented for its optimistic copy: on the response to a send, on its push, and
+  // in history. Null for a message sent without one.
   clientMessageId: string | null
 }
 

@@ -79,6 +79,44 @@ describe('seedMessages', () => {
     expect(ids(store().messages.c1)).toEqual(['before', 'both'])
   })
 
+  // The send reached the server and only its answer was lost, so the tab shows the message as failed. When
+  // the history (a reload, or the catch-up after a reconnect) returns the stored message with the id the tab
+  // invented, that message is delivered and the failed copy must not stay next to it.
+  it('removes the unconfirmed copy of a message that the history returns with its client id', () => {
+    store().addPending(pending('p1', { status: 'failed', error: 'Network Error' }))
+
+    store().seedMessages('c1', [message({ id: 'stored', clientMessageId: 'p1' })])
+
+    expect(store().pending.c1).toEqual([])
+    expect(ids(store().messages.c1)).toEqual(['stored'])
+  })
+
+  it('keeps the unconfirmed messages that nothing loaded matches', () => {
+    store().addPending(pending('p1'))
+    store().addPending(pending('p2'))
+
+    store().seedMessages('c1', [message({ id: 'stored', clientMessageId: 'p1' }), message({ id: 'plain', clientMessageId: null })])
+
+    expect(store().pending.c1.map((p) => p.clientMessageId)).toEqual(['p2'])
+  })
+
+  it('leaves the unconfirmed messages of another conversation alone', () => {
+    store().addPending(pending('p1', { conversationId: 'c2' }))
+
+    store().seedMessages('c1', [message({ id: 'stored', clientMessageId: 'p1' })])
+
+    expect(store().pending.c2.map((p) => p.clientMessageId)).toEqual(['p1'])
+  })
+
+  it('does not touch the pending list when the history confirms nothing', () => {
+    store().addPending(pending('p1'))
+    const before = store().pending
+
+    store().seedMessages('c1', [message({ id: 'other', clientMessageId: null })])
+
+    expect(store().pending).toBe(before)
+  })
+
   it('keeps the client id of a message when a history load returns it without one', () => {
     store().receiveMessage(message({ id: 'm', clientMessageId: 'p1' }))
 
