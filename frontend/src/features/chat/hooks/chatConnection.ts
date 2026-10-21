@@ -1,4 +1,4 @@
-import { reconnectDelay } from '../../../lib/signalr'
+import { isUnauthorized, reconnectDelay } from '../../../lib/signalr'
 import { useChatStore } from '../store/chatStore'
 import type { Presence } from '../../presence/types'
 import type { Conversation, Message } from '../types'
@@ -26,6 +26,9 @@ export interface ChatConnectionDeps {
   onReconnected: () => void
   // Called with every presence change pushed by the server (someone came online or went offline).
   onPresenceChanged: (presence: Presence) => void
+  // Called when the server refuses a connection attempt with 401: it does not accept the token the client
+  // holds. The owner renews the session, so the next attempt carries a new token.
+  onUnauthorized: () => void
   retryDelay?: (failedAttempts: number) => number
 }
 
@@ -160,11 +163,12 @@ export function connectChat(hub: ChatHub, deps: ChatConnectionDeps): ChatConnect
       for (let attempt = 0; !disposed; attempt++) {
         try {
           await hub.start()
-        } catch {
+        } catch (error) {
           // Also what a start abandoned by dispose() ends in, which is not worth reporting.
           if (disposed) return
 
           chat().setConnection('disconnected')
+          if (isUnauthorized(error)) deps.onUnauthorized()
           await pause(retryDelay(attempt))
           continue
         }
