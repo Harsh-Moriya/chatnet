@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { createChatConnection } from '../../../lib/signalr'
 import { catchUpAll } from '../api/catchUp'
+import { session } from '../../auth/session'
 import { useAuthStore } from '../../auth/store/authStore'
 import { usePresenceStore } from '../../presence/store/presenceStore'
 import { useChatStore } from '../store/chatStore'
@@ -32,6 +33,9 @@ export function useSignalR() {
 
         // Someone who shares a conversation with this user came online or went offline.
         onPresenceChanged: (presence) => usePresenceStore.getState().apply(presence),
+
+        // The server refused the token. Renewing the session gives the next attempt a new one.
+        onUnauthorized: () => void session.refresh(),
 
         // Events sent while the connection was down were lost, so REST puts the state back in
         // charge. The list is reloaded; every conversation that was loaded asks the server for the

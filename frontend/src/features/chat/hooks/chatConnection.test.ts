@@ -122,13 +122,15 @@ function setup(options: { hub?: FakeHub } = {}) {
   const hub = options.hub ?? new FakeHub()
   const onReconnected = vi.fn()
   const onPresenceChanged = vi.fn()
+  const onUnauthorized = vi.fn()
   const connection = connectChat(hub, {
     getUserId: () => 'me',
     onReconnected,
     onPresenceChanged,
+    onUnauthorized,
     retryDelay: (attempt) => RETRY_DELAYS[Math.min(attempt, RETRY_DELAYS.length - 1)],
   })
-  return { hub, connection, onReconnected, onPresenceChanged }
+  return { hub, connection, onReconnected, onPresenceChanged, onUnauthorized }
 }
 
 // Lets promise callbacks run, and any timers due now.
@@ -623,5 +625,76 @@ describe('a connection the server closed', () => {
     await vi.advanceTimersByTimeAsync(60_000)
 
     expect(hub.startAttempts).toBe(2)
+  })
+})
+
+// ##### A token the server refuses #####
+// A 401 on a connection attempt means the server does not take the token the client holds (a clock that is
+// behind, a replaced signing key). The library would retry with the same token for ever, so the owner is
+// told to renew the session.
+
+describe('a connection attempt the server refuses with 401', () => {
+  // The shape the real library gives: a plain Error whose message ends in the status, with no statusCode.
+  const unauthorized = () =>
+    new Error("Failed to complete negotiation with the server: Error: {\"status\":401}: Status code '401'")
+
+  it('asks for the session to be renewed, and connects with the next attempt', async () => {
+    const hub = new FakeHub()
+    hub.startOutcomes = [unauthorized(), undefined]
+    const { onUnauthorized } = setup({ hub })
+
+    await flush()
+    expect(onUnauthorized).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(RETRY_DELAYS[0])
+
+    expect(hub.startAttempts).toBe(2)
+    expect(store().connection).toBe('connected')
+  })
+
+  it('asks every time a refusal repeats, so a renewal that did not take is tried again', async () => {
+    const hub = new FakeHub()
+    hub.startOutcomes = [unauthorized(), unauthorized(), unauthorized(), undefined]
+    const { onUnauthorized } = setup({ hub })
+
+    await flush()
+    await vi.advanceTimersByTimeAsync(RETRY_DELAYS[0] + RETRY_DELAYS[1] + RETRY_DELAYS[2])
+
+    expect(onUnauthorized).toHaveBeenCalledTimes(3)
+  })
+
+  it('does not ask for any other failure, such as the server being down', async () => {
+    const hub = new FakeHub()
+    hub.startOutcomes = [new Error('down'), new Error("Failed to complete negotiation with the server: Error: {\"status\":503}: Status code '503'"), undefined]
+    const { onUnauthorized } = setup({ hub })
+
+    await flush()
+    await vi.advanceTimersByTimeAsync(RETRY_DELAYS[0] + RETRY_DELAYS[1])
+
+    expect(onUnauthorized).not.toHaveBeenCalled()
+    expect(store().connection).toBe('connected')
+  })
+
+  it('asks when the restart after a close is refused too', async () => {
+    const { hub, onUnauthorized } = await connected()
+    hub.startOutcomes = [unauthorized(), undefined]
+
+    hub.fireClosed()
+    await flush()
+
+    expect(onUnauthorized).toHaveBeenCalledTimes(1)
+  })
+
+  it('says nothing when it was disposed while the attempt was failing', async () => {
+    const hub = new FakeHub()
+    hub.startGate = deferred()
+    hub.startOutcomes = [unauthorized()]
+    const { connection, onUnauthorized } = setup({ hub })
+    await flush()
+
+    connection.dispose()
+    hub.startGate.resolve()
+    await flush()
+
+    expect(onUnauthorized).not.toHaveBeenCalled()
   })
 })

@@ -16,19 +16,20 @@ import type { AuthResponse } from './types'
 
 const T0 = 1_000_000_000_000
 
-function response(token: string, expiresInMs = 15 * 60_000): AuthResponse {
+function response(token: string, expiresInMs = 15 * 60_000, userId = 'u1'): AuthResponse {
   return {
     token,
-    userId: 'u1',
+    userId,
     userName: 'alice',
     displayName: 'Alice',
     accessTokenExpiresAt: new Date(T0 + expiresInMs).toISOString(),
   }
 }
 
-function setup(initial: { status?: SessionStatus; token?: string | null; expiresInMs?: number } = {}) {
+function setup(initial: { status?: SessionStatus; token?: string | null; expiresInMs?: number; userId?: string } = {}) {
   let status: SessionStatus = initial.status ?? 'unknown'
   let token: string | null = initial.token ?? null
+  let userId: string | null = token ? (initial.userId ?? 'u1') : null
   let tokenExpiresAt: number | null = token ? T0 + (initial.expiresInMs ?? 15 * 60_000) : null
   let now = T0
 
@@ -43,15 +44,17 @@ function setup(initial: { status?: SessionStatus; token?: string | null; expires
       return outcomes.shift() ?? { kind: 'unavailable' }
     }),
     requestLogout: vi.fn(() => logout()),
-    getAuth: () => ({ status, token, tokenExpiresAt }),
+    getAuth: () => ({ status, token, tokenExpiresAt, userId }),
     applyAuth: vi.fn((r: AuthResponse) => {
       status = 'authenticated'
       token = r.token
+      userId = r.userId
       tokenExpiresAt = Date.parse(r.accessTokenExpiresAt)
     }),
     clearAuth: vi.fn(() => {
       status = 'anonymous'
       token = null
+      userId = null
       tokenExpiresAt = null
     }),
     now: () => now,
@@ -83,9 +86,9 @@ function setup(initial: { status?: SessionStatus; token?: string | null; expires
   }
 }
 
-const renewed = (token: string, expiresInMs?: number): RefreshOutcome => ({
+const renewed = (token: string, expiresInMs?: number, userId?: string): RefreshOutcome => ({
   kind: 'renewed',
-  response: response(token, expiresInMs),
+  response: response(token, expiresInMs, userId),
 })
 
 beforeEach(() => {
@@ -350,5 +353,61 @@ describe('another tab signing out', () => {
     expect(state().status).toBe('anonymous')
     expect(deps.requestLogout).not.toHaveBeenCalled()
     expect(deps.announceSignedOut).not.toHaveBeenCalled()
+  })
+})
+
+// ##### Who the tab is #####
+// The refresh cookie belongs to the browser and is shared by every tab. When one tab signs in as someone
+// else, the cookie becomes theirs, and the next renewal in another tab returns their identity.
+
+describe('a renewal that belongs to someone else', () => {
+  it('signs this tab out instead of showing it as that person', async () => {
+    const { manager, answer, advance, state, deps } = setup({ status: 'authenticated', token: 't1', userId: 'alice' })
+    advance(60 * 60_000)
+    answer(renewed('t2', undefined, 'bob'))
+
+    expect(await manager.refresh()).toBe('ended')
+
+    expect(deps.applyAuth).not.toHaveBeenCalled()
+    expect(deps.clearAuth).toHaveBeenCalledTimes(1)
+    expect(state()).toMatchObject({ status: 'anonymous', token: null })
+  })
+
+  it('hands out no token to the request that asked for one', async () => {
+    const { manager, answer, advance } = setup({ status: 'authenticated', token: 't1', userId: 'alice' })
+    advance(60 * 60_000)
+    answer(renewed('t2', undefined, 'bob'))
+
+    expect(await manager.getAccessToken()).toBeNull()
+  })
+
+  it('accepts a renewal for the same person', async () => {
+    const { manager, answer, advance, state } = setup({ status: 'authenticated', token: 't1', userId: 'alice' })
+    advance(60 * 60_000)
+    answer(renewed('t2', undefined, 'alice'))
+
+    expect(await manager.refresh()).toBe('renewed')
+    expect(state()).toMatchObject({ status: 'authenticated', token: 't2' })
+  })
+
+  it('takes whoever the cookie belongs to when nobody is signed in yet, as on a page load', async () => {
+    const { manager, answer, state } = setup()
+    answer(renewed('t1', undefined, 'bob'))
+
+    await manager.start()
+
+    expect(state()).toMatchObject({ status: 'authenticated', token: 't1' })
+  })
+})
+
+describe('a start-up that goes wrong in an unexpected way', () => {
+  it('shows the sign-in page instead of waiting for ever', async () => {
+    const { deps, state } = setup()
+    deps.runExclusively = () => Promise.reject(new Error('locks are not available here'))
+    const manager = createSessionManager(deps)
+
+    await manager.start()
+
+    expect(state().status).toBe('anonymous')
   })
 })

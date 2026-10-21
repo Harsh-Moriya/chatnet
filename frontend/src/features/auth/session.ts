@@ -58,8 +58,8 @@ export const session = createSessionManager({
     await sessionApi.post('/auth/logout')
   },
   getAuth: () => {
-    const { status, token, tokenExpiresAt } = useAuthStore.getState()
-    return { status, token, tokenExpiresAt }
+    const { status, token, tokenExpiresAt, user } = useAuthStore.getState()
+    return { status, token, tokenExpiresAt, userId: user?.userId ?? null }
   },
   applyAuth: (response) => useAuthStore.getState().setAuth(response),
   clearAuth: () => useAuthStore.getState().clearAuth(),

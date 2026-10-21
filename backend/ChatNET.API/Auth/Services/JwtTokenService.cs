@@ -33,7 +33,13 @@ public class JwtTokenService
 
         // The system clock, not the injected TimeProvider: the token is checked against the system clock
         // by the JWT middleware and by SignalR, so it has to be issued by it.
-        var expiresAt = DateTime.UtcNow.AddMinutes(_options.AccessTokenMinutes);
+        //
+        // Whole seconds, like the token's own "exp" claim. The browser reads this value back from JSON, and
+        // .NET writes a time with seven fractional digits ("...:59.7120234Z"), which the JavaScript date
+        // format only promises to parse with three. Without a fraction every engine reads it, and the
+        // announced end is exactly the token's end.
+        var lifetime = DateTime.UtcNow.AddMinutes(_options.AccessTokenMinutes);
+        var expiresAt = new DateTime(lifetime.Ticks - lifetime.Ticks % TimeSpan.TicksPerSecond, DateTimeKind.Utc);
 
         var token = new JwtSecurityToken(
             issuer: _options.Issuer,

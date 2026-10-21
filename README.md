@@ -101,7 +101,7 @@ npm run dev                 # http://localhost:5173
 
 Vite proxies `/api` and `/hubs` to the backend, so the browser only ever talks to port 5173.
 
-To try the app as two users at once, open `http://localhost:5173` for one and `http://[::1]:5173` (or `http://127.0.0.1:5173` if your Vite server answers there) for the other; browser storage is separate per origin.
+To try the app as two users at once, open `http://localhost:5173` for one and `http://[::1]:5173` (or `http://127.0.0.1:5173` if your Vite server answers there) for the other; the sign-in cookie is kept per host, so two tabs on one host share a session, and a different host (`localhost`, `[::1]`, `127.0.0.1`) is a separate browser as far as the app is concerned.
 
 ## Tests
 
