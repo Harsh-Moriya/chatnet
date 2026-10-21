@@ -74,7 +74,7 @@ public class RefreshTokenTests
     }
 
     [Fact]
-    public async Task The_access_token_is_short_lived_and_the_response_says_when_it_ends()
+    public async Task The_access_token_is_short_lived_and_the_response_says_when_it_ends_in_whole_seconds()
     {
         var user = await _factory.RegisterUserAsync("short");
         using var client = _factory.CreateCookielessClient();
@@ -82,10 +82,13 @@ public class RefreshTokenTests
         var body = await (await client.LoginAsync(user)).ReadJsonAsync();
 
         var token = new JwtSecurityTokenHandler().ReadJwtToken(body.GetProperty("token").GetString());
-        var announced = body.GetProperty("accessTokenExpiresAt").GetDateTime();
+        var announced = body.GetProperty("accessTokenExpiresAt");
         Assert.InRange(token.ValidTo, DateTime.UtcNow.AddMinutes(14), DateTime.UtcNow.AddMinutes(16));
-        Assert.True((token.ValidTo - announced).Duration() < TimeSpan.FromSeconds(2),
-            "The announced end of the access token must be the token's own expiry.");
+        Assert.Equal(token.ValidTo, announced.GetDateTime().ToUniversalTime());
+
+        // The browser parses this text. A fraction of seconds with more than three digits is outside what the
+        // JavaScript date format promises to read, so there must be none.
+        Assert.Matches(@"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$", announced.GetString());
     }
 
     // A copy of the table must not be a copy of everyone's sessions.
