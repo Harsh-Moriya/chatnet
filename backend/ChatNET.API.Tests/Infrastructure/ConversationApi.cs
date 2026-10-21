@@ -90,7 +90,7 @@ public static class ConversationApi
     // of the deleted state, or that need thousands of messages, arrange them here.
     public static Task AddMessageAsync(
         this ChatApiFactory factory, Guid conversationId, Guid senderId, string content,
-        DateTime createdAt, bool deleted = false) =>
+        DateTime createdAt, Guid? clientMessageId = null, bool deleted = false) =>
         factory.ExecuteDbAsync(async db =>
         {
             db.Messages.Add(new Message
@@ -99,6 +99,7 @@ public static class ConversationApi
                 SenderId = senderId,
                 Content = content,
                 CreatedAt = createdAt,
+                ClientMessageId = clientMessageId,
                 IsDeleted = deleted,
                 DeletedAt = deleted ? createdAt : null,
                 DeletedById = deleted ? senderId : null,

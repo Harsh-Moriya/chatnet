@@ -10,4 +10,8 @@ public record SendMessageCommand(
     Guid SenderId,
     string? Content,
     Guid? ClientMessageId
-) : IRequest<MessageDto>;
+) : IRequest<SendMessageResult>;
+
+// The message, and whether this request created it. False means the same send had already been stored
+// (a retry), and the message returned is the one stored then.
+public record SendMessageResult(MessageDto Message, bool Created);

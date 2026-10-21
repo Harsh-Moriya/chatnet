@@ -63,6 +63,16 @@ public sealed class ScratchDatabase : IAsyncDisposable
     public async Task<string> EmailIndexDefinitionAsync() =>
         (string)(await ScalarAsync("SELECT indexdef FROM pg_indexes WHERE indexname = 'EmailIndex'"))!;
 
+    public async Task<string> IndexDefinitionAsync(string index) =>
+        (string)(await ScalarAsync($"SELECT indexdef FROM pg_indexes WHERE indexname = '{index}'"))!;
+
+    public async Task<bool> ColumnExistsAsync(string table, string column) =>
+        (bool)(await ScalarAsync(
+            $"SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = '{table}' AND column_name = '{column}')"))!;
+
+    public async Task<bool> IndexExistsAsync(string index) =>
+        (bool)(await ScalarAsync($"SELECT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = '{index}')"))!;
+
     public async Task<bool> TableExistsAsync(string table) =>
         (bool)(await ScalarAsync($"SELECT to_regclass('public.\"{table}\"') IS NOT NULL"))!;
 

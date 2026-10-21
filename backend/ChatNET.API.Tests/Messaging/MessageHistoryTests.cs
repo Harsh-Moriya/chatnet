@@ -135,8 +135,8 @@ public class MessageHistoryTests
         var loaded = Assert.Single(history);
         Assert.Equal(sent.MessageIdOf(), loaded.MessageIdOf());
         Assert.Equal(sent.GetProperty("createdAt").GetDateTime(), loaded.GetProperty("createdAt").GetDateTime());
-        // The client's temporary ID is never stored, so history cannot return it.
-        Assert.Equal(JsonValueKind.Null, loaded.GetProperty("clientMessageId").ValueKind);
+        // The client's temporary ID is stored with the message, so history returns it as the send did.
+        Assert.Equal(clientMessageId, loaded.GetProperty("clientMessageId").GetGuid());
         Assert.Equal(clientMessageId, sent.GetProperty("clientMessageId").GetGuid());
     }
 

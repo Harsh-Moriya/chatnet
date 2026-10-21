@@ -37,6 +37,13 @@ public class OpenApiDocumentTests
         ("get", "/api/presence", "200", "PresenceDto[]", "401"),
     ];
 
+    // Operations that can also succeed with another status, which is documented too. Sending a message answers 200
+    // with the stored message when the same send had already been stored.
+    private static readonly Dictionary<(string Method, string Path), string> AlsoSucceeds = new()
+    {
+        [("post", "/api/conversations/{conversationId}/messages")] = "200",
+    };
+
     public static IEnumerable<object[]> Successes => All.Select(o => new object[] { o.Method, o.Path, o.Status, o.Schema });
 
     public static IEnumerable<object[]> Failures => All.Select(o => new object[] { o.Method, o.Path, o.Status, o.Errors });
@@ -84,7 +91,9 @@ public class OpenApiDocumentTests
 
         // Nothing else is promised: the documented statuses are the success one plus these.
         var documented = responses.EnumerateObject().Select(p => p.Name).Order().ToList();
-        var expected = errors.Split(',').Append(status).Order().ToList();
+        var expected = errors.Split(',').Append(status)
+            .Concat(AlsoSucceeds.TryGetValue((method, path), out var also) ? [also] : [])
+            .Order().ToList();
         Assert.Equal(expected, documented);
     }
 

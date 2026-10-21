@@ -22,6 +22,7 @@ Under active development.
 | Unread counts, marking a conversation read, read receipts ("Seen") | Implemented |
 | Online presence: a dot on direct chats, "N online" in groups, "last seen", correct across several server instances | Implemented |
 | Sessions that renew themselves: 15-minute access tokens, rotating refresh tokens in an httpOnly cookie, sign-out that ends the session | Implemented |
+| Retrying a send is safe: a message is stored once however many times the request arrives | Implemented |
 | Notifications, file uploads | Planned |
 | Structured logging (JSON in production) and tracing (OpenTelemetry, viewed in Jaeger) | Implemented |
 | Deployment | Planned |
@@ -39,6 +40,7 @@ Under active development.
 - **Sessions you can end.** A signed access token cannot be taken back, so it lives 15 minutes and only in memory. The long-lived refresh token is an httpOnly cookie that scripts cannot read, stored on the server as a hash, and replaced on every use. If a replaced token turns up again, someone holds a copy, and the whole session is revoked. Two tabs refreshing at once is told apart from theft by timing, and exactly one of them wins.
 - **Presence that survives several servers.** Who is online lives in Redis and changes only through Lua scripts, so two servers cannot interleave their steps. Every event carries Redis's own clock, which settles which of two reports is newer. Each server renews the connections it holds, so browsers send no heartbeats, and a server that dies is noticed when its entries expire. A short wait before "offline" keeps a page refresh from flashing the person offline, and only the contacts of a user are told anything.
 - **Duplicate-proof direct chats.** A sorted `DirectKey` with a unique partial index in Postgres guarantees at most one conversation per pair of users.
+- **A retried send is stored once.** The id the browser invents for a message is stored with it, under a partial unique index on conversation, sender and id. A repeat of a send is answered with the stored message (200 instead of 201), and two copies arriving at once are settled by the index, so the loser answers with the winner's message instead of failing. A browser that lost the answer finds its own message in the history by that id and drops the failed copy.
 - **A browser store that merges, not overwrites.** Messages reach the screen from REST responses and from SignalR pushes, which race and sometimes deliver the same message twice. Both feed one store through actions that merge by id, so order does not matter. Your own message is shown at once as "sending" and confirmed by whichever arrives first, matched by an id the browser invents.
 - **Logic you can test without a browser.** The hub wiring, ordering, reconciliation and typing timers are plain TypeScript tested in Node with a fake hub and fake timers; the tests were checked by breaking each rule on purpose.
 

@@ -126,9 +126,13 @@ export const useChatStore = create<ChatState>()((set) => ({
     })),
 
   // Merges by id, with the loaded copy winning, and re-sorts. A message pushed while the request
-  // was in flight is kept; a message in both is kept once. History never carries the id a tab
-  // invented for its own message, so the one already known is kept: it is what the list uses to
-  // recognise the message as the same element it showed before.
+  // was in flight is kept; a message in both is kept once. The id a tab invented for its own message
+  // is kept when the loaded copy lacks it: it is what the list uses to recognise the message as the same
+  // element it showed before.
+  //
+  // A loaded message that carries the id of one of this tab's unconfirmed messages is that message: the
+  // server stored it and only the answer was lost (or arrives late). It is no longer unconfirmed, so the
+  // pending copy goes, whether the history was loaded by a reload or by catching up after a reconnect.
   seedMessages: (conversationId, loaded) =>
     set((state) => {
       const merged = new Map<string, Message>()
@@ -138,7 +142,13 @@ export const useChatStore = create<ChatState>()((set) => ({
         merged.set(message.id, { ...message, clientMessageId })
       }
 
-      return { messages: { ...state.messages, [conversationId]: [...merged.values()].sort(byTime) } }
+      const stored = new Set(loaded.map((m) => m.clientMessageId).filter((id): id is string => id !== null))
+      const waiting = state.pending[conversationId]
+      const pending = waiting?.some((p) => stored.has(p.clientMessageId))
+        ? { ...state.pending, [conversationId]: waiting.filter((p) => !stored.has(p.clientMessageId)) }
+        : state.pending
+
+      return { messages: { ...state.messages, [conversationId]: [...merged.values()].sort(byTime) }, pending }
     }),
 
   // Forgets a conversation's confirmed messages, so it counts as not loaded and its history is

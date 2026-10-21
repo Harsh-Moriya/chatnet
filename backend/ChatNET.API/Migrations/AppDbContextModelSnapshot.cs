@@ -233,6 +233,9 @@ namespace ChatNET.API.Migrations
                         .HasColumnType("uuid")
                         .HasDefaultValueSql("gen_random_uuid()");
 
+                    b.Property<Guid?>("ClientMessageId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Content")
                         .HasColumnType("text");
 
@@ -272,6 +275,11 @@ namespace ChatNET.API.Migrations
 
                     b.HasIndex("ConversationId", "CreatedAt")
                         .IsDescending(false, true);
+
+                    b.HasIndex("ConversationId", "SenderId", "ClientMessageId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_Messages_ConversationId_SenderId_ClientMessageId")
+                        .HasFilter("\"ClientMessageId\" IS NOT NULL");
 
                     b.ToTable("Messages");
                 });

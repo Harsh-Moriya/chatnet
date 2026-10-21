@@ -1,8 +1,8 @@
 namespace ChatNET.API.Messaging.Models;
 
-// ClientMessageId is the UUID the sending client generated for its optimistic copy.
-// It is echoed back (never stored) so the client can swap its temporary message for
-// the confirmed one instead of showing a duplicate. It is null on history loads.
+// ClientMessageId is the UUID the sending client generated for its optimistic copy. It is stored with
+// the message and returned everywhere the message appears, so the client can swap its temporary message
+// for the confirmed one instead of showing a duplicate. It is null for a message sent without one.
 public record MessageDto(
     Guid Id,
     Guid ConversationId,

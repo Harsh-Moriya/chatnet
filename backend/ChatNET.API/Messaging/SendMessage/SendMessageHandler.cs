@@ -12,7 +12,7 @@ using Microsoft.AspNetCore.SignalR;
 
 namespace ChatNET.API.Messaging.SendMessage;
 
-public class SendMessageHandler : IRequestHandler<SendMessageCommand, MessageDto>
+public class SendMessageHandler : IRequestHandler<SendMessageCommand, SendMessageResult>
 {
     private readonly IConversationRepository _conversations;
     private readonly IMessageRepository _messages;
@@ -34,7 +34,7 @@ public class SendMessageHandler : IRequestHandler<SendMessageCommand, MessageDto
         _logger = logger;
     }
 
-    public async Task<MessageDto> Handle(SendMessageCommand request, CancellationToken cancellationToken)
+    public async Task<SendMessageResult> Handle(SendMessageCommand request, CancellationToken cancellationToken)
     {
         if (!await _conversations.IsActiveMemberAsync(request.ConversationId, request.SenderId, cancellationToken))
         {
@@ -52,15 +52,37 @@ public class SendMessageHandler : IRequestHandler<SendMessageCommand, MessageDto
         if (sender is null || sender.IsDeactivated)
             throw new ForbiddenException("This account can no longer send messages.");
 
+        // The same send arriving again (the client timed out and tried once more, although the first one had
+        // reached the server) carries the client id it used the first time. Checked after the membership and
+        // account checks, so someone who has since left, or been deactivated, is refused as for any send.
+        if (request.ClientMessageId is { } clientMessageId)
+        {
+            var earlier = await _messages.FindByClientMessageIdAsync(
+                request.ConversationId, request.SenderId, clientMessageId, cancellationToken);
+
+            if (earlier is not null)
+                return await RepeatAsync(earlier);
+        }
+
         var message = new Message
         {
             ConversationId = request.ConversationId,
             SenderId = request.SenderId,
             Content = request.Content!.Trim(),
             CreatedAt = DateTime.UtcNow.TruncateToMicroseconds(),
+            ClientMessageId = request.ClientMessageId,
         };
 
-        await _messages.AddAsync(message, cancellationToken);
+        // Two copies of one send can arrive together, both find nothing above, and both insert. The unique
+        // index lets one in; the other is told so here, and answers with the winner's message.
+        if (!await _messages.TryAddAsync(message, cancellationToken))
+        {
+            var winner = await _messages.FindByClientMessageIdAsync(
+                request.ConversationId, request.SenderId, request.ClientMessageId!.Value, cancellationToken);
+
+            return await RepeatAsync(winner
+                ?? throw new InvalidOperationException("A send was refused as a repeat but the first one cannot be found."));
+        }
 
         _logger.LogInformation(
             "Message {MessageId} sent to conversation {ConversationId} by {UserId}",
@@ -72,7 +94,22 @@ public class SendMessageHandler : IRequestHandler<SendMessageCommand, MessageDto
 
         await PushAsync(dto);
 
-        return dto;
+        return new SendMessageResult(dto, Created: true);
+    }
+
+    // The answer to a send that was already stored: the stored message, not a second one. It is pushed again
+    // because the first attempt may have failed at exactly that step (the push is best effort), and a
+    // retry is the one moment the server learns of it. A client that already has the message merges the
+    // second copy by id, so repeating the push is harmless.
+    private async Task<SendMessageResult> RepeatAsync(MessageDto stored)
+    {
+        _logger.LogInformation(
+            "A repeat of message {MessageId} in conversation {ConversationId} by {UserId} returned the stored message",
+            stored.Id, stored.ConversationId, stored.SenderId);
+
+        await PushAsync(stored);
+
+        return new SendMessageResult(stored, Created: false);
     }
 
     // Runs only after the message is saved, so a client never hears about a message that was rolled
