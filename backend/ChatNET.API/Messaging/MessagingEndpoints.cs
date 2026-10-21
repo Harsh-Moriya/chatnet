@@ -19,17 +19,23 @@ public static class MessagingEndpoints
 
         // No Location header: nothing serves a single message by ID, so the header would point
         // at a route that answers 404. The body carries the new message's ID.
+        //
+        // 201 for a message this request created; 200 with the stored message when the same send (same
+        // client message id from the same sender) had already been stored, which is what makes a retry safe.
         messages.MapPost("/", async (
             Guid conversationId, SendMessageRequest body, HttpContext http, IMediator mediator) =>
         {
             var result = await mediator.Send(new SendMessageCommand(
                 conversationId, http.User.GetUserId(), body.Content, body.ClientMessageId));
 
-            return Results.Json(result, statusCode: StatusCodes.Status201Created);
+            return Results.Json(
+                result.Message,
+                statusCode: result.Created ? StatusCodes.Status201Created : StatusCodes.Status200OK);
         })
         .Returns<MessageDto>(
             StatusCodes.Status201Created, StatusCodes.Status400BadRequest, StatusCodes.Status401Unauthorized,
-            StatusCodes.Status403Forbidden);
+            StatusCodes.Status403Forbidden)
+        .Produces<MessageDto>(StatusCodes.Status200OK);
 
         // Returns at most one page (50), oldest first. Without a cursor it is the latest page;
         // "before" is the id of the oldest message the caller has, and returns the page just older;

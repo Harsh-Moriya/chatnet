@@ -3,6 +3,7 @@ using ChatNET.API.Common.Persistence;
 using ChatNET.API.Conversations.Models;
 using ChatNET.API.Messaging.Models;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace ChatNET.API.Messaging.Persistence;
 
@@ -16,7 +17,7 @@ public class MessageRepository : IMessageRepository
         m.Sender.DisplayName,
         m.IsDeleted ? null : m.Content,
         m.CreatedAt,
-        null);
+        m.ClientMessageId);
 
     private readonly AppDbContext _db;
 
@@ -25,7 +26,7 @@ public class MessageRepository : IMessageRepository
         _db = db;
     }
 
-    public async Task AddAsync(Message message, CancellationToken cancellationToken)
+    public async Task<bool> TryAddAsync(Message message, CancellationToken cancellationToken)
     {
         _db.Messages.Add(message);
 
@@ -50,8 +51,36 @@ public class MessageRepository : IMessageRepository
         _db.ConversationMembers.Attach(sender);
         _db.Entry(sender).Property(m => m.LastReadAt).IsModified = true;
 
-        await _db.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await _db.SaveChangesAsync(cancellationToken);
+            return true;
+        }
+        catch (DbUpdateException ex) when (IsClientMessageClash(ex))
+        {
+            // The failed insert (and the two stubs next to it) stay in the change tracker; clear them so the
+            // caller can run further queries on this context.
+            _db.ChangeTracker.Clear();
+            return false;
+        }
     }
+
+    // Only a clash on the client id index means "already sent". Any other unique violation is a different
+    // problem and must not be mistaken for a retry.
+    public static bool IsClientMessageClash(DbUpdateException exception)
+        => exception.InnerException is PostgresException
+        {
+            SqlState: PostgresErrorCodes.UniqueViolation,
+            ConstraintName: MessageConfiguration.ClientMessageIndexName,
+        };
+
+    public Task<MessageDto?> FindByClientMessageIdAsync(
+        Guid conversationId, Guid senderId, Guid clientMessageId, CancellationToken cancellationToken)
+        => _db.Messages
+            .AsNoTracking()
+            .Where(m => m.ConversationId == conversationId && m.SenderId == senderId && m.ClientMessageId == clientMessageId)
+            .Select(ToDto)
+            .FirstOrDefaultAsync(cancellationToken);
 
     public async Task<MessageCursor?> FindCursorAsync(
         Guid conversationId, Guid messageId, DateTime since, CancellationToken cancellationToken)

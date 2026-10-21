@@ -5,8 +5,14 @@ namespace ChatNET.API.Messaging.Persistence;
 public interface IMessageRepository
 {
     // Saves the message and moves its conversation's UpdatedAt to the message's CreatedAt, as one
-    // atomic write: either both happen or neither does.
-    Task AddAsync(Message message, CancellationToken cancellationToken);
+    // atomic write: either both happen or neither does. Returns false, saving nothing, when the message
+    // carries a client id that this sender already used in this conversation: another request sent it
+    // first.
+    Task<bool> TryAddAsync(Message message, CancellationToken cancellationToken);
+
+    // The message this sender already sent in this conversation with this client id, or null.
+    Task<MessageDto?> FindByClientMessageIdAsync(
+        Guid conversationId, Guid senderId, Guid clientMessageId, CancellationToken cancellationToken);
 
     // The position of a message, or null when the conversation has no such message sent at or after
     // "since". A message of another conversation, or one sent before the caller joined, is "no such
