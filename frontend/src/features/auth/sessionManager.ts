@@ -26,7 +26,12 @@ export type SessionStatus = 'unknown' | 'authenticated' | 'anonymous'
 export interface SessionDeps {
   requestRefresh: () => Promise<RefreshOutcome>
   requestLogout: () => Promise<void>
-  getAuth: () => { status: SessionStatus; token: string | null; tokenExpiresAt: number | null }
+  getAuth: () => {
+    status: SessionStatus
+    token: string | null
+    tokenExpiresAt: number | null
+    userId: string | null
+  }
   applyAuth: (response: AuthResponse) => void
   clearAuth: () => void
   now: () => number
@@ -64,12 +69,26 @@ export function createSessionManager(deps: SessionDeps) {
     return inFlight
   }
 
+  function isAnotherPerson(response: AuthResponse): boolean {
+    const auth = deps.getAuth()
+    return auth.status === 'authenticated' && auth.userId !== null && auth.userId !== response.userId
+  }
+
   async function renewWithRetries(): Promise<RefreshResult> {
     for (let attempt = 0; attempt <= BUSY_RETRIES; attempt++) {
       const outcome = await deps.requestRefresh()
 
       switch (outcome.kind) {
         case 'renewed':
+          // The refresh cookie belongs to the browser, not to a tab. If another tab has signed in as someone
+          // else since this tab did, the cookie is now theirs, and applying their renewal would show this
+          // tab as them while it still holds the first person's conversations. A tab never changes who it
+          // is signed in as: it signs out, and the next load restores whoever the cookie belongs to.
+          if (isAnotherPerson(outcome.response)) {
+            deps.clearAuth()
+            return 'ended'
+          }
+
           deps.applyAuth(outcome.response)
           return 'renewed'
 
@@ -93,11 +112,14 @@ export function createSessionManager(deps: SessionDeps) {
   // the first thing to do is ask for a new one. Until that is answered nobody knows whether the person is
   // signed in, which is why there is a third status besides signed in and signed out.
   function start(): Promise<void> {
-    started ??= refresh().then((result) => {
-      // The server cannot be reached: show the sign-in page. The cookie is untouched, so a reload once
-      // the server is back signs the person in again.
-      if (result === 'unavailable') deps.clearAuth()
-    })
+    started ??= refresh()
+      .then((result) => {
+        // The server cannot be reached: show the sign-in page. The cookie is untouched, so a reload once
+        // the server is back signs the person in again.
+        if (result === 'unavailable') deps.clearAuth()
+      })
+      // Whatever else goes wrong, "not known yet" is not a state to stay in: the routes would wait for ever.
+      .catch(() => deps.clearAuth())
 
     return started
   }
