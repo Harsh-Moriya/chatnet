@@ -167,7 +167,7 @@ public class AddedToConversationTests
     {
         var hub = _factory.Services.GetRequiredService<Microsoft.AspNetCore.SignalR.IHubContext<ChatHub, IChatClient>>();
         var message = new ChatNET.API.Messaging.Models.MessageDto(
-            Guid.NewGuid(), conversationId, Guid.NewGuid(), "Someone", "hello", DateTime.UtcNow, null);
+            Guid.NewGuid(), conversationId, Guid.NewGuid(), "Someone", "hello", DateTime.UtcNow, null, []);
 
         return hub.Clients.Group(ChatGroups.Conversation(conversationId)).ReceiveMessage(message);
     }

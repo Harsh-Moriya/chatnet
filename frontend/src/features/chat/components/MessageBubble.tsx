@@ -1,4 +1,5 @@
 import { AlertCircle, CheckCheck, Clock, RotateCw } from 'lucide-react'
+import type { ReactNode } from 'react'
 import { Button } from '../../../components/ui/Button'
 import { cn } from '../../../lib/cn'
 import { formatClock } from '../../../lib/format'
@@ -9,8 +10,10 @@ interface MessageBubbleProps {
   continuing: boolean
   // Shown above the bubble; only set when the sender should be named.
   senderName?: string
-  // Null for a deleted message.
+  // Null for a deleted message. Empty for a message of only files.
   content: string | null
+  // The message's files, drawn above its text.
+  attachments?: ReactNode
   // Absent while the message is unconfirmed.
   createdAt?: string
   // Set on the reader's newest message once someone has read it.
@@ -26,6 +29,7 @@ export function MessageBubble({
   continuing,
   senderName,
   content,
+  attachments,
   createdAt,
   seen,
   status,
@@ -56,7 +60,12 @@ export function MessageBubble({
         {deleted ? (
           <p className={cn('italic', own ? 'text-blue-100' : 'text-slate-400')}>This message was deleted</p>
         ) : (
-          <p className="whitespace-pre-wrap break-words">{content}</p>
+          <>
+            {attachments}
+            {content !== '' && (
+              <p className={cn('whitespace-pre-wrap break-words', attachments ? 'mt-2' : undefined)}>{content}</p>
+            )}
+          </>
         )}
 
         <p

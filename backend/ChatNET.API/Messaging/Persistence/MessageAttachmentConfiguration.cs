@@ -11,7 +11,11 @@ public class MessageAttachmentConfiguration : IEntityTypeConfiguration<MessageAt
         builder.HasKey(a => a.Id);
         builder.Property(a => a.Id).HasDefaultValueSql("gen_random_uuid()");
 
-        builder.Property(a => a.Url)
+        builder.Property(a => a.StorageKey)
+            .IsRequired()
+            .HasColumnType("text");
+
+        builder.Property(a => a.ContentType)
             .IsRequired()
             .HasColumnType("text");
 

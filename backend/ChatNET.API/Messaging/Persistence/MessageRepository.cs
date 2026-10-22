@@ -17,7 +17,10 @@ public class MessageRepository : IMessageRepository
         m.Sender.DisplayName,
         m.IsDeleted ? null : m.Content,
         m.CreatedAt,
-        m.ClientMessageId);
+        m.ClientMessageId,
+
+        // Filled in for the page as a whole afterwards (AttachmentLoader): one query for all of its files.
+        new List<AttachmentDto>());
 
     private readonly AppDbContext _db;
 

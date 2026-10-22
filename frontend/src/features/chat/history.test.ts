@@ -11,6 +11,7 @@ function page(size: number, firstId = 'first'): Message[] {
     content: 'x',
     createdAt: '2026-10-11T10:00:00Z',
     clientMessageId: null,
+    attachments: [],
   }))
 }
 

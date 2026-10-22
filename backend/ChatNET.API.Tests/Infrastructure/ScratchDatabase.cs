@@ -58,6 +58,13 @@ public sealed class ScratchDatabase : IAsyncDisposable
         await _db.SaveChangesAsync();
     }
 
+    // For arranging rows with the application's own model, at a schema the model still matches.
+    public async Task AddAsync(params object[] entities)
+    {
+        _db.AddRange(entities);
+        await _db.SaveChangesAsync();
+    }
+
     public Task ExecuteAsync(string sql) => _db.Database.ExecuteSqlRawAsync(sql);
 
     public async Task<string> EmailIndexDefinitionAsync() =>
@@ -79,7 +86,7 @@ public sealed class ScratchDatabase : IAsyncDisposable
     public async Task<List<string>> AppliedMigrationsAsync() =>
         (await _db.Database.GetAppliedMigrationsAsync()).ToList();
 
-    private async Task<object?> ScalarAsync(string sql)
+    public async Task<object?> ScalarAsync(string sql)
     {
         await using var connection = new NpgsqlConnection(_db.Database.GetConnectionString());
         await connection.OpenAsync();

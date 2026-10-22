@@ -273,7 +273,8 @@ public class MessageHistoryTests
 
     // ##### Cost #####
 
-    // A membership lookup and the messages query, whatever the number of messages or senders.
+    // A membership lookup, the messages query and one query for the files of the whole page, whatever the number of
+    // messages, senders or files.
     [Fact]
     public async Task Loading_history_uses_a_fixed_number_of_queries()
     {
@@ -297,7 +298,7 @@ public class MessageHistoryTests
         var history = await client.GetHistoryAsync(group);
 
         Assert.Equal(50, history.Count);
-        Assert.True(counter.Count <= 2, $"Loading history ran {counter.Count} queries; expected at most 2.");
+        Assert.True(counter.Count <= 3, $"Loading history ran {counter.Count} queries; expected at most 3.");
     }
 
     private async Task<(TestUser Alice, TestUser Bob, Guid ConversationId)> DirectChatAsync()

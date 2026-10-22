@@ -2,7 +2,7 @@ import { AxiosError, type AxiosResponse } from 'axios'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { api } from '../../../lib/api'
 import { useChatStore } from '../store/chatStore'
-import type { Conversation, Member, Message, UserSummary } from '../types'
+import type { Conversation, Member, Message, PendingAttachment, UserSummary } from '../types'
 import {
   createDirect,
   createGroup,
@@ -11,6 +11,7 @@ import {
   fetchMembers,
   fetchMessages,
   markRead,
+  refreshAttachmentUrl,
   retryMessage,
   searchUsers,
   sendMessage,
@@ -47,6 +48,7 @@ function message(overrides: Partial<Message> & { id: string }): Message {
     content: 'hello',
     createdAt: '2026-10-11T10:00:00Z',
     clientMessageId: null,
+    attachments: [],
     ...overrides,
   }
 }
@@ -501,7 +503,7 @@ describe('telling the server a conversation was read', () => {
       {
         ...conversation('c1'),
         unreadCount: 2,
-        lastMessage: { senderId: 'bob', content: 'x', createdAt: '2026-10-11T10:00:02Z' },
+        lastMessage: { senderId: 'bob', content: 'x', createdAt: '2026-10-11T10:00:02Z', attachmentCount: 0 },
       },
     ])
     store().seedMessages('c1', [
@@ -565,7 +567,7 @@ describe('sending a message counts as reading', () => {
       {
         ...conversation('c1'),
         unreadCount: 3,
-        lastMessage: { senderId: 'bob', content: 'x', createdAt: '2026-10-11T09:59:00Z' },
+        lastMessage: { senderId: 'bob', content: 'x', createdAt: '2026-10-11T09:59:00Z', attachmentCount: 0 },
       },
     ])
     vi.spyOn(api, 'post').mockResolvedValue(
@@ -575,5 +577,156 @@ describe('sending a message counts as reading', () => {
     await sendMessage('c1', 'on my way')
 
     expect(store().conversations.c1.unreadCount).toBe(0)
+  })
+})
+
+// ##### Sending files #####
+
+function upload(n: number): PendingAttachment {
+  return {
+    uploadKey: `pending/c1/me/key-${n}`,
+    fileName: `file ${n}.png`,
+    contentType: 'image/png',
+    sizeBytes: 100 * n,
+    type: 'Image',
+    file: {} as File,
+  }
+}
+
+describe('sending files', () => {
+  it('sends a message of only files, naming each upload and nothing else about it', async () => {
+    const post = vi.spyOn(api, 'post').mockResolvedValue(respond(message({ id: 'real', content: '' })))
+
+    await sendMessage('c1', '   ', [upload(1), upload(2)])
+
+    expect(post.mock.calls[0][1]).toEqual({
+      content: '',
+      clientMessageId: expect.stringMatching(/^[0-9a-f-]{36}$/),
+      attachments: [
+        { uploadKey: 'pending/c1/me/key-1', fileName: 'file 1.png' },
+        { uploadKey: 'pending/c1/me/key-2', fileName: 'file 2.png' },
+      ],
+    })
+  })
+
+  it('sends the text together with the files', async () => {
+    const post = vi.spyOn(api, 'post').mockResolvedValue(respond(message({ id: 'real' })))
+
+    await sendMessage('c1', ' look ', [upload(1)])
+
+    expect(post.mock.calls[0][1]).toMatchObject({ content: 'look', attachments: [{ uploadKey: 'pending/c1/me/key-1' }] })
+  })
+
+  it('does not send a message with neither text nor files', async () => {
+    const post = vi.spyOn(api, 'post')
+
+    await sendMessage('c1', '  ', [])
+
+    expect(post).not.toHaveBeenCalled()
+    expect(store().pending.c1).toBeUndefined()
+  })
+
+  it('keeps the files on the unconfirmed message so they can be drawn while it is sending', async () => {
+    const response = deferred<AxiosResponse<Message>>()
+    vi.spyOn(api, 'post').mockReturnValue(response.promise)
+
+    const sending = sendMessage('c1', '', [upload(1), upload(2)])
+
+    expect(store().pending.c1[0].attachments.map((a) => a.fileName)).toEqual(['file 1.png', 'file 2.png'])
+    response.resolve(respond(message({ id: 'real', clientMessageId: store().pending.c1[0].clientMessageId })))
+    await sending
+  })
+
+  it('replaces the unconfirmed message with the server\'s, which carries the files with their links', async () => {
+    vi.spyOn(api, 'post').mockImplementation((_url, body) =>
+      Promise.resolve(
+        respond(
+          message({
+            id: 'real',
+            content: '',
+            clientMessageId: (body as { clientMessageId: string }).clientMessageId,
+            attachments: [
+              { id: 'a1', type: 'Image', fileName: 'file 1.png', contentType: 'image/png', sizeBytes: 100, url: 'https://files.test/a1' },
+            ],
+          }),
+        ),
+      ),
+    )
+
+    await sendMessage('c1', '', [upload(1)])
+
+    expect(store().pending.c1).toEqual([])
+    expect(store().messages.c1[0].attachments[0].url).toBe('https://files.test/a1')
+  })
+
+  it('shows the failure and keeps the uploads, so the message can be sent again as it was', async () => {
+    vi.spyOn(api, 'post').mockRejectedValue(failure(400, 'One of the files was not uploaded.'))
+
+    await sendMessage('c1', 'text', [upload(1)])
+
+    expect(store().pending.c1[0]).toMatchObject({ status: 'failed', error: 'One of the files was not uploaded.' })
+    expect(store().pending.c1[0].attachments).toHaveLength(1)
+  })
+
+  it('sends the same uploads again with the same id when the message is retried', async () => {
+    const post = vi.spyOn(api, 'post').mockRejectedValueOnce(failure(500, 'x')).mockResolvedValue(respond(message({ id: 'real' })))
+    await sendMessage('c1', 'text', [upload(1), upload(2)])
+    const failed = store().pending.c1[0]
+
+    await retryMessage('c1', failed.clientMessageId)
+
+    expect(post.mock.calls[1][1]).toEqual(post.mock.calls[0][1])
+    expect(post.mock.calls[1][1]).toMatchObject({
+      clientMessageId: failed.clientMessageId,
+      attachments: [{ uploadKey: 'pending/c1/me/key-1' }, { uploadKey: 'pending/c1/me/key-2' }],
+    })
+  })
+
+  it('treats the stored message returned for a repeat as the confirmation when it has files', async () => {
+    const failed = await failedFileMessage()
+    vi.spyOn(api, 'post').mockResolvedValue({
+      data: message({ id: 'stored', content: '', clientMessageId: failed.clientMessageId }),
+      status: 200,
+    } as AxiosResponse<Message>)
+
+    await retryMessage('c1', failed.clientMessageId)
+
+    expect(store().pending.c1).toEqual([])
+    expect(store().messages.c1.map((m) => m.id)).toEqual(['stored'])
+  })
+
+  async function failedFileMessage() {
+    vi.spyOn(api, 'post').mockRejectedValueOnce(failure(500, 'x'))
+    await sendMessage('c1', '', [upload(1)])
+    return store().pending.c1[0]
+  }
+})
+
+describe('renewing a link to a file', () => {
+  const withFile = () =>
+    store().seedMessages('c1', [
+      message({
+        id: 'm1',
+        attachments: [{ id: 'a1', type: 'Image', fileName: 'a.png', contentType: 'image/png', sizeBytes: 1, url: 'https://files.test/old' }],
+      }),
+    ])
+
+  it('asks the server for a new link and puts it into the message', async () => {
+    withFile()
+    const get = vi.spyOn(api, 'get').mockResolvedValue(respond({ url: 'https://files.test/new', expiresAt: '2026-10-22T12:00:00Z' }))
+
+    await refreshAttachmentUrl('c1', 'm1', 'a1')
+
+    expect(get.mock.calls[0][0]).toBe('/attachments/a1/url')
+    expect(store().messages.c1[0].attachments[0].url).toBe('https://files.test/new')
+  })
+
+  it('leaves the message as it was, and says why, when the server refuses', async () => {
+    withFile()
+    vi.spyOn(api, 'get').mockRejectedValue(failure(404, 'Attachment not found.'))
+
+    await expect(refreshAttachmentUrl('c1', 'm1', 'a1')).rejects.toThrow()
+
+    expect(store().messages.c1[0].attachments[0].url).toBe('https://files.test/old')
   })
 })

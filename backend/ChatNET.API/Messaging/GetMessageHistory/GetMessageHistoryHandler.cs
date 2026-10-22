@@ -1,6 +1,7 @@
 using ChatNET.API.Common.Exceptions;
 using ChatNET.API.Conversations;
 using ChatNET.API.Conversations.Persistence;
+using ChatNET.API.Media;
 using ChatNET.API.Messaging.Models;
 using ChatNET.API.Messaging.Persistence;
 using FluentValidation;
@@ -16,15 +17,18 @@ public class GetMessageHistoryHandler : IRequestHandler<GetMessageHistoryQuery, 
 
     private readonly IConversationRepository _conversations;
     private readonly IMessageRepository _messages;
+    private readonly AttachmentLoader _attachments;
     private readonly ILogger<GetMessageHistoryHandler> _logger;
 
     public GetMessageHistoryHandler(
         IConversationRepository conversations,
         IMessageRepository messages,
+        AttachmentLoader attachments,
         ILogger<GetMessageHistoryHandler> logger)
     {
         _conversations = conversations;
         _messages = messages;
+        _attachments = attachments;
         _logger = logger;
     }
 
@@ -47,7 +51,10 @@ public class GetMessageHistoryHandler : IRequestHandler<GetMessageHistoryQuery, 
         var since = joinedAt.Value;
 
         if (request.Before is null && request.After is null)
-            return await _messages.GetLatestAsync(request.ConversationId, since, PageSize, cancellationToken);
+        {
+            return await _attachments.AttachToAsync(
+                await _messages.GetLatestAsync(request.ConversationId, since, PageSize, cancellationToken), cancellationToken);
+        }
 
         var reading = request.Before.HasValue ? nameof(request.Before) : nameof(request.After);
         var anchorId = request.Before ?? request.After!.Value;
@@ -58,8 +65,10 @@ public class GetMessageHistoryHandler : IRequestHandler<GetMessageHistoryQuery, 
         if (cursor is null)
             throw new ValidationException([new ValidationFailure(reading, UnknownCursor)]);
 
-        return request.Before.HasValue
+        var page = request.Before.HasValue
             ? await _messages.GetBeforeAsync(request.ConversationId, since, cursor.Value, PageSize, cancellationToken)
             : await _messages.GetAfterAsync(request.ConversationId, since, cursor.Value, PageSize, cancellationToken);
+
+        return await _attachments.AttachToAsync(page, cancellationToken);
     }
 }
