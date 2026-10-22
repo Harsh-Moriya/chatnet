@@ -1,5 +1,6 @@
 using ChatNET.API.Common.Auth;
 using ChatNET.API.Common.OpenApi;
+using ChatNET.API.Media;
 using ChatNET.API.Messaging.GetMessageHistory;
 using ChatNET.API.Messaging.Models;
 using ChatNET.API.Messaging.SendMessage;
@@ -7,7 +8,7 @@ using MediatR;
 
 namespace ChatNET.API.Messaging;
 
-public record SendMessageRequest(string? Content, Guid? ClientMessageId);
+public record SendMessageRequest(string? Content, Guid? ClientMessageId, List<AttachmentInput>? Attachments);
 
 public static class MessagingEndpoints
 {
@@ -26,7 +27,7 @@ public static class MessagingEndpoints
             Guid conversationId, SendMessageRequest body, HttpContext http, IMediator mediator) =>
         {
             var result = await mediator.Send(new SendMessageCommand(
-                conversationId, http.User.GetUserId(), body.Content, body.ClientMessageId));
+                conversationId, http.User.GetUserId(), body.Content, body.ClientMessageId, body.Attachments));
 
             return Results.Json(
                 result.Message,

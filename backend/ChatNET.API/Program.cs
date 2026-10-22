@@ -262,6 +262,9 @@ try
     builder.Services.AddSingleton<IValidateOptions<StorageOptions>, StorageOptionsValidator>();
     builder.Services.AddSingleton(provider => S3ClientFactory.Create(provider.GetRequiredService<IOptions<StorageOptions>>().Value));
     builder.Services.AddSingleton<IBlobStorage, S3BlobStorage>();
+    builder.Services.AddScoped<IAttachmentRepository, AttachmentRepository>();
+    builder.Services.AddScoped<AttachmentIntake>();
+    builder.Services.AddScoped<AttachmentLoader>();
 
     // ##### Rate limiting #####
     // Login and registration are limited per client address to slow down password guessing and

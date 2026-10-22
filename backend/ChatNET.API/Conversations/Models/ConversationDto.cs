@@ -16,9 +16,12 @@ public record ConversationDto(
     Guid? OtherUserId
 );
 
-// Content is null when the last message was deleted. It is truncated to a preview length.
+// Content is null when the last message was deleted. It is truncated to a preview length, and empty when the
+// message is only files, which AttachmentCount is for: it says how many files the message carries (0 for a
+// deleted message).
 public record LastMessageDto(
     Guid SenderId,
     string? Content,
-    DateTime CreatedAt
+    DateTime CreatedAt,
+    int AttachmentCount
 );

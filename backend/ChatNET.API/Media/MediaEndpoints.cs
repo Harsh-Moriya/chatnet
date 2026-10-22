@@ -1,6 +1,7 @@
 using ChatNET.API.Common.Auth;
 using ChatNET.API.Common.OpenApi;
 using ChatNET.API.Media.CreateUpload;
+using ChatNET.API.Media.GetAttachmentUrl;
 using MediatR;
 
 namespace ChatNET.API.Media;
@@ -27,6 +28,18 @@ public static class MediaEndpoints
         .Returns<UploadTicketDto>(
             StatusCodes.Status200OK, StatusCodes.Status400BadRequest, StatusCodes.Status401Unauthorized,
             StatusCodes.Status403Forbidden);
+
+        // A new link to a file the caller can read, for when the link that came with the message has expired.
+        app.MapGet("/api/attachments/{attachmentId:guid}/url", async (
+            Guid attachmentId, HttpContext http, IMediator mediator) =>
+        {
+            var link = await mediator.Send(new GetAttachmentUrlQuery(attachmentId, http.User.GetUserId()));
+            return Results.Ok(link);
+        })
+        .WithTags("Media")
+        .RequireAuthorization()
+        .Returns<AttachmentLinkDto>(
+            StatusCodes.Status200OK, StatusCodes.Status401Unauthorized, StatusCodes.Status404NotFound);
 
         return app;
     }

@@ -158,6 +158,9 @@ public class ConversationRepository : IConversationRepository
                lm."SenderId" AS "LastMessageSenderId",
                CASE WHEN lm."IsDeleted" THEN NULL ELSE lm."Content" END AS "LastMessageContent",
                lm."CreatedAt" AS "LastMessageCreatedAt",
+               CASE WHEN lm."Id" IS NULL OR lm."IsDeleted" THEN 0
+                    ELSE (SELECT COUNT(*)::int FROM "MessageAttachments" a WHERE a."MessageId" = lm."Id") END
+                   AS "LastMessageAttachmentCount",
                (SELECT COUNT(*)::int
                 FROM (SELECT 1
                       FROM "Messages" um
@@ -178,7 +181,7 @@ public class ConversationRepository : IConversationRepository
             LIMIT 1
         ) other ON TRUE
         LEFT JOIN LATERAL (
-            SELECT m."SenderId", m."Content", m."IsDeleted", m."CreatedAt"
+            SELECT m."Id", m."SenderId", m."Content", m."IsDeleted", m."CreatedAt"
             FROM "Messages" m
             WHERE m."ConversationId" = c."Id"
               AND m."CreatedAt" >= mine."JoinedAt"
@@ -199,7 +202,7 @@ public class ConversationRepository : IConversationRepository
     private static ConversationDto ToDto(ConversationRow row)
     {
         var last = row.LastMessageSenderId is { } senderId && row.LastMessageCreatedAt is { } createdAt
-            ? new LastMessageDto(senderId, Truncate(row.LastMessageContent), createdAt)
+            ? new LastMessageDto(senderId, Truncate(row.LastMessageContent), createdAt, row.LastMessageAttachmentCount)
             : null;
 
         return new ConversationDto(
@@ -222,6 +225,7 @@ public class ConversationRepository : IConversationRepository
         public Guid? LastMessageSenderId { get; set; }
         public string? LastMessageContent { get; set; }
         public DateTime? LastMessageCreatedAt { get; set; }
+        public int LastMessageAttachmentCount { get; set; }
         public int UnreadCount { get; set; }
         public Guid? OtherUserId { get; set; }
     }
