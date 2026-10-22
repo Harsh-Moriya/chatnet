@@ -34,6 +34,7 @@ public class OpenApiDocumentTests
         ("get", "/api/conversations/{conversationId}/messages", "200", "MessageDto[]", "400,401,403"),
         ("post", "/api/conversations/{conversationId}/read", "204", "", "400,401,403"),
         ("get", "/api/conversations/{conversationId}/members", "200", "MemberDto[]", "401,403"),
+        ("post", "/api/conversations/{conversationId}/uploads", "200", "UploadTicketDto", "400,401,403"),
         ("get", "/api/presence", "200", "PresenceDto[]", "401"),
     ];
 

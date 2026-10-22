@@ -356,6 +356,7 @@ try
     app.MapUserEndpoints();
     app.MapConversationEndpoints();
     app.MapMessagingEndpoints();
+    app.MapMediaEndpoints();
     app.MapPresenceEndpoints();
 
     // A token is checked once, when the connection is made. Without this an open connection would keep

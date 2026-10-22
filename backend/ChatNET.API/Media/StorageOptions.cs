@@ -27,6 +27,10 @@ public sealed class StorageOptions
     // already has items instead of replacing them, so a default here could never be narrowed by configuration.
     public string[] AllowedContentTypes { get; set; } = [];
 
+    // Whether a file of this type may be attached. Compared as the normalised type, so case and parameters do not matter.
+    public bool Allows(string contentType)
+        => AllowedContentTypes.Any(allowed => AttachmentKinds.Normalize(allowed) == AttachmentKinds.Normalize(contentType));
+
     // How long a browser has to start an upload after asking for permission to make it.
     public int UploadUrlMinutes { get; set; }
 
