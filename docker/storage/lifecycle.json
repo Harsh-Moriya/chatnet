@@ -1,0 +1,10 @@
+{
+  "Rules": [
+    {
+      "ID": "expire-pending-uploads",
+      "Status": "Enabled",
+      "Filter": { "Prefix": "pending/" },
+      "Expiration": { "Days": 1 }
+    }
+  ]
+}

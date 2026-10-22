@@ -63,6 +63,48 @@ services:
       - "4317:4317"     # OTLP gRPC
       - "4318:4318"     # OTLP HTTP
 
+  # ##### RustFS #####
+  # An S3-compatible object store for attachments. Browsers upload straight to it with presigned URLs,
+  # so it has to be reachable from the browser: the S3 API is on http://localhost:9000 and a console on
+  # http://localhost:9001. Production uses Cloudflare R2 instead; the API talks to both through the S3 API.
+  # MinIO would be the usual choice here, but it no longer publishes container images.
+  rustfs:
+    image: rustfs/rustfs:1.0.3
+    container_name: chatnet-rustfs
+    command: ["/data"]
+    environment:
+      RUSTFS_ACCESS_KEY: ${RUSTFS_ACCESS_KEY}
+      RUSTFS_SECRET_KEY: ${RUSTFS_SECRET_KEY}
+    ports:
+      - "9000:9000"   # S3 API
+      - "9001:9001"   # console
+    volumes:
+      - rustfs-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ##### Storage setup #####
+  # A one-shot job: creates the bucket, applies the CORS rules the browser upload needs and the rule
+  # that deletes abandoned uploads after a day, then exits. See docker/storage.
+  storage-init:
+    image: amazon/aws-cli:2.38.4
+    container_name: chatnet-storage-init
+    depends_on:
+      rustfs:
+        condition: service_healthy
+    environment:
+      AWS_ACCESS_KEY_ID: ${RUSTFS_ACCESS_KEY}
+      AWS_SECRET_ACCESS_KEY: ${RUSTFS_SECRET_KEY}
+      AWS_DEFAULT_REGION: us-east-1
+      STORAGE_BUCKET: ${STORAGE_BUCKET}
+    volumes:
+      - ./docker/storage:/init:ro
+    entrypoint: ["/bin/sh", "/init/init.sh"]
+    restart: "no"
+
   # ##### Adminer #####
   # Lightweight browser-based database UI. Open http://localhost:8080 then:
   # System: PostgreSQL, Server: postgres, Username/Password/Database from your .env file.
@@ -81,3 +123,4 @@ services:
 volumes:
   postgres-data:
   redis-data:
+  rustfs-data:

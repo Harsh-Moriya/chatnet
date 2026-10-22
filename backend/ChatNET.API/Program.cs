@@ -14,6 +14,7 @@ using ChatNET.API.Common.OpenApi;
 using ChatNET.API.Common.Persistence;
 using ChatNET.API.Conversations;
 using ChatNET.API.Conversations.Persistence;
+using ChatNET.API.Media;
 using ChatNET.API.Messaging;
 using ChatNET.API.Messaging.Hubs;
 using ChatNET.API.Messaging.Persistence;
@@ -250,6 +251,17 @@ try
     builder.Services.AddSingleton<PresenceRefreshService>();
     builder.Services.AddHostedService(provider => provider.GetRequiredService<PresenceRefreshService>());
     builder.Services.AddScoped<IPresenceRepository, PresenceRepository>();
+
+    // ##### Storage #####
+    // Attachments live in an S3-compatible bucket (Cloudflare R2 in production, RustFS locally). The browser
+    // uploads and downloads with presigned URLs; the server only signs them, looks at what was uploaded and
+    // moves it. One client is shared: it is thread-safe and keeps its connections alive.
+    builder.Services.AddOptions<StorageOptions>()
+        .BindConfiguration(StorageOptions.SectionName)
+        .ValidateOnStart();
+    builder.Services.AddSingleton<IValidateOptions<StorageOptions>, StorageOptionsValidator>();
+    builder.Services.AddSingleton(provider => S3ClientFactory.Create(provider.GetRequiredService<IOptions<StorageOptions>>().Value));
+    builder.Services.AddSingleton<IBlobStorage, S3BlobStorage>();
 
     // ##### Rate limiting #####
     // Login and registration are limited per client address to slow down password guessing and

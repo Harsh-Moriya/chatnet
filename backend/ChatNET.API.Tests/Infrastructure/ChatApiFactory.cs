@@ -1,8 +1,13 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
+using Amazon.S3;
+using Amazon.S3.Model;
 using ChatNET.API.Auth.Models;
 using ChatNET.API.Common.Persistence;
+using ChatNET.API.Media;
+using DotNet.Testcontainers.Builders;
+using DotNet.Testcontainers.Containers;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -12,8 +17,8 @@ using Testcontainers.Redis;
 
 namespace ChatNET.API.Tests.Infrastructure;
 
-// Starts the real API in-process (WebApplicationFactory) against a real Postgres and a real
-// Redis, each in a throwaway Docker container (Testcontainers). Nothing is mocked: requests
+// Starts the real API in-process (WebApplicationFactory) against a real Postgres, a real Redis and a
+// real S3-compatible object store (RustFS), each in a throwaway Docker container (Testcontainers). Nothing is mocked: requests
 // go through the full pipeline (routing, auth, MediatR, EF Core, SignalR backplane).
 //
 // One instance is shared by every integration test class through a collection fixture, so
@@ -24,9 +29,32 @@ public sealed class ChatApiFactory : WebApplicationFactory<Program>, IAsyncLifet
 
     private readonly RedisContainer _redis = new RedisBuilder("redis:7-alpine").Build();
 
+    // The credentials are made up for each run; the container is the only thing that ever sees them.
+    private readonly string _storageAccessKey = Convert.ToHexString(RandomNumberGenerator.GetBytes(10)).ToLowerInvariant();
+    private readonly string _storageSecretKey = Convert.ToHexString(RandomNumberGenerator.GetBytes(24)).ToLowerInvariant();
+    private readonly IContainer _storage;
+
+    public const string StorageBucket = "chatnet-tests";
+
+    public ChatApiFactory()
+    {
+        _storage = new ContainerBuilder("rustfs/rustfs:1.0.3")
+            .WithEnvironment("RUSTFS_ACCESS_KEY", _storageAccessKey)
+            .WithEnvironment("RUSTFS_SECRET_KEY", _storageSecretKey)
+            .WithCommand("/data")
+            .WithPortBinding(9000, true)
+            .WithWaitStrategy(Wait.ForUnixContainer().UntilHttpRequestIsSucceeded(request => request.ForPort(9000).ForPath("/health")))
+            .Build();
+    }
+
+    // A client for the test bucket, to put objects where the API will look and to see what it left behind.
+    public IAmazonS3 Storage { get; private set; } = null!;
+
+    public string StorageServiceUrl => $"http://{_storage.Hostname}:{_storage.GetMappedPublicPort(9000)}";
+
     public async Task InitializeAsync()
     {
-        await Task.WhenAll(_postgres.StartAsync(), _redis.StartAsync());
+        await Task.WhenAll(_postgres.StartAsync(), _redis.StartAsync(), _storage.StartAsync());
 
         // Configuration is supplied through environment variables on purpose. Program.cs reads
         // some settings while the app is still being assembled, and the environment is the one
@@ -35,6 +63,10 @@ public sealed class ChatApiFactory : WebApplicationFactory<Program>, IAsyncLifet
         Environment.SetEnvironmentVariable("ConnectionStrings__DefaultConnection", _postgres.GetConnectionString());
         Environment.SetEnvironmentVariable("ConnectionStrings__Redis", _redis.GetConnectionString());
         Environment.SetEnvironmentVariable("Jwt__SigningKey", Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)));
+        Environment.SetEnvironmentVariable("Storage__ServiceUrl", StorageServiceUrl);
+        Environment.SetEnvironmentVariable("Storage__Bucket", StorageBucket);
+        Environment.SetEnvironmentVariable("Storage__AccessKey", _storageAccessKey);
+        Environment.SetEnvironmentVariable("Storage__SecretKey", _storageSecretKey);
 
         // Effectively disables the login and registration rate limit for ordinary tests, which
         // register many users from one address. Rate limit tests build a host with a tight limit.
@@ -49,6 +81,17 @@ public sealed class ChatApiFactory : WebApplicationFactory<Program>, IAsyncLifet
 
         AssertUsingTestContainers();
 
+        // The bucket is made the way the compose setup job makes it, without the CORS and lifecycle rules, which
+        // no test needs: the tests upload from the server side of things, not from a browser.
+        Storage = S3ClientFactory.Create(new StorageOptions
+        {
+            ServiceUrl = StorageServiceUrl,
+            Region = "auto",
+            AccessKey = _storageAccessKey,
+            SecretKey = _storageSecretKey,
+        });
+        await Storage.PutBucketAsync(new PutBucketRequest { BucketName = StorageBucket });
+
         using var scope = Services.CreateScope();
         await scope.ServiceProvider.GetRequiredService<AppDbContext>().Database.MigrateAsync();
     }
@@ -58,6 +101,8 @@ public sealed class ChatApiFactory : WebApplicationFactory<Program>, IAsyncLifet
         await base.DisposeAsync();
         await _postgres.DisposeAsync();
         await _redis.DisposeAsync();
+        Storage?.Dispose();
+        await _storage.DisposeAsync();
     }
 
     // Registers a brand new user through the public API and returns their identity and token.
@@ -118,7 +163,8 @@ public sealed class ChatApiFactory : WebApplicationFactory<Program>, IAsyncLifet
         var config = Services.GetRequiredService<IConfiguration>();
 
         if (config.GetConnectionString("DefaultConnection") != _postgres.GetConnectionString()
-            || config.GetConnectionString("Redis") != _redis.GetConnectionString())
+            || config.GetConnectionString("Redis") != _redis.GetConnectionString()
+            || config["Storage:ServiceUrl"] != StorageServiceUrl)
         {
             throw new InvalidOperationException(
                 "The API under test is not using the test containers. Refusing to run tests.");
