@@ -17,12 +17,13 @@ function message(id: string, senderId: string, createdAt: string, overrides: Par
     content: `text ${id}`,
     createdAt,
     clientMessageId: null,
+    attachments: [],
     ...overrides,
   }
 }
 
 function pending(clientMessageId: string, createdAt: string): PendingMessage {
-  return { clientMessageId, conversationId: 'c1', content: 'draft', createdAt, status: 'sending', error: null }
+  return { clientMessageId, conversationId: 'c1', content: 'draft', attachments: [], createdAt, status: 'sending', error: null }
 }
 
 function build(

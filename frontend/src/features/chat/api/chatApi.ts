@@ -3,7 +3,8 @@ import { getApiError } from '../../../lib/errors'
 import { newClientMessageId } from '../../../lib/uuid'
 import { useChatStore } from '../store/chatStore'
 import { waitForConnection } from '../store/waitForConnection'
-import type { Conversation, Member, Message, UserSummary } from '../types'
+import type { Conversation, Member, Message, PendingAttachment, UserSummary } from '../types'
+import { fetchAttachmentLink } from './uploadsApi'
 
 // Every REST call the chat makes. Plain functions, so they can be tested without React; the hooks
 // in this folder only hand them to TanStack Query. REST loads data and confirms changes, SignalR
@@ -102,21 +103,28 @@ export async function markRead(conversationId: string, messageId: string, selfId
 // The message appears at once, marked as sending. The server's copy replaces it when the response
 // arrives or when the push does, whichever is first; both carry the id invented here.
 
-export async function sendMessage(conversationId: string, text: string): Promise<void> {
+// The files have already been uploaded (see uploadsApi); the message only names them. A message may be
+// only files, with no text.
+export async function sendMessage(
+  conversationId: string,
+  text: string,
+  attachments: PendingAttachment[] = [],
+): Promise<void> {
   const content = text.trim()
-  if (content === '') return
+  if (content === '' && attachments.length === 0) return
 
   const clientMessageId = newClientMessageId()
   chat().addPending({
     clientMessageId,
     conversationId,
     content,
+    attachments,
     createdAt: new Date().toISOString(),
     status: 'sending',
     error: null,
   })
 
-  await post(conversationId, clientMessageId, content)
+  await post(conversationId, clientMessageId, content, attachments)
 }
 
 // Sends a failed message again with the same id. If the first attempt did reach the server and only
@@ -127,18 +135,30 @@ export async function retryMessage(conversationId: string, clientMessageId: stri
   if (failed?.status !== 'failed') return
 
   chat().retryPending(conversationId, clientMessageId)
-  await post(conversationId, clientMessageId, failed.content)
+  await post(conversationId, clientMessageId, failed.content, failed.attachments)
 }
 
 export function dismissMessage(conversationId: string, clientMessageId: string): void {
   chat().removePending(conversationId, clientMessageId)
 }
 
-async function post(conversationId: string, clientMessageId: string, content: string): Promise<void> {
+async function post(
+  conversationId: string,
+  clientMessageId: string,
+  content: string,
+  attachments: PendingAttachment[],
+): Promise<void> {
   try {
     const { data } = await api.post<Message>(
       `/conversations/${conversationId}/messages`,
-      { content, clientMessageId },
+      {
+        content,
+        clientMessageId,
+        // Left out when there are none, so a message of only text is the request it always was.
+        ...(attachments.length > 0 && {
+          attachments: attachments.map(({ uploadKey, fileName }) => ({ uploadKey, fileName })),
+        }),
+      },
       { timeout: SEND_TIMEOUT_MS },
     )
     // The response to a send is the sender's own message, so its sender is the signed-in user.
@@ -148,4 +168,17 @@ async function post(conversationId: string, clientMessageId: string, content: st
     // does nothing, so a lost response cannot turn a delivered message into a failed one.
     chat().failPending(conversationId, clientMessageId, getApiError(error))
   }
+}
+
+// ##### Attachment links #####
+
+// The links that come with a message stop working after a while. A picture that fails to load asks for a
+// new one, and the store puts it in the message so the picture is drawn again.
+export async function refreshAttachmentUrl(
+  conversationId: string,
+  messageId: string,
+  attachmentId: string,
+): Promise<void> {
+  const { url } = await fetchAttachmentLink(attachmentId)
+  chat().setAttachmentUrl(conversationId, messageId, attachmentId, url)
 }

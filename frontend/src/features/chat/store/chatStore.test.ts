@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { sortedConversations, useChatStore } from './chatStore'
-import type { Conversation, Member, Message, PendingMessage } from '../types'
+import type { Attachment, Conversation, Member, Message, PendingMessage } from '../types'
 
 const store = () => useChatStore.getState()
 
@@ -12,6 +12,7 @@ function message(overrides: Partial<Message> & { id: string }): Message {
     content: `content of ${overrides.id}`,
     createdAt: '2026-10-11T10:00:00Z',
     clientMessageId: null,
+    attachments: [],
     ...overrides,
   }
 }
@@ -29,11 +30,24 @@ function conversation(overrides: Partial<Conversation> & { id: string }): Conver
   }
 }
 
+function attachment(id: string, overrides: Partial<Attachment> = {}): Attachment {
+  return {
+    id,
+    type: 'Image',
+    fileName: `${id}.png`,
+    contentType: 'image/png',
+    sizeBytes: 1000,
+    url: `https://files.test/${id}?signature=old`,
+    ...overrides,
+  }
+}
+
 function pending(clientMessageId: string, overrides: Partial<PendingMessage> = {}): PendingMessage {
   return {
     clientMessageId,
     conversationId: 'c1',
     content: `pending ${clientMessageId}`,
+    attachments: [],
     createdAt: '2026-10-11T10:00:00Z',
     status: 'sending',
     error: null,
@@ -366,7 +380,22 @@ describe('conversations', () => {
     const list = sortedConversations(store().conversations)
     expect(list.map((c) => c.id)).toEqual(['c1', 'c2'])
     expect(list[0].updatedAt).toBe('2026-10-11T10:00:00Z')
-    expect(list[0].lastMessage).toEqual({ senderId: 'bob', content: 'hello', createdAt: '2026-10-11T10:00:00Z' })
+    expect(list[0].lastMessage).toEqual({
+      senderId: 'bob',
+      content: 'hello',
+      createdAt: '2026-10-11T10:00:00Z',
+      attachmentCount: 0,
+    })
+  })
+
+  it('say how many files the newest message carries, so a message of only files can be previewed', () => {
+    store().seedConversations([conversation({ id: 'c1' })])
+
+    store().receiveMessage(
+      message({ id: 'm', content: '', attachments: [attachment('a'), attachment('b')], createdAt: '2026-10-11T10:00:00Z' }),
+    )
+
+    expect(store().conversations.c1.lastMessage).toMatchObject({ content: '', attachmentCount: 2 })
   })
 
   it('keep the newest preview when an older message arrives late', () => {
@@ -416,7 +445,7 @@ describe('conversations', () => {
       conversation({
         id: 'c1',
         updatedAt: '2026-10-11T11:00:00Z',
-        lastMessage: { senderId: 'x', content: 'from another device', createdAt: '2026-10-11T11:00:00Z' },
+        lastMessage: { senderId: 'x', content: 'from another device', createdAt: '2026-10-11T11:00:00Z', attachmentCount: 0 },
       }),
     ])
 
@@ -538,7 +567,7 @@ describe('unread counts', () => {
       conversation({
         id: 'c1',
         unreadCount: 2,
-        lastMessage: { senderId: 'bob', content: 'x', createdAt: '2026-10-11T10:00:00Z' },
+        lastMessage: { senderId: 'bob', content: 'x', createdAt: '2026-10-11T10:00:00Z', attachmentCount: 0 },
       }),
     ])
   })
@@ -598,7 +627,7 @@ describe('unread counts', () => {
       conversation({
         id: 'c1',
         unreadCount: 0,
-        lastMessage: { senderId: 'bob', content: 'x', createdAt: '2026-10-11T10:00:00Z' },
+        lastMessage: { senderId: 'bob', content: 'x', createdAt: '2026-10-11T10:00:00Z', attachmentCount: 0 },
       }),
     ])
 
@@ -613,7 +642,7 @@ describe('applying a read', () => {
         id: 'c1',
         unreadCount: 3,
         updatedAt: '2026-10-11T10:00:03Z',
-        lastMessage: { senderId: 'bob', content: 'x', createdAt: '2026-10-11T10:00:03Z' },
+        lastMessage: { senderId: 'bob', content: 'x', createdAt: '2026-10-11T10:00:03Z', attachmentCount: 0 },
       }),
     ])
     store().seedMessages('c1', [
@@ -759,5 +788,51 @@ describe('members', () => {
 
     expect(readBy('bob')).toBe('2026-10-11T10:00:07Z')
     expect(readBy('me')).toBeNull()
+  })
+})
+
+describe('attachment links', () => {
+  const linkOf = (messageId: string, attachmentId: string) =>
+    store().messages.c1.find((m) => m.id === messageId)?.attachments.find((a) => a.id === attachmentId)?.url
+
+  beforeEach(() => {
+    store().seedMessages('c1', [
+      message({ id: 'm1', attachments: [attachment('a'), attachment('b')] }),
+      message({ id: 'm2', createdAt: '2026-10-11T10:00:01Z', attachments: [attachment('c')] }),
+    ])
+  })
+
+  it('replaces the link of one attachment', () => {
+    store().setAttachmentUrl('c1', 'm1', 'a', 'https://files.test/a?signature=new')
+
+    expect(linkOf('m1', 'a')).toBe('https://files.test/a?signature=new')
+  })
+
+  it('leaves the other attachments and messages alone', () => {
+    const before = store().messages.c1
+
+    store().setAttachmentUrl('c1', 'm1', 'a', 'https://files.test/a?signature=new')
+
+    expect(linkOf('m1', 'b')).toBe('https://files.test/b?signature=old')
+    expect(linkOf('m2', 'c')).toBe('https://files.test/c?signature=old')
+    expect(store().messages.c1[1]).toBe(before[1])
+  })
+
+  it('does nothing, and says nothing changed, for a message or attachment that is not there', () => {
+    const before = store().messages
+
+    store().setAttachmentUrl('c1', 'nope', 'a', 'x')
+    store().setAttachmentUrl('c1', 'm1', 'nope', 'x')
+    store().setAttachmentUrl('other', 'm1', 'a', 'x')
+
+    expect(store().messages).toBe(before)
+  })
+
+  it('does nothing when the link is the one already held', () => {
+    const before = store().messages
+
+    store().setAttachmentUrl('c1', 'm1', 'a', 'https://files.test/a?signature=old')
+
+    expect(store().messages).toBe(before)
   })
 })

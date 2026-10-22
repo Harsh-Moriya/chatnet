@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatClock, formatDayLabel, formatLastSeen, formatListTime } from './format'
+import { formatClock, formatDayLabel, formatFileSize, formatLastSeen, formatListTime } from './format'
 
 // All timestamps here are built in local time (new Date(y, m, d, h, min)) and converted to the ISO
 // strings the API sends, so the tests give the same answer in any time zone. "Now" is Sunday
@@ -103,5 +103,35 @@ describe('formatLastSeen', () => {
   it('gives a date from a week ago, with the year only when it differs', () => {
     expect(formatLastSeen(at(2026, 10, 4, 12, 0), NOW, LOCALE)).toBe('Oct 4')
     expect(formatLastSeen(at(2025, 10, 4, 12, 0), NOW, LOCALE)).toBe('Oct 4, 2025')
+  })
+})
+
+describe('formatFileSize', () => {
+  it('writes small sizes in bytes', () => {
+    expect(formatFileSize(0)).toBe('0 B')
+    expect(formatFileSize(1023)).toBe('1023 B')
+  })
+
+  it('uses units of 1024', () => {
+    expect(formatFileSize(1024)).toBe('1 KB')
+    expect(formatFileSize(1024 * 1024)).toBe('1 MB')
+    expect(formatFileSize(1024 ** 3)).toBe('1 GB')
+  })
+
+  it('shows one decimal below ten of a unit and none above', () => {
+    expect(formatFileSize(1536)).toBe('1.5 KB')
+    expect(formatFileSize(9.4 * 1024)).toBe('9.4 KB')
+    expect(formatFileSize(10 * 1024)).toBe('10 KB')
+    expect(formatFileSize(512 * 1024)).toBe('512 KB')
+    expect(formatFileSize(10 * 1024 * 1024)).toBe('10 MB')
+  })
+
+  it('does not write a trailing .0', () => {
+    expect(formatFileSize(2 * 1024 * 1024)).toBe('2 MB')
+  })
+
+  it('rolls over to the next unit instead of showing 1024', () => {
+    expect(formatFileSize(1024 * 1024 - 1)).toBe('1 MB')
+    expect(formatFileSize(1024 * 1024 * 1024 - 1)).toBe('1 GB')
   })
 })

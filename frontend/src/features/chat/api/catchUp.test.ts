@@ -33,6 +33,7 @@ function message(n: number, conversationId = 'c1'): Message {
     content: `message ${n}`,
     createdAt: `2026-10-11T${hours}:${minutes}:${seconds}Z`,
     clientMessageId: null,
+    attachments: [],
   }
 }
 
@@ -191,6 +192,7 @@ describe('a gap that is too long to fill', () => {
       clientMessageId: 'p1',
       conversationId: 'c1',
       content: 'still sending',
+      attachments: [],
       createdAt: '2026-10-11T10:00:00Z',
       status: 'sending',
       error: null,

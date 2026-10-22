@@ -108,6 +108,7 @@ function message(id: string, overrides: Partial<Message> = {}): Message {
     content: 'hello',
     createdAt: '2026-10-11T10:00:00Z',
     clientMessageId: null,
+    attachments: [],
     ...overrides,
   }
 }
@@ -203,7 +204,7 @@ describe('event handlers', () => {
   it('records who read a conversation, and lowers the signed-in user\x27s own count when they read in another tab', async () => {
     const { hub } = await connected()
     store().seedConversations([
-      { ...conversation('c1'), unreadCount: 2, lastMessage: { senderId: 'bob', content: 'x', createdAt: '2026-10-11T10:00:05Z' } },
+      { ...conversation('c1'), unreadCount: 2, lastMessage: { senderId: 'bob', content: 'x', createdAt: '2026-10-11T10:00:05Z', attachmentCount: 0 } },
     ])
     store().seedMembers('c1', [
       { userId: 'me', displayName: 'Me', avatarUrl: null, role: 'Member', lastReadAt: null },

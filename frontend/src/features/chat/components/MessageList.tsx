@@ -10,7 +10,9 @@ import { seenFor, unreadLabel } from '../readState'
 import { useChatStore } from '../store/chatStore'
 import { buildTimeline } from '../timeline'
 import type { Conversation, Message, PendingMessage } from '../types'
+import { AttachmentGrid } from './AttachmentGrid'
 import { MessageBubble } from './MessageBubble'
+import { PendingAttachments } from './PendingAttachments'
 
 // Stable empty values, so a conversation with nothing in it does not look like a change on every render.
 const NO_MESSAGES: Message[] = []
@@ -206,6 +208,11 @@ export function MessageList({ conversation, isLoading, errorMessage, onRetry, ol
               own
               continuing={item.continuing}
               content={item.pending.content}
+              attachments={
+                item.pending.attachments.length > 0 ? (
+                  <PendingAttachments attachments={item.pending.attachments} />
+                ) : undefined
+              }
               status={item.pending.status}
               error={item.pending.error}
               onRetry={() => void retryMessage(conversation.id, item.pending.clientMessageId)}
@@ -221,6 +228,16 @@ export function MessageList({ conversation, isLoading, errorMessage, onRetry, ol
             continuing={item.continuing}
             senderName={item.showSender ? item.message.senderDisplayName : undefined}
             content={item.message.content}
+            attachments={
+              item.message.attachments.length > 0 ? (
+                <AttachmentGrid
+                  attachments={item.message.attachments}
+                  own={item.own}
+                  conversationId={item.message.conversationId}
+                  messageId={item.message.id}
+                />
+              ) : undefined
+            }
             createdAt={item.message.createdAt}
             seen={seen?.messageId === item.message.id ? seen : undefined}
           />

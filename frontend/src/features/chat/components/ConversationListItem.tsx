@@ -1,9 +1,11 @@
+import { Paperclip } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
 import { Avatar } from '../../../components/ui/Avatar'
 import { cn } from '../../../lib/cn'
 import { formatListTime } from '../../../lib/format'
 import { usePresenceStore } from '../../presence/store/presenceStore'
 import { useChatStore } from '../store/chatStore'
+import { attachmentPreview } from '../attachments'
 import { unreadLabel } from '../readState'
 import { typingLabel } from '../typingLabel'
 import type { Conversation } from '../types'
@@ -65,7 +67,10 @@ export function ConversationListItem({ conversation, currentUserId, now }: Conve
                   ) : (
                     <>
                       {last.senderId === currentUserId && <span>You: </span>}
-                      {last.content}
+                      {last.attachmentCount > 0 && (
+                        <Paperclip className="mr-1 inline h-3.5 w-3.5 align-text-bottom" aria-hidden="true" />
+                      )}
+                      {last.content === '' ? attachmentPreview(last.attachmentCount) : last.content}
                     </>
                   )}
                 </p>

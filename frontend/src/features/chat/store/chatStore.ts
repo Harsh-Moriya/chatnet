@@ -38,6 +38,8 @@ interface ChatState {
   seedMembers: (conversationId: string, members: Member[]) => void
   // selfId is the signed-in user. Without it the message is stored but unread counts are left alone.
   receiveMessage: (message: Message, selfId?: string) => void
+  // A message's attachment links stop working after a while; this puts in the fresh link the server gave.
+  setAttachmentUrl: (conversationId: string, messageId: string, attachmentId: string, url: string) => void
   // A member read the conversation up to readAt. selfId is the signed-in user, whose own count it lowers.
   applyRead: (conversationId: string, userId: string, readAt: string, selfId?: string) => void
   addPending: (message: PendingMessage) => void
@@ -217,7 +219,12 @@ export const useChatStore = create<ChatState>()((set) => ({
           ...next,
           updatedAt:
             compareTimestamps(message.createdAt, next.updatedAt) > 0 ? message.createdAt : next.updatedAt,
-          lastMessage: { senderId: message.senderId, content: message.content, createdAt: message.createdAt },
+          lastMessage: {
+            senderId: message.senderId,
+            content: message.content,
+            createdAt: message.createdAt,
+            attachmentCount: message.attachments.length,
+          },
         }
       }
 
@@ -241,6 +248,22 @@ export const useChatStore = create<ChatState>()((set) => ({
       }
 
       return Object.keys(patch).length > 0 ? patch : state
+    }),
+
+  setAttachmentUrl: (conversationId, messageId, attachmentId, url) =>
+    set((state) => {
+      const list = state.messages[conversationId]
+      const message = list?.find((m) => m.id === messageId)
+      const attachment = message?.attachments.find((a) => a.id === attachmentId)
+      if (!list || !message || !attachment || attachment.url === url) return state
+
+      const changed: Message = {
+        ...message,
+        attachments: message.attachments.map((a) => (a.id === attachmentId ? { ...a, url } : a)),
+      }
+      return {
+        messages: { ...state.messages, [conversationId]: list.map((m) => (m.id === messageId ? changed : m)) },
+      }
     }),
 
   // The same rules apply whoever the reader is: their position moves forward only. For the

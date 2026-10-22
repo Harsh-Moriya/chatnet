@@ -67,3 +67,22 @@ export function formatLastSeen(iso: string, now: Date, locale?: string): string 
   if (days < 7) return `${then.toLocaleDateString(locale, { weekday: 'long' })} at ${formatClock(iso, locale)}`
   return shortDate(then, now, locale)
 }
+
+// "512 B", "1.5 KB", "10 MB": the size of a file as a person reads it, in units of 1024. One decimal below
+// ten of a unit, none above, and no trailing ".0".
+export function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+
+  const units = ['KB', 'MB', 'GB']
+  const shown = (n: number) => (n < 10 ? Math.round(n * 10) / 10 : Math.round(n))
+
+  let value = bytes / 1024
+  let unit = 0
+  // Judged by what would be written, so 1,048,575 bytes is "1 MB" and not "1024 KB".
+  while (shown(value) >= 1024 && unit < units.length - 1) {
+    value /= 1024
+    unit += 1
+  }
+
+  return `${shown(value)} ${units[unit]}`
+}

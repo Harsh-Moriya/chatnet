@@ -20,9 +20,24 @@ export interface Conversation {
 
 export interface LastMessage {
   senderId: string
-  // Null when the last message was deleted.
+  // Null when the last message was deleted. Empty when it was only files.
   content: string | null
   createdAt: string
+  // How many files the last message carries, so a message of only files can still be previewed.
+  attachmentCount: number
+}
+
+export type AttachmentType = 'Image' | 'Video' | 'File'
+
+// A file attached to a confirmed message. `url` is a link signed by the server that stops working after a
+// while (see refreshAttachmentUrl), so it is never kept beyond the page that shows it.
+export interface Attachment {
+  id: string
+  type: AttachmentType
+  fileName: string
+  contentType: string
+  sizeBytes: number
+  url: string
 }
 
 export interface Message {
@@ -30,12 +45,26 @@ export interface Message {
   conversationId: string
   senderId: string
   senderDisplayName: string
-  // Null for a deleted message: it keeps its place in the timeline but has no text.
+  // Null for a deleted message: it keeps its place in the timeline but has no text. A message of only files
+  // has an empty string.
   content: string | null
   createdAt: string
+  attachments: Attachment[]
   // The id the sender's tab invented for its optimistic copy: on the response to a send, on its push, and
   // in history. Null for a message sent without one.
   clientMessageId: string | null
+}
+
+// A file that finished uploading and is attached to a message that has not been confirmed yet. `uploadKey` is
+// what the server gave for it; the message names it so the server can find the uploaded file. The file itself
+// is kept to draw a preview of an image while the message is unconfirmed.
+export interface PendingAttachment {
+  uploadKey: string
+  fileName: string
+  contentType: string
+  sizeBytes: number
+  type: AttachmentType
+  file: File
 }
 
 // A message this tab has sent that the server has not confirmed yet. It lives only in the
@@ -44,6 +73,7 @@ export interface PendingMessage {
   clientMessageId: string
   conversationId: string
   content: string
+  attachments: PendingAttachment[]
   // The browser's clock at the moment of sending. Used for display only.
   createdAt: string
   status: 'sending' | 'failed'
