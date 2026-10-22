@@ -23,7 +23,8 @@ Under active development.
 | Online presence: a dot on direct chats, "N online" in groups, "last seen", correct across several server instances | Implemented |
 | Sessions that renew themselves: 15-minute access tokens, rotating refresh tokens in an httpOnly cookie, sign-out that ends the session | Implemented |
 | Retrying a send is safe: a message is stored once however many times the request arrives | Implemented |
-| Notifications, file uploads | Planned |
+| File attachments: pictures, videos and documents sent straight to object storage, shown in the conversation | Implemented |
+| Notifications | Planned |
 | Structured logging (JSON in production) and tracing (OpenTelemetry, viewed in Jaeger) | Implemented |
 | Deployment | Planned |
 
@@ -39,6 +40,7 @@ Under active development.
 - **Query cost is tested, not assumed.** The conversation list and message history have tests that ask Postgres how many rows the real query read, so a change that makes either scan far more data than it returns fails the build.
 - **Sessions you can end.** A signed access token cannot be taken back, so it lives 15 minutes and only in memory. The long-lived refresh token is an httpOnly cookie that scripts cannot read, stored on the server as a hash, and replaced on every use. If a replaced token turns up again, someone holds a copy, and the whole session is revoked. Two tabs refreshing at once is told apart from theft by timing, and exactly one of them wins.
 - **Presence that survives several servers.** Who is online lives in Redis and changes only through Lua scripts, so two servers cannot interleave their steps. Every event carries Redis's own clock, which settles which of two reports is newer. Each server renews the connections it holds, so browsers send no heartbeats, and a server that dies is noticed when its entries expire. A short wait before "offline" keeps a page refresh from flashing the person offline, and only the contacts of a user are told anything.
+- **Files that never pass through the API.** To attach a file the browser first asks the API for permission and gets a presigned link to the bucket, then sends the file there directly. When the message is sent the API looks at what was really stored (a presigned upload cannot cap or inspect it), copies each file inside the bucket only if it is still the object it checked, and saves the message with its files in one transaction. Links to files are signed for each reader and expire; a client asks for a new one.
 - **Duplicate-proof direct chats.** A sorted `DirectKey` with a unique partial index in Postgres guarantees at most one conversation per pair of users.
 - **A retried send is stored once.** The id the browser invents for a message is stored with it, under a partial unique index on conversation, sender and id. A repeat of a send is answered with the stored message (200 instead of 201), and two copies arriving at once are settled by the index, so the loser answers with the winner's message instead of failing. A browser that lost the answer finds its own message in the history by that id and drops the failed copy.
 - **A browser store that merges, not overwrites.** Messages reach the screen from REST responses and from SignalR pushes, which race and sometimes deliver the same message twice. Both feed one store through actions that merge by id, so order does not matter. Your own message is shown at once as "sending" and confirmed by whichever arrives first, matched by an id the browser invents.
@@ -54,7 +56,8 @@ Under active development.
 | Real-time and cache | SignalR with a Redis 7 backplane |
 | Auth | ASP.NET Core Identity, JWT bearer |
 | Observability | Serilog (structured logs), OpenTelemetry traces viewed in Jaeger |
-| Local infrastructure | Docker Compose (Postgres, Redis, Jaeger, Adminer) |
+| File storage | Any S3-compatible bucket through the S3 API: Cloudflare R2 in production, RustFS locally |
+| Local infrastructure | Docker Compose (Postgres, Redis, RustFS, Jaeger, Adminer) |
 
 ## Getting started
 
@@ -72,7 +75,7 @@ cp .env.example .env        # then set a strong POSTGRES_PASSWORD in .env
 docker-compose up -d
 ```
 
-This starts Postgres (5432), Redis (6379), Jaeger (16686) and Adminer (8080).
+This starts Postgres (5432), Redis (6379), RustFS, an S3-compatible object store for attachments (9000, console on 9001), Jaeger (16686) and Adminer (8080), and runs a one-off job that creates the storage bucket with its CORS rules. Put `RUSTFS_ACCESS_KEY` and `RUSTFS_SECRET_KEY` (any values you like) and `STORAGE_BUCKET=chatnet` in `.env` first; `.env.example` lists them.
 
 ### 2. Configure and run the backend
 
@@ -84,6 +87,10 @@ cd backend/ChatNET.API
 dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Host=localhost;Port=5432;Database=chatnet;Username=chatnet_user;Password=<POSTGRES_PASSWORD from .env>"
 dotnet user-secrets set "ConnectionStrings:Redis" "localhost:6379"
 dotnet user-secrets set "Jwt:SigningKey" "$(openssl rand -base64 32)"
+dotnet user-secrets set "Storage:ServiceUrl" "http://localhost:9000"
+dotnet user-secrets set "Storage:Bucket" "<STORAGE_BUCKET from .env>"
+dotnet user-secrets set "Storage:AccessKey" "<RUSTFS_ACCESS_KEY from .env>"
+dotnet user-secrets set "Storage:SecretKey" "<RUSTFS_SECRET_KEY from .env>"
 
 dotnet ef database update   # creates the schema
 dotnet run                  # http://localhost:5045
@@ -124,9 +131,10 @@ backend/ChatNET.API/
   Users/           user search
   Conversations/   direct and group conversations, membership
   Messaging/       messages and the SignalR hub
+  Media/           file uploads and attachments: object storage, upload tickets, links
   Common/          shared behaviours, exceptions, persistence
 backend/ChatNET.API.Tests/
-  Infrastructure/  test host (WebApplicationFactory + Testcontainers), helpers
+  Infrastructure/  test host (WebApplicationFactory + Testcontainers for Postgres, Redis and the object store), helpers
 frontend/src/
   features/        auth, chat (one folder per feature)
   components/ui/   shared UI primitives
