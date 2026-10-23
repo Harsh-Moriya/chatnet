@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using ChatNET.API.Conversations.Models;
 using ChatNET.API.Conversations.Persistence;
+using ChatNET.API.Notifications.Models;
 
 namespace ChatNET.API.Tests.Conversations;
 
@@ -49,8 +50,8 @@ public sealed class BarrierConversationRepository : IConversationRepository
         return added;
     }
 
-    public Task AddAsync(Conversation conversation, CancellationToken cancellationToken) =>
-        _inner.AddAsync(conversation, cancellationToken);
+    public Task AddAsync(Conversation conversation, IReadOnlyList<Notification> notifications, CancellationToken cancellationToken) =>
+        _inner.AddAsync(conversation, notifications, cancellationToken);
 
     public Task<ConversationDto?> GetForViewerAsync(Guid conversationId, Guid viewerId, CancellationToken cancellationToken) =>
         _inner.GetForViewerAsync(conversationId, viewerId, cancellationToken);

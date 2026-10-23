@@ -7,6 +7,9 @@ using ChatNET.API.Media;
 using ChatNET.API.Messaging.Hubs;
 using ChatNET.API.Messaging.Models;
 using ChatNET.API.Messaging.Persistence;
+using ChatNET.API.Notifications;
+using ChatNET.API.Notifications.Models;
+using ChatNET.API.Notifications.Persistence;
 using MediatR;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.SignalR;
@@ -20,6 +23,8 @@ public class SendMessageHandler : IRequestHandler<SendMessageCommand, SendMessag
     private readonly UserManager<AppUser> _userManager;
     private readonly AttachmentIntake _intake;
     private readonly AttachmentLoader _attachmentLoader;
+    private readonly INotificationRepository _notifications;
+    private readonly NotificationPusher _notificationPusher;
     private readonly IHubContext<ChatHub, IChatClient> _hub;
     private readonly ILogger<SendMessageHandler> _logger;
 
@@ -29,6 +34,8 @@ public class SendMessageHandler : IRequestHandler<SendMessageCommand, SendMessag
         UserManager<AppUser> userManager,
         AttachmentIntake intake,
         AttachmentLoader attachmentLoader,
+        INotificationRepository notifications,
+        NotificationPusher notificationPusher,
         IHubContext<ChatHub, IChatClient> hub,
         ILogger<SendMessageHandler> logger)
     {
@@ -37,6 +44,8 @@ public class SendMessageHandler : IRequestHandler<SendMessageCommand, SendMessag
         _userManager = userManager;
         _intake = intake;
         _attachmentLoader = attachmentLoader;
+        _notifications = notifications;
+        _notificationPusher = notificationPusher;
         _hub = hub;
         _logger = logger;
     }
@@ -110,13 +119,15 @@ public class SendMessageHandler : IRequestHandler<SendMessageCommand, SendMessag
         if (staged is not null)
             message.Attachments = staged.Attachments;
 
+        var mentions = await MentionsAsync(message, cancellationToken);
+
         // Two copies of one send can arrive together, both find nothing above, and both insert. The unique
         // index lets one in; the other is told so here, and answers with the winner's message. The files this
         // copy made are of no use to anyone then, and are removed, as they are when the save fails.
         bool added;
         try
         {
-            added = await _messages.TryAddAsync(message, cancellationToken);
+            added = await _messages.TryAddAsync(message, mentions, cancellationToken);
         }
         catch
         {
@@ -144,8 +155,8 @@ public class SendMessageHandler : IRequestHandler<SendMessageCommand, SendMessag
             await _intake.ReleaseAsync(staged.PendingKeys);
 
         _logger.LogInformation(
-            "Message {MessageId} sent to conversation {ConversationId} by {UserId} with {AttachmentCount} attachments",
-            message.Id, message.ConversationId, message.SenderId, message.Attachments.Count);
+            "Message {MessageId} sent to conversation {ConversationId} by {UserId} with {AttachmentCount} attachments and {MentionCount} mentions",
+            message.Id, message.ConversationId, message.SenderId, message.Attachments.Count, mentions.Count);
 
         var dto = new MessageDto(
             message.Id, message.ConversationId, message.SenderId, sender.DisplayName,
@@ -154,7 +165,37 @@ public class SendMessageHandler : IRequestHandler<SendMessageCommand, SendMessag
 
         await PushAsync(dto);
 
+        foreach (var mention in mentions)
+        {
+            await _notificationPusher.ReceivedAsync(mention.UserId, new NotificationDto(
+                mention.Id, mention.Type, mention.ConversationId, mention.ActorId, sender.DisplayName,
+                message.Id, MessagePreview.Of(message.Content), mention.IsRead, mention.CreatedAt));
+        }
+
         return new SendMessageResult(dto, Created: true);
+    }
+
+    // The people the message names with "@username", as notifications that are saved in the same transaction as the
+    // message. A mention counts in a muted conversation too: someone addressed the person by name. Only active members
+    // can be mentioned, so a name says nothing about who exists elsewhere.
+    private async Task<List<Notification>> MentionsAsync(Message message, CancellationToken cancellationToken)
+    {
+        var names = MentionParser.NormalizedUserNamesIn(message.Content);
+        if (names.Count == 0)
+            return [];
+
+        var recipients = await _notifications.FindMentionedMembersAsync(
+            message.ConversationId, message.SenderId, names, cancellationToken);
+
+        return recipients.Select(userId => new Notification
+        {
+            UserId = userId,
+            ActorId = message.SenderId,
+            ConversationId = message.ConversationId,
+            Type = NotificationType.Mention,
+            CreatedAt = message.CreatedAt,
+            Message = message,
+        }).ToList();
     }
 
     // The answer to a send that was already stored: the stored message, not a second one. It is pushed again

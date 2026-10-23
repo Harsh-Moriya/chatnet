@@ -1,5 +1,7 @@
 using ChatNET.API.Common.Persistence;
 using ChatNET.API.Conversations.Models;
+using ChatNET.API.Messaging;
+using ChatNET.API.Notifications.Models;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 
@@ -7,8 +9,6 @@ namespace ChatNET.API.Conversations.Persistence;
 
 public class ConversationRepository : IConversationRepository
 {
-    private const int PreviewLength = 100;
-
     // The unread count stops here, so the cost of a conversation does not grow with how far behind
     // the member is. Clients show it as "99+".
     public const int UnreadCap = 100;
@@ -41,9 +41,11 @@ public class ConversationRepository : IConversationRepository
         }
     }
 
-    public async Task AddAsync(Conversation conversation, CancellationToken cancellationToken)
+    public async Task AddAsync(
+        Conversation conversation, IReadOnlyList<Notification> notifications, CancellationToken cancellationToken)
     {
         _db.Conversations.Add(conversation);
+        _db.Notifications.AddRange(notifications);
         await _db.SaveChangesAsync(cancellationToken);
     }
 
@@ -212,16 +214,13 @@ public class ConversationRepository : IConversationRepository
     private static ConversationDto ToDto(ConversationRow row)
     {
         var last = row.LastMessageSenderId is { } senderId && row.LastMessageCreatedAt is { } createdAt
-            ? new LastMessageDto(senderId, Truncate(row.LastMessageContent), createdAt, row.LastMessageAttachmentCount)
+            ? new LastMessageDto(senderId, MessagePreview.Of(row.LastMessageContent), createdAt, row.LastMessageAttachmentCount)
             : null;
 
         return new ConversationDto(
             row.Id, Enum.Parse<ConversationType>(row.Type), row.Name ?? "Unknown", row.AvatarUrl, row.UpdatedAt, last,
             row.UnreadCount, row.OtherUserId, row.IsMuted);
     }
-
-    private static string? Truncate(string? content)
-        => content is { Length: > PreviewLength } ? content[..PreviewLength] : content;
 
     // One row of the queries above. Property names match the column aliases in the SQL, which is how
     // EF maps a raw query to a type.

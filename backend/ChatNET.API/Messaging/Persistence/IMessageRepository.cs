@@ -1,14 +1,15 @@
 using ChatNET.API.Messaging.Models;
+using ChatNET.API.Notifications.Models;
 
 namespace ChatNET.API.Messaging.Persistence;
 
 public interface IMessageRepository
 {
-    // Saves the message and moves its conversation's UpdatedAt to the message's CreatedAt, as one
-    // atomic write: either both happen or neither does. Returns false, saving nothing, when the message
+    // Saves the message, the notifications it causes and its conversation's UpdatedAt (moved to the message's
+    // CreatedAt), as one atomic write: either all of it happens or none of it does. Returns false, saving nothing, when the message
     // carries a client id that this sender already used in this conversation: another request sent it
     // first.
-    Task<bool> TryAddAsync(Message message, CancellationToken cancellationToken);
+    Task<bool> TryAddAsync(Message message, IReadOnlyList<Notification> notifications, CancellationToken cancellationToken);
 
     // The message this sender already sent in this conversation with this client id, or null.
     Task<MessageDto?> FindByClientMessageIdAsync(

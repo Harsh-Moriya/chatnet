@@ -51,6 +51,12 @@ public sealed class ThrowingHubContext : IHubContext<ChatHub, IChatClient>
 
         public Task PresenceChanged(ChatNET.API.Presence.PresenceDto presence) => throw Failure();
 
+        public Task NotificationReceived(ChatNET.API.Notifications.Models.NotificationDto notification) => throw Failure();
+
+        public Task NotificationsRead(Guid[] ids) => throw Failure();
+
+        public Task NotificationDismissed(Guid id) => throw Failure();
+
         public Task ConversationMuteChanged(Guid conversationId, bool isMuted) => throw Failure();
     }
 }
