@@ -1,0 +1,7 @@
+# Only the frontend and the proxy's configuration go into the web image's build.
+*
+!frontend
+!deploy
+frontend/node_modules
+frontend/dist
+frontend/.vite

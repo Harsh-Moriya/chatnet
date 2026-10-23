@@ -1,0 +1,81 @@
+# The one public address of the application. Caddy serves the built page, passes /api, /hubs and /health to the API
+# instances, and gets and renews the certificate for DOMAIN by itself.
+#
+# One address for the page and the API is deliberate: the refresh cookie is SameSite=Strict, so it is only sent
+# from a page on the same site as the API, and the browser needs no CORS for any request.
+
+{
+	# The admin endpoint is how a running Caddy is reconfigured; nothing here needs it.
+	admin off
+}
+
+# SITE_ADDRESS is the host name of the site, for example chat.example.com. Caddy gets a certificate for a host
+# name that points at this machine. localhost (the default) gets a certificate from Caddy's own authority, which
+# a browser does not trust, so it is only for trying the stack out. An address that starts with http:// is
+# served without TLS.
+{$SITE_ADDRESS:localhost} {
+	encode zstd gzip
+
+	# The access log is written to the container's output. The SignalR client sends its access token in the
+	# query string of the WebSocket request (a browser cannot set a header on one), so that value is removed
+	# before a line is written; the API's own log does the same (D-156). Cookie and Authorization headers are
+	# redacted by Caddy itself.
+	log {
+		output stdout
+		format filter {
+			wrap json
+			request>uri query {
+				replace access_token REDACTED
+			}
+		}
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy no-referrer
+		Content-Security-Policy "frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
+		-Server
+	}
+
+	@backend path /api/* /hubs/* /health
+	handle @backend {
+		reverse_proxy {
+			# Every instance of the API behind the name "api". The addresses are looked up again every few
+			# seconds, so an instance that is added or replaced is found without restarting Caddy.
+			dynamic a {
+				name api
+				port 8080
+				refresh 5s
+			}
+
+			# SignalR makes several requests (negotiate, then the connection) and its fallback transports need
+			# all of them to reach the same instance. The first answer sets a cookie that names the instance.
+			lb_policy cookie chatnet_instance
+
+			# An instance that does not answer /health is left out until it does. A request that finds none
+			# waits a few seconds for one rather than failing at once.
+			health_uri /health
+			health_interval 10s
+			health_timeout 3s
+			lb_try_duration 5s
+
+			# Events and long polling must not be held back by buffering.
+			flush_interval -1
+		}
+	}
+
+	handle {
+		root * /srv
+		# Any path that is not a file is a route of the page.
+		try_files {path} /index.html
+		file_server
+
+		# The built files have a hash in their name and never change; the page that names them does.
+		@assets path /assets/*
+		header @assets Cache-Control "public, max-age=31536000, immutable"
+		@page not path /assets/*
+		header @page Cache-Control "no-cache"
+	}
+}
