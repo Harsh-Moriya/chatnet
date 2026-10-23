@@ -26,7 +26,7 @@ Under active development.
 | File attachments: pictures, videos and documents sent straight to object storage, shown in the conversation | Implemented |
 | Notifications: a bell with an unread count and a panel, @mentions (with autocomplete and highlighting), being added to a group, browser alerts, an unread count in the tab title, and muting a conversation | Implemented |
 | Structured logging (JSON in production) and tracing (OpenTelemetry, viewed in Jaeger) | Implemented |
-| Deployment | Planned |
+| Deployment: Docker images for the API, a migration job and the web server, one Compose file for a single machine with Caddy (automatic HTTPS) in front of two API instances, Postgres and Redis | Implemented (run on one machine; not deployed to a server) |
 
 ## How it is built
 
@@ -58,6 +58,7 @@ Under active development.
 | Observability | Serilog (structured logs), OpenTelemetry traces viewed in Jaeger |
 | File storage | Any S3-compatible bucket through the S3 API: Cloudflare R2 in production, RustFS locally |
 | Local infrastructure | Docker Compose (Postgres, Redis, RustFS, Jaeger, Adminer) |
+| Deployment | Docker images, Caddy (automatic HTTPS, reverse proxy), Docker Compose on one machine |
 
 ## Getting started
 
@@ -112,6 +113,65 @@ Vite proxies `/api` and `/hubs` to the backend, so the browser only ever talks t
 
 To try the app as two users at once, open `http://localhost:5173` for one and `http://[::1]:5173` (or `http://127.0.0.1:5173` if your Vite server answers there) for the other; the sign-in cookie is kept per host, so two tabs on one host share a session, and a different host (`localhost`, `[::1]`, `127.0.0.1`) is a separate browser as far as the app is concerned.
 
+## Deploying to a server
+
+`docker-compose.prod.yml` describes the whole application for one machine, for example a small VPS:
+
+- **Caddy** serves the built frontend, passes `/api`, `/hubs` and `/health` to the API, and gets and renews the HTTPS certificate. It is the only thing reachable from outside (ports 80 and 443). The page and the API share one address, so the sign-in cookie stays first-party and no CORS is needed.
+- **api**, two instances by default. They share the work and reach each other through Redis, so a message sent through one reaches a browser connected to the other, and Caddy keeps each browser on one instance (SignalR needs that).
+- **migrate**, a job that applies the database migrations and exits before the API instances start, so several instances starting together never change the schema at once.
+- **postgres** and **redis**, with passwords, data in volumes, and no published ports.
+- **jaeger**, only with `--profile tracing`.
+
+Files are kept in object storage that is not part of this stack: Cloudflare R2 (or any S3-compatible service). Create the bucket and apply the CORS and lifecycle rules in `docker/storage` (`cors.json` needs your own address in `AllowedOrigins`).
+
+### What you need
+
+- A Linux machine with Docker and the Compose plugin, and ports 80 and 443 open to the internet.
+- A domain name whose DNS records point at that machine. Caddy asks for the certificate as soon as it starts, so the records must be right before the first start.
+- An R2 bucket and an access key for it.
+
+### First start
+
+```bash
+git clone <this repository> chatnet && cd chatnet
+cp .env.prod.example .env.prod      # fill in every value; the file explains each one
+docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
+docker compose -f docker-compose.prod.yml --env-file .env.prod ps
+```
+
+The first build takes a few minutes. When `ps` shows the API instances as healthy, open `https://<your domain>`. `docker compose ... logs -f api` follows the API (one JSON object per line).
+
+### Updating
+
+```bash
+git pull
+docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
+```
+
+The migration job runs first and does nothing when the database is already up to date. The API instances are replaced together, so there is a short break while they start; this stack does not do rolling updates.
+
+### Backups
+
+The database is the only thing here that cannot be rebuilt. Take a dump on a schedule and copy it off the machine:
+
+```bash
+docker compose -f docker-compose.prod.yml --env-file .env.prod exec -T postgres \
+  sh -c 'pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB"' | gzip > chatnet-$(date +%F).sql.gz
+```
+
+Uploaded files are in the bucket, not in the dump. Keep Caddy's `caddy-data` volume if you can: it holds the certificate account, and the certificate authority limits how often new certificates may be requested.
+
+### Trying it on one machine
+
+Set `DOMAIN=localhost` in `.env.prod`. Caddy then uses its own certificate authority, which a browser does not trust, so the browser warns once; `curl -k https://localhost/health` shows the stack answering. To skip TLS altogether, also set `SITE_ADDRESS=http://localhost`. The development setup in `docker-compose.yml` and this stack use different project names, so they never share volumes.
+
+### Limits
+
+- The login and refresh rate limits are counted in each API instance, so with two instances the effective allowance per client is up to twice what is configured.
+- One Postgres and one Redis, with no replication and no automatic backups.
+- Nothing here has run on a real server or against Cloudflare R2; it has been run on one machine with the object store left unconfigured.
+
 ## Tests
 
 Backend tests run the real API in-process against a real Postgres and a real Redis, each started in a throwaway Docker container, so Docker must be running. They never touch the development database and need no secrets or configuration.
@@ -133,11 +193,13 @@ backend/ChatNET.API/
   Messaging/       messages and the SignalR hub
   Media/           file uploads and attachments: object storage, upload tickets, links
   Notifications/   mentions and group invitations as notifications, the list behind the bell
-  Common/          shared behaviours, exceptions, persistence
+  Common/          shared behaviours, exceptions, persistence, hosting (trusted proxies)
 backend/ChatNET.API.Tests/
   Infrastructure/  test host (WebApplicationFactory + Testcontainers for Postgres, Redis and the object store), helpers
 frontend/src/
   features/        auth, chat, notifications, presence (one folder per feature)
   components/ui/   shared UI primitives
   lib/             API client, query client
+deploy/            Caddyfile (the proxy in front of the production stack)
+backend/Dockerfile, frontend/Dockerfile, docker-compose.prod.yml, .env.prod.example   the production stack
 ```

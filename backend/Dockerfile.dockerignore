@@ -1,0 +1,9 @@
+# What a build of the API image never needs. Local settings and secrets stay out of the image; the image takes
+# its configuration from environment variables.
+**/bin
+**/obj
+**/*.user
+**/.vs
+ChatNET.API.Tests
+ChatNET.API/appsettings.*.json
+!ChatNET.API/appsettings.json

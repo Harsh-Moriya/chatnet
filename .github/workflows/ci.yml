@@ -81,3 +81,29 @@ jobs:
       # Only runtime dependencies: they ship to users. High severity and above fails the job.
       - name: Audit dependencies
         run: npm audit --omit=dev --audit-level=high
+
+  # ##### Docker #####
+  # Builds the three images the production stack is made of, without pushing them, and checks the files that describe
+  # the stack, so a Dockerfile, the compose file or the Caddyfile that stops working is found here and not on a server.
+  docker:
+    name: Docker (images, compose file, proxy configuration)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      # The example values are placeholders; this only shows that the file reads and that every setting it needs has a name.
+      - name: Check the production compose file
+        run: docker compose -f docker-compose.prod.yml --env-file .env.prod.example config --quiet
+
+      - name: Build the API image
+        run: docker build --target api --tag chatnet-api backend
+
+      - name: Build the migration job image
+        run: docker build --target migrate --tag chatnet-migrate backend
+
+      - name: Build the web image
+        run: docker build --file frontend/Dockerfile --tag chatnet-web .
+
+      - name: Check the proxy configuration
+        run: docker run --rm --env SITE_ADDRESS=chat.example.com chatnet-web caddy validate --config /etc/caddy/Caddyfile
