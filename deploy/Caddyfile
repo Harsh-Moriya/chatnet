@@ -3,10 +3,19 @@
 #
 # One address for the page and the API is deliberate: the refresh cookie is SameSite=Strict, so it is only sent
 # from a page on the same site as the API, and the browser needs no CORS for any request.
-
 {
-	# The admin endpoint is how a running Caddy is reconfigured; nothing here needs it.
-	admin off
+	# Everything Caddy logs apart from the access log below. When no instance of the API answers, the reverse proxy
+	# writes an error that quotes the whole request, query string included, so the SignalR access token has to be
+	# removed here as well as from the access log. Cookie and Authorization headers are redacted by Caddy itself.
+	log {
+		output stdout
+		format filter {
+			wrap json
+			request>uri query {
+				replace access_token REDACTED
+			}
+		}
+	}
 }
 
 # SITE_ADDRESS is the host name of the site, for example chat.example.com. Caddy gets a certificate for a host
@@ -30,8 +39,12 @@
 		}
 	}
 
+	# Not for the machine's own names: a browser that remembered HSTS for localhost would refuse every other local
+	# project that does not use https (the API leaves it out for the same reason, D-114).
+	@publicHost not host localhost 127.0.0.1 [::1] ::1
+	header @publicHost Strict-Transport-Security "max-age=31536000"
+
 	header {
-		Strict-Transport-Security "max-age=31536000"
 		X-Content-Type-Options nosniff
 		X-Frame-Options DENY
 		Referrer-Policy no-referrer

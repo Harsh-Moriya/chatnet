@@ -144,8 +144,11 @@ try
         options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
     })
     .AddRoles<IdentityRole<Guid>>()
-    .AddEntityFrameworkStores<AppDbContext>()
-    .AddDefaultTokenProviders();
+    .AddEntityFrameworkStores<AppDbContext>();
+
+    // The default token providers (for confirming an e-mail address, resetting a password, two-factor codes) are not
+    // registered: none of those flows exists, and building them makes Identity ask for the data protection provider
+    // the first time someone signs up or in, which logs warnings in a container and creates a key nothing uses.
 
     // ##### Auth #####
     // JwtBearer middleware validates the token on every request: it decodes the JWT,
@@ -291,6 +294,21 @@ try
     // listed in ForwardedHeaders:KnownNetworks (see ForwardedHeadersSetup).
     builder.Services.AddTrustedProxies();
 
+    // ##### Data protection #####
+    // The framework keeps a key ring for anything an application protects with its data protection API. Nothing
+    // here does: tokens are signed with the JWT key, refresh tokens are random values stored hashed, and no
+    // confirmation or reset token is made (D-217). Authentication still registers the API, and the framework starts a
+    // hosted service that creates the first key as soon as the host starts. In a container there is nowhere to keep
+    // it, so every start of every instance logged three warnings about keys that nothing uses. Without the hosted
+    // service the key ring is created, with the same warnings, the first time something does protect data, which is
+    // when they matter: such a feature needs keys shared by every instance (for example in Redis) first.
+    foreach (var warmUp in builder.Services
+                 .Where(d => d.ServiceType == typeof(IHostedService) && d.ImplementationType?.Name == "DataProtectionHostedService")
+                 .ToList())
+    {
+        builder.Services.Remove(warmUp);
+    }
+
     // ##### Health #####
     // /health reports whether this instance can reach what it depends on. Each check is cut off after
     // three seconds so a dependency that hangs reads as down instead of hanging the probe.
@@ -357,7 +375,12 @@ try
         app.MapScalarApiReference();
     }
 
-    app.UseHttpsRedirection();
+    // With a proxy in front that ends TLS, moving http to https is the proxy's job (it answers 308 itself) and this
+    // application only ever sees the proxy's plain http: asking it to redirect would have no port to redirect to and
+    // log a warning on the first request of every instance. Without a proxy the application redirects as before.
+    if (!app.IsBehindTrustedProxy())
+        app.UseHttpsRedirection();
+
     app.UseCors("AllowFrontend");
 
     // After CORS so browser preflight requests are answered without being counted, and before
