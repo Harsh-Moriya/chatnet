@@ -28,4 +28,8 @@ public interface IChatClient
     // people who may see their presence (and nobody else), once per change: a second tab or a page
     // refresh is not a change.
     Task PresenceChanged(PresenceDto presence);
+
+    // The receiver muted or unmuted a conversation, in this tab or another. Sent to every open tab of that person
+    // and nobody else, so each of their tabs agrees on which alerts to raise.
+    Task ConversationMuteChanged(Guid conversationId, bool isMuted);
 }

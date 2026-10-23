@@ -37,4 +37,8 @@ public interface IConversationRepository
 
     // The active members, earliest joiner first, each with how far they have read.
     Task<List<MemberDto>> GetActiveMembersAsync(Guid conversationId, CancellationToken cancellationToken);
+
+    // Stores whether an active member has muted the conversation. Returns false when the user is not an active
+    // member, in which case nothing was changed.
+    Task<bool> SetMutedAsync(Guid conversationId, Guid userId, bool isMuted, CancellationToken cancellationToken);
 }

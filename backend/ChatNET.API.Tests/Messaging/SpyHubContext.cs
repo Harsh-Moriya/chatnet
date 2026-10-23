@@ -70,5 +70,7 @@ public sealed class SpyHubContext : IHubContext<ChatHub, IChatClient>
         public Task MessageRead(Guid conversationId, Guid userId, DateTime readAt) => throw new NotSupportedException();
 
         public Task PresenceChanged(ChatNET.API.Presence.PresenceDto presence) => throw new NotSupportedException();
+
+        public Task ConversationMuteChanged(Guid conversationId, bool isMuted) => throw new NotSupportedException();
     }
 }

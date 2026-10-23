@@ -10,6 +10,8 @@ public sealed record TypingEvent(Guid ConversationId, Guid UserId, string Displa
 
 public sealed record ReadEvent(Guid ConversationId, Guid UserId, DateTime ReadAt);
 
+public sealed record MuteEvent(Guid ConversationId, bool IsMuted);
+
 // A real SignalR client talking to the in-memory test server over WebSockets, as a browser would:
 // it negotiates over HTTP and then upgrades to a WebSocket, passing the token in the query string.
 // Every event the server pushes is recorded so a test can wait for it, or check that none came.
@@ -27,6 +29,7 @@ public sealed class HubClient : IAsyncDisposable
     private readonly ConcurrentQueue<JsonElement> _added = new();
     private readonly ConcurrentQueue<ReadEvent> _reads = new();
     private readonly ConcurrentQueue<JsonElement> _presence = new();
+    private readonly ConcurrentQueue<MuteEvent> _muteChanges = new();
 
     private HubClient(HubConnection connection)
     {
@@ -40,6 +43,8 @@ public sealed class HubClient : IAsyncDisposable
         _connection.On<Guid, Guid, DateTime>("MessageRead", (conversationId, userId, readAt) =>
             _reads.Enqueue(new ReadEvent(conversationId, userId, readAt)));
         _connection.On<JsonElement>("PresenceChanged", presence => _presence.Enqueue(presence));
+        _connection.On<Guid, bool>("ConversationMuteChanged", (conversationId, isMuted) =>
+            _muteChanges.Enqueue(new MuteEvent(conversationId, isMuted)));
     }
 
     public HubConnectionState State => _connection.State;
@@ -53,6 +58,8 @@ public sealed class HubClient : IAsyncDisposable
     public IReadOnlyList<ReadEvent> ReadEvents => _reads.ToArray();
 
     public IReadOnlyList<JsonElement> PresenceEvents => _presence.ToArray();
+
+    public IReadOnlyList<MuteEvent> MuteChanges => _muteChanges.ToArray();
 
     public static Task<HubClient> ConnectAsync(WebApplicationFactory<Program> host, TestUser user) =>
         ConnectAsync(host, user.Token);
@@ -165,6 +172,15 @@ public sealed class HubClient : IAsyncDisposable
     {
         await Task.Delay(QuietPeriod);
         return _reads.Any(match);
+    }
+
+    public Task<MuteEvent> WaitForMuteChangedAsync(Func<MuteEvent, bool> match, TimeSpan? timeout = null) =>
+        WaitAsync(_muteChanges, match, timeout);
+
+    public async Task<bool> ReceivedMuteChangedAsync()
+    {
+        await Task.Delay(QuietPeriod);
+        return !_muteChanges.IsEmpty;
     }
 
     // Listens for a short while and reports whether any presence change about this user arrived.
