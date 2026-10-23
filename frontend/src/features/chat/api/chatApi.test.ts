@@ -461,7 +461,7 @@ describe('retrying and dismissing', () => {
 // ##### Members and reading #####
 
 function member(userId: string, lastReadAt: string | null = null): Member {
-  return { userId, displayName: userId, avatarUrl: null, role: 'Member', lastReadAt }
+  return { userId, userName: userId, displayName: userId, avatarUrl: null, role: 'Member', lastReadAt }
 }
 
 describe('loading the members of a conversation', () => {

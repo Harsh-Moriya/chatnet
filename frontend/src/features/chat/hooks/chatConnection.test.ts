@@ -240,8 +240,8 @@ describe('event handlers', () => {
       { ...conversation('c1'), unreadCount: 2, lastMessage: { senderId: 'bob', content: 'x', createdAt: '2026-10-11T10:00:05Z', attachmentCount: 0 } },
     ])
     store().seedMembers('c1', [
-      { userId: 'me', displayName: 'Me', avatarUrl: null, role: 'Member', lastReadAt: null },
-      { userId: 'bob', displayName: 'Bob', avatarUrl: null, role: 'Member', lastReadAt: null },
+      { userId: 'me', userName: 'me', displayName: 'Me', avatarUrl: null, role: 'Member', lastReadAt: null },
+      { userId: 'bob', userName: 'bob', displayName: 'Bob', avatarUrl: null, role: 'Member', lastReadAt: null },
     ])
 
     hub.emit('MessageRead', 'c1', 'bob', '2026-10-11T10:00:04Z')

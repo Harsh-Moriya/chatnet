@@ -87,6 +87,8 @@ export interface PendingMessage {
 // before `lastReadAt`. Null until they have read or sent something.
 export interface Member {
   userId: string
+  // The name a message addresses the person by ("@userName").
+  userName: string
   displayName: string
   avatarUrl: string | null
   role: 'Owner' | 'Admin' | 'Member'

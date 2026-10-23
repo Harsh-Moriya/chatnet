@@ -556,7 +556,7 @@ describe('connection and reset', () => {
 // ##### Read state #####
 
 function member(userId: string, lastReadAt: string | null): Member {
-  return { userId, displayName: userId, avatarUrl: null, role: 'Member', lastReadAt }
+  return { userId, userName: userId, displayName: userId, avatarUrl: null, role: 'Member', lastReadAt }
 }
 
 const unread = (id = 'c1') => store().conversations[id].unreadCount

@@ -5,12 +5,17 @@ import { cn } from '../../../lib/cn'
 import { formatClock } from '../../../lib/format'
 import { messageDomId } from '../messageDom'
 import type { Seen } from '../readState'
+import type { Member } from '../types'
+import { MessageText } from './MessageText'
 
 interface MessageBubbleProps {
   // The confirmed message's id; absent while it is unconfirmed.
   messageId?: string
   // Drawn with a ring for a moment after a notification took the reader to it.
   highlighted?: boolean
+  // Who is in the conversation and who is reading, to pick the mentions out of the text.
+  members?: readonly Member[]
+  selfUserName?: string
   own: boolean
   continuing: boolean
   // Shown above the bubble; only set when the sender should be named.
@@ -32,6 +37,8 @@ interface MessageBubbleProps {
 export function MessageBubble({
   messageId,
   highlighted = false,
+  members,
+  selfUserName,
   own,
   continuing,
   senderName,
@@ -74,7 +81,9 @@ export function MessageBubble({
           <>
             {attachments}
             {content !== '' && (
-              <p className={cn('whitespace-pre-wrap break-words', attachments ? 'mt-2' : undefined)}>{content}</p>
+              <p className={cn('whitespace-pre-wrap break-words', attachments ? 'mt-2' : undefined)}>
+                <MessageText content={content} members={members} selfUserName={selfUserName} own={own} />
+              </p>
             )}
           </>
         )}

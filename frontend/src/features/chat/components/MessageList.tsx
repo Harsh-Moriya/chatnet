@@ -88,7 +88,7 @@ export function MessageList({ conversation, isLoading, errorMessage, onRetry, ol
 
   useMarkRead(conversation.id, isAtBottom)
 
-  // The "seen" mark under the reader's newest message.
+  // The "seen" mark under the reader's newest message, and who the mentions in the text can name.
   const members = useChatStore((state) => state.members[conversation.id])
   const seen = useMemo(
     () => seenFor(messages, members, user?.userId ?? '', conversation.type === 'Group'),
@@ -231,6 +231,8 @@ export function MessageList({ conversation, isLoading, errorMessage, onRetry, ol
           return (
             <MessageBubble
               key={item.key}
+              members={members}
+              selfUserName={user?.userName}
               own
               continuing={item.continuing}
               content={item.pending.content}
@@ -252,6 +254,8 @@ export function MessageList({ conversation, isLoading, errorMessage, onRetry, ol
             key={item.key}
             messageId={item.message.id}
             highlighted={item.message.id === highlight?.id}
+            members={members}
+            selfUserName={user?.userName}
             own={item.own}
             continuing={item.continuing}
             senderName={item.showSender ? item.message.senderDisplayName : undefined}
