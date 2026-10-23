@@ -107,3 +107,13 @@ jobs:
 
       - name: Check the proxy configuration
         run: docker run --rm --env SITE_ADDRESS=chat.example.com chatnet-web caddy validate --config /etc/caddy/Caddyfile
+
+      # Caddy warns on every start about a Caddyfile that is not in its own format; this exits 1 and prints the
+      # difference when it is not.
+      - name: Check that the Caddyfile is formatted
+        run: docker run --rm chatnet-web caddy fmt --diff /etc/caddy/Caddyfile
+
+      # Starts the web image alone and checks the headers, the single page's fallback, caching, compression, HSTS only
+      # for public host names, and that the SignalR access token is not written to the log.
+      - name: Smoke test the web server
+        run: sh deploy/smoke-test.sh chatnet-web
