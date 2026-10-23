@@ -50,6 +50,10 @@ services:
   # ##### Migration #####
   # Applies the database migrations and exits. The API instances wait for it to finish, so several of them starting at
   # once never change the schema at the same time. It is built from the same sources as the API, so the two always agree.
+  #
+  # "Gss Encryption Mode=Disable" in the connection strings (here and in the api service): the database driver otherwise
+  # looks for the Kerberos library on its first connection, the slim images do not have it, and the process writes
+  # "Cannot load library libgssapi_krb5.so.2" to its error output. Postgres here uses a password, not Kerberos.
   migrate:
     build:
       context: ./backend
@@ -60,7 +64,7 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD};Gss Encryption Mode=Disable
 
   # ##### API #####
   # API_REPLICAS instances share the work. They find each other through Redis (SignalR backplane, presence), so a
@@ -81,7 +85,7 @@ services:
       replicas: ${API_REPLICAS:-2}
     environment:
       ASPNETCORE_ENVIRONMENT: Production
-      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD};Gss Encryption Mode=Disable
       ConnectionStrings__Redis: redis:6379,password=${REDIS_PASSWORD}
       Jwt__SigningKey: ${JWT_SIGNING_KEY:?set JWT_SIGNING_KEY in .env.prod}
       # The public address of the site. CORS is not used (one origin), but the setting is still checked.
@@ -95,6 +99,8 @@ services:
       Storage__Bucket: ${STORAGE_BUCKET:?set STORAGE_BUCKET in .env.prod}
       Storage__AccessKey: ${STORAGE_ACCESS_KEY:?set STORAGE_ACCESS_KEY in .env.prod}
       Storage__SecretKey: ${STORAGE_SECRET_KEY:?set STORAGE_SECRET_KEY in .env.prod}
+      # Where traces are sent. Empty, the default, exports nothing. With --profile tracing, set it to http://jaeger:4317.
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
     read_only: true
     tmpfs:
       - /tmp
@@ -133,7 +139,7 @@ services:
       - no-new-privileges:true
 
   # ##### Jaeger (optional) #####
-  # Only with --profile tracing. Add OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317 to the api environment to send
+  # Only with --profile tracing. Set OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317 in .env.prod to send the API's
   # traces to it. Its page listens on the machine's own loopback address only; reach it with an ssh tunnel
   # (ssh -L 16686:localhost:16686 user@host), never through the internet.
   jaeger:

@@ -121,7 +121,7 @@ To try the app as two users at once, open `http://localhost:5173` for one and `h
 - **api**, two instances by default. They share the work and reach each other through Redis, so a message sent through one reaches a browser connected to the other, and Caddy keeps each browser on one instance (SignalR needs that).
 - **migrate**, a job that applies the database migrations and exits before the API instances start, so several instances starting together never change the schema at once.
 - **postgres** and **redis**, with passwords, data in volumes, and no published ports.
-- **jaeger**, only with `--profile tracing`.
+- **jaeger**, only with `--profile tracing`; set `OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317` in `.env.prod` to send the API's traces to it. Its page listens on the machine's own loopback address only, so reach it through an ssh tunnel (`ssh -L 16686:localhost:16686 <server>`).
 
 Files are kept in object storage that is not part of this stack: Cloudflare R2 (or any S3-compatible service). Create the bucket and apply the CORS and lifecycle rules in `docker/storage` (`cors.json` needs your own address in `AllowedOrigins`).
 

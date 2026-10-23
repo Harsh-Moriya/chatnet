@@ -40,8 +40,9 @@ ENTRYPOINT ["./efbundle"]
 FROM mcr.microsoft.com/dotnet/aspnet:10.0.13 AS api
 WORKDIR /app
 COPY --from=build /app/publish .
-ENV ASPNETCORE_URLS=http://+:8080 \
-    ASPNETCORE_ENVIRONMENT=Production \
+# The base image already listens on port 8080 (ASPNETCORE_HTTP_PORTS). Setting ASPNETCORE_URLS as well makes the
+# framework warn about the two overriding each other on every start.
+ENV ASPNETCORE_ENVIRONMENT=Production \
     DOTNET_EnableDiagnostics=0
 USER $APP_UID
 EXPOSE 8080
