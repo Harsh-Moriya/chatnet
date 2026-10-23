@@ -344,6 +344,9 @@ namespace ChatNET.API.Migrations
                         .HasColumnType("boolean")
                         .HasDefaultValue(false);
 
+                    b.Property<Guid?>("MessageId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Type")
                         .IsRequired()
                         .HasColumnType("text");
@@ -356,6 +359,8 @@ namespace ChatNET.API.Migrations
                     b.HasIndex("ActorId");
 
                     b.HasIndex("ConversationId");
+
+                    b.HasIndex("MessageId");
 
                     b.HasIndex("UserId", "IsRead", "CreatedAt")
                         .IsDescending(false, false, true);
@@ -584,6 +589,11 @@ namespace ChatNET.API.Migrations
                         .HasForeignKey("ConversationId")
                         .OnDelete(DeleteBehavior.SetNull);
 
+                    b.HasOne("ChatNET.API.Messaging.Models.Message", "Message")
+                        .WithMany()
+                        .HasForeignKey("MessageId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("ChatNET.API.Auth.Models.AppUser", "User")
                         .WithMany()
                         .HasForeignKey("UserId")
@@ -593,6 +603,8 @@ namespace ChatNET.API.Migrations
                     b.Navigation("Actor");
 
                     b.Navigation("Conversation");
+
+                    b.Navigation("Message");
 
                     b.Navigation("User");
                 });
