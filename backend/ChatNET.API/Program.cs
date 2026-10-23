@@ -7,6 +7,7 @@ using ChatNET.API.Auth.RateLimiting;
 using ChatNET.API.Auth.Services;
 using ChatNET.API.Common.Behaviours;
 using ChatNET.API.Common.Health;
+using ChatNET.API.Common.Hosting;
 using ChatNET.API.Common.Logging;
 using ChatNET.API.Common.Middleware;
 using ChatNET.API.Common.Observability;
@@ -285,6 +286,11 @@ try
     builder.Services.AddRateLimiter(_ => { });
     builder.Services.AddSingleton<IConfigureOptions<RateLimiterOptions>, AuthRateLimiterSetup>();
 
+    // ##### Reverse proxy #####
+    // The client address and scheme come from the proxy's forwarded headers, but only from the networks
+    // listed in ForwardedHeaders:KnownNetworks (see ForwardedHeadersSetup).
+    builder.Services.AddTrustedProxies();
+
     // ##### Health #####
     // /health reports whether this instance can reach what it depends on. Each check is cut off after
     // three seconds so a dependency that hangs reads as down instead of hanging the probe.
@@ -325,7 +331,11 @@ try
     //     policy checks run against it.
     // This ordering is the chain-of-responsibility pattern applied to the HTTP pipeline.
 
-    // First, so the request line also covers the work every other middleware does.
+    // Before everything that reads the scheme or the client's address: HSTS, the https redirect and the rate
+    // limiter. Nothing here when no proxy is configured.
+    app.UseTrustedProxies();
+
+    // First after that, so the request line also covers the work every other middleware does.
     app.UseChatNetRequestLogging();
 
     app.UseMiddleware<SecurityHeadersMiddleware>();
