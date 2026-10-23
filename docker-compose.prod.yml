@@ -1,0 +1,150 @@
+# The whole application as one stack, for a single machine (a VPS). Nothing in it is published except Caddy's ports
+# 80 and 443; Postgres, Redis and the API instances are reachable only from each other.
+#
+#   cp .env.prod.example .env.prod      (fill in every value)
+#   docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
+#
+# docker-compose.yml next to this file is the development setup (infrastructure only, ports open, a Jaeger and an
+# object store). This file does not extend it.
+
+# A project name of its own keeps this stack's containers, network and volumes apart from the development stack
+# in docker-compose.yml, which is also called chatnet: without it the two would share the database volume.
+name: chatnet-prod
+
+services:
+
+  # ##### Postgres #####
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB in .env.prod}
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in .env.prod}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.prod}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ##### Redis #####
+  # The SignalR backplane and presence. A password is required, and the data is written to disk so a restart does
+  # not forget who was online (presence rebuilds itself within a minute either way).
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    # The password is read from the environment by the shell, so it is not part of the process's command line.
+    command: ["sh", "-c", "exec redis-server --requirepass \"$$REDIS_PASSWORD\" --appendonly yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" --no-auth-warning ping | grep -q PONG"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?set REDIS_PASSWORD in .env.prod}
+
+  # ##### Migration #####
+  # Applies the database migrations and exits. The API instances wait for it to finish, so several of them starting at
+  # once never change the schema at the same time. It is built from the same sources as the API, so the two always agree.
+  migrate:
+    build:
+      context: ./backend
+      target: migrate
+    image: chatnet-migrate:${CHATNET_VERSION:-local}
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+
+  # ##### API #####
+  # API_REPLICAS instances share the work. They find each other through Redis (SignalR backplane, presence), so a
+  # message sent through one reaches a client connected to another. Caddy sends a browser to one instance and keeps it
+  # there (see deploy/Caddyfile).
+  api:
+    build:
+      context: ./backend
+      target: api
+    image: chatnet-api:${CHATNET_VERSION:-local}
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    deploy:
+      replicas: ${API_REPLICAS:-2}
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      ConnectionStrings__Redis: redis:6379,password=${REDIS_PASSWORD}
+      Jwt__SigningKey: ${JWT_SIGNING_KEY:?set JWT_SIGNING_KEY in .env.prod}
+      # The public address of the site. CORS is not used (one origin), but the setting is still checked.
+      Frontend__Url: https://${DOMAIN:?set DOMAIN in .env.prod}
+      # Requests for any other host name are refused. localhost stays for the container's own health check.
+      AllowedHosts: ${ALLOWED_HOSTS:-${DOMAIN};localhost}
+      # Caddy is the only thing that can reach the API, from the network this stack runs on. Its word about the
+      # client's address and scheme is believed; nobody else's is.
+      ForwardedHeaders__KnownNetworks__0: ${TRUSTED_PROXY_NETWORK:-172.16.0.0/12}
+      Storage__ServiceUrl: ${STORAGE_SERVICE_URL:?set STORAGE_SERVICE_URL in .env.prod}
+      Storage__Bucket: ${STORAGE_BUCKET:?set STORAGE_BUCKET in .env.prod}
+      Storage__AccessKey: ${STORAGE_ACCESS_KEY:?set STORAGE_ACCESS_KEY in .env.prod}
+      Storage__SecretKey: ${STORAGE_SECRET_KEY:?set STORAGE_SECRET_KEY in .env.prod}
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  # ##### Caddy #####
+  # The page, the way in to the API, and the certificate. Its certificates and account are kept in a volume: without
+  # it every restart would ask for new ones and the certificate authority limits how often that may happen.
+  caddy:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      target: web
+    image: chatnet-web:${CHATNET_VERSION:-local}
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-${DOMAIN}}
+    volumes:
+      - caddy-data:/data
+      - caddy-config:/config
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    security_opt:
+      - no-new-privileges:true
+
+  # ##### Jaeger (optional) #####
+  # Only with --profile tracing. Add OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317 to the api environment to send
+  # traces to it. Its page listens on the machine's own loopback address only; reach it with an ssh tunnel
+  # (ssh -L 16686:localhost:16686 user@host), never through the internet.
+  jaeger:
+    profiles: ["tracing"]
+    image: jaegertracing/jaeger:2.22.0
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:16686:16686"
+
+volumes:
+  postgres-data:
+  redis-data:
+  caddy-data:
+  caddy-config:
