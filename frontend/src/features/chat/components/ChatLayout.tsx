@@ -1,5 +1,6 @@
 import { Outlet, useMatch } from 'react-router-dom'
 import { cn } from '../../../lib/cn'
+import { useDocumentTitle } from '../../notifications/useDocumentTitle'
 import { useContactPresence } from '../api/useContactPresence'
 import { Sidebar } from './Sidebar'
 
@@ -13,11 +14,15 @@ export function ChatLayout() {
   // for the whole chat; the changes after that arrive as pushes.
   useContactPresence()
 
+  // The number of unread messages in the tab's title, so a background tab shows it.
+  useDocumentTitle()
+
   return (
     <div className="flex h-dvh bg-slate-50">
+      {/* Relative, so the notification panel can cover the list below the sidebar's header. */}
       <aside
         className={cn(
-          'w-full shrink-0 flex-col border-r border-slate-200 bg-white md:flex md:w-80 lg:w-96',
+          'relative w-full shrink-0 flex-col border-r border-slate-200 bg-white md:flex md:w-80 lg:w-96',
           conversationOpen ? 'hidden' : 'flex',
         )}
       >

@@ -42,6 +42,8 @@ interface ChatState {
   setAttachmentUrl: (conversationId: string, messageId: string, attachmentId: string, url: string) => void
   // A member read the conversation up to readAt. selfId is the signed-in user, whose own count it lowers.
   applyRead: (conversationId: string, userId: string, readAt: string, selfId?: string) => void
+  // The signed-in user muted or unmuted a conversation, in this tab or another.
+  setMuted: (conversationId: string, isMuted: boolean) => void
   addPending: (message: PendingMessage) => void
   failPending: (conversationId: string, clientMessageId: string, error: string) => void
   retryPending: (conversationId: string, clientMessageId: string) => void
@@ -283,6 +285,15 @@ export const useChatStore = create<ChatState>()((set) => ({
       }
 
       return Object.keys(patch).length > 0 ? patch : state
+    }),
+
+  // A conversation the sidebar does not know is left alone: its copy will carry the choice when it is loaded.
+  setMuted: (conversationId, isMuted) =>
+    set((state) => {
+      const conversation = state.conversations[conversationId]
+      if (!conversation || conversation.isMuted === isMuted) return state
+
+      return { conversations: { ...state.conversations, [conversationId]: { ...conversation, isMuted } } }
     }),
 
   addPending: (message) =>

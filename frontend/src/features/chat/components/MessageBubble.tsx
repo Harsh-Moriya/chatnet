@@ -3,9 +3,14 @@ import type { ReactNode } from 'react'
 import { Button } from '../../../components/ui/Button'
 import { cn } from '../../../lib/cn'
 import { formatClock } from '../../../lib/format'
+import { messageDomId } from '../messageDom'
 import type { Seen } from '../readState'
 
 interface MessageBubbleProps {
+  // The confirmed message's id; absent while it is unconfirmed.
+  messageId?: string
+  // Drawn with a ring for a moment after a notification took the reader to it.
+  highlighted?: boolean
   own: boolean
   continuing: boolean
   // Shown above the bubble; only set when the sender should be named.
@@ -25,6 +30,8 @@ interface MessageBubbleProps {
 }
 
 export function MessageBubble({
+  messageId,
+  highlighted = false,
   own,
   continuing,
   senderName,
@@ -41,12 +48,16 @@ export function MessageBubble({
   const deleted = content === null
 
   return (
-    <div className={cn('flex flex-col', own ? 'items-end' : 'items-start', continuing ? 'mt-0.5' : 'mt-3')}>
+    <div
+      id={messageId ? messageDomId(messageId) : undefined}
+      className={cn('flex flex-col', own ? 'items-end' : 'items-start', continuing ? 'mt-0.5' : 'mt-3')}
+    >
       {senderName && <p className="mb-1 px-1 text-xs font-medium text-slate-500">{senderName}</p>}
 
       <div
         className={cn(
-          'max-w-[85%] rounded-lg px-3 py-2 text-sm sm:max-w-[75%]',
+          'max-w-[85%] rounded-lg px-3 py-2 text-sm transition-shadow sm:max-w-[75%]',
+          highlighted && 'ring-2 ring-blue-500 ring-offset-2',
           // One tone only. Two background or text colours in the same class list would be decided
           // by their order in the stylesheet, and a failed message once ended up white on pale red.
           failed

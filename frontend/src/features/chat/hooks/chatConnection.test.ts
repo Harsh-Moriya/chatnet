@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { connectChat, READINESS_PING, TYPING_TTL_MS, type ChatHub } from './chatConnection'
 import { useChatStore } from '../store/chatStore'
+import type { NotificationItem } from '../../notifications/types'
 import type { Conversation, Message } from '../types'
 
 const store = () => useChatStore.getState()
@@ -114,7 +115,7 @@ function message(id: string, overrides: Partial<Message> = {}): Message {
 }
 
 function conversation(id: string): Conversation {
-  return { id, type: 'Direct', name: 'Bob', avatarUrl: null, updatedAt: '2026-10-11T09:00:00Z', lastMessage: null, unreadCount: 0, otherUserId: null }
+  return { id, type: 'Direct', name: 'Bob', avatarUrl: null, updatedAt: '2026-10-11T09:00:00Z', lastMessage: null, unreadCount: 0, otherUserId: null, isMuted: false }
 }
 
 const RETRY_DELAYS = [100, 200, 400]
@@ -123,15 +124,33 @@ function setup(options: { hub?: FakeHub } = {}) {
   const hub = options.hub ?? new FakeHub()
   const onReconnected = vi.fn()
   const onPresenceChanged = vi.fn()
+  const onMessageArrived = vi.fn()
+  const onNotificationReceived = vi.fn()
+  const onNotificationsRead = vi.fn()
+  const onNotificationDismissed = vi.fn()
   const onUnauthorized = vi.fn()
   const connection = connectChat(hub, {
     getUserId: () => 'me',
     onReconnected,
     onPresenceChanged,
+    onMessageArrived,
+    onNotificationReceived,
+    onNotificationsRead,
+    onNotificationDismissed,
     onUnauthorized,
     retryDelay: (attempt) => RETRY_DELAYS[Math.min(attempt, RETRY_DELAYS.length - 1)],
   })
-  return { hub, connection, onReconnected, onPresenceChanged, onUnauthorized }
+  return {
+    hub,
+    connection,
+    onReconnected,
+    onPresenceChanged,
+    onMessageArrived,
+    onNotificationReceived,
+    onNotificationsRead,
+    onNotificationDismissed,
+    onUnauthorized,
+  }
 }
 
 // Lets promise callbacks run, and any timers due now.
@@ -162,7 +181,17 @@ describe('event handlers', () => {
 
     const start = hub.calls.indexOf('start')
     expect(start).toBeGreaterThan(-1)
-    for (const event of ['ReceiveMessage', 'AddedToConversation', 'UserTyping', 'MessageRead', 'PresenceChanged']) {
+    for (const event of [
+      'ReceiveMessage',
+      'AddedToConversation',
+      'UserTyping',
+      'MessageRead',
+      'PresenceChanged',
+      'ConversationMuteChanged',
+      'NotificationReceived',
+      'NotificationsRead',
+      'NotificationDismissed',
+    ]) {
       const registered = hub.calls.indexOf(`on:${event}`)
       expect(registered, event).toBeGreaterThan(-1)
       expect(registered, event).toBeLessThan(start)
@@ -180,6 +209,10 @@ describe('event handlers', () => {
     expect(hub.emit('UserTyping', 'c1', 'bob', 'Bob', true)).toBeUndefined()
     expect(hub.emit('MessageRead', 'c1', 'bob', '2026-10-11T10:00:00Z')).toBeUndefined()
     expect(hub.emit('PresenceChanged', { userId: 'bob', isOnline: true, lastSeenAt: null, at: '2026-10-11T10:00:00Z' })).toBeUndefined()
+    expect(hub.emit('ConversationMuteChanged', 'c1', true)).toBeUndefined()
+    expect(hub.emit('NotificationReceived', mention('n1'))).toBeUndefined()
+    expect(hub.emit('NotificationsRead', ['n1'])).toBeUndefined()
+    expect(hub.emit('NotificationDismissed', 'n1')).toBeUndefined()
   })
 
   it('puts a pushed message into the store', async () => {
@@ -697,5 +730,112 @@ describe('a connection attempt the server refuses with 401', () => {
     await flush()
 
     expect(onUnauthorized).not.toHaveBeenCalled()
+  })
+})
+
+// ##### Muting, notifications and alerts #####
+
+function mention(id: string): NotificationItem {
+  return {
+    id,
+    type: 'Mention',
+    conversationId: 'c1',
+    actorId: 'bob',
+    actorDisplayName: 'Bob',
+    messageId: 'm1',
+    messagePreview: '@me hello',
+    isRead: false,
+    createdAt: '2026-10-11T10:00:00Z',
+  }
+}
+
+describe('a conversation muted in another tab', () => {
+  it('is muted here too', async () => {
+    const { hub } = await connected()
+    store().seedConversations([conversation('c1'), conversation('c2')])
+
+    hub.emit('ConversationMuteChanged', 'c1', true)
+
+    expect(store().conversations.c1.isMuted).toBe(true)
+    expect(store().conversations.c2.isMuted).toBe(false)
+  })
+
+  it('is unmuted here too', async () => {
+    const { hub } = await connected()
+    store().seedConversations([{ ...conversation('c1'), isMuted: true }])
+
+    hub.emit('ConversationMuteChanged', 'c1', false)
+
+    expect(store().conversations.c1.isMuted).toBe(false)
+  })
+})
+
+describe('notifications pushed by the server', () => {
+  it('hands a new notification to whoever owns the connection, unchanged', async () => {
+    const { hub, onNotificationReceived } = await connected()
+    const pushed = mention('n1')
+
+    hub.emit('NotificationReceived', pushed)
+
+    expect(onNotificationReceived).toHaveBeenCalledTimes(1)
+    expect(onNotificationReceived).toHaveBeenCalledWith(pushed)
+  })
+
+  it('hands over the ids that were read', async () => {
+    const { hub, onNotificationsRead } = await connected()
+
+    hub.emit('NotificationsRead', ['n1', 'n2'])
+
+    expect(onNotificationsRead).toHaveBeenCalledWith(['n1', 'n2'])
+  })
+
+  it('hands over the id that was dismissed', async () => {
+    const { hub, onNotificationDismissed } = await connected()
+
+    hub.emit('NotificationDismissed', 'n1')
+
+    expect(onNotificationDismissed).toHaveBeenCalledWith('n1')
+  })
+})
+
+describe('telling the owner a message arrived', () => {
+  it('does so after the message is in the store, so the owner decides with the current picture', async () => {
+    const { hub, onMessageArrived } = await connected()
+    let heldWhenTold: string[] = []
+    onMessageArrived.mockImplementation((m: Message) => {
+      heldWhenTold = (store().messages[m.conversationId] ?? []).map((x) => x.id)
+    })
+
+    hub.emit('ReceiveMessage', message('m1'))
+
+    expect(onMessageArrived).toHaveBeenCalledTimes(1)
+    expect(onMessageArrived).toHaveBeenCalledWith(expect.objectContaining({ id: 'm1' }))
+    expect(heldWhenTold).toEqual(['m1'])
+  })
+
+  it('does not for a message the store already held', async () => {
+    const { hub, onMessageArrived } = await connected()
+    store().seedMessages('c1', [message('m1')])
+
+    hub.emit('ReceiveMessage', message('m1'))
+
+    expect(onMessageArrived).not.toHaveBeenCalled()
+  })
+
+  it('does not twice for the same message pushed twice', async () => {
+    const { hub, onMessageArrived } = await connected()
+
+    hub.emit('ReceiveMessage', message('m1'))
+    hub.emit('ReceiveMessage', message('m1'))
+
+    expect(onMessageArrived).toHaveBeenCalledTimes(1)
+  })
+
+  it('does for a message in a conversation that was never opened', async () => {
+    const { hub, onMessageArrived } = await connected()
+
+    hub.emit('ReceiveMessage', message('m1', { conversationId: 'never-opened' }))
+
+    expect(onMessageArrived).toHaveBeenCalledTimes(1)
   })
 })

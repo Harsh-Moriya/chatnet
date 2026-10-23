@@ -99,6 +99,15 @@ export async function markRead(conversationId: string, messageId: string, selfId
   if (message) chat().applyRead(conversationId, selfId, message.createdAt, selfId)
 }
 
+// ##### Muting #####
+
+// Mutes or unmutes the conversation for the signed-in user. Applied here once the server has stored it; their
+// other tabs hear about it by push. A failure is the caller's to show.
+export async function setMuted(conversationId: string, isMuted: boolean): Promise<void> {
+  await api.put(`/conversations/${conversationId}/mute`, { isMuted })
+  chat().setMuted(conversationId, isMuted)
+}
+
 // ##### Sending #####
 // The message appears at once, marked as sending. The server's copy replaces it when the response
 // arrives or when the push does, whichever is first; both carry the id invented here.

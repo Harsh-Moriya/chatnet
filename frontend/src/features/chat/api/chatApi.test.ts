@@ -15,6 +15,7 @@ import {
   retryMessage,
   searchUsers,
   sendMessage,
+  setMuted,
 } from './chatApi'
 
 const store = () => useChatStore.getState()
@@ -54,7 +55,7 @@ function message(overrides: Partial<Message> & { id: string }): Message {
 }
 
 function conversation(id: string): Conversation {
-  return { id, type: 'Direct', name: 'Bob', avatarUrl: null, updatedAt: '2026-10-11T09:00:00Z', lastMessage: null, unreadCount: 0, otherUserId: null }
+  return { id, type: 'Direct', name: 'Bob', avatarUrl: null, updatedAt: '2026-10-11T09:00:00Z', lastMessage: null, unreadCount: 0, otherUserId: null, isMuted: false }
 }
 
 const flush = () => new Promise<void>((resolve) => setTimeout(resolve, 0))
@@ -728,5 +729,52 @@ describe('renewing a link to a file', () => {
     await expect(refreshAttachmentUrl('c1', 'm1', 'a1')).rejects.toThrow()
 
     expect(store().messages.c1[0].attachments[0].url).toBe('https://files.test/old')
+  })
+})
+
+// ##### Muting #####
+
+describe('muting a conversation', () => {
+  it('puts the choice to the server, and applies it once the server has stored it', async () => {
+    store().seedConversations([conversation('c1')])
+    const put = vi.spyOn(api, 'put').mockResolvedValue(respond(undefined))
+
+    await setMuted('c1', true)
+
+    expect(put).toHaveBeenCalledWith('/conversations/c1/mute', { isMuted: true })
+    expect(store().conversations.c1.isMuted).toBe(true)
+  })
+
+  it('does not apply it before the server has answered', async () => {
+    store().seedConversations([conversation('c1')])
+    const response = deferred<AxiosResponse>()
+    vi.spyOn(api, 'put').mockReturnValue(response.promise)
+
+    const pending = setMuted('c1', true)
+    await flush()
+    expect(store().conversations.c1.isMuted).toBe(false)
+
+    response.resolve(respond(undefined))
+    await pending
+    expect(store().conversations.c1.isMuted).toBe(true)
+  })
+
+  it('leaves the choice as it was when the server refuses, and lets the caller show why', async () => {
+    store().seedConversations([conversation('c1')])
+    vi.spyOn(api, 'put').mockRejectedValue(failure(403, 'You are not a member of this conversation.'))
+
+    await expect(setMuted('c1', true)).rejects.toThrow()
+
+    expect(store().conversations.c1.isMuted).toBe(false)
+  })
+
+  it('unmutes with the same call', async () => {
+    store().seedConversations([{ ...conversation('c1'), isMuted: true }])
+    const put = vi.spyOn(api, 'put').mockResolvedValue(respond(undefined))
+
+    await setMuted('c1', false)
+
+    expect(put).toHaveBeenCalledWith('/conversations/c1/mute', { isMuted: false })
+    expect(store().conversations.c1.isMuted).toBe(false)
   })
 })
