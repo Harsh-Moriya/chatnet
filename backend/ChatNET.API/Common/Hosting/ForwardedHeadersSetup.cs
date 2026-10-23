@@ -39,11 +39,15 @@ public static class ForwardedHeadersSetup
         return services;
     }
 
+    // Whether a proxy is configured at all, which means TLS is ended in front of the application.
+    public static bool IsBehindTrustedProxy(this WebApplication app)
+        => app.Services.GetRequiredService<IOptions<TrustedProxyOptions>>().Value.KnownNetworks.Count > 0;
+
     // Does nothing unless a network is configured: the headers of a request that came straight from a client
     // are never believed.
     public static WebApplication UseTrustedProxies(this WebApplication app)
     {
-        if (app.Services.GetRequiredService<IOptions<TrustedProxyOptions>>().Value.KnownNetworks.Count > 0)
+        if (app.IsBehindTrustedProxy())
             app.UseForwardedHeaders();
 
         return app;
