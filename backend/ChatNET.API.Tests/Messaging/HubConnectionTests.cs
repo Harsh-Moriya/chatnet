@@ -95,5 +95,5 @@ public class HubConnectionTests
         _factory.Services.GetRequiredService<IHubContext<ChatHub, IChatClient>>();
 
     private static ConversationDto SampleConversation() =>
-        new(Guid.NewGuid(), ConversationType.Group, "Team", null, DateTime.UtcNow, null, 0, null);
+        new(Guid.NewGuid(), ConversationType.Group, "Team", null, DateTime.UtcNow, null, 0, null, false);
 }

@@ -2,6 +2,8 @@ using ChatNET.API.Common.Exceptions;
 using ChatNET.API.Conversations.Persistence;
 using ChatNET.API.Messaging.Hubs;
 using ChatNET.API.Messaging.Persistence;
+using ChatNET.API.Notifications;
+using ChatNET.API.Notifications.Persistence;
 using FluentValidation;
 using FluentValidation.Results;
 using MediatR;
@@ -15,17 +17,23 @@ public class MarkReadHandler : IRequestHandler<MarkReadCommand, Unit>
 
     private readonly IConversationRepository _conversations;
     private readonly IMessageRepository _messages;
+    private readonly INotificationRepository _notifications;
+    private readonly NotificationPusher _notificationPusher;
     private readonly IHubContext<ChatHub, IChatClient> _hub;
     private readonly ILogger<MarkReadHandler> _logger;
 
     public MarkReadHandler(
         IConversationRepository conversations,
         IMessageRepository messages,
+        INotificationRepository notifications,
+        NotificationPusher notificationPusher,
         IHubContext<ChatHub, IChatClient> hub,
         ILogger<MarkReadHandler> logger)
     {
         _conversations = conversations;
         _messages = messages;
+        _notifications = notifications;
+        _notificationPusher = notificationPusher;
         _hub = hub;
         _logger = logger;
     }
@@ -64,7 +72,16 @@ public class MarkReadHandler : IRequestHandler<MarkReadCommand, Unit>
             "User {UserId} read conversation {ConversationId} up to message {MessageId}",
             request.UserId, request.ConversationId, request.MessageId);
 
+        // Reading a conversation up to a message is reading the mentions of the person in it up to that message too,
+        // so their bell does not keep asking about what is already on screen.
+        var mentionsRead = await _notifications.MarkMentionsReadAsync(
+            request.UserId, request.ConversationId, message.Value.CreatedAt, cancellationToken);
+
         await PushAsync(request.ConversationId, request.UserId, message.Value.CreatedAt);
+
+        if (mentionsRead.Count > 0)
+            await _notificationPusher.ReadAsync(request.UserId, mentionsRead);
+
         return Unit.Value;
     }
 

@@ -47,6 +47,17 @@ public static class ConversationApi
         response.EnsureSuccessStatusCode();
     }
 
+    // Mutes (or unmutes) the conversation for the caller.
+    public static Task<HttpResponseMessage> SetMutedResponseAsync(
+        this HttpClient client, Guid conversationId, bool isMuted) =>
+        client.PutAsJsonAsync($"/api/conversations/{conversationId}/mute", new { isMuted });
+
+    public static async Task SetMutedAsync(this HttpClient client, Guid conversationId, bool isMuted)
+    {
+        var response = await client.SetMutedResponseAsync(conversationId, isMuted);
+        response.EnsureSuccessStatusCode();
+    }
+
     public static Task<HttpResponseMessage> GetMembersResponseAsync(this HttpClient client, Guid conversationId) =>
         client.GetAsync($"/api/conversations/{conversationId}/members");
 

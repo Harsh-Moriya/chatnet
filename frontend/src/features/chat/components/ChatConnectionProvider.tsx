@@ -1,5 +1,6 @@
 import { type ReactNode, useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
+import { useNotificationStore } from '../../notifications/store/notificationStore'
 import { usePresenceStore } from '../../presence/store/presenceStore'
 import { ChatConnectionContext } from '../hooks/chatConnectionContext'
 import { useSignalR } from '../hooks/useSignalR'
@@ -17,6 +18,7 @@ export function ChatConnectionProvider({ children }: { children: ReactNode }) {
   useEffect(
     () => () => {
       useChatStore.getState().reset()
+      useNotificationStore.getState().reset()
       usePresenceStore.getState().reset()
       queryClient.clear()
     },

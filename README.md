@@ -24,7 +24,7 @@ Under active development.
 | Sessions that renew themselves: 15-minute access tokens, rotating refresh tokens in an httpOnly cookie, sign-out that ends the session | Implemented |
 | Retrying a send is safe: a message is stored once however many times the request arrives | Implemented |
 | File attachments: pictures, videos and documents sent straight to object storage, shown in the conversation | Implemented |
-| Notifications | Planned |
+| Notifications: a bell with an unread count and a panel, @mentions (with autocomplete and highlighting), being added to a group, browser alerts, an unread count in the tab title, and muting a conversation | Implemented |
 | Structured logging (JSON in production) and tracing (OpenTelemetry, viewed in Jaeger) | Implemented |
 | Deployment | Planned |
 
@@ -132,11 +132,12 @@ backend/ChatNET.API/
   Conversations/   direct and group conversations, membership
   Messaging/       messages and the SignalR hub
   Media/           file uploads and attachments: object storage, upload tickets, links
+  Notifications/   mentions and group invitations as notifications, the list behind the bell
   Common/          shared behaviours, exceptions, persistence
 backend/ChatNET.API.Tests/
   Infrastructure/  test host (WebApplicationFactory + Testcontainers for Postgres, Redis and the object store), helpers
 frontend/src/
-  features/        auth, chat (one folder per feature)
+  features/        auth, chat, notifications, presence (one folder per feature)
   components/ui/   shared UI primitives
   lib/             API client, query client
 ```

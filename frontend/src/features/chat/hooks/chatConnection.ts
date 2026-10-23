@@ -1,5 +1,6 @@
 import { isUnauthorized, reconnectDelay } from '../../../lib/signalr'
 import { useChatStore } from '../store/chatStore'
+import type { NotificationItem } from '../../notifications/types'
 import type { Presence } from '../../presence/types'
 import type { Conversation, Message } from '../types'
 
@@ -26,6 +27,16 @@ export interface ChatConnectionDeps {
   onReconnected: () => void
   // Called with every presence change pushed by the server (someone came online or went offline).
   onPresenceChanged: (presence: Presence) => void
+  // Called for a message that was not in the store before, once it is there: the moment to raise an alert for
+  // it. A message the store already held (the sender's own copy, or one a reload brought) is not new.
+  onMessageArrived: (message: Message) => void
+  // Called with each notification pushed to the user: someone mentioned them, or added them to a group.
+  onNotificationReceived: (notification: NotificationItem) => void
+  // Called with the ids of notifications that were marked read, here or in another tab or by reading the
+  // conversation they are about.
+  onNotificationsRead: (ids: string[]) => void
+  // Called with the id of a notification that was dismissed, here or in another tab.
+  onNotificationDismissed: (id: string) => void
   // Called when the server refuses a connection attempt with 401: it does not accept the token the client
   // holds. The owner renews the session, so the next attempt carries a new token.
   onUnauthorized: () => void
@@ -66,7 +77,28 @@ export function connectChat(hub: ChatHub, deps: ChatConnectionDeps): ChatConnect
   // value as the reply to the server and logs an error when none was asked for.
 
   hub.on('ReceiveMessage', (message: Message) => {
+    const known = chat().messages[message.conversationId]?.some((m) => m.id === message.id) ?? false
+
     chat().receiveMessage(message, deps.getUserId() ?? undefined)
+
+    if (!known) deps.onMessageArrived(message)
+  })
+
+  // The signed-in user muted or unmuted a conversation in one of their tabs; every tab follows.
+  hub.on('ConversationMuteChanged', (conversationId: string, isMuted: boolean) => {
+    chat().setMuted(conversationId, isMuted)
+  })
+
+  hub.on('NotificationReceived', (notification: NotificationItem) => {
+    deps.onNotificationReceived(notification)
+  })
+
+  hub.on('NotificationsRead', (ids: string[]) => {
+    deps.onNotificationsRead(ids)
+  })
+
+  hub.on('NotificationDismissed', (id: string) => {
+    deps.onNotificationDismissed(id)
   })
 
   // Someone read a conversation up to readAt. For the signed-in user this is another tab of theirs

@@ -18,6 +18,8 @@ using ChatNET.API.Media;
 using ChatNET.API.Messaging;
 using ChatNET.API.Messaging.Hubs;
 using ChatNET.API.Messaging.Persistence;
+using ChatNET.API.Notifications;
+using ChatNET.API.Notifications.Persistence;
 using ChatNET.API.Presence;
 using ChatNET.API.Presence.Persistence;
 using ChatNET.API.Users;
@@ -235,6 +237,8 @@ try
     builder.Services.AddScoped<IConversationRepository, ConversationRepository>();
     builder.Services.AddScoped<IMessageRepository, MessageRepository>();
     builder.Services.AddScoped<ConversationNotifier>();
+    builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
+    builder.Services.AddScoped<NotificationPusher>();
 
     // ##### Presence #####
     // Who is online lives in Redis (see PresenceScripts). The settings are validated when the host starts,
@@ -360,6 +364,7 @@ try
     app.MapConversationEndpoints();
     app.MapMessagingEndpoints();
     app.MapMediaEndpoints();
+    app.MapNotificationEndpoints();
     app.MapPresenceEndpoints();
 
     // A token is checked once, when the connection is made. Without this an open connection would keep

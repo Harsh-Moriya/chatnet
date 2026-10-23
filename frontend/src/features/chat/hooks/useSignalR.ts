@@ -4,6 +4,8 @@ import { createChatConnection } from '../../../lib/signalr'
 import { catchUpAll } from '../api/catchUp'
 import { session } from '../../auth/session'
 import { useAuthStore } from '../../auth/store/authStore'
+import { useNotificationStore } from '../../notifications/store/notificationStore'
+import { useBrowserAlerts } from '../../notifications/useBrowserAlerts'
 import { usePresenceStore } from '../../presence/store/presenceStore'
 import { useChatStore } from '../store/chatStore'
 import { connectChat, type ChatConnection } from './chatConnection'
@@ -16,6 +18,7 @@ import { connectChat, type ChatConnection } from './chatConnection'
 // shuts down quietly and the second one is the real one.
 export function useSignalR() {
   const queryClient = useQueryClient()
+  const alerts = useBrowserAlerts()
   const connectionRef = useRef<ChatConnection | null>(null)
 
   useEffect(() => {
@@ -34,6 +37,16 @@ export function useSignalR() {
         // Someone who shares a conversation with this user came online or went offline.
         onPresenceChanged: (presence) => usePresenceStore.getState().apply(presence),
 
+        // A push patches the stores directly (the bell does not ask the server again); the browser alert is
+        // raised on top of that when the rules in alerts.ts say the user should be told.
+        onMessageArrived: alerts.message,
+        onNotificationReceived: (notification) => {
+          useNotificationStore.getState().receive(notification)
+          alerts.notification(notification)
+        },
+        onNotificationsRead: (ids) => useNotificationStore.getState().applyRead(ids),
+        onNotificationDismissed: (id) => useNotificationStore.getState().applyDismissed(id),
+
         // The server refused the token. Renewing the session gives the next attempt a new one.
         onUnauthorized: () => void session.refresh(),
 
@@ -45,6 +58,7 @@ export function useSignalR() {
         // reloading on pushes.
         onReconnected: () => {
           void queryClient.invalidateQueries({ queryKey: ['conversations'] })
+          void queryClient.invalidateQueries({ queryKey: ['notifications'] })
           void queryClient.invalidateQueries({ queryKey: ['members'] })
           void queryClient.invalidateQueries({ queryKey: ['presence'] })
           void catchUpAll({
@@ -62,7 +76,7 @@ export function useSignalR() {
       connection?.dispose()
       connectionRef.current = null
     }
-  }, [queryClient])
+  }, [queryClient, alerts])
 
   const sendTyping = useCallback((conversationId: string, isTyping: boolean) => {
     connectionRef.current?.sendTyping(conversationId, isTyping)

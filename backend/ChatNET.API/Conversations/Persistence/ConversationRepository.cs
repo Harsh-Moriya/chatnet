@@ -1,5 +1,7 @@
 using ChatNET.API.Common.Persistence;
 using ChatNET.API.Conversations.Models;
+using ChatNET.API.Messaging;
+using ChatNET.API.Notifications.Models;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 
@@ -7,8 +9,6 @@ namespace ChatNET.API.Conversations.Persistence;
 
 public class ConversationRepository : IConversationRepository
 {
-    private const int PreviewLength = 100;
-
     // The unread count stops here, so the cost of a conversation does not grow with how far behind
     // the member is. Clients show it as "99+".
     public const int UnreadCap = 100;
@@ -41,9 +41,11 @@ public class ConversationRepository : IConversationRepository
         }
     }
 
-    public async Task AddAsync(Conversation conversation, CancellationToken cancellationToken)
+    public async Task AddAsync(
+        Conversation conversation, IReadOnlyList<Notification> notifications, CancellationToken cancellationToken)
     {
         _db.Conversations.Add(conversation);
+        _db.Notifications.AddRange(notifications);
         await _db.SaveChangesAsync(cancellationToken);
     }
 
@@ -127,8 +129,17 @@ public class ConversationRepository : IConversationRepository
             .AsNoTracking()
             .Where(m => m.ConversationId == conversationId && m.LeftAt == null)
             .OrderBy(m => m.JoinedAt).ThenBy(m => m.UserId)
-            .Select(m => new MemberDto(m.UserId, m.User.DisplayName, m.User.AvatarUrl, m.Role, m.LastReadAt))
+            .Select(m => new MemberDto(m.UserId, m.User.UserName!, m.User.DisplayName, m.User.AvatarUrl, m.Role, m.LastReadAt))
             .ToListAsync(cancellationToken);
+
+    // A single UPDATE that is also the membership check: it touches the row of an active member and nothing else,
+    // so a stranger or someone who left changes nothing and gets false. Setting the value a row already has still
+    // matches it, which makes repeating a request harmless.
+    public async Task<bool> SetMutedAsync(
+        Guid conversationId, Guid userId, bool isMuted, CancellationToken cancellationToken)
+        => await _db.ConversationMembers
+            .Where(m => m.ConversationId == conversationId && m.UserId == userId && m.LeftAt == null)
+            .ExecuteUpdateAsync(s => s.SetProperty(m => m.IsMuted, isMuted), cancellationToken) > 0;
 
     // ##### Conversation list and detail queries #####
     // Written as SQL by hand because the obvious LINQ form is slow. EF Core translates "latest
@@ -168,7 +179,8 @@ public class ConversationRepository : IConversationRepository
                         AND um."CreatedAt" >= mine."JoinedAt"
                         AND um."CreatedAt" > COALESCE(mine."LastReadAt", '-infinity'::timestamptz)
                         AND um."SenderId" <> @viewerId
-                      LIMIT @unreadCap) AS counted) AS "UnreadCount"
+                      LIMIT @unreadCap) AS counted) AS "UnreadCount",
+               mine."IsMuted" AS "IsMuted"
         FROM "Conversations" c
         JOIN "ConversationMembers" mine
           ON mine."ConversationId" = c."Id" AND mine."UserId" = @viewerId
@@ -202,16 +214,13 @@ public class ConversationRepository : IConversationRepository
     private static ConversationDto ToDto(ConversationRow row)
     {
         var last = row.LastMessageSenderId is { } senderId && row.LastMessageCreatedAt is { } createdAt
-            ? new LastMessageDto(senderId, Truncate(row.LastMessageContent), createdAt, row.LastMessageAttachmentCount)
+            ? new LastMessageDto(senderId, MessagePreview.Of(row.LastMessageContent), createdAt, row.LastMessageAttachmentCount)
             : null;
 
         return new ConversationDto(
             row.Id, Enum.Parse<ConversationType>(row.Type), row.Name ?? "Unknown", row.AvatarUrl, row.UpdatedAt, last,
-            row.UnreadCount, row.OtherUserId);
+            row.UnreadCount, row.OtherUserId, row.IsMuted);
     }
-
-    private static string? Truncate(string? content)
-        => content is { Length: > PreviewLength } ? content[..PreviewLength] : content;
 
     // One row of the queries above. Property names match the column aliases in the SQL, which is how
     // EF maps a raw query to a type.
@@ -228,5 +237,6 @@ public class ConversationRepository : IConversationRepository
         public int LastMessageAttachmentCount { get; set; }
         public int UnreadCount { get; set; }
         public Guid? OtherUserId { get; set; }
+        public bool IsMuted { get; set; }
     }
 }

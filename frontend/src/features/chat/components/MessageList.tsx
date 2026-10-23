@@ -1,11 +1,14 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { AlertCircle, ChevronDown, LoaderCircle } from 'lucide-react'
 import { Button } from '../../../components/ui/Button'
 import { useNow } from '../../../lib/useNow'
 import { useAuth } from '../../auth/hooks/useAuth'
+import { focusedMessageId } from '../../notifications/navigation'
 import { dismissMessage, retryMessage } from '../api/chatApi'
 import { scrollTopAfterPrepend, wasPrepended } from '../history'
 import { useMarkRead } from '../hooks/useMarkRead'
+import { messageDomId } from '../messageDom'
 import { seenFor, unreadLabel } from '../readState'
 import { useChatStore } from '../store/chatStore'
 import { buildTimeline } from '../timeline'
@@ -13,6 +16,9 @@ import type { Conversation, Message, PendingMessage } from '../types'
 import { AttachmentGrid } from './AttachmentGrid'
 import { MessageBubble } from './MessageBubble'
 import { PendingAttachments } from './PendingAttachments'
+
+// How long the message a notification pointed at keeps its ring.
+const HIGHLIGHT_MS = 2500
 
 // Stable empty values, so a conversation with nothing in it does not look like a change on every render.
 const NO_MESSAGES: Message[] = []
@@ -82,12 +88,32 @@ export function MessageList({ conversation, isLoading, errorMessage, onRetry, ol
 
   useMarkRead(conversation.id, isAtBottom)
 
-  // The "seen" mark under the reader's newest message.
+  // The "seen" mark under the reader's newest message, and who the mentions in the text can name.
   const members = useChatStore((state) => state.members[conversation.id])
   const seen = useMemo(
     () => seenFor(messages, members, user?.userId ?? '', conversation.type === 'Group'),
     [messages, members, user?.userId, conversation.type],
   )
+
+  // A notification that opened this conversation names a message to show. Once that message is loaded it is
+  // scrolled into view and ringed for a moment, once per navigation (its key): the conversation may re-render,
+  // and load more messages, any number of times after that. Setting state while rendering, guarded by the key, is
+  // how a value is derived from props without an extra render pass.
+  const location = useLocation()
+  const focusId = focusedMessageId(location.state)
+  const [highlight, setHighlight] = useState<{ key: string; id: string } | null>(null)
+  if (focusId && highlight?.key !== location.key && messages.some((m) => m.id === focusId)) {
+    setHighlight({ key: location.key, id: focusId })
+  }
+
+  useEffect(() => {
+    if (!highlight || highlight.id === '') return
+
+    document.getElementById(messageDomId(highlight.id))?.scrollIntoView({ block: 'center' })
+
+    const timer = setTimeout(() => setHighlight({ key: highlight.key, id: '' }), HIGHLIGHT_MS)
+    return () => clearTimeout(timer)
+  }, [highlight])
 
   // The first message and the content height as of the previous render. When the first message
   // changes, older messages were added above the reader; browsers would let the content jump down by
@@ -205,6 +231,8 @@ export function MessageList({ conversation, isLoading, errorMessage, onRetry, ol
           return (
             <MessageBubble
               key={item.key}
+              members={members}
+              selfUserName={user?.userName}
               own
               continuing={item.continuing}
               content={item.pending.content}
@@ -224,6 +252,10 @@ export function MessageList({ conversation, isLoading, errorMessage, onRetry, ol
         return (
           <MessageBubble
             key={item.key}
+            messageId={item.message.id}
+            highlighted={item.message.id === highlight?.id}
+            members={members}
+            selfUserName={user?.userName}
             own={item.own}
             continuing={item.continuing}
             senderName={item.showSender ? item.message.senderDisplayName : undefined}

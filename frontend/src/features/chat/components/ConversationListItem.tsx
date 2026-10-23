@@ -1,4 +1,4 @@
-import { Paperclip } from 'lucide-react'
+import { BellOff, Paperclip } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
 import { Avatar } from '../../../components/ui/Avatar'
 import { cn } from '../../../lib/cn'
@@ -50,7 +50,12 @@ export function ConversationListItem({ conversation, currentUserId, now }: Conve
 
             <div className="min-w-0 flex-1">
               <div className="flex items-baseline justify-between gap-2">
-                <p className="truncate text-sm font-semibold text-slate-900">{conversation.name}</p>
+                <p className="flex min-w-0 items-center gap-1.5 text-sm font-semibold text-slate-900">
+                  <span className="truncate">{conversation.name}</span>
+                  {conversation.isMuted && (
+                    <BellOff className="h-3.5 w-3.5 shrink-0 text-slate-400" role="img" aria-label="Muted" />
+                  )}
+                </p>
                 <time className="shrink-0 text-xs text-slate-500" dateTime={last?.createdAt ?? conversation.updatedAt}>
                   {formatListTime(last?.createdAt ?? conversation.updatedAt, now)}
                 </time>
@@ -79,7 +84,11 @@ export function ConversationListItem({ conversation, currentUserId, now }: Conve
                     and the jump button in the list says how many are below. */}
                 {unread && !isActive && (
                   <span
-                    className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-blue-600 px-1.5 text-xs font-semibold text-white"
+                    className={cn(
+                      'inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full px-1.5 text-xs font-semibold text-white',
+                      // A muted conversation still counts what is unread, but does not ask for attention.
+                      conversation.isMuted ? 'bg-slate-500' : 'bg-blue-600',
+                    )}
                     aria-label={`${unreadLabel(conversation.unreadCount)} unread`}
                   >
                     {unreadLabel(conversation.unreadCount)}

@@ -4,7 +4,8 @@ namespace ChatNET.API.Conversations.Models;
 // display name, for a Group it is the group name. UnreadCount is per viewer too: the messages
 // other people sent since the viewer last read the conversation, at most ConversationRepository's cap.
 // OtherUserId is the other participant of a Direct conversation (what presence is shown for) and
-// null for a Group.
+// null for a Group. IsMuted is the viewer's own choice: it only quiets alerts for new messages, and what a
+// conversation shows to its other members does not change.
 public record ConversationDto(
     Guid Id,
     ConversationType Type,
@@ -13,7 +14,8 @@ public record ConversationDto(
     DateTime UpdatedAt,
     LastMessageDto? LastMessage,
     int UnreadCount,
-    Guid? OtherUserId
+    Guid? OtherUserId,
+    bool IsMuted
 );
 
 // Content is null when the last message was deleted. It is truncated to a preview length, and empty when the

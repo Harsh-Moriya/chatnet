@@ -16,6 +16,9 @@ export interface Conversation {
   unreadCount: number
   // The other person of a direct conversation, whose presence is shown for it; null for a group.
   otherUserId: string | null
+  // The signed-in user's own choice to have this conversation quiet: no alert for its new messages, and its
+  // unread count stays out of the page title. A mention still alerts.
+  isMuted: boolean
 }
 
 export interface LastMessage {
@@ -84,6 +87,8 @@ export interface PendingMessage {
 // before `lastReadAt`. Null until they have read or sent something.
 export interface Member {
   userId: string
+  // The name a message addresses the person by ("@userName").
+  userName: string
   displayName: string
   avatarUrl: string | null
   role: 'Owner' | 'Admin' | 'Member'

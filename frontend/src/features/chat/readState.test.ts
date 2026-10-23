@@ -17,7 +17,7 @@ function message(id: string, overrides: Partial<Message> = {}): Message {
 }
 
 function member(userId: string, lastReadAt: string | null, displayName = userId): Member {
-  return { userId, displayName, avatarUrl: null, role: 'Member', lastReadAt }
+  return { userId, userName: userId, displayName, avatarUrl: null, role: 'Member', lastReadAt }
 }
 
 // ##### The badge text #####

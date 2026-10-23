@@ -2,6 +2,7 @@ using System.Linq.Expressions;
 using ChatNET.API.Common.Persistence;
 using ChatNET.API.Conversations.Models;
 using ChatNET.API.Messaging.Models;
+using ChatNET.API.Notifications.Models;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 
@@ -29,9 +30,11 @@ public class MessageRepository : IMessageRepository
         _db = db;
     }
 
-    public async Task<bool> TryAddAsync(Message message, CancellationToken cancellationToken)
+    public async Task<bool> TryAddAsync(
+        Message message, IReadOnlyList<Notification> notifications, CancellationToken cancellationToken)
     {
         _db.Messages.Add(message);
+        _db.Notifications.AddRange(notifications);
 
         // The conversation row is never loaded. A stub carrying only its key and the new UpdatedAt is
         // attached and that one property is marked modified, so EF sends a single-column UPDATE next

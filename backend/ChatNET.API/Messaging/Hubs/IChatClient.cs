@@ -1,5 +1,6 @@
 using ChatNET.API.Conversations.Models;
 using ChatNET.API.Messaging.Models;
+using ChatNET.API.Notifications.Models;
 using ChatNET.API.Presence;
 
 namespace ChatNET.API.Messaging.Hubs;
@@ -28,4 +29,19 @@ public interface IChatClient
     // people who may see their presence (and nobody else), once per change: a second tab or a page
     // refresh is not a change.
     Task PresenceChanged(PresenceDto presence);
+
+    // The receiver muted or unmuted a conversation, in this tab or another. Sent to every open tab of that person
+    // and nobody else, so each of their tabs agrees on which alerts to raise.
+    Task ConversationMuteChanged(Guid conversationId, bool isMuted);
+
+    // Someone mentioned the receiver, or added them to a group. Sent to every open tab of that one person, once the
+    // notification is saved.
+    Task NotificationReceived(NotificationDto notification);
+
+    // These notifications of the receiver were marked read: by this tab, by another tab, or by reading the
+    // conversation they are about. Sent to every open tab of that person, so their badge agrees everywhere.
+    Task NotificationsRead(Guid[] ids);
+
+    // This notification of the receiver was dismissed, in this tab or another.
+    Task NotificationDismissed(Guid id);
 }

@@ -36,6 +36,22 @@ public class ConversationMembersTests
         Assert.Equal(carol.DisplayName, byId[carol.Id].GetProperty("displayName").GetString());
     }
 
+    // What a message must say to mention someone: the autocomplete in the composer writes this name.
+    [Fact]
+    public async Task Each_member_carries_the_user_name_a_mention_uses()
+    {
+        var alice = await _factory.RegisterUserAsync("alice");
+        var bob = await _factory.RegisterUserAsync("bob");
+        using var client = _factory.CreateClientFor(alice);
+        var conversation = (await client.CreateDirectAsync(bob.Id)).IdOf();
+
+        var members = await client.GetMembersAsync(conversation);
+
+        var byId = members.ToDictionary(m => m.GetProperty("userId").GetGuid());
+        Assert.Equal(alice.UserName, byId[alice.Id].GetProperty("userName").GetString());
+        Assert.Equal(bob.UserName, byId[bob.Id].GetProperty("userName").GetString());
+    }
+
     [Fact]
     public async Task A_direct_chat_lists_both_people()
     {
@@ -60,7 +76,7 @@ public class ConversationMembersTests
         var member = (await client.GetMembersAsync(conversation))[0];
 
         Assert.Equal(
-            new[] { "avatarUrl", "displayName", "lastReadAt", "role", "userId" },
+            new[] { "avatarUrl", "displayName", "lastReadAt", "role", "userId", "userName" },
             member.EnumerateObject().Select(p => p.Name).Order());
     }
 

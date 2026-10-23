@@ -1,4 +1,5 @@
 using ChatNET.API.Conversations.Models;
+using ChatNET.API.Notifications.Models;
 
 namespace ChatNET.API.Conversations.Persistence;
 
@@ -11,7 +12,8 @@ public interface IConversationRepository
     // between two concurrent creates).
     Task<bool> TryAddDirectAsync(Conversation conversation, CancellationToken cancellationToken);
 
-    Task AddAsync(Conversation conversation, CancellationToken cancellationToken);
+    // Saves the conversation together with the notifications that come with it, in one transaction.
+    Task AddAsync(Conversation conversation, IReadOnlyList<Notification> notifications, CancellationToken cancellationToken);
 
     Task<ConversationDto?> GetForViewerAsync(Guid conversationId, Guid viewerId, CancellationToken cancellationToken);
 
@@ -37,4 +39,8 @@ public interface IConversationRepository
 
     // The active members, earliest joiner first, each with how far they have read.
     Task<List<MemberDto>> GetActiveMembersAsync(Guid conversationId, CancellationToken cancellationToken);
+
+    // Stores whether an active member has muted the conversation. Returns false when the user is not an active
+    // member, in which case nothing was changed.
+    Task<bool> SetMutedAsync(Guid conversationId, Guid userId, bool isMuted, CancellationToken cancellationToken);
 }

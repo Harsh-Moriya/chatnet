@@ -26,6 +26,7 @@ function conversation(overrides: Partial<Conversation> & { id: string }): Conver
     lastMessage: null,
     unreadCount: 0,
     otherUserId: null,
+    isMuted: false,
     ...overrides,
   }
 }
@@ -555,7 +556,7 @@ describe('connection and reset', () => {
 // ##### Read state #####
 
 function member(userId: string, lastReadAt: string | null): Member {
-  return { userId, displayName: userId, avatarUrl: null, role: 'Member', lastReadAt }
+  return { userId, userName: userId, displayName: userId, avatarUrl: null, role: 'Member', lastReadAt }
 }
 
 const unread = (id = 'c1') => store().conversations[id].unreadCount
@@ -834,5 +835,65 @@ describe('attachment links', () => {
     store().setAttachmentUrl('c1', 'm1', 'a', 'https://files.test/a?signature=old')
 
     expect(store().messages).toBe(before)
+  })
+})
+
+describe('muting a conversation', () => {
+  it('records the choice on that conversation only', () => {
+    store().seedConversations([conversation({ id: 'c1' }), conversation({ id: 'c2' })])
+
+    store().setMuted('c1', true)
+
+    expect(store().conversations.c1.isMuted).toBe(true)
+    expect(store().conversations.c2.isMuted).toBe(false)
+  })
+
+  it('can be undone', () => {
+    store().seedConversations([conversation({ id: 'c1', isMuted: true })])
+
+    store().setMuted('c1', false)
+
+    expect(store().conversations.c1.isMuted).toBe(false)
+  })
+
+  it('leaves the unread count and the preview alone', () => {
+    store().seedConversations([
+      conversation({
+        id: 'c1',
+        unreadCount: 4,
+        lastMessage: { senderId: 'bob', content: 'x', createdAt: '2026-10-11T10:00:00Z', attachmentCount: 0 },
+      }),
+    ])
+    const before = store().conversations.c1
+
+    store().setMuted('c1', true)
+
+    expect(store().conversations.c1).toEqual({ ...before, isMuted: true })
+  })
+
+  it('says nothing changed when the choice is the one already held', () => {
+    store().seedConversations([conversation({ id: 'c1', isMuted: true })])
+    const before = store().conversations
+
+    store().setMuted('c1', true)
+
+    expect(store().conversations).toBe(before)
+  })
+
+  it('ignores a conversation the sidebar does not know', () => {
+    const before = store().conversations
+
+    store().setMuted('nope', true)
+
+    expect(store().conversations).toBe(before)
+  })
+
+  it('is not undone by a message arriving', () => {
+    store().seedConversations([conversation({ id: 'c1', isMuted: true })])
+
+    store().receiveMessage(message({ id: 'm1', conversationId: 'c1', senderId: 'bob' }), 'me')
+
+    expect(store().conversations.c1.isMuted).toBe(true)
+    expect(store().conversations.c1.unreadCount).toBe(1)
   })
 })

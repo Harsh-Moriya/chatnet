@@ -7,6 +7,7 @@ using ChatNET.API.Conversations.GetMembers;
 using ChatNET.API.Conversations.GetMyConversations;
 using ChatNET.API.Conversations.MarkRead;
 using ChatNET.API.Conversations.Models;
+using ChatNET.API.Conversations.SetMuted;
 using MediatR;
 
 namespace ChatNET.API.Conversations;
@@ -16,6 +17,8 @@ public record CreateDirectRequest(Guid OtherUserId);
 public record CreateGroupRequest(string Name, List<Guid> MemberIds);
 
 public record MarkReadRequest(Guid MessageId);
+
+public record SetMutedRequest(bool? IsMuted);
 
 public static class ConversationEndpoints
 {
@@ -63,6 +66,16 @@ public static class ConversationEndpoints
             Guid conversationId, MarkReadRequest body, HttpContext http, IMediator mediator) =>
         {
             await mediator.Send(new MarkReadCommand(conversationId, http.User.GetUserId(), body.MessageId));
+            return Results.NoContent();
+        })
+        .ReturnsNoContent(
+            StatusCodes.Status400BadRequest, StatusCodes.Status401Unauthorized, StatusCodes.Status403Forbidden);
+
+        // Mutes or unmutes the conversation for the caller only. 204 whether or not the value changed.
+        conversations.MapPut("/{conversationId:guid}/mute", async (
+            Guid conversationId, SetMutedRequest body, HttpContext http, IMediator mediator) =>
+        {
+            await mediator.Send(new SetMutedCommand(conversationId, http.User.GetUserId(), body.IsMuted));
             return Results.NoContent();
         })
         .ReturnsNoContent(
