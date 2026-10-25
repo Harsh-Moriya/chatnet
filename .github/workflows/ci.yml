@@ -117,3 +117,25 @@ jobs:
       # for public host names, and that the SignalR access token is not written to the log.
       - name: Smoke test the web server
         run: sh deploy/smoke-test.sh chatnet-web
+
+      # The images are also built for ARM64 so the same stack runs on ARM servers. Nothing is emulated: the commands of
+      # a build run on this machine and only files are copied into the ARM images.
+      - name: Build the API image for ARM64
+        run: docker build --platform linux/arm64 --target api --tag chatnet-api:arm64 backend
+
+      - name: Build the migration job image for ARM64
+        run: docker build --platform linux/arm64 --target migrate --tag chatnet-migrate:arm64 backend
+
+      - name: Build the web image for ARM64
+        run: docker build --platform linux/arm64 --file frontend/Dockerfile --tag chatnet-web:arm64 .
+
+      # An image's platform label comes from the base image it starts from, so only the executables inside show what
+      # was really built: the migration bundle is the one that is compiled for a CPU during the build.
+      - name: Check which CPU each image's executable is for
+        run: |
+          sh deploy/check-image-arch.sh chatnet-migrate /app/efbundle amd64
+          sh deploy/check-image-arch.sh chatnet-migrate:arm64 /app/efbundle arm64
+          sh deploy/check-image-arch.sh chatnet-api /usr/share/dotnet/dotnet amd64
+          sh deploy/check-image-arch.sh chatnet-api:arm64 /usr/share/dotnet/dotnet arm64
+          sh deploy/check-image-arch.sh chatnet-web /usr/bin/caddy amd64
+          sh deploy/check-image-arch.sh chatnet-web:arm64 /usr/bin/caddy arm64

@@ -7,7 +7,8 @@
 # ##### Build #####
 # npm ci installs exactly what the lockfile says and stops if it is out of step with package.json. The page talks to
 # /api and /hubs on its own address (no VITE_API_URL or VITE_HUB_URL), which is what the proxy serves.
-FROM node:24.22.1-alpine AS build
+# The build runs on the machine doing it, whichever CPU the image is for: it produces plain files that any CPU can serve.
+FROM --platform=$BUILDPLATFORM node:24.22.1-alpine AS build
 WORKDIR /app
 
 COPY frontend/package.json frontend/package-lock.json ./
