@@ -127,7 +127,7 @@ Files are kept in object storage that is not part of this stack: Cloudflare R2 (
 
 ### What you need
 
-- A Linux machine with Docker and the Compose plugin, and ports 80 and 443 open to the internet.
+- A Linux machine with Docker and the Compose plugin, and ports 80 and 443 open to the internet. It can be x86-64 or ARM64: the images are built for the CPU of the machine that builds them, so the commands below are the same on both.
 - A domain name whose DNS records point at that machine. Caddy asks for the certificate as soon as it starts, so the records must be right before the first start.
 - An R2 bucket and an access key for it.
 
@@ -170,7 +170,7 @@ Set `DOMAIN=localhost` in `.env.prod`. Caddy then uses its own certificate autho
 
 - The login and refresh rate limits are counted in each API instance, so with two instances the effective allowance per client is up to twice what is configured.
 - One Postgres and one Redis, with no replication and no automatic backups.
-- Nothing here has run on a real server or against Cloudflare R2; it has been run on one machine with the object store left unconfigured.
+- Nothing here has run on a real server or against Cloudflare R2; it has been run on one machine with the object store left unconfigured. The ARM64 images have been built and checked, and the whole stack has run as ARM64 only under emulation on an x86-64 machine, not on a real ARM server.
 
 ## Tests
 
