@@ -2,6 +2,9 @@
 
 @theme {
   --font-sans: 'Inter', system-ui, sans-serif;
+
+  --color-line: var(--color-slate-300);
+  --color-line-subtle: var(--color-slate-200);
 }
 
 @layer base {

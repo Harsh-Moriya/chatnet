@@ -79,7 +79,7 @@ export function AttachmentGrid({ attachments, own, conversationId, messageId }: 
             'flex w-64 max-w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-xs transition-colors',
             own
               ? 'border-white/30 bg-white/15 text-white hover:bg-white/25'
-              : 'border-slate-200 bg-slate-50 text-slate-900 hover:bg-slate-100',
+              : 'border-line bg-slate-50 text-slate-900 hover:bg-slate-100',
           )}
         >
           <AttachmentIcon contentType={attachment.contentType} className="h-5 w-5 shrink-0" />

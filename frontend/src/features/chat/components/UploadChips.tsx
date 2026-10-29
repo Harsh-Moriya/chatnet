@@ -25,7 +25,7 @@ export function UploadChips({ items, onRemove }: UploadChipsProps) {
             key={item.id}
             className={cn(
               'flex w-56 max-w-full items-center gap-2 rounded-lg border bg-white p-1.5 text-xs',
-              failed ? 'border-red-400' : 'border-slate-200',
+              failed ? 'border-red-400' : 'border-line',
             )}
           >
             {attachmentTypeOf(item.file.type) === 'Image' ? (

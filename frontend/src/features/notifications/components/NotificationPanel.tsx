@@ -60,7 +60,7 @@ export function NotificationPanel({ id, onClose }: NotificationPanelProps) {
 
   return (
     <section id={id} aria-label="Notifications" className="absolute inset-x-0 bottom-0 top-16 z-20 flex flex-col bg-white">
-      <div className="flex shrink-0 items-center justify-between gap-2 border-b border-slate-200 px-4 py-2">
+      <div className="flex shrink-0 items-center justify-between gap-2 border-b border-line px-4 py-2">
         <h2 className="text-sm font-semibold text-slate-900">Notifications</h2>
         <div className="flex items-center gap-1">
           <Button
@@ -79,7 +79,7 @@ export function NotificationPanel({ id, onClose }: NotificationPanelProps) {
       </div>
 
       {permission === 'default' && (
-        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-4 py-2">
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-line bg-slate-50 px-4 py-2">
           <p className="text-xs text-slate-500">Get an alert when something arrives while you are away.</p>
           <Button variant="ghost" size="sm" onClick={() => void request()}>
             <BellRing className="h-3.5 w-3.5" />
@@ -89,7 +89,7 @@ export function NotificationPanel({ id, onClose }: NotificationPanelProps) {
       )}
 
       {permission === 'denied' && (
-        <p className="shrink-0 border-b border-slate-200 bg-slate-50 px-4 py-2 text-xs text-slate-500">
+        <p className="shrink-0 border-b border-line bg-slate-50 px-4 py-2 text-xs text-slate-500">
           Alerts are blocked for this site. Allow notifications in your browser settings to turn them on.
         </p>
       )}
@@ -126,7 +126,7 @@ export function NotificationPanel({ id, onClose }: NotificationPanelProps) {
         )}
 
         {items.length > 0 && (
-          <ul className="divide-y divide-slate-100">
+          <ul className="divide-y divide-line-subtle">
             {items.map((notification) => (
               <NotificationRow
                 key={notification.id}

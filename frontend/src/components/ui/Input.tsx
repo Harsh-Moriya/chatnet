@@ -17,7 +17,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
       'disabled:cursor-not-allowed disabled:opacity-50',
       error
         ? 'border-red-400 focus:border-red-400 focus:ring-red-500/20'
-        : 'border-slate-200 focus:border-blue-500 focus:ring-blue-500/20',
+        : 'border-line focus:border-blue-500 focus:ring-blue-500/20',
       leftIcon ? 'pl-10' : '',
       rightElement ? 'pr-10' : '',
       className,
