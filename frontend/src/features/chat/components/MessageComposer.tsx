@@ -162,13 +162,13 @@ export function MessageComposer({ conversationId }: { conversationId: string }) 
   }
 
   return (
-    <div className="relative shrink-0 border-t border-slate-200 bg-white p-3">
+    <div className="relative shrink-0 border-t border-line bg-white p-3">
       {listOpen && (
         <ul
           id={SUGGESTIONS_ID}
           role="listbox"
           aria-label="People you can mention"
-          className="absolute inset-x-3 bottom-full z-10 mb-1 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-md"
+          className="absolute inset-x-3 bottom-full z-10 mb-1 overflow-hidden rounded-lg border border-line bg-white shadow-md"
         >
           {suggestions.map((member, index) => (
             <li

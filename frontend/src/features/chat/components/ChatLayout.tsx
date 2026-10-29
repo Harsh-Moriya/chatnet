@@ -22,7 +22,7 @@ export function ChatLayout() {
       {/* Relative, so the notification panel can cover the list below the sidebar's header. */}
       <aside
         className={cn(
-          'relative w-full shrink-0 flex-col border-r border-slate-200 bg-white md:flex md:w-80 lg:w-96',
+          'relative w-full shrink-0 flex-col border-r border-line bg-white md:flex md:w-80 lg:w-96',
           conversationOpen ? 'hidden' : 'flex',
         )}
       >

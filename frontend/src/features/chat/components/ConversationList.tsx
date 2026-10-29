@@ -48,7 +48,7 @@ export function ConversationList({ onNewConversation }: { onNewConversation: () 
 
   return (
     <nav aria-label="Conversations" className="flex-1 overflow-y-auto">
-      <ul className="divide-y divide-slate-100">
+      <ul className="divide-y divide-line-subtle">
         {list.map((conversation) => (
           <ConversationListItem
             key={conversation.id}

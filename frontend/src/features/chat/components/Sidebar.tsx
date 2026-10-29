@@ -29,7 +29,7 @@ export function Sidebar() {
 
   return (
     <>
-      <header className="flex h-16 shrink-0 items-center justify-between gap-2 border-b border-slate-200 px-4">
+      <header className="flex h-16 shrink-0 items-center justify-between gap-2 border-b border-line px-4">
         <div className="flex min-w-0 items-center gap-3">
           <Avatar name={user?.displayName ?? ''} />
           <div className="min-w-0">

@@ -33,11 +33,11 @@ export function Dialog({ open, onClose, title, children }: DialogProps) {
       onClick={(event) => {
         if (event.target === event.currentTarget) onClose()
       }}
-      className="m-auto w-[calc(100%-2rem)] max-w-md rounded-lg border border-slate-200 bg-white p-0 shadow-xl backdrop:bg-slate-900/40"
+      className="m-auto w-[calc(100%-2rem)] max-w-md rounded-lg border border-line bg-white p-0 shadow-xl backdrop:bg-slate-900/40"
     >
       {open && (
         <div className="flex max-h-[85dvh] flex-col">
-          <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+          <div className="flex items-center justify-between border-b border-line px-5 py-4">
             <h2 className="text-base font-semibold text-slate-900">{title}</h2>
             <Button variant="ghost" size="icon" aria-label="Close" onClick={onClose}>
               <X className="h-5 w-5" />

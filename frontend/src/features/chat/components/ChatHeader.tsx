@@ -53,7 +53,7 @@ export function ChatHeader({ conversation }: { conversation: Conversation }) {
   }
 
   return (
-    <header className="flex h-16 shrink-0 items-center gap-3 border-b border-slate-200 bg-white px-4">
+    <header className="flex h-16 shrink-0 items-center gap-3 border-b border-line bg-white px-4">
       {/* On a phone the list and the conversation are separate screens; this goes back to the list. */}
       <Button
         variant="ghost"

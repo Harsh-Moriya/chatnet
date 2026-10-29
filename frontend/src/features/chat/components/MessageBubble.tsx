@@ -71,7 +71,7 @@ export function MessageBubble({
             ? 'border border-red-400 bg-red-50 text-slate-900'
             : own
               ? 'bg-blue-600 text-white'
-              : 'border border-slate-200 bg-white text-slate-900',
+              : 'border border-line bg-white text-slate-900',
           status === 'sending' && 'opacity-70',
         )}
       >
