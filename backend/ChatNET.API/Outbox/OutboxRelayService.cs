@@ -3,8 +3,8 @@ using Microsoft.Extensions.Options;
 
 namespace ChatNET.API.Outbox;
 
-// Makes the pushes that the requests did not make: the push failed, or the process stopped between the save and
-// the push. Each pass takes the rows that are due (see IOutboxRepository.ClaimDueAsync), pushes them oldest first and
+// Does the jobs that the requests did not do: a push that failed, files that were not removed, or a process that
+// stopped between the save and the job. Each pass takes the rows that are due (see IOutboxRepository.ClaimDueAsync), pushes them oldest first and
 // marks the ones that worked. A row that fails is tried again later with a growing wait, up to MaxAttempts, then
 // left in the table with its last error.
 //

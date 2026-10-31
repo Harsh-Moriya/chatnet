@@ -30,6 +30,17 @@ public sealed record MessageUpdated(Guid MessageId, Guid ConversationId) : IOutb
     public string Kind => Name;
 }
 
+// A message was deleted and had files: they are removed from the bucket. The only event that is not a push; it is here
+// because a failure to remove a file has to be retried, and a file that is never removed is a file nobody can reach
+// and nobody can account for.
+public sealed record MessageFilesRemoved(Guid MessageId) : IOutboxEvent
+{
+    public const string Name = nameof(MessageFilesRemoved);
+
+    [JsonIgnore]
+    public string Kind => Name;
+}
+
 // A notification was stored: its recipient's open tabs are sent it.
 public sealed record NotificationCreated(Guid NotificationId, Guid UserId) : IOutboxEvent
 {
@@ -69,6 +80,7 @@ public static class OutboxEvents
     {
         MessageCreated.Name => Deserialize<MessageCreated>(payload),
         MessageUpdated.Name => Deserialize<MessageUpdated>(payload),
+        MessageFilesRemoved.Name => Deserialize<MessageFilesRemoved>(payload),
         NotificationCreated.Name => Deserialize<NotificationCreated>(payload),
         ConversationCreated.Name => Deserialize<ConversationCreated>(payload),
         ConversationRead.Name => Deserialize<ConversationRead>(payload),

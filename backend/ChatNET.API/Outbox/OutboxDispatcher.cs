@@ -10,8 +10,9 @@ using Microsoft.AspNetCore.SignalR;
 
 namespace ChatNET.API.Outbox;
 
-// Makes the push a stored row stands for, the way the relay needs it: from the stored data as it is now, and with
-// failures thrown so the relay can record them. (The request that wrote the row pushes from what it already holds.)
+// Does the job a stored row stands for (a push, or taking files out of the bucket), the way the relay needs it: from the
+// stored data as it is now, and with failures thrown so the relay can record them. (The request that wrote the row
+// does the job from what it already holds.)
 //
 // A row whose subject is gone (a notification that was dismissed before the push, for example) has nothing left to
 // say, and counts as done.
@@ -23,6 +24,8 @@ public class OutboxDispatcher
     private readonly INotificationRepository _notifications;
     private readonly IConversationRepository _conversations;
     private readonly ConversationNotifier _notifier;
+    private readonly IAttachmentRepository _attachments;
+    private readonly AttachmentRemover _remover;
     private readonly ILogger<OutboxDispatcher> _logger;
 
     public OutboxDispatcher(
@@ -32,6 +35,8 @@ public class OutboxDispatcher
         INotificationRepository notifications,
         IConversationRepository conversations,
         ConversationNotifier notifier,
+        IAttachmentRepository attachments,
+        AttachmentRemover remover,
         ILogger<OutboxDispatcher> logger)
     {
         _hub = hub;
@@ -40,6 +45,8 @@ public class OutboxDispatcher
         _notifications = notifications;
         _conversations = conversations;
         _notifier = notifier;
+        _attachments = attachments;
+        _remover = remover;
         _logger = logger;
     }
 
@@ -67,6 +74,10 @@ public class OutboxDispatcher
                 }
 
                 await _hub.Clients.Group(ChatGroups.Conversation(updated.ConversationId)).MessageUpdated(changed);
+                return;
+
+            case MessageFilesRemoved removed:
+                await RemoveFilesAsync(removed, row, cancellationToken);
                 return;
 
             case NotificationCreated notification:
@@ -101,6 +112,30 @@ public class OutboxDispatcher
             default:
                 throw new InvalidOperationException($"The outbox has no push for kind '{row.Kind}'.");
         }
+    }
+
+    // Removes the files of a deleted message. A row that names a message that is not deleted removes nothing, whatever
+    // put it there: the files of a message people can still read must never go. A file already gone counts as removed.
+    private async Task RemoveFilesAsync(MessageFilesRemoved removed, OutboxMessage row, CancellationToken cancellationToken)
+    {
+        var message = await _messages.FindByIdAsync(removed.MessageId, cancellationToken);
+        if (message is null)
+        {
+            LogNothingToPush(row);
+            return;
+        }
+
+        if (!message.IsDeleted)
+        {
+            _logger.LogWarning(
+                "Outbox {OutboxId} asks for the files of message {MessageId} to be removed, but it is not deleted; nothing removed",
+                row.Id, removed.MessageId);
+
+            return;
+        }
+
+        var files = await _attachments.GetForMessagesAsync([removed.MessageId], cancellationToken);
+        await _remover.RemoveAsync(files, cancellationToken);
     }
 
     // The message as it is now, with links to its files signed now. A deleted message has no text and no files.

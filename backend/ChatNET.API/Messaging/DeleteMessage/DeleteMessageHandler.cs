@@ -26,7 +26,7 @@ public class DeleteMessageHandler : IRequestHandler<DeleteMessageCommand, Messag
     private readonly IConversationRepository _conversations;
     private readonly IMessageRepository _messages;
     private readonly IAttachmentRepository _attachments;
-    private readonly IBlobStorage _storage;
+    private readonly AttachmentRemover _remover;
     private readonly UserManager<AppUser> _userManager;
     private readonly AttachmentLoader _attachmentLoader;
     private readonly OutboxPublisher _outbox;
@@ -38,7 +38,7 @@ public class DeleteMessageHandler : IRequestHandler<DeleteMessageCommand, Messag
         IConversationRepository conversations,
         IMessageRepository messages,
         IAttachmentRepository attachments,
-        IBlobStorage storage,
+        AttachmentRemover remover,
         UserManager<AppUser> userManager,
         AttachmentLoader attachmentLoader,
         OutboxPublisher outbox,
@@ -49,7 +49,7 @@ public class DeleteMessageHandler : IRequestHandler<DeleteMessageCommand, Messag
         _conversations = conversations;
         _messages = messages;
         _attachments = attachments;
-        _storage = storage;
+        _remover = remover;
         _userManager = userManager;
         _attachmentLoader = attachmentLoader;
         _outbox = outbox;
@@ -99,8 +99,14 @@ public class DeleteMessageHandler : IRequestHandler<DeleteMessageCommand, Messag
         var now = _time.GetUtcNow().UtcDateTime.TruncateToMicroseconds();
         var row = _outbox.Create(new MessageUpdated(message.Id, request.ConversationId));
 
-        // False means another request deleted it between the read above and here: it announced the deletion.
-        if (!await _messages.TryDeleteAsync(message.Id, request.UserId, now, [row], cancellationToken))
+        // Taking the files out of the bucket is a job of its own, saved with the deletion: if the storage cannot be
+        // reached now, or this process stops before it gets there, the relay does it. Only a message with files has one.
+        var filesRow = files.Count > 0 ? _outbox.Create(new MessageFilesRemoved(message.Id)) : null;
+        List<OutboxMessage> rows = filesRow is null ? [row] : [row, filesRow];
+
+        // False means another request deleted it between the read above and here: it announced the deletion and
+        // took the files out.
+        if (!await _messages.TryDeleteAsync(message.Id, request.UserId, now, rows, cancellationToken))
             return await CurrentAsync(message.Id, cancellationToken);
 
         _logger.LogInformation(
@@ -113,7 +119,9 @@ public class DeleteMessageHandler : IRequestHandler<DeleteMessageCommand, Messag
             row,
             () => _hub.Clients.Group(ChatGroups.Conversation(request.ConversationId)).MessageUpdated(dto));
 
-        await RemoveFilesAsync(files);
+        // Not tied to the request: the request ending now does not make the files any less in the way.
+        if (filesRow is not null)
+            await _outbox.DeliverAsync(filesRow, () => _remover.RemoveAsync(files, CancellationToken.None));
 
         return dto;
     }
@@ -123,26 +131,6 @@ public class DeleteMessageHandler : IRequestHandler<DeleteMessageCommand, Messag
     {
         var role = await _conversations.GetActiveMemberRoleAsync(request.ConversationId, request.UserId, cancellationToken);
         return role is MemberRole.Owner or MemberRole.Admin;
-    }
-
-    // After the commit, so a failed deletion never loses files of a message that still exists. A file the storage
-    // cannot delete stays where it is, unreachable (its message is deleted, so no link is ever signed for it again),
-    // and is logged by id.
-    private async Task RemoveFilesAsync(IReadOnlyList<MessageAttachment> files)
-    {
-        foreach (var file in files)
-        {
-            try
-            {
-                await _storage.DeleteAsync(file.StorageKey, CancellationToken.None);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex,
-                    "Could not delete the stored file of attachment {AttachmentId} of deleted message {MessageId}",
-                    file.Id, file.MessageId);
-            }
-        }
     }
 
     private async Task<MessageDto> CurrentAsync(Guid messageId, CancellationToken cancellationToken)

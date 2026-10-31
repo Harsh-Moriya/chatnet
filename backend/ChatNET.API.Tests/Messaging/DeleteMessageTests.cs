@@ -322,13 +322,18 @@ public class DeleteMessageTests
 
         Assert.False(await _factory.ObjectExistsAsync(file.StorageKey));
         Assert.Empty(deleted.AttachmentsOf());
+        var job = Assert.Single(
+            await _factory.OutboxRowsAboutAsync("messageId", sent.MessageIdOf()), r => r.Kind == MessageFilesRemoved.Name);
+        Assert.NotNull(job.DispatchedAt);
         using var bobClient = _factory.CreateClientFor(bob);
         var link = await bobClient.GetAttachmentLinkResponseAsync(file.Id);
         Assert.Equal(HttpStatusCode.NotFound, link.StatusCode);
     }
 
+    // The storage cannot be reached when the message is deleted. The deletion still succeeds, the job to remove the file
+    // stays in the outbox, and the relay takes the file out once it can.
     [Fact]
-    public async Task A_file_the_storage_cannot_delete_is_logged_by_id_and_the_deletion_still_succeeds()
+    public async Task A_file_the_storage_would_not_delete_is_removed_later_by_the_relay()
     {
         var capture = new CapturingLoggerProvider();
         var (alice, _, conversation) = await _factory.DirectChatAsync();
@@ -349,8 +354,89 @@ public class DeleteMessageTests
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.True((await StoredAsync(sent)).IsDeleted);
+        Assert.True(await _factory.ObjectExistsAsync(file.StorageKey));
+        var job = Assert.Single(
+            await _factory.OutboxRowsAboutAsync("messageId", sent.MessageIdOf()), r => r.Kind == MessageFilesRemoved.Name);
+        Assert.Null(job.DispatchedAt);
         var warning = Assert.Single(capture.Entries, e => e.StartsWith("[Warning]") && e.Contains(file.Id.ToString()));
         Assert.DoesNotContain(file.StorageKey, warning);
+
+        var clock = new ManualTimeProvider();
+        using var relayHost = _factory.WithClock(clock);
+        clock.Advance(TimeSpan.FromMinutes(3));
+        await relayHost.Services.GetRequiredService<OutboxRelayService>().RunOnceAsync(CancellationToken.None);
+
+        Assert.False(await _factory.ObjectExistsAsync(file.StorageKey));
+        Assert.NotNull((await _factory.OutboxRowAsync(job.Id)).DispatchedAt);
+    }
+
+    // Every file is tried even when one fails: the others go at once, and only the one that failed is left for the relay.
+    [Fact]
+    public async Task When_one_of_two_files_cannot_be_deleted_the_other_goes_at_once_and_the_relay_removes_the_first()
+    {
+        var (alice, _, conversation) = await _factory.DirectChatAsync();
+        using var client = _factory.CreateClientFor(alice);
+        var first = await client.UploadFileAsync(conversation, "one"u8.ToArray(), "text/plain", "one.txt");
+        var second = await client.UploadFileAsync(conversation, "two"u8.ToArray(), "text/plain", "two.txt");
+        var sent = await client.SendMessageWithFilesAsync(conversation, "two files", (first, "one.txt"), (second, "two.txt"));
+        var files = await _factory.QueryDbAsync(db => db.MessageAttachments
+            .Where(a => a.MessageId == sent.MessageIdOf()).OrderBy(a => a.CreatedAt).ToListAsync());
+        var stubborn = files[0].StorageKey;
+        using var host = _factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+        {
+            services.RemoveAll<IBlobStorage>();
+            services.AddSingleton<IBlobStorage>(provider => new UndeletableBlobStorage(
+                ActivatorUtilities.CreateInstance<S3BlobStorage>(provider), key => key == stubborn));
+        }));
+        using var hostClient = Authorized(host, alice);
+
+        await hostClient.DeleteMessageAsync(conversation, sent.MessageIdOf());
+
+        Assert.True(await _factory.ObjectExistsAsync(files[0].StorageKey));
+        Assert.False(await _factory.ObjectExistsAsync(files[1].StorageKey));
+
+        var clock = new ManualTimeProvider();
+        using var relayHost = _factory.WithClock(clock);
+        clock.Advance(TimeSpan.FromMinutes(3));
+        await relayHost.Services.GetRequiredService<OutboxRelayService>().RunOnceAsync(CancellationToken.None);
+
+        Assert.False(await _factory.ObjectExistsAsync(files[0].StorageKey));
+    }
+
+    [Fact]
+    public async Task A_message_without_files_has_no_job_for_files()
+    {
+        var (sent, conversation, alice, _) = await SentInDirectChatAsync();
+        using var client = _factory.CreateClientFor(alice);
+
+        await client.DeleteMessageAsync(conversation, sent.MessageIdOf());
+
+        Assert.DoesNotContain(
+            await _factory.OutboxRowsAboutAsync("messageId", sent.MessageIdOf()), r => r.Kind == MessageFilesRemoved.Name);
+    }
+
+    // The job is saved with the deletion, so a deletion that is not stored leaves no job to remove the files of a
+    // message that still exists.
+    [Fact]
+    public async Task A_message_with_files_that_is_not_deleted_keeps_its_files_and_has_no_job()
+    {
+        var (alice, _, conversation) = await _factory.DirectChatAsync();
+        using var client = _factory.CreateClientFor(alice);
+        var key = await client.UploadFileAsync(conversation, "hello"u8.ToArray(), "text/plain", "note.txt");
+        var sent = await client.SendMessageWithFilesAsync(conversation, "see file", (key, "note.txt"));
+        var file = await _factory.QueryDbAsync(db => db.MessageAttachments.SingleAsync(a => a.MessageId == sent.MessageIdOf()));
+        using var scope = _factory.Services.CreateScope();
+        var publisher = scope.ServiceProvider.GetRequiredService<OutboxPublisher>();
+        var update = publisher.Create(new MessageUpdated(sent.MessageIdOf(), conversation));
+        var removal = publisher.Create(new MessageFilesRemoved(sent.MessageIdOf()));
+        removal.Kind = new string('x', 65);
+
+        await Assert.ThrowsAsync<DbUpdateException>(() => scope.ServiceProvider.GetRequiredService<IMessageRepository>()
+            .TryDeleteAsync(sent.MessageIdOf(), alice.Id, DateTime.UtcNow, [update, removal], CancellationToken.None));
+
+        Assert.False((await StoredAsync(sent)).IsDeleted);
+        Assert.True(await _factory.ObjectExistsAsync(file.StorageKey));
+        Assert.Equal(0, await _factory.QueryDbAsync(db => db.OutboxMessages.CountAsync(o => o.Id == removal.Id)));
     }
 
     [Fact]
