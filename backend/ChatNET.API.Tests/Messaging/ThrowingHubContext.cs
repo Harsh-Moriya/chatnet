@@ -6,17 +6,28 @@ using Microsoft.AspNetCore.SignalR;
 namespace ChatNET.API.Tests.Messaging;
 
 // A hub context whose pushes always fail, to simulate Redis or SignalR being unavailable at the
-// moment a request tries to notify clients. Only the members the code under test uses are
+// moment a request tries to notify clients. It throws an InvalidOperationException unless it is given another exception
+// to throw (a timeout that surfaces as a cancellation, for example). Only the members the code under test uses are
 // implemented; the rest throw, so an unexpected use shows up as a test failure.
 public sealed class ThrowingHubContext : IHubContext<ChatHub, IChatClient>
 {
-    public IHubClients<IChatClient> Clients { get; } = new ThrowingClients();
+    public ThrowingHubContext(Func<Exception>? failure = null)
+    {
+        Clients = new ThrowingClients(failure ?? (() => new InvalidOperationException("Simulated push failure.")));
+    }
+
+    public IHubClients<IChatClient> Clients { get; }
 
     public IGroupManager Groups => throw new NotSupportedException();
 
     private sealed class ThrowingClients : IHubClients<IChatClient>
     {
-        private static readonly IChatClient Client = new ThrowingChatClient();
+        private readonly IChatClient Client;
+
+        public ThrowingClients(Func<Exception> failure)
+        {
+            Client = new ThrowingChatClient(failure);
+        }
 
         public IChatClient User(string userId) => Client;
 
@@ -39,7 +50,14 @@ public sealed class ThrowingHubContext : IHubContext<ChatHub, IChatClient>
 
     private sealed class ThrowingChatClient : IChatClient
     {
-        private static InvalidOperationException Failure() => new("Simulated push failure.");
+        private readonly Func<Exception> _failure;
+
+        public ThrowingChatClient(Func<Exception> failure)
+        {
+            _failure = failure;
+        }
+
+        private Exception Failure() => _failure();
 
         public Task ReceiveMessage(MessageDto message) => throw Failure();
 

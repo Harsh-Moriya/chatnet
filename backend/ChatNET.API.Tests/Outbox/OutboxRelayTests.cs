@@ -5,6 +5,7 @@ using ChatNET.API.Messaging.Hubs;
 using ChatNET.API.Messaging.Models;
 using ChatNET.API.Outbox;
 using ChatNET.API.Outbox.Models;
+using ChatNET.API.Outbox.Persistence;
 using ChatNET.API.Tests.Infrastructure;
 using ChatNET.API.Tests.Media;
 using ChatNET.API.Tests.Messaging;
@@ -376,6 +377,63 @@ public class OutboxRelayTests : IAsyncLifetime
         Assert.Null(last.DispatchedAt);
     }
 
+    // A timeout can surface as a cancellation (a client that gives up on a slow call). Only the host stopping may end a
+    // pass by cancellation; anything else is a failed row, or the exception leaves the background service and stops the
+    // whole process.
+    [Fact]
+    public async Task A_cancellation_that_is_not_the_shutdown_is_a_failed_row_and_does_not_end_the_pass()
+    {
+        var clock = new ManualTimeProvider();
+        using var relayHost = _factory.WithClock(clock).WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+        {
+            services.RemoveAll<IHubContext<ChatHub, IChatClient>>();
+            services.AddSingleton<IHubContext<ChatHub, IChatClient>>(
+                new ThrowingHubContext(() => new TaskCanceledException("The call timed out.")));
+        }));
+        var now = clock.GetUtcNow().UtcDateTime;
+        var row = await InsertAsync(
+            new ConversationRead(Guid.NewGuid(), Guid.NewGuid(), now), now.AddMinutes(-1), now.AddMinutes(-1));
+
+        await RunAsync(relayHost);
+
+        var stored = await _factory.OutboxRowAsync(row.Id);
+        Assert.Equal(1, stored.Attempts);
+        Assert.Null(stored.DispatchedAt);
+        Assert.Contains("TaskCanceledException", stored.LastError);
+    }
+
+    // The same holds for what happens outside the rows: reading the table can fail too, and a pass that cannot even
+    // start is a failed pass, not a reason to stop the process.
+    [Fact]
+    public async Task A_pass_that_cannot_read_the_table_fails_quietly_whatever_the_exception_is()
+    {
+        var capture = new CapturingLoggerProvider();
+        using var relayHost = _factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+        {
+            services.AddLogging(logging => logging.AddProvider(capture));
+            services.RemoveAll<IOutboxRepository>();
+            services.AddScoped<IOutboxRepository>(_ =>
+                new FailingOutboxRepository(() => new TaskCanceledException("The query timed out.")));
+        }));
+
+        await RunAsync(relayHost);
+
+        Assert.Single(capture.Entries, e => e.StartsWith("[Warning]") && e.Contains("An outbox pass failed"));
+    }
+
+    // The host stopping is the one cancellation that does end a pass.
+    [Fact]
+    public async Task The_shutdown_ends_a_pass_by_cancellation()
+    {
+        var clock = new ManualTimeProvider();
+        using var relayHost = _factory.WithClock(clock);
+        using var stopping = new CancellationTokenSource();
+        await stopping.CancelAsync();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => RelayOf(relayHost).RunOnceAsync(stopping.Token));
+    }
+
     [Fact]
     public async Task A_row_of_a_kind_the_relay_does_not_know_is_recorded_not_dropped()
     {
@@ -563,6 +621,34 @@ public class OutboxRelayTests : IAsyncLifetime
         var done = await _factory.OutboxRowAsync(row.Id);
         Assert.NotNull(done.DispatchedAt);
         Assert.Null(done.LastError);
+    }
+
+    // A call to the storage that times out can surface as a cancellation. That is a failed removal, to be tried again,
+    // and not an exception that ends the pass and with it the process.
+    [Fact]
+    public async Task A_storage_call_that_times_out_as_a_cancellation_is_a_failed_removal_not_a_crash()
+    {
+        var (alice, _, conversation) = await _factory.DirectChatAsync();
+        var (_, messageId, file) = await MessageWithFileAsync(alice, conversation);
+        await _factory.ExecuteDbAsync(db => db.Messages.Where(m => m.Id == messageId)
+            .ExecuteUpdateAsync(s => s.SetProperty(m => m.IsDeleted, true).SetProperty(m => m.Content, (string?)null)));
+        var clock = new ManualTimeProvider();
+        using var relayHost = _factory.WithClock(clock).WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+        {
+            services.RemoveAll<IBlobStorage>();
+            services.AddSingleton<IBlobStorage>(provider => new UndeletableBlobStorage(
+                ActivatorUtilities.CreateInstance<S3BlobStorage>(provider),
+                failure: () => new TaskCanceledException("The request timed out.")));
+        }));
+        var now = clock.GetUtcNow().UtcDateTime;
+        var row = await InsertAsync(new MessageFilesRemoved(messageId), now.AddMinutes(-1), now.AddMinutes(-1));
+
+        await RunAsync(relayHost);
+
+        var stored = await _factory.OutboxRowAsync(row.Id);
+        Assert.Equal(1, stored.Attempts);
+        Assert.Null(stored.DispatchedAt);
+        Assert.True(await _factory.ObjectExistsAsync(file.StorageKey));
     }
 
     [Fact]

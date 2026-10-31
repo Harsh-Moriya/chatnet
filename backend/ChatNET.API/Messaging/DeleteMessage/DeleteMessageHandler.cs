@@ -117,11 +117,12 @@ public class DeleteMessageHandler : IRequestHandler<DeleteMessageCommand, Messag
 
         await _outbox.DeliverAsync(
             row,
-            () => _hub.Clients.Group(ChatGroups.Conversation(request.ConversationId)).MessageUpdated(dto));
+            () => _hub.Clients.Group(ChatGroups.Conversation(request.ConversationId)).MessageUpdated(dto),
+            cancellationToken);
 
         // Not tied to the request: the request ending now does not make the files any less in the way.
         if (filesRow is not null)
-            await _outbox.DeliverAsync(filesRow, () => _remover.RemoveAsync(files, CancellationToken.None));
+            await _outbox.DeliverAsync(filesRow, () => _remover.RemoveAsync(files, CancellationToken.None), cancellationToken);
 
         return dto;
     }

@@ -133,7 +133,8 @@ public class EditMessageHandler : IRequestHandler<EditMessageCommand, MessageDto
 
         await _outbox.DeliverAsync(
             updateRow,
-            () => _hub.Clients.Group(ChatGroups.Conversation(request.ConversationId)).MessageUpdated(dto));
+            () => _hub.Clients.Group(ChatGroups.Conversation(request.ConversationId)).MessageUpdated(dto),
+            cancellationToken);
 
         for (var i = 0; i < mentions.Count; i++)
         {
@@ -144,7 +145,8 @@ public class EditMessageHandler : IRequestHandler<EditMessageCommand, MessageDto
 
             await _outbox.DeliverAsync(
                 mentionRows[i],
-                () => _hub.Clients.User(mention.UserId.ToString()).NotificationReceived(notification));
+                () => _hub.Clients.User(mention.UserId.ToString()).NotificationReceived(notification),
+                cancellationToken);
         }
 
         return dto;

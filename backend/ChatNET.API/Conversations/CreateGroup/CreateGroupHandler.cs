@@ -114,7 +114,8 @@ public class CreateGroupHandler : IRequestHandler<CreateGroupCommand, Conversati
                   ?? throw new NotFoundException("Conversation", conversation.Id);
 
         await _outbox.DeliverAsync(
-            announcementRow, () => _notifier.NotifyCreatedAsync(dto, request.UserId, allMemberIds, cancellationToken));
+            announcementRow, () => _notifier.NotifyCreatedAsync(dto, request.UserId, allMemberIds, cancellationToken),
+            cancellationToken);
 
         var creator = await _userManager.FindByIdAsync(request.UserId.ToString());
         for (var i = 0; i < invitations.Count; i++)
@@ -126,7 +127,8 @@ public class CreateGroupHandler : IRequestHandler<CreateGroupCommand, Conversati
 
             await _outbox.DeliverAsync(
                 invitationRows[i],
-                () => _hub.Clients.User(invitation.UserId.ToString()).NotificationReceived(notification));
+                () => _hub.Clients.User(invitation.UserId.ToString()).NotificationReceived(notification),
+                cancellationToken);
         }
 
         return dto;

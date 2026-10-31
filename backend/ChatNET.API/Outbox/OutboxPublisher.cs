@@ -44,13 +44,16 @@ public class OutboxPublisher
     // stored by then, so a failing push (Redis down, for example) must not turn a successful request into an error:
     // the row stays and the relay pushes it. A failure to mark the row has the same cost, one repeated push, which a
     // client that already has the data merges away.
-    public async Task DeliverAsync(OutboxMessage row, Func<Task> push)
+    //
+    // A cancellation is a failed push too, unless it is the request's own (the client left, the host is stopping): a
+    // timeout can surface as a cancellation, and must not fail a request whose change is stored.
+    public async Task DeliverAsync(OutboxMessage row, Func<Task> push, CancellationToken cancellationToken)
     {
         try
         {
             await push();
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
         {
             _logger.LogWarning(ex,
                 "Could not push {Kind} (outbox {OutboxId}); the relay will retry it",

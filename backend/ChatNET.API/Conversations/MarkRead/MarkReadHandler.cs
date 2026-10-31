@@ -87,7 +87,7 @@ public class MarkReadHandler : IRequestHandler<MarkReadCommand, Unit>
             request.UserId, request.ConversationId, message.Value.CreatedAt, cancellationToken);
 
         await _outbox.DeliverAsync(announcement, () => _hub.Clients.Group(ChatGroups.Conversation(request.ConversationId))
-            .MessageRead(request.ConversationId, request.UserId, message.Value.CreatedAt));
+            .MessageRead(request.ConversationId, request.UserId, message.Value.CreatedAt), cancellationToken);
 
         if (mentionsRead.Count > 0)
             await _notificationPusher.ReadAsync(request.UserId, mentionsRead);

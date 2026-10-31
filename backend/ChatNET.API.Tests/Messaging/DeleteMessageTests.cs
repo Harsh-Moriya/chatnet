@@ -403,6 +403,37 @@ public class DeleteMessageTests
         Assert.False(await _factory.ObjectExistsAsync(files[0].StorageKey));
     }
 
+    // A call to the storage that times out can surface as a cancellation. It is a failure of that file like any other:
+    // the other files are still tried.
+    [Fact]
+    public async Task A_timeout_on_one_file_does_not_stop_the_other_files_from_being_removed()
+    {
+        var (alice, _, conversation) = await _factory.DirectChatAsync();
+        using var client = _factory.CreateClientFor(alice);
+        var first = await client.UploadFileAsync(conversation, "one"u8.ToArray(), "text/plain", "one.txt");
+        var second = await client.UploadFileAsync(conversation, "two"u8.ToArray(), "text/plain", "two.txt");
+        var sent = await client.SendMessageWithFilesAsync(conversation, "two files", (first, "one.txt"), (second, "two.txt"));
+        var files = await _factory.QueryDbAsync(db => db.MessageAttachments
+            .Where(a => a.MessageId == sent.MessageIdOf()).OrderBy(a => a.CreatedAt).ToListAsync());
+        var slow = files[0].StorageKey;
+        using var host = _factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+        {
+            services.RemoveAll<IBlobStorage>();
+            services.AddSingleton<IBlobStorage>(provider => new UndeletableBlobStorage(
+                ActivatorUtilities.CreateInstance<S3BlobStorage>(provider),
+                key => key == slow,
+                () => new TaskCanceledException("The request timed out.")));
+        }));
+        using var hostClient = Authorized(host, alice);
+
+        var response = await hostClient.DeleteMessageResponseAsync(conversation, sent.MessageIdOf());
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.True(await _factory.ObjectExistsAsync(files[0].StorageKey));
+        Assert.False(await _factory.ObjectExistsAsync(files[1].StorageKey));
+        await _factory.RemoveWaitingOutboxRowsAsync();
+    }
+
     [Fact]
     public async Task A_message_without_files_has_no_job_for_files()
     {

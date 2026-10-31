@@ -8,11 +8,14 @@ public sealed class UndeletableBlobStorage : IBlobStorage
 {
     private readonly IBlobStorage _inner;
     private readonly Func<string, bool> _refuses;
+    private readonly Func<Exception> _failure;
 
-    public UndeletableBlobStorage(IBlobStorage inner, Func<string, bool>? refuses = null)
+    public UndeletableBlobStorage(
+        IBlobStorage inner, Func<string, bool>? refuses = null, Func<Exception>? failure = null)
     {
         _inner = inner;
         _refuses = refuses ?? (_ => true);
+        _failure = failure ?? (() => new InvalidOperationException("The storage refused to delete."));
     }
 
     public SignedUrl CreateUploadUrl(string key, string contentType) => _inner.CreateUploadUrl(key, contentType);
@@ -27,7 +30,5 @@ public sealed class UndeletableBlobStorage : IBlobStorage
         _inner.CopyAsync(sourceKey, destinationKey, sourceETag, cancellationToken);
 
     public Task DeleteAsync(string key, CancellationToken cancellationToken) =>
-        _refuses(key)
-            ? throw new InvalidOperationException("The storage refused to delete.")
-            : _inner.DeleteAsync(key, cancellationToken);
+        _refuses(key) ? throw _failure() : _inner.DeleteAsync(key, cancellationToken);
 }
