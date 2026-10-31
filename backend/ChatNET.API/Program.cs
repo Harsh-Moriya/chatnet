@@ -293,6 +293,7 @@ try
     builder.Services.AddScoped<IAttachmentRepository, AttachmentRepository>();
     builder.Services.AddScoped<AttachmentIntake>();
     builder.Services.AddScoped<AttachmentLoader>();
+    builder.Services.AddScoped<AttachmentRemover>();
 
     // ##### Rate limiting #####
     // Login and registration are limited per client address to slow down password guessing and

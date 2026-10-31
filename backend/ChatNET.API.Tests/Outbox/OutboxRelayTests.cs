@@ -1,9 +1,12 @@
 using System.Text.Json;
 using ChatNET.API.Common.Persistence;
+using ChatNET.API.Media;
 using ChatNET.API.Messaging.Hubs;
+using ChatNET.API.Messaging.Models;
 using ChatNET.API.Outbox;
 using ChatNET.API.Outbox.Models;
 using ChatNET.API.Tests.Infrastructure;
+using ChatNET.API.Tests.Media;
 using ChatNET.API.Tests.Messaging;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.SignalR;
@@ -507,6 +510,92 @@ public class OutboxRelayTests : IAsyncLifetime
         var order = counting.Reads.Where(r => r.ConversationId == conversation).Select(r => r.ReadAt).ToList();
         Assert.Equal(20, order.Count);
         Assert.Equal(order.Order().ToList(), order);
+    }
+
+    // ##### Files of deleted messages #####
+
+    private async Task<(Guid Conversation, Guid MessageId, MessageAttachment File)> MessageWithFileAsync(TestUser sender, Guid conversation)
+    {
+        using var client = _factory.CreateClientFor(sender);
+        var key = await client.UploadFileAsync(conversation, "hello"u8.ToArray(), "text/plain", "note.txt");
+        var sent = await client.SendMessageWithFilesAsync(conversation, "see file", (key, "note.txt"));
+        var file = await _factory.QueryDbAsync(db => db.MessageAttachments.SingleAsync(a => a.MessageId == sent.MessageIdOf()));
+
+        return (conversation, sent.MessageIdOf(), file);
+    }
+
+    // The files of a message people can still read must never go, whatever put the row there.
+    [Fact]
+    public async Task A_row_asking_for_the_files_of_a_message_that_is_not_deleted_removes_nothing()
+    {
+        var capture = new CapturingLoggerProvider();
+        var (alice, _, conversation) = await _factory.DirectChatAsync();
+        var (_, messageId, file) = await MessageWithFileAsync(alice, conversation);
+        var clock = new ManualTimeProvider();
+        using var relayHost = _factory.WithClock(clock).WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+            services.AddLogging(logging => logging.AddProvider(capture))));
+        var now = clock.GetUtcNow().UtcDateTime;
+        var row = await InsertAsync(new MessageFilesRemoved(messageId), now.AddMinutes(-1), now.AddMinutes(-1));
+
+        await RunAsync(relayHost);
+
+        Assert.True(await _factory.ObjectExistsAsync(file.StorageKey));
+        Assert.NotNull((await _factory.OutboxRowAsync(row.Id)).DispatchedAt);
+        Assert.Single(capture.Entries, e => e.StartsWith("[Warning]") && e.Contains(row.Id.ToString()));
+    }
+
+    // A second run of the job (the request and the relay both did it, or the relay ran twice) finds nothing to remove.
+    [Fact]
+    public async Task A_file_that_is_already_gone_counts_as_removed()
+    {
+        var (alice, _, conversation) = await _factory.DirectChatAsync();
+        var (_, messageId, file) = await MessageWithFileAsync(alice, conversation);
+        using var client = _factory.CreateClientFor(alice);
+        await client.DeleteMessageAsync(conversation, messageId);
+        Assert.False(await _factory.ObjectExistsAsync(file.StorageKey));
+        var clock = new ManualTimeProvider();
+        using var relayHost = _factory.WithClock(clock);
+        var now = clock.GetUtcNow().UtcDateTime;
+        var row = await InsertAsync(new MessageFilesRemoved(messageId), now.AddMinutes(-1), now.AddMinutes(-1));
+
+        await RunAsync(relayHost);
+
+        var done = await _factory.OutboxRowAsync(row.Id);
+        Assert.NotNull(done.DispatchedAt);
+        Assert.Null(done.LastError);
+    }
+
+    [Fact]
+    public async Task Files_the_relay_cannot_remove_are_tried_again_and_removed_when_the_storage_works()
+    {
+        var (alice, _, conversation) = await _factory.DirectChatAsync();
+        var (_, messageId, file) = await MessageWithFileAsync(alice, conversation);
+        await _factory.ExecuteDbAsync(db => db.Messages.Where(m => m.Id == messageId)
+            .ExecuteUpdateAsync(s => s.SetProperty(m => m.IsDeleted, true).SetProperty(m => m.Content, (string?)null)));
+        var clock = new ManualTimeProvider();
+        using var failing = _factory.WithClock(clock).WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+        {
+            services.RemoveAll<IBlobStorage>();
+            services.AddSingleton<IBlobStorage>(provider =>
+                new UndeletableBlobStorage(ActivatorUtilities.CreateInstance<S3BlobStorage>(provider)));
+        }));
+        using var working = _factory.WithClock(clock);
+        var now = clock.GetUtcNow().UtcDateTime;
+        var row = await InsertAsync(new MessageFilesRemoved(messageId), now.AddMinutes(-1), now.AddMinutes(-1));
+
+        await RunAsync(failing);
+
+        var first = await _factory.OutboxRowAsync(row.Id);
+        Assert.Equal(1, first.Attempts);
+        Assert.Null(first.DispatchedAt);
+        Assert.Contains("could not be deleted", first.LastError);
+        Assert.True(await _factory.ObjectExistsAsync(file.StorageKey));
+
+        clock.Advance(TimeSpan.FromSeconds(6));
+        await RunAsync(working);
+
+        Assert.False(await _factory.ObjectExistsAsync(file.StorageKey));
+        Assert.NotNull((await _factory.OutboxRowAsync(row.Id)).DispatchedAt);
     }
 
     // ##### Housekeeping #####

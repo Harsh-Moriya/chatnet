@@ -1,9 +1,10 @@
 namespace ChatNET.API.Outbox.Models;
 
-// A push that has to happen because something was saved. It is written in the same transaction as that change, so
+// A job that has to happen because something was saved: a push to the people connected, or (MessageFilesRemoved)
+// taking the files of a deleted message out of the bucket. It is written in the same transaction as that change, so
 // the two never disagree: a change that is stored always has its row, and a change that was rolled back has none.
-// Whoever saved the change delivers the push right away and marks the row dispatched; a row that stays undispatched
-// (the push failed, or the process died between the save and the push) is picked up by the relay.
+// Whoever saved the change does the job right away and marks the row dispatched; a row that stays undispatched
+// (the job failed, or the process died between the save and the job) is picked up by the relay.
 //
 // The row holds ids, not what is pushed. The message, notification or conversation is read again when the push is
 // made, so a retry sends what is true then: fresh download links, and no text of a message deleted in the meantime.
