@@ -109,6 +109,9 @@ function message(id: string, overrides: Partial<Message> = {}): Message {
     content: 'hello',
     createdAt: '2026-10-11T10:00:00Z',
     clientMessageId: null,
+    editedAt: null,
+    editCount: 0,
+    isDeleted: false,
     attachments: [],
     ...overrides,
   }
@@ -186,6 +189,7 @@ describe('event handlers', () => {
       'AddedToConversation',
       'UserTyping',
       'MessageRead',
+      'MessageUpdated',
       'PresenceChanged',
       'ConversationMuteChanged',
       'NotificationReceived',
@@ -208,6 +212,7 @@ describe('event handlers', () => {
     expect(hub.emit('AddedToConversation', conversation('c9'))).toBeUndefined()
     expect(hub.emit('UserTyping', 'c1', 'bob', 'Bob', true)).toBeUndefined()
     expect(hub.emit('MessageRead', 'c1', 'bob', '2026-10-11T10:00:00Z')).toBeUndefined()
+    expect(hub.emit('MessageUpdated', message('m1'))).toBeUndefined()
     expect(hub.emit('PresenceChanged', { userId: 'bob', isOnline: true, lastSeenAt: null, at: '2026-10-11T10:00:00Z' })).toBeUndefined()
     expect(hub.emit('ConversationMuteChanged', 'c1', true)).toBeUndefined()
     expect(hub.emit('NotificationReceived', mention('n1'))).toBeUndefined()
@@ -250,6 +255,35 @@ describe('event handlers', () => {
 
     hub.emit('MessageRead', 'c1', 'me', '2026-10-11T10:00:05Z')
     expect(store().conversations.c1.unreadCount).toBe(0)
+  })
+
+  it('puts a pushed edit in place of the message it is about', async () => {
+    const { hub } = await connected()
+    hub.emit('ReceiveMessage', message('m1'))
+
+    hub.emit('MessageUpdated', message('m1', { content: 'edited', editCount: 1, editedAt: '2026-10-11T10:05:00Z' }))
+
+    expect(store().messages.c1[0]).toMatchObject({ content: 'edited', editCount: 1 })
+  })
+
+  it('takes a pushed deletion off the unread count of the signed-in user', async () => {
+    const { hub } = await connected()
+    store().seedConversations([{ ...conversation('c1'), unreadCount: 1 }])
+    store().seedMessages('c1', [message('m1')])
+
+    hub.emit('MessageUpdated', message('m1', { isDeleted: true, content: null }))
+
+    expect(store().messages.c1[0].isDeleted).toBe(true)
+    expect(store().conversations.c1.unreadCount).toBe(0)
+  })
+
+  it('does not announce a pushed edit as a new message', async () => {
+    const { hub, onMessageArrived } = await connected()
+    store().seedMessages('c1', [message('m1')])
+
+    hub.emit('MessageUpdated', message('m1', { content: 'edited', editCount: 1 }))
+
+    expect(onMessageArrived).not.toHaveBeenCalled()
   })
 
   it('hands a presence change to whoever owns the connection, unchanged', async () => {

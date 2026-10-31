@@ -19,6 +19,9 @@ function page(start: number): Message[] {
     content: 'x',
     createdAt: '2026-10-11T10:00:00Z',
     clientMessageId: null,
+    editedAt: null,
+    editCount: 0,
+    isDeleted: false,
     attachments: [],
   }))
 }

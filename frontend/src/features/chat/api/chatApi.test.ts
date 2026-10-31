@@ -49,6 +49,9 @@ function message(overrides: Partial<Message> & { id: string }): Message {
     content: 'hello',
     createdAt: '2026-10-11T10:00:00Z',
     clientMessageId: null,
+    editedAt: null,
+    editCount: 0,
+    isDeleted: false,
     attachments: [],
     ...overrides,
   }

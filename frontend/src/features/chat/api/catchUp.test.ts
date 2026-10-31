@@ -33,6 +33,9 @@ function message(n: number, conversationId = 'c1'): Message {
     content: `message ${n}`,
     createdAt: `2026-10-11T${hours}:${minutes}:${seconds}Z`,
     clientMessageId: null,
+    editedAt: null,
+    editCount: 0,
+    isDeleted: false,
     attachments: [],
   }
 }

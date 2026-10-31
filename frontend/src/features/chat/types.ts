@@ -56,6 +56,11 @@ export interface Message {
   // The id the sender's tab invented for its optimistic copy: on the response to a send, on its push, and
   // in history. Null for a message sent without one.
   clientMessageId: string | null
+  // When the sender last edited it, or null if they never did. `editCount` is how many times, and orders two copies of
+  // the same message: the higher is the newer. A deleted message is newer than any other copy of itself.
+  editedAt: string | null
+  editCount: number
+  isDeleted: boolean
 }
 
 // A file that finished uploading and is attached to a message that has not been confirmed yet. `uploadKey` is
