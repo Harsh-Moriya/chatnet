@@ -74,6 +74,8 @@ public sealed class CountingHubContext : IHubContext<ChatHub, IChatClient>
 
         public Task ReceiveMessage(MessageDto message) => throw new NotSupportedException();
 
+        public Task MessageUpdated(MessageDto message) => throw new NotSupportedException();
+
         public Task UserTyping(Guid conversationId, Guid userId, string displayName, bool isTyping) =>
             throw new NotSupportedException();
 

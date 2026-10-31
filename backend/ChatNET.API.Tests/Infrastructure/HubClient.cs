@@ -25,6 +25,7 @@ public sealed class HubClient : IAsyncDisposable
 
     private readonly HubConnection _connection;
     private readonly ConcurrentQueue<JsonElement> _messages = new();
+    private readonly ConcurrentQueue<JsonElement> _updates = new();
     private readonly ConcurrentQueue<TypingEvent> _typing = new();
     private readonly ConcurrentQueue<JsonElement> _added = new();
     private readonly ConcurrentQueue<ReadEvent> _reads = new();
@@ -40,6 +41,7 @@ public sealed class HubClient : IAsyncDisposable
 
         // Payloads are kept as raw JSON so tests assert on what a client really receives.
         _connection.On<JsonElement>("ReceiveMessage", message => _messages.Enqueue(message));
+        _connection.On<JsonElement>("MessageUpdated", message => _updates.Enqueue(message));
         _connection.On<Guid, Guid, string, bool>("UserTyping", (conversationId, userId, displayName, isTyping) =>
             _typing.Enqueue(new TypingEvent(conversationId, userId, displayName, isTyping)));
         _connection.On<JsonElement>("AddedToConversation", conversation => _added.Enqueue(conversation));
@@ -56,6 +58,8 @@ public sealed class HubClient : IAsyncDisposable
     public HubConnectionState State => _connection.State;
 
     public IReadOnlyList<JsonElement> Messages => _messages.ToArray();
+
+    public IReadOnlyList<JsonElement> Updates => _updates.ToArray();
 
     public IReadOnlyList<TypingEvent> TypingEvents => _typing.ToArray();
 
@@ -146,6 +150,13 @@ public sealed class HubClient : IAsyncDisposable
         WaitAsync(_messages, m => m.GetProperty("conversationId").GetGuid() == conversationId
                                   && m.GetProperty("id").GetGuid() == messageId, timeout);
 
+    // The next `MessageUpdated` push about this message (an edit or a deletion).
+    public Task<JsonElement> WaitForUpdateAsync(Guid messageId, TimeSpan? timeout = null) =>
+        WaitAsync(_updates, m => m.GetProperty("id").GetGuid() == messageId, timeout);
+
+    public Task<JsonElement> WaitForUpdateAsync(Func<JsonElement, bool> match, TimeSpan? timeout = null) =>
+        WaitAsync(_updates, match, timeout);
+
     public Task<TypingEvent> WaitForTypingAsync(Func<TypingEvent, bool> match, TimeSpan? timeout = null) =>
         WaitAsync(_typing, match, timeout);
 
@@ -169,6 +180,12 @@ public sealed class HubClient : IAsyncDisposable
     {
         await Task.Delay(QuietPeriod);
         return _messages.Any(m => m.GetProperty("conversationId").GetGuid() == conversationId);
+    }
+
+    public async Task<bool> ReceivedUpdateAsync(Guid messageId)
+    {
+        await Task.Delay(QuietPeriod);
+        return _updates.Any(m => m.GetProperty("id").GetGuid() == messageId);
     }
 
     public async Task<bool> ReceivedTypingAsync(Func<TypingEvent, bool> match)

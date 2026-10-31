@@ -21,6 +21,15 @@ public sealed record MessageCreated(Guid MessageId, Guid ConversationId) : IOutb
     public string Kind => Name;
 }
 
+// A message already stored was edited or deleted: everyone in the conversation is sent it as it is now.
+public sealed record MessageUpdated(Guid MessageId, Guid ConversationId) : IOutboxEvent
+{
+    public const string Name = nameof(MessageUpdated);
+
+    [JsonIgnore]
+    public string Kind => Name;
+}
+
 // A notification was stored: its recipient's open tabs are sent it.
 public sealed record NotificationCreated(Guid NotificationId, Guid UserId) : IOutboxEvent
 {
@@ -59,6 +68,7 @@ public static class OutboxEvents
     public static IOutboxEvent Read(string kind, string payload) => kind switch
     {
         MessageCreated.Name => Deserialize<MessageCreated>(payload),
+        MessageUpdated.Name => Deserialize<MessageUpdated>(payload),
         NotificationCreated.Name => Deserialize<NotificationCreated>(payload),
         ConversationCreated.Name => Deserialize<ConversationCreated>(payload),
         ConversationRead.Name => Deserialize<ConversationRead>(payload),
