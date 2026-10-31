@@ -175,6 +175,12 @@ describe('withChangedPreview', () => {
     expect(withChangedPreview(shown, message({ attachments: files })).lastMessage?.attachmentCount).toBe(1)
   })
 
+  it('leaves the same object when the preview already says what the message says', () => {
+    const shown = conversation({ lastMessage: preview({ content: 'edited' }) })
+
+    expect(withChangedPreview(shown, message({ content: 'edited', editCount: 1 }))).toBe(shown)
+  })
+
   it('leaves the same object when the preview is of another message', () => {
     const shown = conversation({ lastMessage: preview({ createdAt: '2026-10-11T11:00:00Z' }) })
 

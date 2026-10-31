@@ -210,3 +210,75 @@ describe('a later version arriving by another route', () => {
     expect(store().messages.c1[0].content).toBe('edited')
   })
 })
+
+// ##### A conversation whose messages are not loaded #####
+// The sidebar shows the newest message of every conversation, opened or not, so a change to that message has to reach
+// it even when the message itself is not held: a deleted message must not stay readable there.
+
+describe('a change to the newest message of a conversation that was never opened', () => {
+  const preview = (overrides = {}) => previewOf({ content: 'secret words', ...overrides })
+
+  it('shows an edit in the preview', () => {
+    store().seedConversations([conversation({ id: 'c1', lastMessage: preview() })])
+
+    store().replaceMessage(message({ id: 'm1', content: 'corrected words', editCount: 1 }))
+
+    expect(store().conversations.c1.lastMessage?.content).toBe('corrected words')
+    expect(store().messages.c1).toBeUndefined()
+  })
+
+  it('takes the text of a deleted message out of the preview, and one off the unread count', () => {
+    store().seedConversations([conversation({ id: 'c1', unreadCount: 2, lastMessage: preview({ attachmentCount: 1 }) })])
+
+    store().replaceMessage(message({ id: 'm1', isDeleted: true, content: null }), 'me')
+
+    expect(store().conversations.c1.lastMessage).toMatchObject({ content: null, attachmentCount: 0 })
+    expect(store().conversations.c1.unreadCount).toBe(1)
+  })
+
+  it('counts the deletion once, however often it is pushed', () => {
+    store().seedConversations([conversation({ id: 'c1', unreadCount: 2, lastMessage: preview() })])
+    const deleted = message({ id: 'm1', isDeleted: true, content: null })
+
+    store().replaceMessage(deleted, 'me')
+    store().replaceMessage(deleted, 'me')
+
+    expect(store().conversations.c1.unreadCount).toBe(1)
+  })
+
+  it('does not bring a deleted preview back with a late edit', () => {
+    store().seedConversations([conversation({ id: 'c1', lastMessage: preview({ content: null }) })])
+
+    store().replaceMessage(message({ id: 'm1', content: 'late edit', editCount: 1 }))
+
+    expect(store().conversations.c1.lastMessage?.content).toBeNull()
+  })
+
+  // The server cuts a preview to 100 characters; an ordinary push of the same message carries all of it, and is
+  // not a change, so it must not rewrite what the sidebar already shows.
+  it('is not set off by an ordinary push of that message', () => {
+    store().seedConversations([conversation({ id: 'c1', lastMessage: preview({ content: 'the first hundred' }) })])
+
+    store().receiveMessage(message({ id: 'm1', content: 'the first hundred and then all the rest of it' }), 'me')
+
+    expect(store().conversations.c1.lastMessage?.content).toBe('the first hundred')
+  })
+
+  it('leaves the preview of another message, and a conversation the sidebar does not know, alone', () => {
+    store().seedConversations([conversation({ id: 'c1', lastMessage: preview({ createdAt: '2026-10-11T12:00:00Z' }) })])
+    const before = store().conversations
+
+    store().replaceMessage(message({ id: 'm1', content: 'older message edited', editCount: 1 }))
+    store().replaceMessage(message({ id: 'm9', conversationId: 'c9', content: 'elsewhere', editCount: 1 }))
+
+    expect(store().conversations).toBe(before)
+  })
+
+  it('leaves the unread count alone for the reader\'s own message', () => {
+    store().seedConversations([conversation({ id: 'c1', unreadCount: 2, lastMessage: preview({ senderId: 'me' }) })])
+
+    store().replaceMessage(message({ id: 'm1', senderId: 'me', isDeleted: true, content: null }), 'me')
+
+    expect(store().conversations.c1.unreadCount).toBe(2)
+  })
+})

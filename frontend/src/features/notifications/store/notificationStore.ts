@@ -9,6 +9,9 @@ import type { NotificationItem, NotificationList } from '../types'
 // How many the server returns in a page. A page of this size may be followed by another.
 export const NOTIFICATION_PAGE_SIZE = 30
 
+// How much of a message's text a notification shows. Matches MessagePreview.Length on the server.
+const PREVIEW_LENGTH = 100
+
 interface NotificationState {
   items: NotificationItem[]
   // How many are unread. The server counts to a cap, so at the cap this is "at least". Between loads it is
@@ -34,6 +37,9 @@ interface NotificationState {
   applyRead: (ids: readonly string[]) => void
   applyAllRead: () => void
   applyDismissed: (id: string) => void
+  // The message a notification is about was edited (its new text) or deleted (null): the bell shows what is true now,
+  // and the text of a deleted message does not stay readable in it. A deleted message stays deleted.
+  applyMessageChange: (messageId: string, text: string | null) => void
   reset: () => void
 }
 
@@ -157,6 +163,19 @@ export const useNotificationStore = create<NotificationState>()((set) => ({
       const items = state.items.filter((n) => n.id !== id)
       const unreadCount = held.isRead ? state.unreadCount : state.unreadCount - 1
       return { dismissed, items, unreadCount: Math.max(unreadCount, unreadIn(items)) }
+    }),
+
+  applyMessageChange: (messageId, text) =>
+    set((state) => {
+      const preview = text === null ? null : text.slice(0, PREVIEW_LENGTH)
+      const changing = state.items.filter(
+        (n) => n.messageId === messageId && n.messagePreview !== null && n.messagePreview !== preview,
+      )
+      if (changing.length === 0) return state
+
+      return {
+        items: state.items.map((n) => (changing.includes(n) ? { ...n, messagePreview: preview } : n)),
+      }
     }),
 
   reset: () => set(emptyData()),
