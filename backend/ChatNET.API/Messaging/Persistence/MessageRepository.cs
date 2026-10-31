@@ -22,7 +22,10 @@ public class MessageRepository : IMessageRepository
         m.ClientMessageId,
 
         // Filled in for the page as a whole afterwards (AttachmentLoader): one query for all of its files.
-        new List<AttachmentDto>());
+        new List<AttachmentDto>(),
+        m.EditedAt,
+        m.EditCount,
+        m.IsDeleted);
 
     private readonly AppDbContext _db;
 
@@ -91,6 +94,68 @@ public class MessageRepository : IMessageRepository
             .Where(m => m.Id == messageId)
             .Select(ToDto)
             .FirstOrDefaultAsync(cancellationToken);
+
+    public Task<MessageForChange?> FindForChangeAsync(
+        Guid conversationId, Guid messageId, DateTime since, CancellationToken cancellationToken)
+        => _db.Messages
+            .AsNoTracking()
+            .Where(m => m.Id == messageId && m.ConversationId == conversationId && m.CreatedAt >= since)
+            .Select(m => new MessageForChange(m.Id, m.SenderId, m.CreatedAt, m.IsDeleted, m.Content, m.Attachments.Count))
+            .FirstOrDefaultAsync(cancellationToken);
+
+    // The UPDATE carries every condition, so two requests racing for one message (an edit and a delete, two edits, an
+    // edit at the end of the window) are settled by Postgres: each statement is checked against what the other wrote.
+    // The transaction keeps the new text, the notifications and the rows that announce them together.
+    public async Task<bool> TryEditAsync(
+        Guid messageId, string content, DateTime editedAt, DateTime notBefore,
+        IReadOnlyList<Notification> notifications, IReadOnlyList<OutboxMessage> outbox,
+        CancellationToken cancellationToken)
+    {
+        await using var transaction = await _db.Database.BeginTransactionAsync(cancellationToken);
+
+        var updated = await _db.Messages
+            .Where(m => m.Id == messageId && !m.IsDeleted && m.CreatedAt > notBefore)
+            .ExecuteUpdateAsync(
+                s => s.SetProperty(m => m.Content, content)
+                    .SetProperty(m => m.EditCount, m => m.EditCount + 1)
+                    .SetProperty(m => m.EditedAt, (DateTime?)editedAt),
+                cancellationToken);
+
+        if (updated == 0)
+            return false;
+
+        _db.Notifications.AddRange(notifications);
+        _db.OutboxMessages.AddRange(outbox);
+        await _db.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+
+        return true;
+    }
+
+    public async Task<bool> TryDeleteAsync(
+        Guid messageId, Guid deletedById, DateTime deletedAt, IReadOnlyList<OutboxMessage> outbox,
+        CancellationToken cancellationToken)
+    {
+        await using var transaction = await _db.Database.BeginTransactionAsync(cancellationToken);
+
+        var updated = await _db.Messages
+            .Where(m => m.Id == messageId && !m.IsDeleted)
+            .ExecuteUpdateAsync(
+                s => s.SetProperty(m => m.IsDeleted, true)
+                    .SetProperty(m => m.DeletedAt, (DateTime?)deletedAt)
+                    .SetProperty(m => m.DeletedById, (Guid?)deletedById)
+                    .SetProperty(m => m.Content, (string?)null),
+                cancellationToken);
+
+        if (updated == 0)
+            return false;
+
+        _db.OutboxMessages.AddRange(outbox);
+        await _db.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+
+        return true;
+    }
 
     public Task<MessageDto?> FindByClientMessageIdAsync(
         Guid conversationId, Guid senderId, Guid clientMessageId, CancellationToken cancellationToken)

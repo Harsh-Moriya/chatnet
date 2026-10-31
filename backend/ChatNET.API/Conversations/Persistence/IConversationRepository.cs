@@ -32,6 +32,9 @@ public interface IConversationRepository
 
     Task<List<Guid>> GetActiveMemberIdsAsync(Guid conversationId, CancellationToken cancellationToken);
 
+    // The role of an active member, or null when the user is not in the conversation or has left it.
+    Task<MemberRole?> GetActiveMemberRoleAsync(Guid conversationId, Guid userId, CancellationToken cancellationToken);
+
     Task<List<Guid>> GetActiveConversationIdsForUserAsync(Guid userId, CancellationToken cancellationToken);
 
     // Everyone who shares an active conversation with this user: the people who may see their presence,

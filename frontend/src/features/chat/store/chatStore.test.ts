@@ -12,6 +12,9 @@ function message(overrides: Partial<Message> & { id: string }): Message {
     content: `content of ${overrides.id}`,
     createdAt: '2026-10-11T10:00:00Z',
     clientMessageId: null,
+    editedAt: null,
+    editCount: 0,
+    isDeleted: false,
     attachments: [],
     ...overrides,
   }

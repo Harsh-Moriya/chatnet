@@ -172,7 +172,8 @@ public class SendMessageHandler : IRequestHandler<SendMessageCommand, SendMessag
         var dto = new MessageDto(
             message.Id, message.ConversationId, message.SenderId, sender.DisplayName,
             message.Content, message.CreatedAt, request.ClientMessageId,
-            message.Attachments.Select(_attachmentLoader.ToDto).ToList());
+            message.Attachments.Select(_attachmentLoader.ToDto).ToList(),
+            EditedAt: null, EditCount: 0, IsDeleted: false);
 
         await _outbox.DeliverAsync(messageRow, () => PushOrThrowAsync(dto));
 

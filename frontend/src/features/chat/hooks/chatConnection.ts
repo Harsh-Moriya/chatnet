@@ -84,6 +84,12 @@ export function connectChat(hub: ChatHub, deps: ChatConnectionDeps): ChatConnect
     if (!known) deps.onMessageArrived(message)
   })
 
+  // A message was edited or deleted, by its sender or (for a deletion) a group admin. Every tab shows the later version,
+  // and a push that is late or repeated is ignored when the tab already has that version or a later one.
+  hub.on('MessageUpdated', (message: Message) => {
+    chat().replaceMessage(message, deps.getUserId() ?? undefined)
+  })
+
   // The signed-in user muted or unmuted a conversation in one of their tabs; every tab follows.
   hub.on('ConversationMuteChanged', (conversationId: string, isMuted: boolean) => {
     chat().setMuted(conversationId, isMuted)

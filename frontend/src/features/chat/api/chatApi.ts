@@ -99,6 +99,29 @@ export async function markRead(conversationId: string, messageId: string, selfId
   if (message) chat().applyRead(conversationId, selfId, message.createdAt, selfId)
 }
 
+// ##### Changing a sent message #####
+
+// Replaces the text of one of the signed-in user's own messages. The server answers with the message as it is now
+// and pushes the same to everyone in the conversation, this tab included; whichever arrives first is applied, and the
+// other changes nothing. A refusal (the window has closed, the message was deleted) is the caller's to show.
+export async function editMessage(
+  conversationId: string,
+  messageId: string,
+  content: string,
+  selfId: string,
+): Promise<Message> {
+  const { data } = await api.patch<Message>(`/conversations/${conversationId}/messages/${messageId}`, { content })
+  chat().replaceMessage(data, selfId)
+  return data
+}
+
+// Deletes a message: the signed-in user's own, or anyone's in a group they own or administer.
+export async function deleteMessage(conversationId: string, messageId: string, selfId: string): Promise<Message> {
+  const { data } = await api.delete<Message>(`/conversations/${conversationId}/messages/${messageId}`)
+  chat().replaceMessage(data, selfId)
+  return data
+}
+
 // ##### Muting #####
 
 // Mutes or unmutes the conversation for the signed-in user. Applied here once the server has stored it; their

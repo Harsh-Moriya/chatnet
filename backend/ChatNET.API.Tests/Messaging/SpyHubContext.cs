@@ -62,6 +62,8 @@ public sealed class SpyHubContext : IHubContext<ChatHub, IChatClient>
 
         public Task ReceiveMessage(MessageDto message) => _onReceiveMessage(_group, message);
 
+        public Task MessageUpdated(MessageDto message) => throw new NotSupportedException();
+
         public Task UserTyping(Guid conversationId, Guid userId, string displayName, bool isTyping) =>
             throw new NotSupportedException();
 

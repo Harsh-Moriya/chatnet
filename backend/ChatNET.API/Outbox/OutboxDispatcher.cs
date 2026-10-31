@@ -2,6 +2,7 @@ using ChatNET.API.Conversations;
 using ChatNET.API.Conversations.Persistence;
 using ChatNET.API.Media;
 using ChatNET.API.Messaging.Hubs;
+using ChatNET.API.Messaging.Models;
 using ChatNET.API.Messaging.Persistence;
 using ChatNET.API.Notifications.Persistence;
 using ChatNET.API.Outbox.Models;
@@ -47,15 +48,25 @@ public class OutboxDispatcher
         switch (OutboxEvents.Read(row.Kind, row.Payload))
         {
             case MessageCreated created:
-                var message = await _messages.FindByIdAsync(created.MessageId, cancellationToken);
+                var message = await LoadMessageAsync(created.MessageId, cancellationToken);
                 if (message is null)
                 {
                     LogNothingToPush(row);
                     return;
                 }
 
-                var withFiles = (await _attachmentLoader.AttachToAsync([message], cancellationToken))[0];
-                await _hub.Clients.Group(ChatGroups.Conversation(created.ConversationId)).ReceiveMessage(withFiles);
+                await _hub.Clients.Group(ChatGroups.Conversation(created.ConversationId)).ReceiveMessage(message);
+                return;
+
+            case MessageUpdated updated:
+                var changed = await LoadMessageAsync(updated.MessageId, cancellationToken);
+                if (changed is null)
+                {
+                    LogNothingToPush(row);
+                    return;
+                }
+
+                await _hub.Clients.Group(ChatGroups.Conversation(updated.ConversationId)).MessageUpdated(changed);
                 return;
 
             case NotificationCreated notification:
@@ -90,6 +101,13 @@ public class OutboxDispatcher
             default:
                 throw new InvalidOperationException($"The outbox has no push for kind '{row.Kind}'.");
         }
+    }
+
+    // The message as it is now, with links to its files signed now. A deleted message has no text and no files.
+    private async Task<MessageDto?> LoadMessageAsync(Guid messageId, CancellationToken cancellationToken)
+    {
+        var message = await _messages.FindByIdAsync(messageId, cancellationToken);
+        return message is null ? null : (await _attachmentLoader.AttachToAsync([message], cancellationToken))[0];
     }
 
     private void LogNothingToPush(OutboxMessage row)

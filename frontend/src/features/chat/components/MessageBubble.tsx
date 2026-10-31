@@ -1,6 +1,7 @@
 import { AlertCircle, CheckCheck, Clock, RotateCw } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { Button } from '../../../components/ui/Button'
+import { Menu, type MenuItem } from '../../../components/ui/Menu'
 import { cn } from '../../../lib/cn'
 import { formatClock } from '../../../lib/format'
 import { messageDomId } from '../messageDom'
@@ -26,6 +27,12 @@ interface MessageBubbleProps {
   attachments?: ReactNode
   // Absent while the message is unconfirmed.
   createdAt?: string
+  // When the sender last edited it; shown as "edited" next to the time. Null or absent for a message nobody edited.
+  editedAt?: string | null
+  // What the reader may do with the message (edit, delete). The menu is drawn only when there is something to offer.
+  actions?: MenuItem[]
+  // Takes the place of the text while the message is being edited.
+  editor?: ReactNode
   // Set on the reader's newest message once someone has read it.
   seen?: Seen
   status?: 'sending' | 'failed'
@@ -45,6 +52,9 @@ export function MessageBubble({
   content,
   attachments,
   createdAt,
+  editedAt,
+  actions,
+  editor,
   seen,
   status,
   error,
@@ -53,6 +63,8 @@ export function MessageBubble({
 }: MessageBubbleProps) {
   const failed = status === 'failed'
   const deleted = content === null
+  // While it is being edited the bubble is a plain white box, so the editor's buttons and text read on any message.
+  const editing = editor !== undefined && !deleted
 
   return (
     <div
@@ -61,48 +73,67 @@ export function MessageBubble({
     >
       {senderName && <p className="mb-1 px-1 text-xs font-medium text-slate-500">{senderName}</p>}
 
-      <div
-        className={cn(
-          'max-w-[85%] rounded-lg px-3 py-2 text-sm transition-shadow sm:max-w-[75%]',
-          highlighted && 'ring-2 ring-blue-500 ring-offset-2',
-          // One tone only. Two background or text colours in the same class list would be decided
-          // by their order in the stylesheet, and a failed message once ended up white on pale red.
-          failed
-            ? 'border border-red-400 bg-red-50 text-slate-900'
-            : own
-              ? 'bg-blue-600 text-white'
-              : 'border border-line bg-white text-slate-900',
-          status === 'sending' && 'opacity-70',
-        )}
-      >
-        {deleted ? (
-          <p className={cn('italic', own ? 'text-blue-100' : 'text-slate-400')}>This message was deleted</p>
-        ) : (
-          <>
-            {attachments}
-            {content !== '' && (
-              <p className={cn('whitespace-pre-wrap break-words', attachments ? 'mt-2' : undefined)}>
-                <MessageText content={content} members={members} selfUserName={selfUserName} own={own} />
-              </p>
-            )}
-          </>
-        )}
-
-        <p
+      {/* The menu sits beside the bubble, on the side facing the middle of the page, and shows when the pointer is
+          over the row or focus is inside it (always on a touch screen, which has no pointer to hover with). */}
+      <div className={cn('group flex max-w-[85%] items-start gap-1 sm:max-w-[75%]', own && 'flex-row-reverse')}>
+        <div
           className={cn(
-            'mt-1 flex items-center justify-end gap-1 text-[11px] leading-none',
-            own && !failed ? 'text-blue-100' : 'text-slate-400',
+            'min-w-0 rounded-lg px-3 py-2 text-sm transition-shadow',
+            highlighted && 'ring-2 ring-blue-500 ring-offset-2',
+            // One tone only. Two background or text colours in the same class list would be decided
+            // by their order in the stylesheet, and a failed message once ended up white on pale red.
+            failed
+              ? 'border border-red-400 bg-red-50 text-slate-900'
+              : own && !editing
+                ? 'bg-blue-600 text-white'
+                : 'border border-line bg-white text-slate-900',
+            status === 'sending' && 'opacity-70',
           )}
         >
-          {status === 'sending' ? (
-            <>
-              <Clock className="h-3 w-3" aria-hidden="true" />
-              <span>Sending</span>
-            </>
+          {deleted ? (
+            <p className={cn('italic', own ? 'text-blue-100' : 'text-slate-400')}>This message was deleted</p>
           ) : (
-            createdAt && <time dateTime={createdAt}>{formatClock(createdAt)}</time>
+            <>
+              {attachments}
+              {editor ??
+                (content !== '' && (
+                  <p className={cn('whitespace-pre-wrap break-words', attachments ? 'mt-2' : undefined)}>
+                    <MessageText content={content} members={members} selfUserName={selfUserName} own={own} />
+                  </p>
+                ))}
+            </>
           )}
-        </p>
+
+          <p
+            className={cn(
+              'mt-1 flex items-center justify-end gap-1 text-[11px] leading-none',
+              own && !failed && !editing ? 'text-blue-100' : 'text-slate-400',
+            )}
+          >
+            {status === 'sending' ? (
+              <>
+                <Clock className="h-3 w-3" aria-hidden="true" />
+                <span>Sending</span>
+              </>
+            ) : (
+              <>
+                {editedAt && !deleted && (
+                  <span title={`Edited at ${formatClock(editedAt)}`}>edited</span>
+                )}
+                {createdAt && <time dateTime={createdAt}>{formatClock(createdAt)}</time>}
+              </>
+            )}
+          </p>
+        </div>
+
+        {actions && actions.length > 0 && !editor && (
+          <Menu
+            label="Message actions"
+            items={actions}
+            align={own ? 'end' : 'start'}
+            className="opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100"
+          />
+        )}
       </div>
 
       {seen && (

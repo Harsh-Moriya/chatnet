@@ -6,6 +6,9 @@ namespace ChatNET.API.Messaging.Models;
 //
 // Content is null for a deleted message, and empty for a message that is only files. Attachments is empty
 // for a message without files and for a deleted one.
+//
+// EditCount and IsDeleted order two copies of one message: the one that was edited more often is the newer, and a
+// deleted copy is newer than any other. EditedAt is null for a message nobody edited.
 public record MessageDto(
     Guid Id,
     Guid ConversationId,
@@ -14,5 +17,8 @@ public record MessageDto(
     string? Content,
     DateTime CreatedAt,
     Guid? ClientMessageId,
-    List<AttachmentDto> Attachments
+    List<AttachmentDto> Attachments,
+    DateTime? EditedAt,
+    int EditCount,
+    bool IsDeleted
 );

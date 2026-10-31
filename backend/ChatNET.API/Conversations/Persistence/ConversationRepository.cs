@@ -97,6 +97,12 @@ public class ConversationRepository : IConversationRepository
             .Select(m => m.UserId)
             .ToListAsync(cancellationToken);
 
+    public Task<MemberRole?> GetActiveMemberRoleAsync(Guid conversationId, Guid userId, CancellationToken cancellationToken)
+        => _db.ConversationMembers
+            .Where(m => m.ConversationId == conversationId && m.UserId == userId && m.LeftAt == null)
+            .Select(m => (MemberRole?)m.Role)
+            .FirstOrDefaultAsync(cancellationToken);
+
     public Task<List<Guid>> GetActiveConversationIdsForUserAsync(Guid userId, CancellationToken cancellationToken)
         => _db.ConversationMembers
             .Where(m => m.UserId == userId && m.LeftAt == null)
@@ -174,8 +180,8 @@ public class ConversationRepository : IConversationRepository
     // window history uses (D-90), so nothing from before they joined shows up in the sidebar.
     //
     // The unread count is a correlated subquery over the same index: the messages of this conversation
-    // since the viewer read it (or since they joined), from other people, counted by a query that
-    // stops at @unreadCap rows. The viewer's own messages cannot pile up in front of the count, because
+    // since the viewer read it (or since they joined), from other people, that were not deleted since, counted by a
+    // query that stops at @unreadCap rows. The viewer's own messages cannot pile up in front of the count, because
     // sending moves the sender's read position to the message (MessageRepository.AddAsync).
     private const string ConversationSelect = """
         SELECT c."Id"        AS "Id",
@@ -197,6 +203,7 @@ public class ConversationRepository : IConversationRepository
                         AND um."CreatedAt" >= mine."JoinedAt"
                         AND um."CreatedAt" > COALESCE(mine."LastReadAt", '-infinity'::timestamptz)
                         AND um."SenderId" <> @viewerId
+                        AND NOT um."IsDeleted"
                       LIMIT @unreadCap) AS counted) AS "UnreadCount",
                mine."IsMuted" AS "IsMuted"
         FROM "Conversations" c

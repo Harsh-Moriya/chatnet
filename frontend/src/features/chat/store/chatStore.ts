@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { compareTimestamps } from '../../../lib/time'
+import { afterDeletion, isNewer, latest, withChangedPreview } from '../messageChanges'
 import type {
   ConnectionStatus,
   Conversation,
@@ -38,6 +39,10 @@ interface ChatState {
   seedMembers: (conversationId: string, members: Member[]) => void
   // selfId is the signed-in user. Without it the message is stored but unread counts are left alone.
   receiveMessage: (message: Message, selfId?: string) => void
+  // A message already held was edited or deleted: puts the later version in its place, and fixes the sidebar preview and
+  // the unread count that depended on it. A message that is not held is ignored (loading its page brings it as it is),
+  // and so is a copy that is not newer than the one held. selfId is the signed-in user.
+  replaceMessage: (message: Message, selfId?: string) => void
   // A message's attachment links stop working after a while; this puts in the fresh link the server gave.
   setAttachmentUrl: (conversationId: string, messageId: string, attachmentId: string, url: string) => void
   // A member read the conversation up to readAt. selfId is the signed-in user, whose own count it lowers.
@@ -70,6 +75,31 @@ const emptyData = (): Data => ({
 // order they arrived in.
 function byTime(a: Message, b: Message): number {
   return compareTimestamps(a.createdAt, b.createdAt) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)
+}
+
+// The patch that puts a later version of a message that is held in its place: the message itself, the sidebar preview if it
+// shows that message, and the unread count if the message was deleted. Null when the message is not held, or the copy
+// that arrived is not newer than the one held, so callers can tell that nothing would change.
+function changeOf(state: Data, message: Message, selfId: string | undefined): Partial<Data> | null {
+  const id = message.conversationId
+  const list = state.messages[id]
+  const held = list?.find((m) => m.id === message.id)
+  if (!list || !held || !isNewer(message, held)) return null
+
+  // The id this tab invented for its own copy stays, as it does when a page is loaded.
+  const kept: Message = { ...message, clientMessageId: message.clientMessageId ?? held.clientMessageId }
+  const patch: Partial<Data> = {
+    messages: { ...state.messages, [id]: list.map((m) => (m.id === held.id ? kept : m)) },
+  }
+
+  const conversation = state.conversations[id]
+  if (conversation) {
+    let next = withChangedPreview(conversation, kept)
+    if (kept.isDeleted && !held.isDeleted && selfId !== undefined) next = afterDeletion(next, list, kept, selfId)
+    if (next !== conversation) patch.conversations = { ...state.conversations, [id]: next }
+  }
+
+  return patch
 }
 
 // Of two copies of the same conversation, the one with the later activity is the fresher.
@@ -142,8 +172,11 @@ export const useChatStore = create<ChatState>()((set) => ({
       const merged = new Map<string, Message>()
       for (const message of state.messages[conversationId] ?? []) merged.set(message.id, message)
       for (const message of loaded) {
-        const clientMessageId = message.clientMessageId ?? merged.get(message.id)?.clientMessageId ?? null
-        merged.set(message.id, { ...message, clientMessageId })
+        const held = merged.get(message.id)
+        const clientMessageId = message.clientMessageId ?? held?.clientMessageId ?? null
+
+        // A page requested before an edit can arrive after the push of it: the later version is kept.
+        merged.set(message.id, { ...latest(held, message), clientMessageId })
       }
 
       const stored = new Set(loaded.map((m) => m.clientMessageId).filter((id): id is string => id !== null))
@@ -189,7 +222,11 @@ export const useChatStore = create<ChatState>()((set) => ({
   // first time it is seen, and a message from the signed-in user (which the server treats as
   // reading) clears what came before it. Either way the sender has read up to their own message.
   receiveMessage: (message, selfId) =>
-    set((state) => {
+    set((held) => {
+      // A copy of a message that is already here but is a later version (an edit the push of it was missed) replaces it.
+      const change = changeOf(held, message, selfId)
+      const state = change ? { ...held, ...change } : held
+
       const patch: Partial<Data> = {}
       const id = message.conversationId
 
@@ -249,8 +286,13 @@ export const useChatStore = create<ChatState>()((set) => ({
         patch.typing = { ...state.typing, [id]: typers.filter((u) => u.userId !== message.senderId) }
       }
 
+      if (change) return { ...change, ...patch }
+
       return Object.keys(patch).length > 0 ? patch : state
     }),
+
+  replaceMessage: (message, selfId) =>
+    set((state) => changeOf(state, message, selfId) ?? state),
 
   setAttachmentUrl: (conversationId, messageId, attachmentId, url) =>
     set((state) => {

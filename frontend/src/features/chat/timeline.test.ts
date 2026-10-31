@@ -17,6 +17,9 @@ function message(id: string, senderId: string, createdAt: string, overrides: Par
     content: `text ${id}`,
     createdAt,
     clientMessageId: null,
+    editedAt: null,
+    editCount: 0,
+    isDeleted: false,
     attachments: [],
     ...overrides,
   }

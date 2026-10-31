@@ -14,11 +14,13 @@ public class OutboxEventsTests
     {
         var message = new MessageCreated(Guid.NewGuid(), Guid.NewGuid());
         var notification = new NotificationCreated(Guid.NewGuid(), Guid.NewGuid());
+        var updated = new MessageUpdated(Guid.NewGuid(), Guid.NewGuid());
         var conversation = new ConversationCreated(Guid.NewGuid(), Guid.NewGuid(), [Guid.NewGuid(), Guid.NewGuid()]);
         var read = new ConversationRead(Guid.NewGuid(), Guid.NewGuid(), new DateTime(2026, 10, 31, 8, 30, 15, 123, DateTimeKind.Utc).AddTicks(450));
 
         Assert.Equal(message, OutboxEvents.Read(message.Kind, OutboxEvents.Serialize(message)));
         Assert.Equal(notification, OutboxEvents.Read(notification.Kind, OutboxEvents.Serialize(notification)));
+        Assert.Equal(updated, OutboxEvents.Read(updated.Kind, OutboxEvents.Serialize(updated)));
         Assert.Equal(read, OutboxEvents.Read(read.Kind, OutboxEvents.Serialize(read)));
 
         var back = Assert.IsType<ConversationCreated>(
@@ -44,6 +46,7 @@ public class OutboxEventsTests
     public void Each_kind_is_its_own_name()
     {
         Assert.Equal("MessageCreated", new MessageCreated(Guid.Empty, Guid.Empty).Kind);
+        Assert.Equal("MessageUpdated", new MessageUpdated(Guid.Empty, Guid.Empty).Kind);
         Assert.Equal("NotificationCreated", new NotificationCreated(Guid.Empty, Guid.Empty).Kind);
         Assert.Equal("ConversationCreated", new ConversationCreated(Guid.Empty, Guid.Empty, []).Kind);
         Assert.Equal("ConversationRead", new ConversationRead(Guid.Empty, Guid.Empty, default).Kind);

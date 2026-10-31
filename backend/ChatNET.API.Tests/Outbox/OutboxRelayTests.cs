@@ -133,6 +133,57 @@ public class OutboxRelayTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task An_edit_whose_push_failed_reaches_the_conversation_through_the_relay()
+    {
+        var (alice, bob, conversation) = await _factory.DirectChatAsync();
+        using var normal = _factory.CreateClientFor(alice);
+        var sent = await normal.SendMessageAsync(conversation, "first draft");
+        await using var bobTab = await HubClient.ConnectAsync(_factory, bob);
+        var clock = new ManualTimeProvider();
+        using var relayHost = _factory.WithClock(clock);
+        using var broken = BrokenHub();
+        using var client = Authorized(broken, alice);
+
+        await client.EditMessageAsync(conversation, sent.MessageIdOf(), "second draft");
+        Assert.False(await bobTab.ReceivedUpdateAsync(sent.MessageIdOf()));
+
+        clock.Advance(TimeSpan.FromMinutes(3));
+        await RunAsync(relayHost);
+
+        var pushed = await bobTab.WaitForUpdateAsync(sent.MessageIdOf());
+        Assert.Equal("second draft", pushed.ContentOf());
+        Assert.Equal(1, pushed.GetProperty("editCount").GetInt32());
+    }
+
+    // The row holds ids, so a push made late says what is true then. A message edited and then deleted while the pushes
+    // were failing goes out as deleted both times, with none of the text it had.
+    [Fact]
+    public async Task A_late_push_of_an_edited_and_then_deleted_message_carries_none_of_its_old_text()
+    {
+        var (alice, bob, conversation) = await _factory.DirectChatAsync();
+        using var normal = _factory.CreateClientFor(alice);
+        var sent = await normal.SendMessageAsync(conversation, "the first words");
+        await using var bobTab = await HubClient.ConnectAsync(_factory, bob);
+        var clock = new ManualTimeProvider();
+        using var relayHost = _factory.WithClock(clock);
+        using var broken = BrokenHub();
+        using var client = Authorized(broken, alice);
+        await client.EditMessageAsync(conversation, sent.MessageIdOf(), "the edited words");
+        await client.DeleteMessageAsync(conversation, sent.MessageIdOf());
+
+        clock.Advance(TimeSpan.FromMinutes(3));
+        await RunAsync(relayHost);
+
+        await bobTab.WaitForUpdateAsync(m => m.GetProperty("id").GetGuid() == sent.MessageIdOf() && m.GetProperty("isDeleted").GetBoolean());
+        Assert.False(await bobTab.ReceivedUpdateAsync(Guid.Empty));
+        Assert.All(bobTab.Updates.Where(m => m.GetProperty("id").GetGuid() == sent.MessageIdOf()), pushed =>
+        {
+            Assert.True(pushed.GetProperty("isDeleted").GetBoolean());
+            Assert.DoesNotContain("words", pushed.GetRawText());
+        });
+    }
+
+    [Fact]
     public async Task A_mention_whose_push_failed_reaches_the_person_through_the_relay()
     {
         var alice = await _factory.RegisterUserAsync("alice");

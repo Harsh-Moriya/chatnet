@@ -242,6 +242,10 @@ try
 
     builder.Services.AddScoped<IConversationRepository, ConversationRepository>();
     builder.Services.AddScoped<IMessageRepository, MessageRepository>();
+    builder.Services.AddOptions<MessagingOptions>()
+        .BindConfiguration(MessagingOptions.SectionName)
+        .ValidateOnStart();
+    builder.Services.AddSingleton<IValidateOptions<MessagingOptions>, MessagingOptionsValidator>();
     builder.Services.AddScoped<ConversationNotifier>();
     builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
     builder.Services.AddScoped<NotificationPusher>();

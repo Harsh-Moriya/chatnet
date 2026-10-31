@@ -14,6 +14,11 @@ public interface IChatClient
 {
     Task ReceiveMessage(MessageDto message);
 
+    // A message already shown changed: it was edited or deleted. Carries the whole message as it is now. Sent to the
+    // whole conversation, the changer's own tabs included, after the change is stored. A client keeps the copy with
+    // the higher EditCount, and a deleted copy over any other, so a late or repeated push cannot undo a change.
+    Task MessageUpdated(MessageDto message);
+
     Task UserTyping(Guid conversationId, Guid userId, string displayName, bool isTyping);
 
     // Sent to users who are added to a conversation while already connected, because
