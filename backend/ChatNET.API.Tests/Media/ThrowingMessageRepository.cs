@@ -24,6 +24,21 @@ public sealed class ThrowingMessageRepository : IMessageRepository
     public Task<MessageDto?> FindByIdAsync(Guid messageId, CancellationToken cancellationToken)
         => _inner.FindByIdAsync(messageId, cancellationToken);
 
+    public Task<MessageForChange?> FindForChangeAsync(
+        Guid conversationId, Guid messageId, DateTime since, CancellationToken cancellationToken)
+        => _inner.FindForChangeAsync(conversationId, messageId, since, cancellationToken);
+
+    public Task<bool> TryEditAsync(
+        Guid messageId, string content, DateTime editedAt, DateTime notBefore,
+        IReadOnlyList<Notification> notifications, IReadOnlyList<OutboxMessage> outbox,
+        CancellationToken cancellationToken)
+        => _inner.TryEditAsync(messageId, content, editedAt, notBefore, notifications, outbox, cancellationToken);
+
+    public Task<bool> TryDeleteAsync(
+        Guid messageId, Guid deletedById, DateTime deletedAt, IReadOnlyList<OutboxMessage> outbox,
+        CancellationToken cancellationToken)
+        => _inner.TryDeleteAsync(messageId, deletedById, deletedAt, outbox, cancellationToken);
+
     public Task<MessageDto?> FindByClientMessageIdAsync(
         Guid conversationId, Guid senderId, Guid clientMessageId, CancellationToken cancellationToken)
         => _inner.FindByClientMessageIdAsync(conversationId, senderId, clientMessageId, cancellationToken);

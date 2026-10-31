@@ -41,6 +41,29 @@ public static class MessageApi
         return history.EnumerateArray().ToList();
     }
 
+    public static Task<HttpResponseMessage> PatchMessageAsync(
+        this HttpClient client, Guid conversationId, Guid messageId, string? content) =>
+        client.PatchAsJsonAsync($"/api/conversations/{conversationId}/messages/{messageId}", new { content });
+
+    public static async Task<JsonElement> EditMessageAsync(
+        this HttpClient client, Guid conversationId, Guid messageId, string content)
+    {
+        var response = await client.PatchMessageAsync(conversationId, messageId, content);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<JsonElement>();
+    }
+
+    public static Task<HttpResponseMessage> DeleteMessageResponseAsync(
+        this HttpClient client, Guid conversationId, Guid messageId) =>
+        client.DeleteAsync($"/api/conversations/{conversationId}/messages/{messageId}");
+
+    public static async Task<JsonElement> DeleteMessageAsync(this HttpClient client, Guid conversationId, Guid messageId)
+    {
+        var response = await client.DeleteMessageResponseAsync(conversationId, messageId);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<JsonElement>();
+    }
+
     public static Guid MessageIdOf(this JsonElement message) => message.GetProperty("id").GetGuid();
 
     public static string? ContentOf(this JsonElement message) =>
