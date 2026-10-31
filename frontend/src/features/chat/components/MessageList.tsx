@@ -1,20 +1,24 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
-import { AlertCircle, ChevronDown, LoaderCircle } from 'lucide-react'
+import { AlertCircle, ChevronDown, LoaderCircle, Pencil, Trash2 } from 'lucide-react'
 import { Button } from '../../../components/ui/Button'
+import type { MenuItem } from '../../../components/ui/Menu'
 import { useNow } from '../../../lib/useNow'
 import { useAuth } from '../../auth/hooks/useAuth'
 import { focusedMessageId } from '../../notifications/navigation'
-import { dismissMessage, retryMessage } from '../api/chatApi'
+import { deleteMessage, dismissMessage, editMessage, retryMessage } from '../api/chatApi'
 import { scrollTopAfterPrepend, wasPrepended } from '../history'
 import { useMarkRead } from '../hooks/useMarkRead'
+import { canDelete, canEdit } from '../messageChanges'
 import { messageDomId } from '../messageDom'
 import { seenFor, unreadLabel } from '../readState'
 import { useChatStore } from '../store/chatStore'
 import { buildTimeline } from '../timeline'
 import type { Conversation, Message, PendingMessage } from '../types'
 import { AttachmentGrid } from './AttachmentGrid'
+import { DeleteMessageDialog } from './DeleteMessageDialog'
 import { MessageBubble } from './MessageBubble'
+import { MessageEditor } from './MessageEditor'
 import { PendingAttachments } from './PendingAttachments'
 
 // How long the message a notification pointed at keeps its ring.
@@ -52,6 +56,10 @@ interface MessageListProps {
 export function MessageList({ conversation, isLoading, errorMessage, onRetry, older }: MessageListProps) {
   const { user } = useAuth()
   const now = useNow()
+
+  // The message being edited in place, and the one a delete is being confirmed for.
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState<Message | null>(null)
   const messages = useChatStore((state) => state.messages[conversation.id]) ?? NO_MESSAGES
   const pending = useChatStore((state) => state.pending[conversation.id]) ?? NO_PENDING
 
@@ -90,6 +98,7 @@ export function MessageList({ conversation, isLoading, errorMessage, onRetry, ol
 
   // The "seen" mark under the reader's newest message, and who the mentions in the text can name.
   const members = useChatStore((state) => state.members[conversation.id])
+  const role = members?.find((member) => member.userId === user?.userId)?.role
   const seen = useMemo(
     () => seenFor(messages, members, user?.userId ?? '', conversation.type === 'Group'),
     [messages, members, user?.userId, conversation.type],
@@ -249,6 +258,24 @@ export function MessageList({ conversation, isLoading, errorMessage, onRetry, ol
           )
         }
 
+        const message = item.message
+        const selfId = user?.userId ?? ''
+        const actions: MenuItem[] = []
+        if (canEdit(message, selfId, now.getTime())) {
+          actions.push({
+            label: 'Edit',
+            icon: <Pencil className="h-4 w-4" />,
+            onSelect: () => setEditingId(message.id),
+          })
+        }
+        if (canDelete(message, selfId, role)) {
+          actions.push({
+            label: 'Delete',
+            icon: <Trash2 className="h-4 w-4" />,
+            onSelect: () => setDeleting(message),
+          })
+        }
+
         return (
           <MessageBubble
             key={item.key}
@@ -271,6 +298,18 @@ export function MessageList({ conversation, isLoading, errorMessage, onRetry, ol
               ) : undefined
             }
             createdAt={item.message.createdAt}
+            editedAt={item.message.editedAt}
+            actions={actions}
+            editor={
+              editingId === message.id && !message.isDeleted ? (
+                <MessageEditor
+                  initial={message.content ?? ''}
+                  mayBeEmpty={message.attachments.length > 0}
+                  onSave={(content) => editMessage(message.conversationId, message.id, content, selfId)}
+                  onCancel={() => setEditingId(null)}
+                />
+              ) : undefined
+            }
             seen={seen?.messageId === item.message.id ? seen : undefined}
           />
         )
@@ -286,6 +325,15 @@ export function MessageList({ conversation, isLoading, errorMessage, onRetry, ol
           </Button>
         </div>
       )}
+
+      <DeleteMessageDialog
+        open={deleting !== null}
+        someoneElses={deleting !== null && deleting.senderId !== user?.userId}
+        onConfirm={() =>
+          deleting ? deleteMessage(deleting.conversationId, deleting.id, user?.userId ?? '') : Promise.resolve()
+        }
+        onClose={() => setDeleting(null)}
+      />
     </div>
   )
 }
