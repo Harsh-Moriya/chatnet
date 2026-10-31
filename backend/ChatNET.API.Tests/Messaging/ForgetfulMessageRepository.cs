@@ -1,6 +1,7 @@
 using ChatNET.API.Messaging.Models;
 using ChatNET.API.Messaging.Persistence;
 using ChatNET.API.Notifications.Models;
+using ChatNET.API.Outbox.Models;
 
 namespace ChatNET.API.Tests.Messaging;
 
@@ -33,8 +34,13 @@ public sealed class ForgetfulMessageRepository : IMessageRepository
         return await _inner.FindByClientMessageIdAsync(conversationId, senderId, clientMessageId, cancellationToken);
     }
 
-    public Task<bool> TryAddAsync(Message message, IReadOnlyList<Notification> notifications, CancellationToken cancellationToken)
-        => _inner.TryAddAsync(message, notifications, cancellationToken);
+    public Task<bool> TryAddAsync(
+        Message message, IReadOnlyList<Notification> notifications, IReadOnlyList<OutboxMessage> outbox,
+        CancellationToken cancellationToken)
+        => _inner.TryAddAsync(message, notifications, outbox, cancellationToken);
+
+    public Task<MessageDto?> FindByIdAsync(Guid messageId, CancellationToken cancellationToken)
+        => _inner.FindByIdAsync(messageId, cancellationToken);
 
     public Task<MessageCursor?> FindCursorAsync(
         Guid conversationId, Guid messageId, DateTime since, CancellationToken cancellationToken)

@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using ChatNET.API.Conversations.Models;
 using ChatNET.API.Conversations.Persistence;
 using ChatNET.API.Notifications.Models;
+using ChatNET.API.Outbox.Models;
 
 namespace ChatNET.API.Tests.Conversations;
 
@@ -43,15 +44,18 @@ public sealed class BarrierConversationRepository : IConversationRepository
         return found;
     }
 
-    public async Task<bool> TryAddDirectAsync(Conversation conversation, CancellationToken cancellationToken)
+    public async Task<bool> TryAddDirectAsync(
+        Conversation conversation, IReadOnlyList<OutboxMessage> outbox, CancellationToken cancellationToken)
     {
-        var added = await _inner.TryAddDirectAsync(conversation, cancellationToken);
+        var added = await _inner.TryAddDirectAsync(conversation, outbox, cancellationToken);
         _insertResults.Add(added);
         return added;
     }
 
-    public Task AddAsync(Conversation conversation, IReadOnlyList<Notification> notifications, CancellationToken cancellationToken) =>
-        _inner.AddAsync(conversation, notifications, cancellationToken);
+    public Task AddAsync(
+        Conversation conversation, IReadOnlyList<Notification> notifications, IReadOnlyList<OutboxMessage> outbox,
+        CancellationToken cancellationToken) =>
+        _inner.AddAsync(conversation, notifications, outbox, cancellationToken);
 
     public Task<ConversationDto?> GetForViewerAsync(Guid conversationId, Guid viewerId, CancellationToken cancellationToken) =>
         _inner.GetForViewerAsync(conversationId, viewerId, cancellationToken);
@@ -75,8 +79,8 @@ public sealed class BarrierConversationRepository : IConversationRepository
         _inner.GetContactIdsAsync(userId, cancellationToken);
 
     public Task<bool> AdvanceLastReadAsync(
-        Guid conversationId, Guid userId, DateTime readAt, CancellationToken cancellationToken) =>
-        _inner.AdvanceLastReadAsync(conversationId, userId, readAt, cancellationToken);
+        Guid conversationId, Guid userId, DateTime readAt, OutboxMessage outbox, CancellationToken cancellationToken) =>
+        _inner.AdvanceLastReadAsync(conversationId, userId, readAt, outbox, cancellationToken);
 
     public Task<List<MemberDto>> GetActiveMembersAsync(Guid conversationId, CancellationToken cancellationToken) =>
         _inner.GetActiveMembersAsync(conversationId, cancellationToken);

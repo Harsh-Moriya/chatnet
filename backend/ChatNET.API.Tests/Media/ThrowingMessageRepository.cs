@@ -1,6 +1,7 @@
 using ChatNET.API.Messaging.Models;
 using ChatNET.API.Messaging.Persistence;
 using ChatNET.API.Notifications.Models;
+using ChatNET.API.Outbox.Models;
 
 namespace ChatNET.API.Tests.Media;
 
@@ -15,8 +16,13 @@ public sealed class ThrowingMessageRepository : IMessageRepository
         _inner = inner;
     }
 
-    public Task<bool> TryAddAsync(Message message, IReadOnlyList<Notification> notifications, CancellationToken cancellationToken)
+    public Task<bool> TryAddAsync(
+        Message message, IReadOnlyList<Notification> notifications, IReadOnlyList<OutboxMessage> outbox,
+        CancellationToken cancellationToken)
         => throw new InvalidOperationException("The database refused the message.");
+
+    public Task<MessageDto?> FindByIdAsync(Guid messageId, CancellationToken cancellationToken)
+        => _inner.FindByIdAsync(messageId, cancellationToken);
 
     public Task<MessageDto?> FindByClientMessageIdAsync(
         Guid conversationId, Guid senderId, Guid clientMessageId, CancellationToken cancellationToken)

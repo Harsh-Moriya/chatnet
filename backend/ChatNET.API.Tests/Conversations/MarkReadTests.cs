@@ -4,6 +4,8 @@ using System.Text.Json;
 using ChatNET.API.Common.Time;
 using ChatNET.API.Conversations.Persistence;
 using ChatNET.API.Messaging.Hubs;
+using ChatNET.API.Outbox;
+using ChatNET.API.Outbox.Models;
 using ChatNET.API.Tests.Infrastructure;
 using ChatNET.API.Tests.Messaging;
 using Microsoft.AspNetCore.TestHost;
@@ -280,10 +282,15 @@ public class MarkReadTests
         using var scope = _factory.Services.CreateScope();
         var conversations = scope.ServiceProvider.GetRequiredService<IConversationRepository>();
 
-        var moved = await conversations.AdvanceLastReadAsync(group, bob.Id, DateTime.UtcNow, CancellationToken.None);
+        var readAt = DateTime.UtcNow;
+        var announcement = scope.ServiceProvider.GetRequiredService<OutboxPublisher>()
+            .Create(new ConversationRead(group, bob.Id, readAt));
+
+        var moved = await conversations.AdvanceLastReadAsync(group, bob.Id, readAt, announcement, CancellationToken.None);
 
         Assert.False(moved);
         Assert.Null(await _factory.LastReadAtAsync(group, bob.Id));
+        Assert.Equal(0, await _factory.QueryDbAsync(db => db.OutboxMessages.CountAsync(o => o.Id == announcement.Id)));
     }
 
     [Fact]

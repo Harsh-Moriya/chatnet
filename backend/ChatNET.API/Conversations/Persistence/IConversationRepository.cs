@@ -1,5 +1,6 @@
 using ChatNET.API.Conversations.Models;
 using ChatNET.API.Notifications.Models;
+using ChatNET.API.Outbox.Models;
 
 namespace ChatNET.API.Conversations.Persistence;
 
@@ -7,13 +8,17 @@ public interface IConversationRepository
 {
     Task<Conversation?> GetDirectByKeyAsync(string directKey, CancellationToken cancellationToken);
 
-    // Persists a new Direct conversation. Returns false if the DirectKey unique index
-    // rejected it because the same pair of users already has a conversation (a race
-    // between two concurrent creates).
-    Task<bool> TryAddDirectAsync(Conversation conversation, CancellationToken cancellationToken);
+    // Persists a new Direct conversation, with the outbox rows for its announcement. Returns false (saving nothing,
+    // rows included) if the DirectKey unique index rejected it because the same pair of users already has a
+    // conversation (a race between two concurrent creates).
+    Task<bool> TryAddDirectAsync(
+        Conversation conversation, IReadOnlyList<OutboxMessage> outbox, CancellationToken cancellationToken);
 
-    // Saves the conversation together with the notifications that come with it, in one transaction.
-    Task AddAsync(Conversation conversation, IReadOnlyList<Notification> notifications, CancellationToken cancellationToken);
+    // Saves the conversation together with the notifications that come with it and the outbox rows for their
+    // pushes, in one transaction.
+    Task AddAsync(
+        Conversation conversation, IReadOnlyList<Notification> notifications, IReadOnlyList<OutboxMessage> outbox,
+        CancellationToken cancellationToken);
 
     Task<ConversationDto?> GetForViewerAsync(Guid conversationId, Guid viewerId, CancellationToken cancellationToken);
 
@@ -34,8 +39,10 @@ public interface IConversationRepository
     Task<List<Guid>> GetContactIdsAsync(Guid userId, CancellationToken cancellationToken);
 
     // Moves an active member's read position to readAt, only if that is later than where it is.
-    // Returns whether it moved, so callers announce a change only when there was one.
-    Task<bool> AdvanceLastReadAsync(Guid conversationId, Guid userId, DateTime readAt, CancellationToken cancellationToken);
+    // Returns whether it moved, so callers announce a change only when there was one. The outbox row for that
+    // announcement is saved in the same transaction as the move, and only when it moved.
+    Task<bool> AdvanceLastReadAsync(
+        Guid conversationId, Guid userId, DateTime readAt, OutboxMessage outbox, CancellationToken cancellationToken);
 
     // The active members, earliest joiner first, each with how far they have read.
     Task<List<MemberDto>> GetActiveMembersAsync(Guid conversationId, CancellationToken cancellationToken);

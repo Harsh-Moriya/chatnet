@@ -1,13 +1,13 @@
 using ChatNET.API.Messaging.Hubs;
-using ChatNET.API.Notifications.Models;
 using Microsoft.AspNetCore.SignalR;
 
 namespace ChatNET.API.Notifications;
 
-// Tells a person's open tabs about a change to their notifications. Called only after the change is saved, so a
-// client never hears about a notification that was rolled back. The change is already committed, so a failing
-// push (Redis down, for example) must not turn a successful request into an error: a client loads the list again
-// when it connects, and shows what it missed then.
+// Tells a person's open tabs that notifications were read or dismissed. Called only after the change is saved, so a
+// client never hears about a change that was rolled back. The change is already committed, so a failing push (Redis
+// down, for example) must not turn a successful request into an error: a client loads the list again when it
+// connects, and shows what it missed then. A new notification is pushed through the outbox instead, because losing
+// that one costs the person an alert (see OutboxPublisher).
 public class NotificationPusher
 {
     private readonly IHubContext<ChatHub, IChatClient> _hub;
@@ -44,20 +44,6 @@ public class NotificationPusher
             _logger.LogWarning(ex,
                 "Could not tell user {UserId} that notification {NotificationId} was dismissed; their other tabs will agree on the next load",
                 userId, notificationId);
-        }
-    }
-
-    public async Task ReceivedAsync(Guid userId, NotificationDto notification)
-    {
-        try
-        {
-            await _hub.Clients.User(userId.ToString()).NotificationReceived(notification);
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            _logger.LogWarning(ex,
-                "Could not push notification {NotificationId} to user {UserId}; it will show on their next load",
-                notification.Id, userId);
         }
     }
 }

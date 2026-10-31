@@ -4,6 +4,8 @@ using ChatNET.API.Messaging.Hubs;
 using ChatNET.API.Messaging.Persistence;
 using ChatNET.API.Notifications;
 using ChatNET.API.Notifications.Persistence;
+using ChatNET.API.Outbox;
+using ChatNET.API.Outbox.Models;
 using FluentValidation;
 using FluentValidation.Results;
 using MediatR;
@@ -19,6 +21,7 @@ public class MarkReadHandler : IRequestHandler<MarkReadCommand, Unit>
     private readonly IMessageRepository _messages;
     private readonly INotificationRepository _notifications;
     private readonly NotificationPusher _notificationPusher;
+    private readonly OutboxPublisher _outbox;
     private readonly IHubContext<ChatHub, IChatClient> _hub;
     private readonly ILogger<MarkReadHandler> _logger;
 
@@ -27,6 +30,7 @@ public class MarkReadHandler : IRequestHandler<MarkReadCommand, Unit>
         IMessageRepository messages,
         INotificationRepository notifications,
         NotificationPusher notificationPusher,
+        OutboxPublisher outbox,
         IHubContext<ChatHub, IChatClient> hub,
         ILogger<MarkReadHandler> logger)
     {
@@ -34,6 +38,7 @@ public class MarkReadHandler : IRequestHandler<MarkReadCommand, Unit>
         _messages = messages;
         _notifications = notifications;
         _notificationPusher = notificationPusher;
+        _outbox = outbox;
         _hub = hub;
         _logger = logger;
     }
@@ -60,8 +65,12 @@ public class MarkReadHandler : IRequestHandler<MarkReadCommand, Unit>
         if (message is null)
             throw new ValidationException([new ValidationFailure(nameof(request.MessageId), UnknownMessage)]);
 
+        // The announcement of the move is saved with it, and only when there is a move.
+        var announcement = _outbox.Create(new ConversationRead(
+            request.ConversationId, request.UserId, message.Value.CreatedAt));
+
         var moved = await _conversations.AdvanceLastReadAsync(
-            request.ConversationId, request.UserId, message.Value.CreatedAt, cancellationToken);
+            request.ConversationId, request.UserId, message.Value.CreatedAt, announcement, cancellationToken);
 
         // A read that changes nothing (a repeat, or an older message than the one already read) is
         // not worth telling anyone about.
@@ -77,28 +86,12 @@ public class MarkReadHandler : IRequestHandler<MarkReadCommand, Unit>
         var mentionsRead = await _notifications.MarkMentionsReadAsync(
             request.UserId, request.ConversationId, message.Value.CreatedAt, cancellationToken);
 
-        await PushAsync(request.ConversationId, request.UserId, message.Value.CreatedAt);
+        await _outbox.DeliverAsync(announcement, () => _hub.Clients.Group(ChatGroups.Conversation(request.ConversationId))
+            .MessageRead(request.ConversationId, request.UserId, message.Value.CreatedAt));
 
         if (mentionsRead.Count > 0)
             await _notificationPusher.ReadAsync(request.UserId, mentionsRead);
 
         return Unit.Value;
-    }
-
-    // After the new position is stored, so nobody is told about a position that was not saved. The
-    // position is already committed, so a failing push (Redis down, for example) must not turn a
-    // successful request into an error; members see the position the next time they load it.
-    private async Task PushAsync(Guid conversationId, Guid userId, DateTime readAt)
-    {
-        try
-        {
-            await _hub.Clients.Group(ChatGroups.Conversation(conversationId)).MessageRead(conversationId, userId, readAt);
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            _logger.LogWarning(ex,
-                "Could not push the read position of user {UserId} in conversation {ConversationId}; members will see it on their next load",
-                userId, conversationId);
-        }
     }
 }

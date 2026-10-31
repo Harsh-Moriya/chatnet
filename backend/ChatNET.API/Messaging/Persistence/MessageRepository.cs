@@ -3,6 +3,7 @@ using ChatNET.API.Common.Persistence;
 using ChatNET.API.Conversations.Models;
 using ChatNET.API.Messaging.Models;
 using ChatNET.API.Notifications.Models;
+using ChatNET.API.Outbox.Models;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 
@@ -31,10 +32,14 @@ public class MessageRepository : IMessageRepository
     }
 
     public async Task<bool> TryAddAsync(
-        Message message, IReadOnlyList<Notification> notifications, CancellationToken cancellationToken)
+        Message message, IReadOnlyList<Notification> notifications, IReadOnlyList<OutboxMessage> outbox,
+        CancellationToken cancellationToken)
     {
         _db.Messages.Add(message);
         _db.Notifications.AddRange(notifications);
+
+        // The pushes this message causes are saved with it: either both are stored or neither is.
+        _db.OutboxMessages.AddRange(outbox);
 
         // The conversation row is never loaded. A stub carrying only its key and the new UpdatedAt is
         // attached and that one property is marked modified, so EF sends a single-column UPDATE next
@@ -79,6 +84,13 @@ public class MessageRepository : IMessageRepository
             SqlState: PostgresErrorCodes.UniqueViolation,
             ConstraintName: MessageConfiguration.ClientMessageIndexName,
         };
+
+    public Task<MessageDto?> FindByIdAsync(Guid messageId, CancellationToken cancellationToken)
+        => _db.Messages
+            .AsNoTracking()
+            .Where(m => m.Id == messageId)
+            .Select(ToDto)
+            .FirstOrDefaultAsync(cancellationToken);
 
     public Task<MessageDto?> FindByClientMessageIdAsync(
         Guid conversationId, Guid senderId, Guid clientMessageId, CancellationToken cancellationToken)

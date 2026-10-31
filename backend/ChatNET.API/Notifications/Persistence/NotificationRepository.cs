@@ -58,9 +58,15 @@ public class NotificationRepository : INotificationRepository
             .Select(n => n.Id)
             .ToListAsync(cancellationToken);
 
-        if (ids.Count == 0)
-            return [];
+        return ids.Count == 0 ? [] : await LoadAsync(ids, cancellationToken);
+    }
 
+    public async Task<NotificationDto?> FindByIdAsync(Guid notificationId, CancellationToken cancellationToken)
+        => (await LoadAsync([notificationId], cancellationToken)).FirstOrDefault();
+
+    // The notifications with these ids, newest first, with the actor's name and the start of the message's text.
+    private async Task<List<NotificationDto>> LoadAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken)
+    {
         var rows = await _db.Notifications
             .AsNoTracking()
             .Where(n => ids.Contains(n.Id))

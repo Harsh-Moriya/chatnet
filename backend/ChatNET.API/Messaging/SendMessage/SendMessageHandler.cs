@@ -10,6 +10,8 @@ using ChatNET.API.Messaging.Persistence;
 using ChatNET.API.Notifications;
 using ChatNET.API.Notifications.Models;
 using ChatNET.API.Notifications.Persistence;
+using ChatNET.API.Outbox;
+using ChatNET.API.Outbox.Models;
 using MediatR;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.SignalR;
@@ -24,7 +26,7 @@ public class SendMessageHandler : IRequestHandler<SendMessageCommand, SendMessag
     private readonly AttachmentIntake _intake;
     private readonly AttachmentLoader _attachmentLoader;
     private readonly INotificationRepository _notifications;
-    private readonly NotificationPusher _notificationPusher;
+    private readonly OutboxPublisher _outbox;
     private readonly IHubContext<ChatHub, IChatClient> _hub;
     private readonly ILogger<SendMessageHandler> _logger;
 
@@ -35,7 +37,7 @@ public class SendMessageHandler : IRequestHandler<SendMessageCommand, SendMessag
         AttachmentIntake intake,
         AttachmentLoader attachmentLoader,
         INotificationRepository notifications,
-        NotificationPusher notificationPusher,
+        OutboxPublisher outbox,
         IHubContext<ChatHub, IChatClient> hub,
         ILogger<SendMessageHandler> logger)
     {
@@ -45,7 +47,7 @@ public class SendMessageHandler : IRequestHandler<SendMessageCommand, SendMessag
         _intake = intake;
         _attachmentLoader = attachmentLoader;
         _notifications = notifications;
-        _notificationPusher = notificationPusher;
+        _outbox = outbox;
         _hub = hub;
         _logger = logger;
     }
@@ -106,8 +108,10 @@ public class SendMessageHandler : IRequestHandler<SendMessageCommand, SendMessag
             }
         }
 
+        // The id is made here, not by the database, because the outbox rows saved with the message name it.
         var message = new Message
         {
+            Id = Guid.CreateVersion7(),
             ConversationId = request.ConversationId,
             SenderId = request.SenderId,
 
@@ -121,13 +125,20 @@ public class SendMessageHandler : IRequestHandler<SendMessageCommand, SendMessag
 
         var mentions = await MentionsAsync(message, cancellationToken);
 
+        // One row for the message and one for each mention, saved with them. If this request stops before it has
+        // pushed, or the push fails, the relay makes the push from these rows.
+        var messageRow = _outbox.Create(new MessageCreated(message.Id, message.ConversationId));
+        var mentionRows = mentions
+            .Select(mention => _outbox.Create(new NotificationCreated(mention.Id, mention.UserId)))
+            .ToList();
+
         // Two copies of one send can arrive together, both find nothing above, and both insert. The unique
         // index lets one in; the other is told so here, and answers with the winner's message. The files this
         // copy made are of no use to anyone then, and are removed, as they are when the save fails.
         bool added;
         try
         {
-            added = await _messages.TryAddAsync(message, mentions, cancellationToken);
+            added = await _messages.TryAddAsync(message, mentions, [messageRow, .. mentionRows], cancellationToken);
         }
         catch
         {
@@ -163,13 +174,18 @@ public class SendMessageHandler : IRequestHandler<SendMessageCommand, SendMessag
             message.Content, message.CreatedAt, request.ClientMessageId,
             message.Attachments.Select(_attachmentLoader.ToDto).ToList());
 
-        await PushAsync(dto);
+        await _outbox.DeliverAsync(messageRow, () => PushOrThrowAsync(dto));
 
-        foreach (var mention in mentions)
+        for (var i = 0; i < mentions.Count; i++)
         {
-            await _notificationPusher.ReceivedAsync(mention.UserId, new NotificationDto(
+            var mention = mentions[i];
+            var notification = new NotificationDto(
                 mention.Id, mention.Type, mention.ConversationId, mention.ActorId, sender.DisplayName,
-                message.Id, MessagePreview.Of(message.Content), mention.IsRead, mention.CreatedAt));
+                message.Id, MessagePreview.Of(message.Content), mention.IsRead, mention.CreatedAt);
+
+            await _outbox.DeliverAsync(
+                mentionRows[i],
+                () => _hub.Clients.User(mention.UserId.ToString()).NotificationReceived(notification));
         }
 
         return new SendMessageResult(dto, Created: true);
@@ -189,6 +205,7 @@ public class SendMessageHandler : IRequestHandler<SendMessageCommand, SendMessag
 
         return recipients.Select(userId => new Notification
         {
+            Id = Guid.CreateVersion7(),
             UserId = userId,
             ActorId = message.SenderId,
             ConversationId = message.ConversationId,
@@ -215,25 +232,24 @@ public class SendMessageHandler : IRequestHandler<SendMessageCommand, SendMessag
         return new SendMessageResult(withFiles, Created: false);
     }
 
-    // Runs only after the message is saved, so a client never hears about a message that was rolled
-    // back. The group includes the sender's own connections: their sending tab uses the push to
-    // confirm its optimistic copy (through ClientMessageId) and their other tabs have no other way
-    // to learn about the message.
-    //
-    // The data is already committed, so a failing push (Redis down, for example) must not turn a
-    // successful send into an error: the client would retry and send the message twice. Members
-    // still get it from history on their next load or reconnect.
+    // The push of a message that was already stored, for a repeated send. The first send's own push is covered by its
+    // outbox row, so this one is only a second chance, and a failure of it is not worth more than a warning.
     private async Task PushAsync(MessageDto message)
     {
         try
         {
-            await _hub.Clients.Group(ChatGroups.Conversation(message.ConversationId)).ReceiveMessage(message);
+            await PushOrThrowAsync(message);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             _logger.LogWarning(ex,
-                "Could not push message {MessageId} to conversation {ConversationId}; members will see it on their next history load",
+                "Could not push message {MessageId} to conversation {ConversationId} again",
                 message.Id, message.ConversationId);
         }
     }
+
+    // The group includes the sender's own connections: their sending tab uses the push to confirm its optimistic
+    // copy (through ClientMessageId) and their other tabs have no other way to learn about the message.
+    private Task PushOrThrowAsync(MessageDto message)
+        => _hub.Clients.Group(ChatGroups.Conversation(message.ConversationId)).ReceiveMessage(message);
 }

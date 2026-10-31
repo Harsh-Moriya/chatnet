@@ -20,6 +20,10 @@ public interface INotificationRepository
     Task<List<NotificationDto>> GetPageAsync(
         Guid userId, NotificationCursor? after, int take, CancellationToken cancellationToken);
 
+    // One notification as the bell shows it, whoever it belongs to, or null when there is none. For pushes made from
+    // a stored row, which already know whose it is; never for an endpoint that takes the id from a caller.
+    Task<NotificationDto?> FindByIdAsync(Guid notificationId, CancellationToken cancellationToken);
+
     // How many of this person's notifications are unread, counting no further than the cap.
     Task<int> CountUnreadAsync(Guid userId, CancellationToken cancellationToken);
 
