@@ -23,6 +23,7 @@ Under active development.
 | Online presence: a dot on direct chats, "N online" in groups, "last seen", correct across several server instances | Implemented |
 | Sessions that renew themselves: 15-minute access tokens, rotating refresh tokens in an httpOnly cookie, sign-out that ends the session | Implemented |
 | Retrying a send is safe: a message is stored once however many times the request arrives | Implemented |
+| Pushes that survive an outage: a message, a notification, a new conversation and a read position are written to an outbox table in the same transaction as the change, and a background relay on every server delivers any push that failed, for example while Redis was down | Implemented |
 | File attachments: pictures, videos and documents sent straight to object storage, shown in the conversation | Implemented |
 | Notifications: a bell with an unread count and a panel, @mentions (with autocomplete and highlighting), being added to a group, browser alerts, an unread count in the tab title, and muting a conversation | Implemented |
 | Structured logging (JSON in production) and tracing (OpenTelemetry, viewed in Jaeger) | Implemented |
@@ -31,7 +32,7 @@ Under active development.
 ## How it is built
 
 - **Vertical slices.** Each feature owns its endpoint, MediatR handler, validator and data access in one folder, instead of spreading across technical layers.
-- **REST writes, SignalR pushes.** Clients send messages with a REST call; the server saves the message, then pushes it to the conversation's SignalR group. Loading data and confirming changes are REST; live updates are SignalR.
+- **REST writes, SignalR pushes.** Clients send messages with a REST call; the server saves the message, then pushes it to the conversation's SignalR group. The same save stores an outbox row for the push, so a push that fails is retried by a relay instead of forgotten. Loading data and confirming changes are REST; live updates are SignalR.
 - **One group per conversation.** A connection joins the group of every conversation its user belongs to, so the sidebar and the open chat both update live. Redis fans events out across server instances.
 - **Predictable errors.** FluentValidation runs in the MediatR pipeline, domain failures use a small exception hierarchy, and every API error, including bare 401 and 404 responses, is an RFC 7807 `ProblemDetails` response.
 - **Hardened login.** A per-address rate limit and a per-account lockout (five failures, 15 minutes) slow password guessing, and the JWT settings are validated when the app starts so a weak or missing signing key stops it immediately.
