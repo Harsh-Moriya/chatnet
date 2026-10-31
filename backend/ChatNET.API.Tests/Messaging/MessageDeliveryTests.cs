@@ -184,7 +184,7 @@ public class MessageDeliveryTests
 
     // The message is saved before the push is attempted, so a failing push (Redis down, for
     // example) must not turn a successful send into an error: the client would retry and send a
-    // duplicate. Members get the message from history when they next load or reconnect.
+    // duplicate. The row saved with the message stays undispatched and the relay makes the push.
     [Fact]
     public async Task A_failing_push_does_not_fail_the_send_and_is_logged_without_the_content()
     {
@@ -208,8 +208,11 @@ public class MessageDeliveryTests
         var sent = await response.Content.ReadFromJsonAsync<JsonElement>();
         var stored = await _factory.QueryDbAsync(db => db.Messages.SingleAsync(m => m.Id == sent.MessageIdOf()));
         Assert.Equal(secret, stored.Content);
-        var warning = Assert.Single(capture.Entries, e => e.StartsWith("[Warning]") && e.Contains(sent.MessageIdOf().ToString()));
+        // The warning names the outbox row that stands for the push, which the relay will retry.
+        var row = Assert.Single(await _factory.OutboxRowsAboutAsync("messageId", sent.MessageIdOf()));
+        var warning = Assert.Single(capture.Entries, e => e.StartsWith("[Warning]") && e.Contains(row.Id.ToString()));
         Assert.DoesNotContain(secret, warning);
+        Assert.Null(row.DispatchedAt);
         Assert.DoesNotContain(capture.Entries, e => e.Contains(secret));
     }
 

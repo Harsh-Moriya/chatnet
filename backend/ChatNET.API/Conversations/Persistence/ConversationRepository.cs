@@ -2,6 +2,7 @@ using ChatNET.API.Common.Persistence;
 using ChatNET.API.Conversations.Models;
 using ChatNET.API.Messaging;
 using ChatNET.API.Notifications.Models;
+using ChatNET.API.Outbox.Models;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 
@@ -23,9 +24,11 @@ public class ConversationRepository : IConversationRepository
     public Task<Conversation?> GetDirectByKeyAsync(string directKey, CancellationToken cancellationToken)
         => _db.Conversations.FirstOrDefaultAsync(c => c.DirectKey == directKey, cancellationToken);
 
-    public async Task<bool> TryAddDirectAsync(Conversation conversation, CancellationToken cancellationToken)
+    public async Task<bool> TryAddDirectAsync(
+        Conversation conversation, IReadOnlyList<OutboxMessage> outbox, CancellationToken cancellationToken)
     {
         _db.Conversations.Add(conversation);
+        _db.OutboxMessages.AddRange(outbox);
 
         try
         {
@@ -42,10 +45,12 @@ public class ConversationRepository : IConversationRepository
     }
 
     public async Task AddAsync(
-        Conversation conversation, IReadOnlyList<Notification> notifications, CancellationToken cancellationToken)
+        Conversation conversation, IReadOnlyList<Notification> notifications, IReadOnlyList<OutboxMessage> outbox,
+        CancellationToken cancellationToken)
     {
         _db.Conversations.Add(conversation);
         _db.Notifications.AddRange(notifications);
+        _db.OutboxMessages.AddRange(outbox);
         await _db.SaveChangesAsync(cancellationToken);
     }
 
@@ -110,10 +115,16 @@ public class ConversationRepository : IConversationRepository
     // One UPDATE that carries its own "only if it moves forward" condition. Two requests racing for
     // the same member both reach the row, Postgres makes the second wait for the first and then
     // checks the condition against the value the first wrote, so the position can never go back
-    // and no lock or transaction is needed in the application.
+    // and no lock is needed in the application.
+    //
+    // The outbox row is saved in a transaction with the UPDATE, and only when the UPDATE moved something: a request
+    // that moved nothing announces nothing. The transaction also holds the member's row until the row is saved,
+    // which a second request for the same member waits for, as it already waited for the UPDATE.
     public async Task<bool> AdvanceLastReadAsync(
-        Guid conversationId, Guid userId, DateTime readAt, CancellationToken cancellationToken)
+        Guid conversationId, Guid userId, DateTime readAt, OutboxMessage outbox, CancellationToken cancellationToken)
     {
+        await using var transaction = await _db.Database.BeginTransactionAsync(cancellationToken);
+
         var updated = await _db.ConversationMembers
             .Where(m => m.ConversationId == conversationId
                         && m.UserId == userId
@@ -121,7 +132,14 @@ public class ConversationRepository : IConversationRepository
                         && (m.LastReadAt == null || m.LastReadAt < readAt))
             .ExecuteUpdateAsync(s => s.SetProperty(m => m.LastReadAt, readAt), cancellationToken);
 
-        return updated > 0;
+        if (updated == 0)
+            return false;
+
+        _db.OutboxMessages.Add(outbox);
+        await _db.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+
+        return true;
     }
 
     public Task<List<MemberDto>> GetActiveMembersAsync(Guid conversationId, CancellationToken cancellationToken)

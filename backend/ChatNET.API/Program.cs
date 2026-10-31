@@ -21,6 +21,8 @@ using ChatNET.API.Messaging.Hubs;
 using ChatNET.API.Messaging.Persistence;
 using ChatNET.API.Notifications;
 using ChatNET.API.Notifications.Persistence;
+using ChatNET.API.Outbox;
+using ChatNET.API.Outbox.Persistence;
 using ChatNET.API.Presence;
 using ChatNET.API.Presence.Persistence;
 using ChatNET.API.Users;
@@ -243,6 +245,20 @@ try
     builder.Services.AddScoped<ConversationNotifier>();
     builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
     builder.Services.AddScoped<NotificationPusher>();
+
+    // ##### Outbox #####
+    // A push that follows a save is first written to the OutboxMessages table in the same transaction as the save. The
+    // request pushes right after the commit and marks the row; the relay, which runs on every instance, makes the pushes
+    // that did not happen. The relay is registered as itself too so a test can run a pass without waiting for the timer.
+    builder.Services.AddOptions<OutboxOptions>()
+        .BindConfiguration(OutboxOptions.SectionName)
+        .ValidateOnStart();
+    builder.Services.AddSingleton<IValidateOptions<OutboxOptions>, OutboxOptionsValidator>();
+    builder.Services.AddScoped<IOutboxRepository, OutboxRepository>();
+    builder.Services.AddScoped<OutboxPublisher>();
+    builder.Services.AddScoped<OutboxDispatcher>();
+    builder.Services.AddSingleton<OutboxRelayService>();
+    builder.Services.AddHostedService(provider => provider.GetRequiredService<OutboxRelayService>());
 
     // ##### Presence #####
     // Who is online lives in Redis (see PresenceScripts). The settings are validated when the host starts,

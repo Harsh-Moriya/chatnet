@@ -38,8 +38,8 @@ public class DirectConversationRaceTests
         var loserDb = loserScope.ServiceProvider.GetRequiredService<AppDbContext>();
         var loser = new ConversationRepository(loserDb);
 
-        var first = await winner.TryAddDirectAsync(NewDirect(alice, bob), CancellationToken.None);
-        var second = await loser.TryAddDirectAsync(NewDirect(bob, alice), CancellationToken.None);
+        var first = await winner.TryAddDirectAsync(NewDirect(alice, bob), [], CancellationToken.None);
+        var second = await loser.TryAddDirectAsync(NewDirect(bob, alice), [], CancellationToken.None);
 
         Assert.True(first);
         Assert.False(second);
@@ -55,7 +55,7 @@ public class DirectConversationRaceTests
             CreatedById = alice.Id,
             Members = [new ConversationMember { UserId = alice.Id, Role = MemberRole.Owner, JoinedAt = DateTime.UtcNow }],
         };
-        await loser.AddAsync(group, [], CancellationToken.None);
+        await loser.AddAsync(group, [], [], CancellationToken.None);
 
         var key = DirectKey.For(alice.Id, bob.Id);
         var stored = await _factory.QueryDbAsync(db => db.Conversations.CountAsync(c => c.DirectKey == key));

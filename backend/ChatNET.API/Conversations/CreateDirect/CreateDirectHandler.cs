@@ -2,6 +2,8 @@ using ChatNET.API.Auth.Models;
 using ChatNET.API.Common.Exceptions;
 using ChatNET.API.Conversations.Models;
 using ChatNET.API.Conversations.Persistence;
+using ChatNET.API.Outbox;
+using ChatNET.API.Outbox.Models;
 using MediatR;
 using Microsoft.AspNetCore.Identity;
 
@@ -15,17 +17,20 @@ public class CreateDirectHandler : IRequestHandler<CreateDirectCommand, Conversa
     private readonly UserManager<AppUser> _userManager;
     private readonly ILogger<CreateDirectHandler> _logger;
     private readonly ConversationNotifier _notifier;
+    private readonly OutboxPublisher _outbox;
 
     public CreateDirectHandler(
         IConversationRepository conversations,
         UserManager<AppUser> userManager,
         ILogger<CreateDirectHandler> logger,
-        ConversationNotifier notifier)
+        ConversationNotifier notifier,
+        OutboxPublisher outbox)
     {
         _conversations = conversations;
         _userManager = userManager;
         _logger = logger;
         _notifier = notifier;
+        _outbox = outbox;
     }
 
     public async Task<ConversationDto> Handle(CreateDirectCommand request, CancellationToken cancellationToken)
@@ -37,13 +42,14 @@ public class CreateDirectHandler : IRequestHandler<CreateDirectCommand, Conversa
         var directKey = DirectKey.For(request.UserId, request.OtherUserId);
 
         var conversation = await _conversations.GetDirectByKeyAsync(directKey, cancellationToken);
-        var createdByThisRequest = false;
+        OutboxMessage? announcement = null;
 
         if (conversation is null)
         {
             var now = DateTime.UtcNow;
             var created = new Conversation
             {
+                Id = Guid.CreateVersion7(),
                 Type = ConversationType.Direct,
                 DirectKey = directKey,
                 CreatedAt = now,
@@ -56,10 +62,14 @@ public class CreateDirectHandler : IRequestHandler<CreateDirectCommand, Conversa
                 ]
             };
 
-            if (await _conversations.TryAddDirectAsync(created, cancellationToken))
+            // The announcement is saved with the conversation: if the insert loses a race, it is not saved either.
+            var row = _outbox.Create(new ConversationCreated(
+                created.Id, request.UserId, [request.UserId, request.OtherUserId]));
+
+            if (await _conversations.TryAddDirectAsync(created, [row], cancellationToken))
             {
                 conversation = created;
-                createdByThisRequest = true;
+                announcement = row;
                 _logger.LogInformation(
                     "Direct conversation {ConversationId} created by {UserId}", created.Id, request.UserId);
             }
@@ -78,8 +88,12 @@ public class CreateDirectHandler : IRequestHandler<CreateDirectCommand, Conversa
         // Only the request that created the conversation announces it. A repeated call finds the
         // existing one, and a request that lost a race returns the winner's, which the winner
         // announces.
-        if (createdByThisRequest)
-            await _notifier.NotifyCreatedAsync(dto, request.UserId, [request.UserId, request.OtherUserId], cancellationToken);
+        if (announcement is not null)
+        {
+            await _outbox.DeliverAsync(
+                announcement,
+                () => _notifier.NotifyCreatedAsync(dto, request.UserId, [request.UserId, request.OtherUserId], cancellationToken));
+        }
 
         return dto;
     }

@@ -1,15 +1,22 @@
 using ChatNET.API.Messaging.Models;
 using ChatNET.API.Notifications.Models;
+using ChatNET.API.Outbox.Models;
 
 namespace ChatNET.API.Messaging.Persistence;
 
 public interface IMessageRepository
 {
-    // Saves the message, the notifications it causes and its conversation's UpdatedAt (moved to the message's
-    // CreatedAt), as one atomic write: either all of it happens or none of it does. Returns false, saving nothing, when the message
-    // carries a client id that this sender already used in this conversation: another request sent it
-    // first.
-    Task<bool> TryAddAsync(Message message, IReadOnlyList<Notification> notifications, CancellationToken cancellationToken);
+    // Saves the message, the notifications it causes, the outbox rows for their pushes and its conversation's
+    // UpdatedAt (moved to the message's CreatedAt), as one atomic write: either all of it happens or none of it
+    // does. Returns false, saving nothing, when the message carries a client id that this sender already used in
+    // this conversation: another request sent it first.
+    Task<bool> TryAddAsync(
+        Message message, IReadOnlyList<Notification> notifications, IReadOnlyList<OutboxMessage> outbox,
+        CancellationToken cancellationToken);
+
+    // The message as it is stored (a deleted one without its content, and without its files), or null. Files are
+    // not included: AttachmentLoader adds them.
+    Task<MessageDto?> FindByIdAsync(Guid messageId, CancellationToken cancellationToken);
 
     // The message this sender already sent in this conversation with this client id, or null.
     Task<MessageDto?> FindByClientMessageIdAsync(

@@ -79,6 +79,12 @@ public sealed class ChatApiFactory : WebApplicationFactory<Program>, IAsyncLifet
         Environment.SetEnvironmentVariable("Presence__Ttl", "03:00:00");
         Environment.SetEnvironmentVariable("Presence__OfflineGrace", "00:00:00");
 
+        // The outbox relay ticks once an hour so it never pushes by itself while other tests run; the request that wrote a
+        // row has two minutes to push it before the relay may take it. Tests of the relay run a pass by hand and move
+        // the clock.
+        Environment.SetEnvironmentVariable("Outbox__RelayInterval", "01:00:00");
+        Environment.SetEnvironmentVariable("Outbox__ClaimAfter", "00:02:00");
+
         AssertUsingTestContainers();
 
         // The bucket is made the way the compose setup job makes it, without the CORS and lifecycle rules, which
