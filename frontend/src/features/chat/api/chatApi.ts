@@ -41,6 +41,17 @@ export interface MessagePageOptions {
 
 export async function fetchMessages(
   conversationId: string,
+  options: MessagePageOptions = {},
+): Promise<Message[]> {
+  const page = await requestMessages(conversationId, options)
+  chat().seedMessages(conversationId, page)
+  return page
+}
+
+// The same request, without adding the page to the store. For a caller that has to decide first whether the page may
+// go in: a page that does not join up with what the store holds would leave a hole in the history (the catch-up).
+export async function requestMessages(
+  conversationId: string,
   { before, after, signal }: MessagePageOptions = {},
 ): Promise<Message[]> {
   await waitForConnection(signal)
@@ -49,7 +60,6 @@ export async function fetchMessages(
     params: { before, after },
     signal,
   })
-  chat().seedMessages(conversationId, data)
   return data
 }
 
