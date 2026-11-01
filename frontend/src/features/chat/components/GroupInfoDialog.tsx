@@ -1,12 +1,15 @@
 import { type FormEvent, useState } from 'react'
 import { AlertCircle, Crown, LogOut, ShieldCheck, User, UserMinus, UserPlus, X } from 'lucide-react'
 import { Avatar } from '../../../components/ui/Avatar'
+import { AvatarPicker } from '../../../components/ui/AvatarPicker'
 import { Button } from '../../../components/ui/Button'
 import { Dialog } from '../../../components/ui/Dialog'
 import { Input } from '../../../components/ui/Input'
 import { Menu, type MenuItem } from '../../../components/ui/Menu'
 import { getApiError } from '../../../lib/errors'
 import { useAuth } from '../../auth/hooks/useAuth'
+import { removePicture, setPicture } from '../../profile/api/profileApi'
+import { prepareAvatar } from '../../profile/avatarImage'
 import { addMembers, changeMemberRole, leaveConversation, removeMember, renameConversation } from '../api/chatApi'
 import { MAX_GROUP_NAME_LENGTH, canManage, memberActions, roleOf, roomLeft } from '../groupRules'
 import { useChatStore } from '../store/chatStore'
@@ -140,6 +143,21 @@ function GroupInfo({ conversation, onDone }: { conversation: Conversation; onDon
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
           <span>{error}</span>
         </div>
+      )}
+
+      {manager ? (
+        <AvatarPicker
+          name={conversation.name}
+          src={conversation.avatarUrl}
+          isGroup
+          busy={busy}
+          onPick={(file) =>
+            void run(async () => setPicture({ kind: 'group', conversationId: conversation.id }, await prepareAvatar(file)))
+          }
+          onRemove={() => void run(() => removePicture({ kind: 'group', conversationId: conversation.id }))}
+        />
+      ) : (
+        <Avatar name={conversation.name} src={conversation.avatarUrl} size="lg" isGroup />
       )}
 
       {manager ? (

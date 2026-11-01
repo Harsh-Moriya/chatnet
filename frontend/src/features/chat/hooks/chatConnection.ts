@@ -2,7 +2,7 @@ import { isUnauthorized, reconnectDelay } from '../../../lib/signalr'
 import { useChatStore } from '../store/chatStore'
 import type { NotificationItem } from '../../notifications/types'
 import type { Presence } from '../../presence/types'
-import type { Conversation, ConversationUpdate, MembersChange, Message } from '../types'
+import type { Conversation, ConversationUpdate, MembersChange, Message, UserSummary } from '../types'
 
 // Everything that connects the SignalR hub to the chat store, as plain functions with no React so it
 // can be tested with a fake hub. This is the only place that registers hub event handlers. The
@@ -35,6 +35,9 @@ export interface ChatConnectionDeps {
   // Called when the signed-in user was added back to a group they had left, once the store has forgotten what it held of
   // it: the owner drops the cached pages of its messages and people, so they load again from the time of the new join.
   onRejoined: (conversationId: string) => void
+  // Called with every name and picture change pushed by the server, the signed-in user's own included (made in another tab). The
+  // store has already taken it; this is for what lives elsewhere, which is the signed-in user's own profile.
+  onProfileChanged: (profile: UserSummary) => void
   // Called with each notification pushed to the user: someone mentioned them, or added them to a group.
   onNotificationReceived: (notification: NotificationItem) => void
   // Called with the ids of notifications that were marked read, here or in another tab or by reading the
@@ -141,6 +144,12 @@ export function connectChat(hub: ChatHub, deps: ChatConnectionDeps): ChatConnect
   // A group was renamed, or its picture changed.
   hub.on('ConversationUpdated', (update: ConversationUpdate) => {
     chat().applyConversationUpdate(update)
+  })
+
+  // Someone who shares a conversation with this user (or this user, in another tab) changed their name or picture.
+  hub.on('ProfileChanged', (profile: UserSummary) => {
+    chat().applyProfileChange(profile)
+    deps.onProfileChanged(profile)
   })
 
   // The signed-in user left a group, or was removed from it, in this tab or another.

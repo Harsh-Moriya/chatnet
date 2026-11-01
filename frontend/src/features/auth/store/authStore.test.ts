@@ -17,6 +17,41 @@ beforeEach(() => {
 })
 
 describe('the auth store', () => {
+  it('has no picture until the profile says so, and a renewed session does not take it away', () => {
+    store().setAuth(response)
+    expect(store().user?.avatarUrl).toBeNull()
+
+    store().updateProfile({ id: 'u1', displayName: 'Alice', avatarUrl: '/api/avatars/users/u1/f1' })
+    store().setAuth({ ...response, token: 'renewed' })
+
+    expect(store().user?.avatarUrl).toBe('/api/avatars/users/u1/f1')
+  })
+
+  it('does not hand the picture of one person to the next person who signs in', () => {
+    store().setAuth(response)
+    store().updateProfile({ id: 'u1', displayName: 'Alice', avatarUrl: '/api/avatars/users/u1/f1' })
+
+    store().setAuth({ ...response, userId: 'u2', userName: 'bob', displayName: 'Bob' })
+
+    expect(store().user).toMatchObject({ userId: 'u2', avatarUrl: null })
+  })
+
+  it('takes a new name and picture for the signed-in user and ignores everyone else', () => {
+    store().setAuth(response)
+
+    store().updateProfile({ id: 'someone-else', displayName: 'Other', avatarUrl: 'x' })
+    expect(store().user).toMatchObject({ displayName: 'Alice', avatarUrl: null })
+
+    store().updateProfile({ id: 'u1', displayName: 'Alice B', avatarUrl: 'y' })
+    expect(store().user).toMatchObject({ displayName: 'Alice B', avatarUrl: 'y' })
+  })
+
+  it('says nothing is signed in when nobody is, whatever the profile says', () => {
+    store().updateProfile({ id: 'u1', displayName: 'Alice', avatarUrl: null })
+
+    expect(store().user).toBeNull()
+  })
+
   it('does not know yet whether anyone is signed in when the page loads', () => {
     expect(store().status).toBe('unknown')
     expect(store().token).toBeNull()
