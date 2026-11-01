@@ -6,6 +6,8 @@ import { useAuth } from '../../auth/hooks/useAuth'
 import { session } from '../../auth/session'
 import { NotificationBell } from '../../notifications/components/NotificationBell'
 import { NotificationPanel } from '../../notifications/components/NotificationPanel'
+import { SearchBox } from '../../search/components/SearchBox'
+import { SearchResults } from '../../search/components/SearchResults'
 import { ConnectionBanner } from './ConnectionBanner'
 import { ConversationList } from './ConversationList'
 
@@ -29,6 +31,10 @@ export function Sidebar() {
   const [panelOpen, setPanelOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
   const [profileMounted, setProfileMounted] = useState(false)
+
+  // Kept here, not in the results, so the search is still there after a result is opened (on a phone, when the list comes back).
+  const [searchInput, setSearchInput] = useState('')
+  const searching = searchInput.trim() !== ''
 
   function openProfile() {
     setProfileMounted(true)
@@ -82,7 +88,8 @@ export function Sidebar() {
       </header>
 
       <ConnectionBanner />
-      <ConversationList onNewConversation={openDialog} />
+      <SearchBox value={searchInput} onChange={setSearchInput} />
+      {searching ? <SearchResults input={searchInput} /> : <ConversationList onNewConversation={openDialog} />}
 
       {panelOpen && <NotificationPanel id={NOTIFICATION_PANEL_ID} onClose={() => setPanelOpen(false)} />}
 
