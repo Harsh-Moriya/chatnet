@@ -111,16 +111,21 @@ public class SearchPlanTests : IAsyncLifetime
                        'Image', CASE WHEN n = 77 THEN 'blueprint.pdf' WHEN n = 1500 THEN 'archive.pdf' ELSE 'photo_' || n::text || '.jpg' END, 100, now(), 'image/jpeg'
                 FROM (SELECT ""Id"", row_number() OVER (ORDER BY ""CreatedAt"" DESC) AS n FROM ""Messages"" WHERE ""ConversationId"" = {big} LIMIT {FilesInTheBigConversation}) m");
 
-            await db.Database.ExecuteSqlRawAsync(@"ANALYZE ""Messages""");
+            // VACUUM as well as ANALYZE: rows just inserted sit in the pending list of a GIN index until a vacuum merges them, and
+            // while they do Postgres counts reading that list as part of the cost of using the index.
+            // Statistics from every row and not a random sample of 30,000, so the plans do not depend on which rows were sampled.
+            await db.Database.ExecuteSqlRawAsync(@"ALTER TABLE ""Messages"" ALTER COLUMN ""ConversationId"" SET STATISTICS 1000");
+            await db.Database.ExecuteSqlRawAsync(@"ALTER INDEX ""IX_Messages_Search"" ALTER COLUMN 2 SET STATISTICS 1000");
+            await db.Database.ExecuteSqlRawAsync(@"VACUUM (ANALYZE) ""Messages""");
             await db.Database.ExecuteSqlRawAsync(@"ANALYZE ""MessageAttachments""");
             await db.Database.ExecuteSqlRawAsync(@"ANALYZE ""ConversationMembers""");
         });
     }
 
-    private async Task<(int Hits, long MessageRows, long FileRows)> RunAsync(string q)
+    private async Task<(int Hits, long MessageRows, long FileRows)> RunAsync(string q, Guid? before = null)
     {
         _recorder.Clear();
-        var hits = await _client.SearchAsync(q);
+        var hits = await _client.SearchAsync(q, before: before);
 
         var search = Assert.Single(_recorder.Commands, c => c.Sql.Contains("ts_headline"));
         var messageRows = await _factory.QueryDbAsync(db => QueryPlan.RowsReadFromTableAsync(db, search, "Messages"));
@@ -139,33 +144,28 @@ public class SearchPlanTests : IAsyncLifetime
         $"and {OutsideConversations * MessagesPerOutsideConversation} in conversations they are not in.{Environment.NewLine}{LastPlan}";
 
     [Fact]
-    public async Task A_rare_word_never_reads_more_than_the_conversations_searched()
+    public async Task A_rare_word_reads_about_as_many_messages_as_the_recent_phase_and_the_index_find()
     {
         var run = await RunAsync("needle");
 
-        // The three in the big conversation. The sixty in the conversations that also say it are not Alice's. The recent phase
-        // reads at most 300 messages of each conversation; the older part is found through the full text index, which Postgres
-        // may or may not choose (it depends on its estimates, which differ between databases), and when it does not it reads
-        // that one conversation. Either way the 16,000 messages of the others stay unread.
+        // The three in the big conversation. The sixty in the conversations that also say it are not Alice's. The recent phase reads
+        // at most 300 messages of each conversation (a few dozen in most here, the window is a day); the older part of the big
+        // conversation is found through the full text index. Reading that conversation, or the 16,000 messages of the others,
+        // would be thousands.
         Assert.Equal(3, run.Hits);
-        Assert.True(
-            run.MessageRows <= BigConversation + MemberConversations * 300 + 500,
-            Report("A rare word", run));
+        Assert.True(run.MessageRows <= 1000, Report("A rare word", run));
     }
 
-    // Statistics are kept for the whole table, so Postgres cannot know that a word which is in every message of conversations
-    // the person is not in is rare in theirs, and it reads the conversation instead of using the index. What this guards is
-    // the limit of that: only the conversations searched are read, never the others (16,000 messages here), and the recent phase
-    // keeps every other conversation to its budget.
+    // A word that is in every message of conversations the person is not in is as cheap, because the index starts with the
+    // conversation: what other people said is not looked at. (Statistics are kept for the whole table, so Postgres cannot tell that
+    // the word is rare in this conversation; it goes by the index being a lookup of one conversation.)
     [Fact]
-    public async Task A_word_that_is_common_elsewhere_reads_no_more_than_the_conversations_searched()
+    public async Task A_word_that_is_common_in_other_conversations_does_not_make_the_search_read_them()
     {
         var run = await RunAsync("popular");
 
         Assert.Equal(3, run.Hits);
-        Assert.True(
-            run.MessageRows <= BigConversation + MemberConversations * 300 + 500,
-            Report("A word common in other people's conversations", run));
+        Assert.True(run.MessageRows <= 1000, Report("A word common in other people's conversations", run));
     }
 
     [Fact]
@@ -184,22 +184,10 @@ public class SearchPlanTests : IAsyncLifetime
     {
         _recorder.Clear();
         var first = await _client.SearchAsync("common");
-        var run = await RunWithCursorAsync("common", first[^1].HitIdOf());
+        var run = await RunAsync("common", first[^1].HitIdOf());
 
         Assert.Equal(20, run.Hits);
         Assert.True(run.MessageRows <= 1000, Report("The second page of a common word", run));
-    }
-
-    private async Task<(int Hits, long MessageRows, long FileRows)> RunWithCursorAsync(string q, Guid before)
-    {
-        _recorder.Clear();
-        var hits = await _client.SearchAsync(q, before: before);
-
-        var search = Assert.Single(_recorder.Commands, c => c.Sql.Contains("ts_headline"));
-        var messageRows = await _factory.QueryDbAsync(db => QueryPlan.RowsReadFromTableAsync(db, search, "Messages"));
-        var fileRows = await _factory.QueryDbAsync(db => QueryPlan.RowsReadFromTableAsync(db, search, "MessageAttachments"));
-
-        return (hits.Count, messageRows, fileRows);
     }
 
     [Fact]
