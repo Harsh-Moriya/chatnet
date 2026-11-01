@@ -14,13 +14,16 @@ public class ConversationNotifier
 {
     private readonly IHubContext<ChatHub, IChatClient> _hub;
     private readonly IConversationRepository _conversations;
+    private readonly ConnectionEvictor _evictor;
 
     public ConversationNotifier(
         IHubContext<ChatHub, IChatClient> hub,
-        IConversationRepository conversations)
+        IConversationRepository conversations,
+        ConnectionEvictor evictor)
     {
         _hub = hub;
         _conversations = conversations;
+        _evictor = evictor;
     }
 
     // creatorView is the conversation as its creator sees it. The creator is told as well: the
@@ -84,13 +87,15 @@ public class ConversationNotifier
         }
     }
 
-    // Tells the person's tabs they are out. Nothing is said about someone who is a member again by now.
+    // Takes the person's connections out of the conversation, wherever they are, so they hear nothing more of it, and
+    // tells their tabs they are out. Nothing is done about someone who is a member again by now.
     public async Task NotifyLeftAsync(Guid conversationId, Guid userId, CancellationToken cancellationToken)
     {
         var leftAt = await _conversations.GetLeftAtAsync(conversationId, userId, cancellationToken);
         if (leftAt is null)
             return;
 
+        await _evictor.EvictAsync(userId, conversationId);
         await _hub.Clients.User(userId.ToString()).RemovedFromConversation(conversationId, leftAt.Value);
     }
 

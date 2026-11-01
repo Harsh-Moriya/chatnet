@@ -275,6 +275,13 @@ try
         provider.GetRequiredService<IConfiguration>().GetConnectionString("Redis")
             ?? throw new InvalidOperationException("ConnectionStrings:Redis is not configured.")));
     builder.Services.AddSingleton<IPresenceStore, PresenceStore>();
+
+    // The open connections of this instance, and the message that takes a person's connections out of a conversation they
+    // are no longer in (see ConnectionEvictor). The listener is registered as itself too so a test can wait for it.
+    builder.Services.AddSingleton<ConnectionRegistry>();
+    builder.Services.AddSingleton<ConnectionEvictor>();
+    builder.Services.AddSingleton<ConnectionEvictionListener>();
+    builder.Services.AddHostedService(provider => provider.GetRequiredService<ConnectionEvictionListener>());
     builder.Services.AddSingleton<PresenceService>();
     builder.Services.AddSingleton<PresenceRefreshService>();
     builder.Services.AddHostedService(provider => provider.GetRequiredService<PresenceRefreshService>());

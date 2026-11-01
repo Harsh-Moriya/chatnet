@@ -21,6 +21,10 @@ public sealed class RedisConnection : IAsyncDisposable
 
     public async Task<IDatabase> GetDatabaseAsync() => (await ConnectionAsync()).GetDatabase();
 
+    // For publishing to and listening on a channel. A subscription lives on the shared multiplexer, which sets it up
+    // again by itself when the connection to Redis comes back.
+    public async Task<ISubscriber> GetSubscriberAsync() => (await ConnectionAsync()).GetSubscriber();
+
     private Task<IConnectionMultiplexer> ConnectionAsync()
     {
         lock (_gate)

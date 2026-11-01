@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using ChatNET.API.Common.Auth;
 using ChatNET.API.Conversations;
 using ChatNET.API.Conversations.Persistence;
@@ -18,21 +17,21 @@ namespace ChatNET.API.Messaging.Hubs;
 [Authorize]
 public class ChatHub : Hub<IChatClient>
 {
-    private const string JoinedKey = "joined-conversations";
-    private const string TypingKey = "typing-started-at";
-
     // The shortest time between two delivered "typing" events from one connection in one
     // conversation. A client should send one every couple of seconds while someone types.
     private static readonly TimeSpan TypingInterval = TimeSpan.FromSeconds(1);
 
     private readonly IConversationRepository _conversations;
     private readonly PresenceService _presence;
+    private readonly ConnectionRegistry _registry;
     private readonly ILogger<ChatHub> _logger;
 
-    public ChatHub(IConversationRepository conversations, PresenceService presence, ILogger<ChatHub> logger)
+    public ChatHub(
+        IConversationRepository conversations, PresenceService presence, ConnectionRegistry registry, ILogger<ChatHub> logger)
     {
         _conversations = conversations;
         _presence = presence;
+        _registry = registry;
         _logger = logger;
     }
 
@@ -43,12 +42,22 @@ public class ChatHub : Hub<IChatClient>
     {
         var userId = Context.User!.GetUserId();
 
+        // Known before anything is read, so a person who is taken out of a conversation from now on reaches this
+        // connection (see ConnectionEvictor), whatever it has joined by then.
+        _registry.Add(userId, Context);
+
         var conversationIds = await _conversations.GetActiveConversationIdsForUserAsync(
             userId, Context.ConnectionAborted);
 
         // In parallel: a user with many conversations should not wait for one Redis round trip
         // per group. The multiplexer pipelines the commands.
         await Task.WhenAll(conversationIds.Select(JoinGroupAsync));
+
+        // A removal that committed while the list above was being read may have sent its message before this connection was
+        // in the group, which leaves the connection in a group it does not belong in. Reading again, after the joins, sees
+        // every removal that committed before it; one that commits after it sends its message to a connection that is
+        // registered and in its groups by then.
+        await LeaveConversationsNoLongerActiveAsync(userId, conversationIds);
 
         _logger.LogInformation(
             "Connection {ConnectionId} of user {UserId} joined {ConversationCount} conversations",
@@ -65,7 +74,10 @@ public class ChatHub : Hub<IChatClient>
     // expired). A server that dies never gets here; its connections stop being renewed and expire.
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
-        await _presence.DisconnectedAsync(Context.User!.GetUserId(), Context.ConnectionId);
+        var userId = Context.User!.GetUserId();
+        _registry.Remove(userId, Context.ConnectionId);
+
+        await _presence.DisconnectedAsync(userId, Context.ConnectionId);
 
         await base.OnDisconnectedAsync(exception);
     }
@@ -87,6 +99,10 @@ public class ChatHub : Hub<IChatClient>
         }
 
         await JoinGroupAsync(conversationId);
+
+        // The check above and the join are two steps, and a removal can happen between them, with its message arriving
+        // before the join: so the connection would be in the group of a conversation its user has just left. Asking again
+        // after the join closes that gap, for a removal after this check reaches the connection once it is in the group.
     }
 
     // Client-callable. Tells the other members of the conversation this user is typing.
@@ -99,11 +115,11 @@ public class ChatHub : Hub<IChatClient>
     // cannot turn each keystroke into a message to every member.
     public async Task StartTyping(Guid conversationId)
     {
-        if (!JoinedConversations().ContainsKey(conversationId))
+        if (!ConnectionState.Joined(Context.Items).ContainsKey(conversationId))
             throw new HubException(ConversationErrors.NotAMember);
 
         var now = Environment.TickCount64;
-        var lastSent = TypingStartedAt();
+        var lastSent = ConnectionState.TypingStartedAt(Context.Items);
 
         if (lastSent.TryGetValue(conversationId, out var previous) && now - previous < TypingInterval.TotalMilliseconds)
             return;
@@ -119,10 +135,10 @@ public class ChatHub : Hub<IChatClient>
     // is nothing to stop, and failing would only add noise for a clean-up call.
     public async Task StopTyping(Guid conversationId)
     {
-        if (!JoinedConversations().ContainsKey(conversationId))
+        if (!ConnectionState.Joined(Context.Items).ContainsKey(conversationId))
             return;
 
-        TypingStartedAt().TryRemove(conversationId, out _);
+        ConnectionState.TypingStartedAt(Context.Items).TryRemove(conversationId, out _);
 
         await Clients.OthersInGroup(ChatGroups.Conversation(conversationId))
             .UserTyping(conversationId, Context.User!.GetUserId(), DisplayName(), false);
@@ -136,32 +152,23 @@ public class ChatHub : Hub<IChatClient>
     {
         await Groups.AddToGroupAsync(Context.ConnectionId, ChatGroups.Conversation(conversationId), Context.ConnectionAborted);
 
-        JoinedConversations()[conversationId] = 0;
+        ConnectionState.Joined(Context.Items)[conversationId] = 0;
     }
 
-    // The conversations this connection has actually been put into. It is the authority for what
-    // the connection may do later (such as sending typing events) without asking the database each
-    // time. A concurrent dictionary used as a set, because joins run in parallel.
-    private ConcurrentDictionary<Guid, byte> JoinedConversations()
+    private async Task LeaveGroupAsync(Guid conversationId)
     {
-        if (Context.Items.TryGetValue(JoinedKey, out var existing))
-            return (ConcurrentDictionary<Guid, byte>)existing!;
-
-        var created = new ConcurrentDictionary<Guid, byte>();
-        Context.Items[JoinedKey] = created;
-        return created;
+        ConnectionState.Forget(Context.Items, conversationId);
+        await Groups.RemoveFromGroupAsync(Context.ConnectionId, ChatGroups.Conversation(conversationId), Context.ConnectionAborted);
     }
 
-    // When this connection last had a "typing" event delivered, per conversation (a monotonic
-    // millisecond clock, so a change of system time cannot affect it). Bounded by the number of
-    // conversations the connection joined.
-    private ConcurrentDictionary<Guid, long> TypingStartedAt()
+    private async Task LeaveConversationsNoLongerActiveAsync(Guid userId, IReadOnlyCollection<Guid> joined)
     {
-        if (Context.Items.TryGetValue(TypingKey, out var existing))
-            return (ConcurrentDictionary<Guid, long>)existing!;
+        if (joined.Count == 0)
+            return;
 
-        var created = new ConcurrentDictionary<Guid, long>();
-        Context.Items[TypingKey] = created;
-        return created;
+        var active = (await _conversations.GetActiveConversationIdsForUserAsync(userId, Context.ConnectionAborted)).ToHashSet();
+
+        foreach (var conversationId in joined.Where(id => !active.Contains(id)))
+            await LeaveGroupAsync(conversationId);
     }
 }
