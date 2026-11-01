@@ -175,7 +175,7 @@ public class SendMessageHandler : IRequestHandler<SendMessageCommand, SendMessag
             message.Attachments.Select(_attachmentLoader.ToDto).ToList(),
             EditedAt: null, EditCount: 0, IsDeleted: false);
 
-        await _outbox.DeliverAsync(messageRow, () => PushOrThrowAsync(dto));
+        await _outbox.DeliverAsync(messageRow, () => PushOrThrowAsync(dto), cancellationToken);
 
         for (var i = 0; i < mentions.Count; i++)
         {
@@ -186,7 +186,8 @@ public class SendMessageHandler : IRequestHandler<SendMessageCommand, SendMessag
 
             await _outbox.DeliverAsync(
                 mentionRows[i],
-                () => _hub.Clients.User(mention.UserId.ToString()).NotificationReceived(notification));
+                () => _hub.Clients.User(mention.UserId.ToString()).NotificationReceived(notification),
+                cancellationToken);
         }
 
         return new SendMessageResult(dto, Created: true);

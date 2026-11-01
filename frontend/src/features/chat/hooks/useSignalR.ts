@@ -40,6 +40,8 @@ export function useSignalR() {
         // A push patches the stores directly (the bell does not ask the server again); the browser alert is
         // raised on top of that when the rules in alerts.ts say the user should be told.
         onMessageArrived: alerts.message,
+        onMessageUpdated: (message) =>
+          useNotificationStore.getState().applyMessageChange(message.id, message.isDeleted ? null : message.content),
         onNotificationReceived: (notification) => {
           useNotificationStore.getState().receive(notification)
           alerts.notification(notification)

@@ -92,7 +92,8 @@ public class CreateDirectHandler : IRequestHandler<CreateDirectCommand, Conversa
         {
             await _outbox.DeliverAsync(
                 announcement,
-                () => _notifier.NotifyCreatedAsync(dto, request.UserId, [request.UserId, request.OtherUserId], cancellationToken));
+                () => _notifier.NotifyCreatedAsync(dto, request.UserId, [request.UserId, request.OtherUserId], cancellationToken),
+                cancellationToken);
         }
 
         return dto;

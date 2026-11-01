@@ -38,11 +38,14 @@ public class OutboxPublisherTests
         var row = publisher.Create(new MessageCreated(Guid.NewGuid(), Guid.NewGuid()));
         var pushed = false;
 
-        await publisher.DeliverAsync(row, () =>
-        {
-            pushed = true;
-            return Task.CompletedTask;
-        });
+        await publisher.DeliverAsync(
+            row,
+            () =>
+            {
+                pushed = true;
+                return Task.CompletedTask;
+            },
+            CancellationToken.None);
 
         Assert.True(pushed);
         Assert.Equal([row.Id], repository.Marked);
@@ -56,7 +59,7 @@ public class OutboxPublisherTests
         var publisher = PublisherFor(new ManualTimeProvider(), repository, capture);
         var row = publisher.Create(new MessageCreated(Guid.NewGuid(), Guid.NewGuid()));
 
-        await publisher.DeliverAsync(row, () => throw new InvalidOperationException("Redis is down"));
+        await publisher.DeliverAsync(row, () => throw new InvalidOperationException("Redis is down"), CancellationToken.None);
 
         Assert.Empty(repository.Marked);
         var warning = Assert.Single(capture.Entries, e => e.StartsWith("[Warning]"));
@@ -72,23 +75,43 @@ public class OutboxPublisherTests
         var publisher = PublisherFor(new ManualTimeProvider(), repository, capture);
         var row = publisher.Create(new MessageCreated(Guid.NewGuid(), Guid.NewGuid()));
 
-        await publisher.DeliverAsync(row, () => Task.CompletedTask);
+        await publisher.DeliverAsync(row, () => Task.CompletedTask, CancellationToken.None);
 
         var warning = Assert.Single(capture.Entries, e => e.StartsWith("[Warning]"));
         Assert.Contains(row.Id.ToString(), warning);
     }
 
+    // The request was abandoned (the client left, the host is stopping): that is not hidden. The change is stored and
+    // the row is the safety net, but the work of the request is over.
     [Fact]
     public async Task A_request_that_is_cancelled_during_the_push_is_not_hidden()
     {
         var repository = new RecordingOutboxRepository();
         var publisher = PublisherFor(new ManualTimeProvider(), repository, new CapturingLoggerProvider());
         var row = publisher.Create(new MessageCreated(Guid.NewGuid(), Guid.NewGuid()));
+        using var cancelled = new CancellationTokenSource();
+        await cancelled.CancelAsync();
 
         await Assert.ThrowsAsync<OperationCanceledException>(
-            () => publisher.DeliverAsync(row, () => throw new OperationCanceledException()));
+            () => publisher.DeliverAsync(row, () => throw new OperationCanceledException(), cancelled.Token));
 
         Assert.Empty(repository.Marked);
+    }
+
+    // A cancellation that the request did not ask for (a timeout in the push, which some clients report as one) is a
+    // failed push like any other: the row stays and the relay tries again. It must not fail a request whose change is stored.
+    [Fact]
+    public async Task A_cancellation_the_request_did_not_ask_for_is_a_failed_push_not_a_failed_request()
+    {
+        var repository = new RecordingOutboxRepository();
+        var capture = new CapturingLoggerProvider();
+        var publisher = PublisherFor(new ManualTimeProvider(), repository, capture);
+        var row = publisher.Create(new MessageCreated(Guid.NewGuid(), Guid.NewGuid()));
+
+        await publisher.DeliverAsync(row, () => throw new TaskCanceledException("timed out"), CancellationToken.None);
+
+        Assert.Empty(repository.Marked);
+        Assert.Single(capture.Entries, e => e.StartsWith("[Warning]") && e.Contains(row.Id.ToString()));
     }
 
     private static OutboxPublisher PublisherFor(

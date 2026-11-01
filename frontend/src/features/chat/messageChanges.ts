@@ -60,16 +60,14 @@ export function isPreviewOf(preview: LastMessage | null, message: Message): bool
 // The conversation after one of its messages changed: if the sidebar shows that message, it shows the new text (or
 // that it was deleted). The same object is returned when the preview is of another message.
 export function withChangedPreview(conversation: Conversation, message: Message): Conversation {
-  if (!isPreviewOf(conversation.lastMessage, message)) return conversation
+  const shown = conversation.lastMessage
+  if (!shown || !isPreviewOf(shown, message)) return conversation
 
-  return {
-    ...conversation,
-    lastMessage: {
-      ...conversation.lastMessage!,
-      content: message.isDeleted ? null : message.content,
-      attachmentCount: message.isDeleted ? 0 : message.attachments.length,
-    },
-  }
+  const content = message.isDeleted ? null : message.content
+  const attachmentCount = message.isDeleted ? 0 : message.attachments.length
+  if (shown.content === content && shown.attachmentCount === attachmentCount) return conversation
+
+  return { ...conversation, lastMessage: { ...shown, content, attachmentCount } }
 }
 
 // The conversation after someone else's message was deleted: one fewer unread, if the message was one of them.

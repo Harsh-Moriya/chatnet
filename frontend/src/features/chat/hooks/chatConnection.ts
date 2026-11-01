@@ -30,6 +30,8 @@ export interface ChatConnectionDeps {
   // Called for a message that was not in the store before, once it is there: the moment to raise an alert for
   // it. A message the store already held (the sender's own copy, or one a reload brought) is not new.
   onMessageArrived: (message: Message) => void
+  // Called with every message that was edited or deleted, held or not, so what else shows its text (the bell) can follow.
+  onMessageUpdated: (message: Message) => void
   // Called with each notification pushed to the user: someone mentioned them, or added them to a group.
   onNotificationReceived: (notification: NotificationItem) => void
   // Called with the ids of notifications that were marked read, here or in another tab or by reading the
@@ -88,6 +90,7 @@ export function connectChat(hub: ChatHub, deps: ChatConnectionDeps): ChatConnect
   // and a push that is late or repeated is ignored when the tab already has that version or a later one.
   hub.on('MessageUpdated', (message: Message) => {
     chat().replaceMessage(message, deps.getUserId() ?? undefined)
+    deps.onMessageUpdated(message)
   })
 
   // The signed-in user muted or unmuted a conversation in one of their tabs; every tab follows.

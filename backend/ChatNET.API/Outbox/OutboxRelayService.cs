@@ -41,7 +41,10 @@ public sealed class OutboxRelayService : BackgroundService
             await RunOnceAsync(stoppingToken);
     }
 
-    // One pass. Public so a test (or an operator's tool) can run it without waiting for the timer.
+    // One pass. Public so a test (or an operator's tool) can run it without waiting for the timer. Only the token ending
+    // the pass ends it by cancellation: a push or a call to the storage that times out can surface as a cancellation too,
+    // and that is a failed row, because an exception that left this method would end the background service and with it
+    // the process.
     public async Task RunOnceAsync(CancellationToken cancellationToken)
     {
         try
@@ -65,7 +68,7 @@ public sealed class OutboxRelayService : BackgroundService
                         "Relay pushed {Kind} (outbox {OutboxId}) on attempt {Attempts}",
                         row.Kind, row.Id, row.Attempts);
                 }
-                catch (Exception ex) when (ex is not OperationCanceledException)
+                catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
                 {
                     await RecordFailureAsync(outbox, row.Id, row.Kind, row.Attempts, ex);
                 }
@@ -73,7 +76,7 @@ public sealed class OutboxRelayService : BackgroundService
 
             await CleanUpWhenDueAsync(outbox, now, cancellationToken);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
         {
             // Not worth stopping the application for, and the next pass tries again. A database that is down is
             // reported by the health check.

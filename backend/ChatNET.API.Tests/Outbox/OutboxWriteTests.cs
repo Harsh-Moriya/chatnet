@@ -69,6 +69,29 @@ public class OutboxWriteTests
         await _factory.RemoveWaitingOutboxRowsAsync();
     }
 
+    // A timeout in the push can surface as a cancellation. The message is stored, so the request has to succeed, and the
+    // row is left for the relay like any other failed push.
+    [Fact]
+    public async Task A_push_that_fails_with_a_cancellation_does_not_fail_the_send()
+    {
+        var (alice, _, conversation) = await _factory.DirectChatAsync();
+        using var host = _factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+        {
+            services.RemoveAll<Microsoft.AspNetCore.SignalR.IHubContext<ChatNET.API.Messaging.Hubs.ChatHub, ChatNET.API.Messaging.Hubs.IChatClient>>();
+            services.AddSingleton<Microsoft.AspNetCore.SignalR.IHubContext<ChatNET.API.Messaging.Hubs.ChatHub, ChatNET.API.Messaging.Hubs.IChatClient>>(
+                new ThrowingHubContext(() => new TaskCanceledException("The call timed out.")));
+        }));
+        using var client = Authorized(host, alice);
+
+        var response = await client.PostMessageAsync(conversation, "stored all the same");
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var sent = await response.ReadJsonAsync();
+        var row = Assert.Single(await _factory.OutboxRowsAboutAsync("messageId", sent.MessageIdOf()));
+        Assert.Null(row.DispatchedAt);
+        await _factory.RemoveWaitingOutboxRowsAsync();
+    }
+
     [Fact]
     public async Task A_new_row_is_left_to_its_request_for_the_configured_time()
     {

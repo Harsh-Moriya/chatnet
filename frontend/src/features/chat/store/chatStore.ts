@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { compareTimestamps } from '../../../lib/time'
-import { afterDeletion, isNewer, latest, withChangedPreview } from '../messageChanges'
+import { afterDeletion, isNewer, isPreviewOf, latest, withChangedPreview } from '../messageChanges'
 import type {
   ConnectionStatus,
   Conversation,
@@ -77,14 +77,37 @@ function byTime(a: Message, b: Message): number {
   return compareTimestamps(a.createdAt, b.createdAt) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)
 }
 
+// The patch for a change to a message that is not held (its conversation was never opened, or the message is older
+// than the pages loaded). The sidebar shows the newest message of every conversation, so when this is it the preview
+// follows, and a deleted message does not stay readable there. A copy that is no change at all (an ordinary push of the
+// message) does nothing. The preview carries no version, so an edit can never bring back a preview that already says
+// deleted: a deletion is final.
+function previewChangeOf(state: Data, message: Message, selfId: string | undefined): Partial<Data> | null {
+  if (!message.isDeleted && message.editCount === 0) return null
+
+  const id = message.conversationId
+  const conversation = state.conversations[id]
+  const shown = conversation?.lastMessage
+  if (!conversation || !shown || !isPreviewOf(shown, message)) return null
+  if (!message.isDeleted && shown.content === null) return null
+
+  let next = withChangedPreview(conversation, message)
+  if (message.isDeleted && shown.content !== null && selfId !== undefined) {
+    next = afterDeletion(next, undefined, message, selfId)
+  }
+
+  return next === conversation ? null : { conversations: { ...state.conversations, [id]: next } }
+}
+
 // The patch that puts a later version of a message that is held in its place: the message itself, the sidebar preview if it
-// shows that message, and the unread count if the message was deleted. Null when the message is not held, or the copy
-// that arrived is not newer than the one held, so callers can tell that nothing would change.
+// shows that message, and the unread count if the message was deleted. Null when nothing would change: the copy that
+// arrived is not newer than the one held, or the message is not held and the sidebar does not show it either.
 function changeOf(state: Data, message: Message, selfId: string | undefined): Partial<Data> | null {
   const id = message.conversationId
   const list = state.messages[id]
   const held = list?.find((m) => m.id === message.id)
-  if (!list || !held || !isNewer(message, held)) return null
+  if (!list || !held) return previewChangeOf(state, message, selfId)
+  if (!isNewer(message, held)) return null
 
   // The id this tab invented for its own copy stays, as it does when a page is loaded.
   const kept: Message = { ...message, clientMessageId: message.clientMessageId ?? held.clientMessageId }

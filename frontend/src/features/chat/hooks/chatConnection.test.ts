@@ -128,6 +128,7 @@ function setup(options: { hub?: FakeHub } = {}) {
   const onReconnected = vi.fn()
   const onPresenceChanged = vi.fn()
   const onMessageArrived = vi.fn()
+  const onMessageUpdated = vi.fn()
   const onNotificationReceived = vi.fn()
   const onNotificationsRead = vi.fn()
   const onNotificationDismissed = vi.fn()
@@ -137,6 +138,7 @@ function setup(options: { hub?: FakeHub } = {}) {
     onReconnected,
     onPresenceChanged,
     onMessageArrived,
+    onMessageUpdated,
     onNotificationReceived,
     onNotificationsRead,
     onNotificationDismissed,
@@ -149,6 +151,7 @@ function setup(options: { hub?: FakeHub } = {}) {
     onReconnected,
     onPresenceChanged,
     onMessageArrived,
+    onMessageUpdated,
     onNotificationReceived,
     onNotificationsRead,
     onNotificationDismissed,
@@ -275,6 +278,15 @@ describe('event handlers', () => {
 
     expect(store().messages.c1[0].isDeleted).toBe(true)
     expect(store().conversations.c1.unreadCount).toBe(0)
+  })
+
+  it('hands every change of a message on, held or not, so the bell can follow it', async () => {
+    const { hub, onMessageUpdated } = await connected()
+    const changed = message('m9', { content: 'edited', editCount: 1 })
+
+    hub.emit('MessageUpdated', changed)
+
+    expect(onMessageUpdated).toHaveBeenCalledWith(changed)
   })
 
   it('does not announce a pushed edit as a new message', async () => {

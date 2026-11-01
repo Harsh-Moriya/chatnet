@@ -355,3 +355,60 @@ describe('resetting', () => {
     expect(store().loaded).toBe(false)
   })
 })
+
+describe('a message that a notification is about changes', () => {
+  it('shows the edited text in the notification', () => {
+    store().seedFirstPage({ items: [n(2, { messagePreview: 'the old words' })], unreadCount: 1 })
+
+    store().applyMessageChange('m2', 'the new words')
+
+    expect(store().items[0].messagePreview).toBe('the new words')
+  })
+
+  it('shows only as much of it as the server would', () => {
+    store().seedFirstPage({ items: [n(2)], unreadCount: 1 })
+
+    store().applyMessageChange('m2', 'x'.repeat(250))
+
+    expect(store().items[0].messagePreview).toHaveLength(100)
+  })
+
+  it('takes the text of a deleted message out of the notification', () => {
+    store().seedFirstPage({ items: [n(2, { messagePreview: 'a secret' })], unreadCount: 1 })
+
+    store().applyMessageChange('m2', null)
+
+    expect(store().items[0].messagePreview).toBeNull()
+  })
+
+  it('does not bring the text of a deleted message back with a late edit', () => {
+    store().seedFirstPage({ items: [n(2, { messagePreview: null })], unreadCount: 1 })
+
+    store().applyMessageChange('m2', 'late edit')
+
+    expect(store().items[0].messagePreview).toBeNull()
+  })
+
+  it('changes every notification about the message, and no other, and keeps read state and count', () => {
+    store().seedFirstPage({
+      items: [n(3, { messageId: 'm2', isRead: true }), n(2, { messageId: 'm2' }), n(1)],
+      unreadCount: 2,
+    })
+
+    store().applyMessageChange('m2', null)
+
+    expect(store().items.map((i) => i.messagePreview)).toEqual([null, null, 'hello'])
+    expect(store().items.map((i) => i.isRead)).toEqual([true, false, false])
+    expect(store().unreadCount).toBe(2)
+  })
+
+  it('returns the same state when nothing would change', () => {
+    store().seedFirstPage({ items: [n(2, { messagePreview: 'same' })], unreadCount: 1 })
+    const before = store().items
+
+    store().applyMessageChange('m2', 'same')
+    store().applyMessageChange('unknown', 'anything')
+
+    expect(store().items).toBe(before)
+  })
+})
