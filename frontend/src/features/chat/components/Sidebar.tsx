@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { Suspense, lazy, useEffect, useState } from 'react'
 import { LogOut, SquarePen } from 'lucide-react'
 import { Avatar } from '../../../components/ui/Avatar'
 import { Button } from '../../../components/ui/Button'
@@ -8,14 +8,25 @@ import { NotificationBell } from '../../notifications/components/NotificationBel
 import { NotificationPanel } from '../../notifications/components/NotificationPanel'
 import { ConnectionBanner } from './ConnectionBanner'
 import { ConversationList } from './ConversationList'
-import { NewConversationDialog } from './NewConversationDialog'
+
+// Opened by a click and not needed to show the list, so it is fetched when it is first wanted and not with the page.
+const NewConversationDialog = lazy(() =>
+  import('./NewConversationDialog').then((module) => ({ default: module.NewConversationDialog })),
+)
 
 const NOTIFICATION_PANEL_ID = 'notification-panel'
 
 export function Sidebar() {
   const { user } = useAuth()
   const [dialogOpen, setDialogOpen] = useState(false)
+  // Mounted from the first click on, so closing it returns focus to the button as the browser's dialog does.
+  const [dialogMounted, setDialogMounted] = useState(false)
   const [panelOpen, setPanelOpen] = useState(false)
+
+  function openDialog() {
+    setDialogMounted(true)
+    setDialogOpen(true)
+  }
 
   useEffect(() => {
     if (!panelOpen) return
@@ -44,7 +55,7 @@ export function Sidebar() {
             panelId={NOTIFICATION_PANEL_ID}
             onToggle={() => setPanelOpen((open) => !open)}
           />
-          <Button variant="ghost" size="icon" aria-label="New conversation" onClick={() => setDialogOpen(true)}>
+          <Button variant="ghost" size="icon" aria-label="New conversation" onClick={openDialog}>
             <SquarePen className="h-5 w-5" />
           </Button>
           <Button variant="ghost" size="icon" aria-label="Sign out" onClick={() => void session.signOut()}>
@@ -54,11 +65,15 @@ export function Sidebar() {
       </header>
 
       <ConnectionBanner />
-      <ConversationList onNewConversation={() => setDialogOpen(true)} />
+      <ConversationList onNewConversation={openDialog} />
 
       {panelOpen && <NotificationPanel id={NOTIFICATION_PANEL_ID} onClose={() => setPanelOpen(false)} />}
 
-      <NewConversationDialog open={dialogOpen} onClose={() => setDialogOpen(false)} />
+      {dialogMounted && (
+        <Suspense fallback={null}>
+          <NewConversationDialog open={dialogOpen} onClose={() => setDialogOpen(false)} />
+        </Suspense>
+      )}
     </>
   )
 }

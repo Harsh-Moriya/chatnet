@@ -2,6 +2,7 @@ import { useCallback } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { AlertCircle, LoaderCircle } from 'lucide-react'
 import { getApiError } from '../../../lib/errors'
+import { formatClock, formatDayLabel } from '../../../lib/format'
 import { useConversations } from '../api/useConversations'
 import { useMembers } from '../api/useMembers'
 import { useMessages } from '../api/useMessages'
@@ -53,9 +54,11 @@ export function ConversationView() {
 
 function ConversationPane({ conversation }: { conversation: Conversation }) {
   const history = useMessages(conversation.id)
+  // A group the reader left stays readable, up to the moment they left, and can no longer be written to.
+  const left = conversation.leftAt !== null
   // Loaded for who has read what; the members land in the store, which the list reads. A failure only
-  // means no "seen" marks, so it shows nothing.
-  useMembers(conversation.id)
+  // means no "seen" marks, so it shows nothing. Someone who left is not shown who is in the group.
+  useMembers(conversation.id, !left)
   const { fetchNextPage } = history
   const loadOlder = useCallback(() => void fetchNextPage(), [fetchNextPage])
 
@@ -79,8 +82,24 @@ function ConversationPane({ conversation }: { conversation: Conversation }) {
         onRetry={() => void history.refetch()}
         older={older}
       />
-      <TypingIndicator conversationId={conversation.id} />
-      <MessageComposer conversationId={conversation.id} />
+      {conversation.leftAt !== null ? (
+        <LeftNotice leftAt={conversation.leftAt} />
+      ) : (
+        <>
+          <TypingIndicator conversationId={conversation.id} />
+          <MessageComposer conversationId={conversation.id} />
+        </>
+      )}
     </>
+  )
+}
+
+// Where the composer would be, for a group the reader is no longer in.
+function LeftNotice({ leftAt }: { leftAt: string }) {
+  return (
+    <p className="shrink-0 border-t border-line bg-white px-4 py-4 text-center text-sm text-slate-500">
+      You are no longer a member of this group. You can read what was said until {formatDayLabel(leftAt, new Date())} at{' '}
+      {formatClock(leftAt)}.
+    </p>
   )
 }

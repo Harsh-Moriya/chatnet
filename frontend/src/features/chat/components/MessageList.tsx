@@ -261,14 +261,15 @@ export function MessageList({ conversation, isLoading, errorMessage, onRetry, ol
         const message = item.message
         const selfId = user?.userId ?? ''
         const actions: MenuItem[] = []
-        if (canEdit(message, selfId, now.getTime())) {
+        // A group the reader left is only read: nothing in it can be changed by them any more.
+        if (conversation.leftAt === null && canEdit(message, selfId, now.getTime())) {
           actions.push({
             label: 'Edit',
             icon: <Pencil className="h-4 w-4" />,
             onSelect: () => setEditingId(message.id),
           })
         }
-        if (canDelete(message, selfId, role)) {
+        if (conversation.leftAt === null && canDelete(message, selfId, role)) {
           actions.push({
             label: 'Delete',
             icon: <Trash2 className="h-4 w-4" />,
