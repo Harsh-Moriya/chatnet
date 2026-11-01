@@ -1,6 +1,7 @@
 using ChatNET.API.Common.Exceptions;
 using ChatNET.API.Conversations.Models;
 using ChatNET.API.Conversations.Persistence;
+using ChatNET.API.Media;
 using ChatNET.API.Outbox;
 using ChatNET.API.Outbox.Models;
 using MediatR;
@@ -48,7 +49,8 @@ public class RenameConversationHandler : IRequestHandler<RenameConversationComma
                 await change.CommitAsync([], [row], cancellationToken);
             }
 
-            update = new ConversationUpdateDto(change.Conversation.Id, name, change.Conversation.AvatarUrl);
+            update = new ConversationUpdateDto(
+                change.Conversation.Id, name, AvatarKeys.PublicUrl(change.Conversation.AvatarKey));
         }
 
         if (row is not null)

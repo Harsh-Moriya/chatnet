@@ -9,7 +9,10 @@ public class Conversation
 
     // Null for Direct conversations
     public string? Name { get; set; }
-    public string? AvatarUrl { get; set; }
+
+    // The key of the group's picture in the bucket (see AvatarKeys), or null. Always null for a direct chat, which shows
+    // the other person's picture.
+    public string? AvatarKey { get; set; }
 
     // Composite of the two participant IDs sorted ascending: "{smallerId}:{largerId}".
     // The partial unique index on this column prevents duplicate DM conversations.

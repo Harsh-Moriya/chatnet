@@ -18,7 +18,7 @@ public class ConversationConfiguration : IEntityTypeConfiguration<Conversation>
             .IsRequired();
 
         builder.Property(c => c.Name).HasColumnType("text");
-        builder.Property(c => c.AvatarUrl).HasColumnType("text");
+        builder.Property(c => c.AvatarKey).HasColumnType("text");
         builder.Property(c => c.DirectKey).HasColumnType("text");
 
         builder.Property(c => c.CreatedAt)
