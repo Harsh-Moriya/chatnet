@@ -1,4 +1,5 @@
 using ChatNET.API.Auth.Models;
+using ChatNET.API.Media;
 using MediatR;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -28,7 +29,7 @@ public class SearchUsersHandler : IRequestHandler<SearchUsersQuery, List<UserSum
                             || EF.Functions.ILike(u.DisplayName, pattern, "\\")))
             .OrderBy(u => u.DisplayName)
             .Take(MaxResults)
-            .Select(u => new UserSummaryDto(u.Id, u.UserName!, u.DisplayName, u.AvatarUrl))
+            .Select(u => new UserSummaryDto(u.Id, u.UserName!, u.DisplayName, AvatarKeys.PublicUrl(u.AvatarKey)))
             .ToListAsync(cancellationToken);
     }
 

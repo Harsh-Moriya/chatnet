@@ -1,5 +1,6 @@
 using ChatNET.API.Common.Persistence;
 using ChatNET.API.Conversations.Models;
+using ChatNET.API.Media;
 using ChatNET.API.Messaging;
 using ChatNET.API.Notifications.Models;
 using ChatNET.API.Outbox.Models;
@@ -160,7 +161,8 @@ public class ConversationRepository : IConversationRepository
             .AsNoTracking()
             .Where(m => m.ConversationId == conversationId && m.LeftAt == null)
             .OrderBy(m => m.JoinedAt).ThenBy(m => m.UserId)
-            .Select(m => new MemberDto(m.UserId, m.User.UserName!, m.User.DisplayName, m.User.AvatarUrl, m.Role, m.LastReadAt))
+            .Select(m => new MemberDto(
+                m.UserId, m.User.UserName!, m.User.DisplayName, AvatarKeys.PublicUrl(m.User.AvatarKey), m.Role, m.LastReadAt))
             .ToListAsync(cancellationToken);
 
     // A single UPDATE that is also the membership check: it touches the row of an active member and nothing else,
@@ -182,7 +184,7 @@ public class ConversationRepository : IConversationRepository
         => _db.Conversations
             .AsNoTracking()
             .Where(c => c.Id == conversationId && c.Type == ConversationType.Group)
-            .Select(c => new ConversationUpdateDto(c.Id, c.Name!, c.AvatarUrl))
+            .Select(c => new ConversationUpdateDto(c.Id, c.Name!, AvatarKeys.PublicUrl(c.AvatarKey)))
             .FirstOrDefaultAsync(cancellationToken);
 
     // A transaction-scoped advisory lock on the conversation, as registration takes one on an email: changes to the
@@ -243,7 +245,7 @@ public class ConversationRepository : IConversationRepository
         SELECT c."Id"        AS "Id",
                c."Type"      AS "Type",
                CASE WHEN c."Type" = 'Direct' THEN other."DisplayName" ELSE c."Name" END AS "Name",
-               c."AvatarUrl" AS "AvatarUrl",
+               CASE WHEN c."Type" = 'Direct' THEN other."AvatarKey" ELSE c."AvatarKey" END AS "AvatarKey",
                other."UserId" AS "OtherUserId",
                LEAST(c."UpdatedAt", COALESCE(mine."LeftAt", 'infinity'::timestamptz)) AS "UpdatedAt",
                lm."SenderId" AS "LastMessageSenderId",
@@ -268,7 +270,7 @@ public class ConversationRepository : IConversationRepository
         JOIN "ConversationMembers" mine
           ON mine."ConversationId" = c."Id" AND mine."UserId" = @viewerId
         LEFT JOIN LATERAL (
-            SELECT cm."UserId", u."DisplayName"
+            SELECT cm."UserId", u."DisplayName", u."AvatarKey"
             FROM "ConversationMembers" cm
             JOIN "AspNetUsers" u ON u."Id" = cm."UserId"
             WHERE c."Type" = 'Direct'
@@ -304,7 +306,7 @@ public class ConversationRepository : IConversationRepository
             : null;
 
         return new ConversationDto(
-            row.Id, Enum.Parse<ConversationType>(row.Type), row.Name ?? "Unknown", row.AvatarUrl, row.UpdatedAt, last,
+            row.Id, Enum.Parse<ConversationType>(row.Type), row.Name ?? "Unknown", AvatarKeys.PublicUrl(row.AvatarKey), row.UpdatedAt, last,
             row.UnreadCount, row.OtherUserId, row.IsMuted, row.LeftAt);
     }
 
@@ -315,7 +317,7 @@ public class ConversationRepository : IConversationRepository
         public Guid Id { get; set; }
         public string Type { get; set; } = string.Empty;
         public string? Name { get; set; }
-        public string? AvatarUrl { get; set; }
+        public string? AvatarKey { get; set; }
         public DateTime UpdatedAt { get; set; }
         public Guid? LastMessageSenderId { get; set; }
         public string? LastMessageContent { get; set; }

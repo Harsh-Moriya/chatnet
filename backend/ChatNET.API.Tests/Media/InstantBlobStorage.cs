@@ -18,6 +18,9 @@ public sealed class InstantBlobStorage : IBlobStorage
     public Task CopyAsync(string sourceKey, string destinationKey, string sourceETag, CancellationToken cancellationToken)
         => Task.CompletedTask;
 
+    public Task<BlobContent?> OpenReadAsync(string key, CancellationToken cancellationToken)
+        => Task.FromResult<BlobContent?>(null);
+
     public Task DeleteAsync(string key, CancellationToken cancellationToken) => Task.CompletedTask;
 
     private static SignedUrl Link(string key) => new($"https://files.test/{key}", DateTimeOffset.UtcNow.AddMinutes(10));

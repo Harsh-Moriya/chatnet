@@ -14,6 +14,11 @@ const NewConversationDialog = lazy(() =>
   import('./NewConversationDialog').then((module) => ({ default: module.NewConversationDialog })),
 )
 
+// Likewise: opened by a click.
+const ProfileDialog = lazy(() =>
+  import('../../profile/components/ProfileDialog').then((module) => ({ default: module.ProfileDialog })),
+)
+
 const NOTIFICATION_PANEL_ID = 'notification-panel'
 
 export function Sidebar() {
@@ -22,6 +27,13 @@ export function Sidebar() {
   // Mounted from the first click on, so closing it returns focus to the button as the browser's dialog does.
   const [dialogMounted, setDialogMounted] = useState(false)
   const [panelOpen, setPanelOpen] = useState(false)
+  const [profileOpen, setProfileOpen] = useState(false)
+  const [profileMounted, setProfileMounted] = useState(false)
+
+  function openProfile() {
+    setProfileMounted(true)
+    setProfileOpen(true)
+  }
 
   function openDialog() {
     setDialogMounted(true)
@@ -41,13 +53,18 @@ export function Sidebar() {
   return (
     <>
       <header className="flex h-16 shrink-0 items-center justify-between gap-2 border-b border-line px-4">
-        <div className="flex min-w-0 items-center gap-3">
-          <Avatar name={user?.displayName ?? ''} />
+        <button
+          type="button"
+          aria-label="Your profile"
+          onClick={openProfile}
+          className="flex min-w-0 items-center gap-3 rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+        >
+          <Avatar name={user?.displayName ?? ''} src={user?.avatarUrl} />
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold text-slate-900">{user?.displayName}</p>
             <p className="truncate text-xs text-slate-500">@{user?.userName}</p>
           </div>
-        </div>
+        </button>
 
         <div className="flex shrink-0 items-center gap-1">
           <NotificationBell
@@ -72,6 +89,12 @@ export function Sidebar() {
       {dialogMounted && (
         <Suspense fallback={null}>
           <NewConversationDialog open={dialogOpen} onClose={() => setDialogOpen(false)} />
+        </Suspense>
+      )}
+
+      {profileMounted && (
+        <Suspense fallback={null}>
+          <ProfileDialog open={profileOpen} onClose={() => setProfileOpen(false)} />
         </Suspense>
       )}
     </>

@@ -11,6 +11,8 @@ public class SecurityHeadersMiddleware
 {
     private static readonly string[] NoStorePrefixes = ["/api", "/hubs", "/health"];
 
+    private static readonly PathString Pictures = new("/api/avatars");
+
     private readonly RequestDelegate _next;
 
     public SecurityHeadersMiddleware(RequestDelegate next)
@@ -34,8 +36,14 @@ public class SecurityHeadersMiddleware
             headers["Referrer-Policy"] = "no-referrer";
 
             // Responses are about one signed-in person. A shared cache, or the browser's back button
-            // after sign-out, must not be able to show them to someone else.
-            if (NoStorePrefixes.Any(prefix => context.Request.Path.StartsWithSegments(prefix)))
+            // after sign-out, must not be able to show them to someone else. The one exception is a picture that was
+            // found: its address holds a random file name that is new for every picture, so what is served there never
+            // changes, and the endpoint says how long it may be kept. Anything else from there, a 404 included, is not
+            // kept.
+            var servedPicture = context.Response.StatusCode == StatusCodes.Status200OK
+                && context.Request.Path.StartsWithSegments(Pictures);
+
+            if (!servedPicture && NoStorePrefixes.Any(prefix => context.Request.Path.StartsWithSegments(prefix)))
                 headers.CacheControl = "no-store";
 
             return Task.CompletedTask;

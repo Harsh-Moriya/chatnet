@@ -6,6 +6,7 @@ using ChatNET.API.Messaging.Models;
 using ChatNET.API.Messaging.Persistence;
 using ChatNET.API.Notifications.Persistence;
 using ChatNET.API.Outbox.Models;
+using ChatNET.API.Users;
 using Microsoft.AspNetCore.SignalR;
 
 namespace ChatNET.API.Outbox;
@@ -26,6 +27,8 @@ public class OutboxDispatcher
     private readonly ConversationNotifier _notifier;
     private readonly IAttachmentRepository _attachments;
     private readonly AttachmentRemover _remover;
+    private readonly ProfileNotifier _profileNotifier;
+    private readonly AvatarRemover _avatarRemover;
     private readonly ILogger<OutboxDispatcher> _logger;
 
     public OutboxDispatcher(
@@ -37,6 +40,8 @@ public class OutboxDispatcher
         ConversationNotifier notifier,
         IAttachmentRepository attachments,
         AttachmentRemover remover,
+        ProfileNotifier profileNotifier,
+        AvatarRemover avatarRemover,
         ILogger<OutboxDispatcher> logger)
     {
         _hub = hub;
@@ -47,6 +52,8 @@ public class OutboxDispatcher
         _notifier = notifier;
         _attachments = attachments;
         _remover = remover;
+        _profileNotifier = profileNotifier;
+        _avatarRemover = avatarRemover;
         _logger = logger;
     }
 
@@ -124,6 +131,14 @@ public class OutboxDispatcher
 
             case ConversationRenamed renamed:
                 await _notifier.NotifyUpdatedAsync(renamed.ConversationId, cancellationToken);
+                return;
+
+            case ProfileChanged profile:
+                await _profileNotifier.NotifyChangedAsync(profile.UserId, cancellationToken);
+                return;
+
+            case AvatarFileRemoved avatar:
+                await _avatarRemover.RemoveAsync(avatar.Key, cancellationToken);
                 return;
 
             default:

@@ -130,6 +130,7 @@ function setup(options: { hub?: FakeHub } = {}) {
   const onMessageArrived = vi.fn()
   const onMessageUpdated = vi.fn()
   const onRejoined = vi.fn()
+  const onProfileChanged = vi.fn()
   const onNotificationReceived = vi.fn()
   const onNotificationsRead = vi.fn()
   const onNotificationDismissed = vi.fn()
@@ -141,6 +142,7 @@ function setup(options: { hub?: FakeHub } = {}) {
     onMessageArrived,
     onMessageUpdated,
     onRejoined,
+    onProfileChanged,
     onNotificationReceived,
     onNotificationsRead,
     onNotificationDismissed,
@@ -155,6 +157,7 @@ function setup(options: { hub?: FakeHub } = {}) {
     onMessageArrived,
     onMessageUpdated,
     onRejoined,
+    onProfileChanged,
     onNotificationReceived,
     onNotificationsRead,
     onNotificationDismissed,
@@ -203,6 +206,7 @@ describe('event handlers', () => {
       'NotificationDismissed',
       'MembersChanged',
       'ConversationUpdated',
+      'ProfileChanged',
       'RemovedFromConversation',
     ]) {
       const registered = hub.calls.indexOf(`on:${event}`)
@@ -349,6 +353,19 @@ describe('event handlers', () => {
     hub.emit('ConversationUpdated', { id: 'c1', name: 'Crew', avatarUrl: null })
 
     expect(store().conversations.c1.name).toBe('Crew')
+  })
+
+  it('puts a changed name and picture into the store and tells the owner, whoever it is about', async () => {
+    const { hub, onProfileChanged } = await connected()
+    store().seedConversations([{ ...conversation('c1'), otherUserId: 'bob' }])
+    store().seedMessages('c1', [message('m1')])
+    const profile = { id: 'bob', userName: 'bob', displayName: 'Robert', avatarUrl: '/api/avatars/users/bob/f1' }
+
+    hub.emit('ProfileChanged', profile)
+
+    expect(store().conversations.c1).toMatchObject({ name: 'Robert', avatarUrl: '/api/avatars/users/bob/f1' })
+    expect(store().messages.c1[0].senderDisplayName).toBe('Robert')
+    expect(onProfileChanged).toHaveBeenCalledWith(profile)
   })
 
   it('marks a conversation as left when the server says the signed-in user left it', async () => {

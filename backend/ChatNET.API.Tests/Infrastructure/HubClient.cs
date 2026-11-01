@@ -38,6 +38,7 @@ public sealed class HubClient : IAsyncDisposable
     private readonly ConcurrentQueue<MuteEvent> _muteChanges = new();
     private readonly ConcurrentQueue<JsonElement> _membersChanges = new();
     private readonly ConcurrentQueue<JsonElement> _conversationUpdates = new();
+    private readonly ConcurrentQueue<JsonElement> _profileChanges = new();
     private readonly ConcurrentQueue<RemovedEvent> _removals = new();
 
     private HubClient(HubConnection connection)
@@ -60,6 +61,7 @@ public sealed class HubClient : IAsyncDisposable
             _muteChanges.Enqueue(new MuteEvent(conversationId, isMuted)));
         _connection.On<JsonElement>("MembersChanged", change => _membersChanges.Enqueue(change));
         _connection.On<JsonElement>("ConversationUpdated", update => _conversationUpdates.Enqueue(update));
+        _connection.On<JsonElement>("ProfileChanged", profile => _profileChanges.Enqueue(profile));
         _connection.On<Guid, DateTime>("RemovedFromConversation", (conversationId, leftAt) =>
             _removals.Enqueue(new RemovedEvent(conversationId, leftAt)));
     }
@@ -89,6 +91,8 @@ public sealed class HubClient : IAsyncDisposable
     public IReadOnlyList<JsonElement> MembersChanges => _membersChanges.ToArray();
 
     public IReadOnlyList<JsonElement> ConversationUpdates => _conversationUpdates.ToArray();
+
+    public IReadOnlyList<JsonElement> ProfileChanges => _profileChanges.ToArray();
 
     public IReadOnlyList<RemovedEvent> Removals => _removals.ToArray();
 
@@ -238,6 +242,15 @@ public sealed class HubClient : IAsyncDisposable
     {
         await Task.Delay(QuietPeriod);
         return _membersChanges.Any(c => c.GetProperty("conversationId").GetGuid() == conversationId);
+    }
+
+    public Task<JsonElement> WaitForProfileChangedAsync(Guid userId, TimeSpan? timeout = null) =>
+        WaitAsync(_profileChanges, p => p.GetProperty("id").GetGuid() == userId, timeout);
+
+    public async Task<bool> ReceivedProfileChangedAsync(Guid userId)
+    {
+        await Task.Delay(QuietPeriod);
+        return _profileChanges.Any(p => p.GetProperty("id").GetGuid() == userId);
     }
 
     public Task<JsonElement> WaitForConversationUpdatedAsync(Guid conversationId, TimeSpan? timeout = null) =>

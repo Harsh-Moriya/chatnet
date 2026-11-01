@@ -10,6 +10,7 @@ import type {
   Message,
   PendingMessage,
   TypingUser,
+  UserSummary,
 } from '../types'
 
 // The live picture of what the signed-in user is looking at. Two sources feed it, and neither
@@ -44,6 +45,9 @@ interface ChatState {
   applyMembersChange: (change: MembersChange) => void
   // A group was renamed, or its picture changed.
   applyConversationUpdate: (update: ConversationUpdate) => void
+  // Someone changed their name or picture. Every place the store shows them follows: the direct chat that is named after
+  // them, their entry in the lists of people it holds, and the name on the messages they sent.
+  applyProfileChange: (profile: UserSummary) => void
   // The signed-in user is no longer in the group. The conversation stays, read-only, with what was said up to leftAt; the
   // list of its people and who is typing in it are not theirs to see any more, and nothing in it is unread.
   markLeft: (conversationId: string, leftAt: string) => void
@@ -315,6 +319,52 @@ export const useChatStore = create<ChatState>()((set) => ({
           [update.id]: { ...held, name: update.name, avatarUrl: update.avatarUrl },
         },
       }
+    }),
+
+  applyProfileChange: (profile) =>
+    set((state) => {
+      let changed = false
+
+      const conversations = { ...state.conversations }
+      for (const [id, held] of Object.entries(conversations)) {
+        if (held.type !== 'Direct' || held.otherUserId !== profile.id) continue
+        if (held.name === profile.displayName && held.avatarUrl === profile.avatarUrl) continue
+
+        conversations[id] = { ...held, name: profile.displayName, avatarUrl: profile.avatarUrl }
+        changed = true
+      }
+
+      const members = { ...state.members }
+      for (const [id, held] of Object.entries(members)) {
+        const index = held.findIndex((m) => m.userId === profile.id)
+        if (index < 0) continue
+
+        const person = held[index]
+        if (
+          person.displayName === profile.displayName &&
+          person.userName === profile.userName &&
+          person.avatarUrl === profile.avatarUrl
+        ) {
+          continue
+        }
+
+        members[id] = held.map((m, i) =>
+          i === index ? { ...m, displayName: profile.displayName, userName: profile.userName, avatarUrl: profile.avatarUrl } : m,
+        )
+        changed = true
+      }
+
+      const messages = { ...state.messages }
+      for (const [id, held] of Object.entries(messages)) {
+        if (!held.some((m) => m.senderId === profile.id && m.senderDisplayName !== profile.displayName)) continue
+
+        messages[id] = held.map((m) =>
+          m.senderId === profile.id ? { ...m, senderDisplayName: profile.displayName } : m,
+        )
+        changed = true
+      }
+
+      return changed ? { conversations, members, messages } : state
     }),
 
   markLeft: (conversationId, leftAt) =>

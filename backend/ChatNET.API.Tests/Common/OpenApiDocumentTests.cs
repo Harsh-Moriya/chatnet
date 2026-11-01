@@ -133,7 +133,8 @@ public class OpenApiDocumentTests
         foreach (var entry in document.GetProperty("paths").EnumerateObject())
         {
             var (path, item) = (entry.Name, entry.Value);
-            if (!path.StartsWith("/api/") || path.StartsWith("/api/auth/"))
+            // Sign-in needs no token, and a picture is served to whoever holds its address.
+            if (!path.StartsWith("/api/") || path.StartsWith("/api/auth/") || path.StartsWith("/api/avatars/"))
                 continue;
 
             foreach (var operation in item.EnumerateObject())

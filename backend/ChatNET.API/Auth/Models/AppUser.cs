@@ -10,7 +10,9 @@ public class AppUser : IdentityUser<Guid>
     // UserName (from Identity) is the unique login handle used for @mentions.
     public string DisplayName { get; set; } = string.Empty;
 
-    public string? AvatarUrl { get; set; }
+    // The key of the person's picture in the bucket (see AvatarKeys), or null. The address the browser loads it from is
+    // made from it when a response is built.
+    public string? AvatarKey { get; set; }
 
     // Updated on SignalR disconnect, not on every heartbeat. Answers "last seen when?"
     // Redis presence keys answer the separate question "is this user online right now?"

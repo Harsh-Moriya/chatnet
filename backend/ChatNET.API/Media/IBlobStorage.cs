@@ -26,6 +26,30 @@ public interface IBlobStorage
     // gone or has changed.
     Task CopyAsync(string sourceKey, string destinationKey, string sourceETag, CancellationToken cancellationToken);
 
+    // The object itself, to be sent on by the server. Null when there is no such object.
+    Task<BlobContent?> OpenReadAsync(string key, CancellationToken cancellationToken);
+
     // Removing an object that is not there is not an error.
     Task DeleteAsync(string key, CancellationToken cancellationToken);
+}
+
+// An object being read: its bytes and what it was stored with. Disposing it closes the connection to the storage, so the
+// reader disposes it when it has sent the bytes.
+public sealed class BlobContent : IDisposable
+{
+    private readonly IDisposable _source;
+
+    public BlobContent(Stream content, string contentType, long length, IDisposable source)
+    {
+        Content = content;
+        ContentType = contentType;
+        Length = length;
+        _source = source;
+    }
+
+    public Stream Content { get; }
+    public string ContentType { get; }
+    public long Length { get; }
+
+    public void Dispose() => _source.Dispose();
 }

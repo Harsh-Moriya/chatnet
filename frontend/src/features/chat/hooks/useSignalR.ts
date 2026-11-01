@@ -43,6 +43,7 @@ export function useSignalR() {
         onMessageUpdated: (message) =>
           useNotificationStore.getState().applyMessageChange(message.id, message.isDeleted ? null : message.content),
         // Back in a group after leaving it: the cached pages and people belong to the time before the new join.
+        onProfileChanged: (profile) => useAuthStore.getState().updateProfile(profile),
         onRejoined: (conversationId) => {
           void queryClient.resetQueries({ queryKey: ['messages', conversationId] })
           void queryClient.resetQueries({ queryKey: ['members', conversationId] })
@@ -68,6 +69,7 @@ export function useSignalR() {
           void queryClient.invalidateQueries({ queryKey: ['notifications'] })
           void queryClient.invalidateQueries({ queryKey: ['members'] })
           void queryClient.invalidateQueries({ queryKey: ['presence'] })
+          void queryClient.invalidateQueries({ queryKey: ['me'] })
           void catchUpAll({
             onTooFarBehind: (conversationId) =>
               void queryClient.resetQueries({ queryKey: ['messages', conversationId] }),

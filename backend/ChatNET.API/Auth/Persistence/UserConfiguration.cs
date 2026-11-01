@@ -15,7 +15,7 @@ public class UserConfiguration : IEntityTypeConfiguration<AppUser>
             .IsRequired()
             .HasColumnType("text");
 
-        builder.Property(u => u.AvatarUrl)
+        builder.Property(u => u.AvatarKey)
             .HasColumnType("text");
 
         builder.Property(u => u.LastSeenAt)

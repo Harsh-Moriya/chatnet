@@ -54,15 +54,41 @@ public sealed class ScratchDatabase : IAsyncDisposable
 
     public async Task InsertAsync(params AppUser[] users)
     {
-        _db.Users.AddRange(users);
-        await _db.SaveChangesAsync();
+        await WithModelColumnsAsync(async () =>
+        {
+            _db.Users.AddRange(users);
+            await _db.SaveChangesAsync();
+        });
     }
 
     // For arranging rows with the application's own model, at a schema the model still matches.
     public async Task AddAsync(params object[] entities)
     {
-        _db.AddRange(entities);
-        await _db.SaveChangesAsync();
+        await WithModelColumnsAsync(async () =>
+        {
+            _db.AddRange(entities);
+            await _db.SaveChangesAsync();
+        });
+    }
+
+    // The AvatarKeys migration renamed the picture columns (AvatarUrl to AvatarKey). The model writes AvatarKey, which a schema
+    // from before that migration does not have, so the columns are added for the time of the insert and dropped again: the
+    // rows are as they would have been, and the schema is the one the test asked for.
+    private async Task WithModelColumnsAsync(Func<Task> insert)
+    {
+        var missing = !await ColumnExistsAsync("AspNetUsers", "AvatarKey");
+        if (missing)
+            await ExecuteAsync("ALTER TABLE \"AspNetUsers\" ADD COLUMN \"AvatarKey\" text; ALTER TABLE \"Conversations\" ADD COLUMN \"AvatarKey\" text;");
+
+        try
+        {
+            await insert();
+        }
+        finally
+        {
+            if (missing)
+                await ExecuteAsync("ALTER TABLE \"AspNetUsers\" DROP COLUMN \"AvatarKey\"; ALTER TABLE \"Conversations\" DROP COLUMN \"AvatarKey\";");
+        }
     }
 
     public Task ExecuteAsync(string sql) => _db.Database.ExecuteSqlRawAsync(sql);

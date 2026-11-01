@@ -31,7 +31,7 @@ namespace ChatNET.API.Migrations
                     b.Property<int>("AccessFailedCount")
                         .HasColumnType("integer");
 
-                    b.Property<string>("AvatarUrl")
+                    b.Property<string>("AvatarKey")
                         .HasColumnType("text");
 
                     b.Property<string>("ConcurrencyStamp")
@@ -154,7 +154,7 @@ namespace ChatNET.API.Migrations
                         .HasColumnType("uuid")
                         .HasDefaultValueSql("gen_random_uuid()");
 
-                    b.Property<string>("AvatarUrl")
+                    b.Property<string>("AvatarKey")
                         .HasColumnType("text");
 
                     b.Property<DateTime>("CreatedAt")

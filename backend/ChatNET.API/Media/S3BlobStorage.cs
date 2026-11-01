@@ -96,6 +96,19 @@ public sealed class S3BlobStorage : IBlobStorage
         }
     }
 
+    public async Task<BlobContent?> OpenReadAsync(string key, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var response = await _s3.GetObjectAsync(_options.Bucket, key, cancellationToken);
+            return new BlobContent(response.ResponseStream, response.Headers.ContentType, response.ContentLength, response);
+        }
+        catch (AmazonS3Exception ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+        {
+            return null;
+        }
+    }
+
     public async Task DeleteAsync(string key, CancellationToken cancellationToken)
         => await _s3.DeleteObjectAsync(_options.Bucket, key, cancellationToken);
 }
