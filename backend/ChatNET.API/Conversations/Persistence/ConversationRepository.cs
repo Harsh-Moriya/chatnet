@@ -165,6 +165,38 @@ public class ConversationRepository : IConversationRepository
             .Where(m => m.ConversationId == conversationId && m.UserId == userId && m.LeftAt == null)
             .ExecuteUpdateAsync(s => s.SetProperty(m => m.IsMuted, isMuted), cancellationToken) > 0;
 
+    // A transaction-scoped advisory lock on the conversation, as registration takes one on an email: changes to the
+    // same group go one at a time, each reading the rows after the one before it committed (a statement reads what was
+    // committed when it starts), and changes to different groups never wait for each other. It is released by the
+    // commit or the rollback, so a request that fails cannot leave it held.
+    public async Task<IMembershipChange?> BeginMembershipChangeAsync(Guid conversationId, CancellationToken cancellationToken)
+    {
+        var transaction = await _db.Database.BeginTransactionAsync(cancellationToken);
+
+        try
+        {
+            await _db.Database.ExecuteSqlInterpolatedAsync(
+                $"SELECT pg_advisory_xact_lock(hashtextextended({conversationId.ToString()}, 0))", cancellationToken);
+
+            var conversation = await _db.Conversations
+                .Include(c => c.Members)
+                .FirstOrDefaultAsync(c => c.Id == conversationId, cancellationToken);
+
+            if (conversation is null)
+            {
+                await transaction.DisposeAsync();
+                return null;
+            }
+
+            return new MembershipChange(_db, transaction, conversation);
+        }
+        catch
+        {
+            await transaction.DisposeAsync();
+            throw;
+        }
+    }
+
     // ##### Conversation list and detail queries #####
     // Written as SQL by hand because the obvious LINQ form is slow. EF Core translates "latest
     // message of each conversation" to ROW_NUMBER() over the messages of EVERY conversation and only

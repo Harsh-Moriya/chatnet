@@ -53,4 +53,8 @@ public interface IConversationRepository
     // Stores whether an active member has muted the conversation. Returns false when the user is not an active
     // member, in which case nothing was changed.
     Task<bool> SetMutedAsync(Guid conversationId, Guid userId, bool isMuted, CancellationToken cancellationToken);
+
+    // Starts a change to the membership of a conversation: takes the conversation's lock (waiting for anyone who holds
+    // it) and loads the conversation with every one of its member rows. Null when there is no such conversation.
+    Task<IMembershipChange?> BeginMembershipChangeAsync(Guid conversationId, CancellationToken cancellationToken);
 }
