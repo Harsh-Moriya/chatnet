@@ -54,6 +54,13 @@ public interface IConversationRepository
     // member, in which case nothing was changed.
     Task<bool> SetMutedAsync(Guid conversationId, Guid userId, bool isMuted, CancellationToken cancellationToken);
 
+    // When the user stopped being a member, or null if they are one (or never were). A push about someone leaving checks
+    // this, so it says nothing about a person who has been added back since.
+    Task<DateTime?> GetLeftAtAsync(Guid conversationId, Guid userId, CancellationToken cancellationToken);
+
+    // The name and picture of a group as they are now; null for a conversation that is not a group or does not exist.
+    Task<ConversationUpdateDto?> GetUpdateAsync(Guid conversationId, CancellationToken cancellationToken);
+
     // Starts a change to the membership of a conversation: takes the conversation's lock (waiting for anyone who holds
     // it) and loads the conversation with every one of its member rows. Null when there is no such conversation.
     Task<IMembershipChange?> BeginMembershipChangeAsync(Guid conversationId, CancellationToken cancellationToken);

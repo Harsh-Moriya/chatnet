@@ -165,6 +165,19 @@ public class ConversationRepository : IConversationRepository
             .Where(m => m.ConversationId == conversationId && m.UserId == userId && m.LeftAt == null)
             .ExecuteUpdateAsync(s => s.SetProperty(m => m.IsMuted, isMuted), cancellationToken) > 0;
 
+    public Task<DateTime?> GetLeftAtAsync(Guid conversationId, Guid userId, CancellationToken cancellationToken)
+        => _db.ConversationMembers
+            .Where(m => m.ConversationId == conversationId && m.UserId == userId)
+            .Select(m => m.LeftAt)
+            .FirstOrDefaultAsync(cancellationToken);
+
+    public Task<ConversationUpdateDto?> GetUpdateAsync(Guid conversationId, CancellationToken cancellationToken)
+        => _db.Conversations
+            .AsNoTracking()
+            .Where(c => c.Id == conversationId && c.Type == ConversationType.Group)
+            .Select(c => new ConversationUpdateDto(c.Id, c.Name!, c.AvatarUrl))
+            .FirstOrDefaultAsync(cancellationToken);
+
     // A transaction-scoped advisory lock on the conversation, as registration takes one on an email: changes to the
     // same group go one at a time, each reading the rows after the one before it committed (a statement reads what was
     // committed when it starts), and changes to different groups never wait for each other. It is released by the
@@ -237,7 +250,8 @@ public class ConversationRepository : IConversationRepository
                         AND um."SenderId" <> @viewerId
                         AND NOT um."IsDeleted"
                       LIMIT @unreadCap) AS counted) AS "UnreadCount",
-               mine."IsMuted" AS "IsMuted"
+               mine."IsMuted" AS "IsMuted",
+               mine."LeftAt" AS "LeftAt"
         FROM "Conversations" c
         JOIN "ConversationMembers" mine
           ON mine."ConversationId" = c."Id" AND mine."UserId" = @viewerId
@@ -276,7 +290,7 @@ public class ConversationRepository : IConversationRepository
 
         return new ConversationDto(
             row.Id, Enum.Parse<ConversationType>(row.Type), row.Name ?? "Unknown", row.AvatarUrl, row.UpdatedAt, last,
-            row.UnreadCount, row.OtherUserId, row.IsMuted);
+            row.UnreadCount, row.OtherUserId, row.IsMuted, row.LeftAt);
     }
 
     // One row of the queries above. Property names match the column aliases in the SQL, which is how
@@ -295,5 +309,6 @@ public class ConversationRepository : IConversationRepository
         public int UnreadCount { get; set; }
         public Guid? OtherUserId { get; set; }
         public bool IsMuted { get; set; }
+        public DateTime? LeftAt { get; set; }
     }
 }

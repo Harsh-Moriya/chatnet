@@ -25,13 +25,18 @@ public sealed class GroupMembers
 
     public int ActiveCount => _rows.Count(m => m.LeftAt is null);
 
-    // ##### Who may manage the group #####
+    // ##### Who may do what #####
+
+    // The row of an active member of the group. Anyone else, whether they never were in it or have left, gets the one
+    // refusal every endpoint gives for a conversation that is not theirs.
+    public ConversationMember RequireMember(Guid userId)
+        => FindActive(userId) ?? throw new ForbiddenException(ConversationErrors.NotAMember);
 
     // The actor as an active member who is the owner or an admin. Anyone else is refused: someone who is not in the group
     // gets the one answer every endpoint gives, a plain member is told what they may not do.
     public ConversationMember RequireManager(Guid actorId, string what)
     {
-        var actor = RequireActive(actorId);
+        var actor = RequireMember(actorId);
 
         if (actor.Role == MemberRole.Member)
             throw new ForbiddenException($"Only the owner or an admin can {what}.");
@@ -110,7 +115,7 @@ public sealed class GroupMembers
     // its history for the people who were in it.
     public MembershipOutcome Leave(Guid actorId, DateTime now)
     {
-        var leaving = RequireActive(actorId);
+        var leaving = RequireMember(actorId);
         leaving.LeftAt = now;
 
         if (leaving.Role != MemberRole.Owner)
@@ -137,7 +142,7 @@ public sealed class GroupMembers
     // is still exactly one owner. Asking for the role someone already has changes nothing.
     public MembershipOutcome ChangeRole(Guid actorId, Guid targetId, MemberRole role)
     {
-        var actor = RequireActive(actorId);
+        var actor = RequireMember(actorId);
 
         if (actor.Role != MemberRole.Owner)
             throw new ForbiddenException("Only the owner can change roles.");
@@ -159,9 +164,6 @@ public sealed class GroupMembers
 
         return new MembershipOutcome([], [targetId, actorId], []);
     }
-
-    private ConversationMember RequireActive(Guid userId)
-        => FindActive(userId) ?? throw new ForbiddenException(ConversationErrors.NotAMember);
 
     private ConversationMember? FindActive(Guid userId)
         => _byUser.TryGetValue(userId, out var row) && row.LeftAt is null ? row : null;

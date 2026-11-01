@@ -81,5 +81,11 @@ public sealed class SpyHubContext : IHubContext<ChatHub, IChatClient>
         public Task NotificationDismissed(Guid id) => throw new NotSupportedException();
 
         public Task ConversationMuteChanged(Guid conversationId, bool isMuted) => throw new NotSupportedException();
+
+        public Task MembersChanged(MembersChangedDto change) => throw new NotSupportedException();
+
+        public Task ConversationUpdated(ConversationUpdateDto update) => throw new NotSupportedException();
+
+        public Task RemovedFromConversation(Guid conversationId, DateTime leftAt) => throw new NotSupportedException();
     }
 }

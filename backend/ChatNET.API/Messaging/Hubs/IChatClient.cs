@@ -25,6 +25,18 @@ public interface IChatClient
     // their open connections are not yet in that conversation's group.
     Task AddedToConversation(ConversationDto conversation);
 
+    // The people of a group changed: someone joined, someone's role changed, someone left or was removed. Sent to the
+    // people who are in the group now, one by one and not to its group of connections, so someone who was just removed
+    // never hears who is left. Carries the entries as they are when it is sent, so it is safe to receive twice.
+    Task MembersChanged(MembersChangedDto change);
+
+    // A group was renamed. Sent to the people who are in it.
+    Task ConversationUpdated(ConversationUpdateDto update);
+
+    // The receiver is no longer in the group: they left it, or were removed. Sent to every open tab of that person. The
+    // conversation stays in their list, read-only, with what was said up to leftAt.
+    Task RemovedFromConversation(Guid conversationId, DateTime leftAt);
+
     // A member read the conversation up to and including every message sent at or before readAt.
     // Sent to the whole conversation, the reader's own other tabs included, after the new position
     // is stored; it is only sent when the position moved.

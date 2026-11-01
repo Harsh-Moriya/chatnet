@@ -91,6 +91,12 @@ public sealed class BarrierConversationRepository : IConversationRepository
     public Task<bool> SetMutedAsync(Guid conversationId, Guid userId, bool isMuted, CancellationToken cancellationToken) =>
         _inner.SetMutedAsync(conversationId, userId, isMuted, cancellationToken);
 
+    public Task<DateTime?> GetLeftAtAsync(Guid conversationId, Guid userId, CancellationToken cancellationToken) =>
+        _inner.GetLeftAtAsync(conversationId, userId, cancellationToken);
+
+    public Task<ConversationUpdateDto?> GetUpdateAsync(Guid conversationId, CancellationToken cancellationToken) =>
+        _inner.GetUpdateAsync(conversationId, cancellationToken);
+
     public Task<IMembershipChange?> BeginMembershipChangeAsync(Guid conversationId, CancellationToken cancellationToken) =>
         _inner.BeginMembershipChangeAsync(conversationId, cancellationToken);
 }

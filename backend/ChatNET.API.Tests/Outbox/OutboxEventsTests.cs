@@ -18,12 +18,25 @@ public class OutboxEventsTests
         var removed = new MessageFilesRemoved(Guid.NewGuid());
         var conversation = new ConversationCreated(Guid.NewGuid(), Guid.NewGuid(), [Guid.NewGuid(), Guid.NewGuid()]);
         var read = new ConversationRead(Guid.NewGuid(), Guid.NewGuid(), new DateTime(2026, 10, 31, 8, 30, 15, 123, DateTimeKind.Utc).AddTicks(450));
+        var changed = new MembersChanged(Guid.NewGuid(), [Guid.NewGuid(), Guid.NewGuid()]);
+        var joined = new MembersJoined(Guid.NewGuid(), [Guid.NewGuid()]);
+        var left = new MemberLeft(Guid.NewGuid(), Guid.NewGuid());
+        var renamed = new ConversationRenamed(Guid.NewGuid());
 
         Assert.Equal(message, OutboxEvents.Read(message.Kind, OutboxEvents.Serialize(message)));
         Assert.Equal(notification, OutboxEvents.Read(notification.Kind, OutboxEvents.Serialize(notification)));
         Assert.Equal(updated, OutboxEvents.Read(updated.Kind, OutboxEvents.Serialize(updated)));
         Assert.Equal(removed, OutboxEvents.Read(removed.Kind, OutboxEvents.Serialize(removed)));
         Assert.Equal(read, OutboxEvents.Read(read.Kind, OutboxEvents.Serialize(read)));
+        Assert.Equal(left, OutboxEvents.Read(left.Kind, OutboxEvents.Serialize(left)));
+        Assert.Equal(renamed, OutboxEvents.Read(renamed.Kind, OutboxEvents.Serialize(renamed)));
+
+        var changedBack = Assert.IsType<MembersChanged>(OutboxEvents.Read(changed.Kind, OutboxEvents.Serialize(changed)));
+        Assert.Equal(changed.ConversationId, changedBack.ConversationId);
+        Assert.Equal(changed.UserIds, changedBack.UserIds);
+        var joinedBack = Assert.IsType<MembersJoined>(OutboxEvents.Read(joined.Kind, OutboxEvents.Serialize(joined)));
+        Assert.Equal(joined.ConversationId, joinedBack.ConversationId);
+        Assert.Equal(joined.UserIds, joinedBack.UserIds);
 
         var back = Assert.IsType<ConversationCreated>(
             OutboxEvents.Read(conversation.Kind, OutboxEvents.Serialize(conversation)));
@@ -53,6 +66,10 @@ public class OutboxEventsTests
         Assert.Equal("NotificationCreated", new NotificationCreated(Guid.Empty, Guid.Empty).Kind);
         Assert.Equal("ConversationCreated", new ConversationCreated(Guid.Empty, Guid.Empty, []).Kind);
         Assert.Equal("ConversationRead", new ConversationRead(Guid.Empty, Guid.Empty, default).Kind);
+        Assert.Equal("MembersChanged", new MembersChanged(Guid.Empty, []).Kind);
+        Assert.Equal("MembersJoined", new MembersJoined(Guid.Empty, []).Kind);
+        Assert.Equal("MemberLeft", new MemberLeft(Guid.Empty, Guid.Empty).Kind);
+        Assert.Equal("ConversationRenamed", new ConversationRenamed(Guid.Empty).Kind);
     }
 
     [Fact]

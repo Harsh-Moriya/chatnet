@@ -1,3 +1,4 @@
+using ChatNET.API.Common.Exceptions;
 using ChatNET.API.Common.Persistence;
 using ChatNET.API.Conversations.Membership;
 using ChatNET.API.Conversations.Models;
@@ -23,6 +24,14 @@ public sealed class MembershipChange : IMembershipChange
     public Conversation Conversation { get; }
 
     public GroupMembers Members { get; }
+
+    public void RequireGroupMember(Guid userId)
+    {
+        Members.RequireMember(userId);
+
+        if (Conversation.Type != ConversationType.Group)
+            throw new ConflictException("Only a group has members to manage.");
+    }
 
     public async Task CommitAsync(
         IReadOnlyList<Notification> notifications, IReadOnlyList<OutboxMessage> outbox, CancellationToken cancellationToken)
