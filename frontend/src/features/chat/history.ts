@@ -7,6 +7,15 @@ import type { Message } from './types'
 // reached; the server never returns more.
 export const HISTORY_PAGE_SIZE = 50
 
+// One direction of reading further in a conversation: whether there is more, whether a request is out, and why the last one failed.
+// While an error is set nothing is requested by itself; the reader's "Try again" asks once more.
+export interface ReadingMore {
+  hasMore: boolean
+  isLoading: boolean
+  error: string | null
+  onLoad: () => void
+}
+
 // The cursor for the page of older messages, given the page just loaded (oldest message first), or
 // undefined when there is nothing older. A full page may still be the last one, in which case the
 // next request returns an empty page and paging stops there.

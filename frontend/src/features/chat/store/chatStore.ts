@@ -23,6 +23,17 @@ import type {
 //
 // Components read from here only. The store holds no server logic and never calls the network.
 
+// What is held of a conversation when it is not the latest messages: a window of its history opened at one message, such as a
+// search result. Such a conversation is read in both directions from the window; it is live again once the window reaches the
+// newest message.
+export interface MessageWindow {
+  // The messages pushed while the window does not reach the newest message, which cannot be added to it without leaving a
+  // hole between them and the window. Null once the window reaches the newest message: the conversation is live again.
+  buffer: Message[] | null
+  // Whether there are messages older than the first one held that have not been read.
+  hasOlder: boolean
+}
+
 interface ChatState {
   connection: ConnectionStatus
   conversations: Record<string, Conversation>
@@ -33,12 +44,27 @@ interface ChatState {
   typing: Record<string, TypingUser[]>
   // The people in a conversation and how far each has read, for the conversations that were opened.
   members: Record<string, Member[]>
+  // The conversations whose messages are read from a window of their history and not from the latest page.
+  windows: Record<string, MessageWindow>
 
   setConnection: (status: ConnectionStatus) => void
   seedConversations: (conversations: Conversation[]) => void
   addConversation: (conversation: Conversation) => void
   seedMessages: (conversationId: string, messages: Message[]) => void
   clearMessages: (conversationId: string) => void
+  // Replaces what is held of a conversation with a window of its history (oldest first). It is live again at once when the window
+  // reaches the newest message.
+  showWindow: (
+    conversationId: string,
+    messages: Message[],
+    position: { hasOlder: boolean; reachesNewest: boolean },
+  ) => void
+  // Whether there are still older messages, after a page of them was added above the window.
+  setWindowHasOlder: (conversationId: string, hasOlder: boolean) => void
+  // The window reached the newest message: what was pushed meanwhile joins it, and the conversation is live again.
+  reattach: (conversationId: string) => void
+  // Back to the newest messages: what is held of the conversation is dropped, and the latest page loads again.
+  leaveWindow: (conversationId: string) => void
   seedMembers: (conversationId: string, members: Member[]) => void
   // The people of a group changed: the members in the change are put in (new, or as they are now) and the people
   // named as gone are taken out. Ignored for a group whose members were never loaded: opening it loads them as they are.
@@ -73,7 +99,7 @@ interface ChatState {
 
 type Data = Pick<
   ChatState,
-  'connection' | 'conversations' | 'messages' | 'pending' | 'typing' | 'members'
+  'connection' | 'conversations' | 'messages' | 'pending' | 'typing' | 'members' | 'windows'
 >
 
 const emptyData = (): Data => ({
@@ -83,6 +109,7 @@ const emptyData = (): Data => ({
   pending: {},
   typing: {},
   members: {},
+  windows: {},
 })
 
 // Ties are broken by id so two messages with the same timestamp always sort the same way, whatever
@@ -201,6 +228,20 @@ function afterOwnRead(
   return unread === conversation.unreadCount ? conversation : { ...conversation, unreadCount: unread }
 }
 
+// Merges by id, with the incoming copy winning unless the held one is a later version, and sorts. The id a tab invented for
+// its own message is kept when the incoming copy lacks it.
+function mergeMessages(held: Message[] | undefined, incoming: Message[]): Message[] {
+  const merged = new Map<string, Message>()
+  for (const message of held ?? []) merged.set(message.id, message)
+  for (const message of incoming) {
+    const existing = merged.get(message.id)
+    const clientMessageId = message.clientMessageId ?? existing?.clientMessageId ?? null
+    merged.set(message.id, { ...latest(existing, message), clientMessageId })
+  }
+
+  return [...merged.values()].sort(byTime)
+}
+
 export const useChatStore = create<ChatState>()((set) => ({
   ...emptyData(),
 
@@ -225,6 +266,7 @@ export const useChatStore = create<ChatState>()((set) => ({
           conversations: { ...state.conversations, [conversation.id]: conversation },
           messages: without(state.messages, conversation.id),
           members: without(state.members, conversation.id),
+          windows: without(state.windows, conversation.id),
         }
       }
 
@@ -241,15 +283,8 @@ export const useChatStore = create<ChatState>()((set) => ({
   // pending copy goes, whether the history was loaded by a reload or by catching up after a reconnect.
   seedMessages: (conversationId, loaded) =>
     set((state) => {
-      const merged = new Map<string, Message>()
-      for (const message of state.messages[conversationId] ?? []) merged.set(message.id, message)
-      for (const message of loaded) {
-        const held = merged.get(message.id)
-        const clientMessageId = message.clientMessageId ?? held?.clientMessageId ?? null
-
-        // A page requested before an edit can arrive after the push of it: the later version is kept.
-        merged.set(message.id, { ...latest(held, message), clientMessageId })
-      }
+      // A page requested before an edit can arrive after the push of it: the later version is kept.
+      const merged = mergeMessages(state.messages[conversationId], loaded)
 
       const stored = new Set(loaded.map((m) => m.clientMessageId).filter((id): id is string => id !== null))
       const waiting = state.pending[conversationId]
@@ -257,18 +292,48 @@ export const useChatStore = create<ChatState>()((set) => ({
         ? { ...state.pending, [conversationId]: waiting.filter((p) => !stored.has(p.clientMessageId)) }
         : state.pending
 
-      return { messages: { ...state.messages, [conversationId]: [...merged.values()].sort(byTime) }, pending }
+      return { messages: { ...state.messages, [conversationId]: merged }, pending }
     }),
 
   // Forgets a conversation's confirmed messages, so it counts as not loaded and its history is
   // fetched afresh. Unconfirmed messages stay: they are this tab's own and not on the server yet.
   clearMessages: (conversationId) =>
     set((state) => {
-      if (!(conversationId in state.messages)) return state
+      if (!(conversationId in state.messages) && !(conversationId in state.windows)) return state
 
-      const next = { ...state.messages }
-      delete next[conversationId]
-      return { messages: next }
+      return { messages: without(state.messages, conversationId), windows: without(state.windows, conversationId) }
+    }),
+
+  showWindow: (conversationId, messages, { hasOlder, reachesNewest }) =>
+    set((state) => ({
+      messages: { ...state.messages, [conversationId]: mergeMessages(undefined, messages) },
+      windows: { ...state.windows, [conversationId]: { buffer: reachesNewest ? null : [], hasOlder } },
+    })),
+
+  setWindowHasOlder: (conversationId, hasOlder) =>
+    set((state) => {
+      const held = state.windows[conversationId]
+      if (!held || held.hasOlder === hasOlder) return state
+
+      return { windows: { ...state.windows, [conversationId]: { ...held, hasOlder } } }
+    }),
+
+  reattach: (conversationId) =>
+    set((state) => {
+      const held = state.windows[conversationId]
+      if (!held || held.buffer === null) return state
+
+      return {
+        messages: { ...state.messages, [conversationId]: mergeMessages(state.messages[conversationId], held.buffer) },
+        windows: { ...state.windows, [conversationId]: { ...held, buffer: null } },
+      }
+    }),
+
+  leaveWindow: (conversationId) =>
+    set((state) => {
+      if (!(conversationId in state.windows)) return state
+
+      return { messages: without(state.messages, conversationId), windows: without(state.windows, conversationId) }
     }),
 
   // The server's list wins for who is in the conversation. A read position that already arrived by
@@ -405,8 +470,15 @@ export const useChatStore = create<ChatState>()((set) => ({
       const id = message.conversationId
 
       const known = state.messages[id] ?? []
-      const isNew = !known.some((m) => m.id === message.id)
-      if (isNew) {
+      const window = state.windows[id]
+      const buffered = window?.buffer ?? null
+      const isNew = !known.some((m) => m.id === message.id) && !(buffered?.some((m) => m.id === message.id) ?? false)
+
+      // A conversation read from a window that does not reach its newest message cannot take the new one at the end: there
+      // would be a hole between them. It waits in the buffer, and joins the window when it reaches the newest message.
+      if (isNew && buffered !== null) {
+        patch.windows = { ...state.windows, [id]: { ...window!, buffer: [...buffered, message] } }
+      } else if (isNew) {
         patch.messages = { ...state.messages, [id]: [...known, message].sort(byTime) }
       }
 

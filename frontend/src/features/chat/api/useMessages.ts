@@ -13,8 +13,9 @@ import { fetchMessages } from './chatApi'
 // reader who had scrolled back through ten pages would send ten requests each time. A refetch is
 // still available on purpose (the "Try again" button) and a reset (catch-up that fell too far
 // behind) still reloads from the latest page.
-export function messagesQueryOptions(conversationId: string) {
+export function messagesQueryOptions(conversationId: string, enabled = true) {
   return infiniteQueryOptions({
+    enabled,
     queryKey: ['messages', conversationId],
     // The first page has no cursor: it is the latest one.
     initialPageParam: undefined as string | undefined,
@@ -24,6 +25,8 @@ export function messagesQueryOptions(conversationId: string) {
   })
 }
 
-export function useMessages(conversationId: string) {
-  return useInfiniteQuery(messagesQueryOptions(conversationId))
+// Not enabled while the conversation is read from a window of its history: the latest page would join the window with a hole
+// between them.
+export function useMessages(conversationId: string, enabled = true) {
+  return useInfiniteQuery(messagesQueryOptions(conversationId, enabled))
 }
