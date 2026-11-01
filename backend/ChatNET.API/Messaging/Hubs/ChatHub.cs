@@ -103,6 +103,11 @@ public class ChatHub : Hub<IChatClient>
         // The check above and the join are two steps, and a removal can happen between them, with its message arriving
         // before the join: so the connection would be in the group of a conversation its user has just left. Asking again
         // after the join closes that gap, for a removal after this check reaches the connection once it is in the group.
+        if (!await _conversations.IsActiveMemberAsync(conversationId, userId, Context.ConnectionAborted))
+        {
+            await LeaveGroupAsync(conversationId);
+            throw new HubException(ConversationErrors.NotAMember);
+        }
     }
 
     // Client-callable. Tells the other members of the conversation this user is typing.
