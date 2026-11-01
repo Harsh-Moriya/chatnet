@@ -26,6 +26,24 @@ public static class QueryPlan
         return RowsRead(plan.RootElement[0].GetProperty("Plan"), table);
     }
 
+    // The plan as text, for the message of a test that failed: the number says it read too much, the plan says why.
+    public static async Task<string> ExplainAsync(AppDbContext db, CommandRecorder.Recorded query)
+    {
+        await db.Database.OpenConnectionAsync();
+        var connection = (NpgsqlConnection)db.Database.GetDbConnection();
+
+        await using var explain = new NpgsqlCommand("EXPLAIN (ANALYZE, COSTS ON, TIMING OFF, SUMMARY OFF) " + query.Sql, connection);
+        foreach (var (name, value) in query.Parameters)
+            explain.Parameters.Add(new NpgsqlParameter(name, value ?? DBNull.Value));
+
+        var lines = new List<string>();
+        await using var reader = await explain.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+            lines.Add(reader.GetString(0));
+
+        return string.Join(Environment.NewLine, lines);
+    }
+
     // Walks the plan tree. A node reports its per-loop average, so it is multiplied by the number
     // of loops (a lateral join runs its inner lookup once per outer row). Rows the node read and
     // then discarded with a filter count too: they were read all the same.
