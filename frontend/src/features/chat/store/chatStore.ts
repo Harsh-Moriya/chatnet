@@ -4,7 +4,9 @@ import { afterDeletion, isNewer, isPreviewOf, latest, withChangedPreview } from 
 import type {
   ConnectionStatus,
   Conversation,
+  ConversationUpdate,
   Member,
+  MembersChange,
   Message,
   PendingMessage,
   TypingUser,
@@ -37,6 +39,14 @@ interface ChatState {
   seedMessages: (conversationId: string, messages: Message[]) => void
   clearMessages: (conversationId: string) => void
   seedMembers: (conversationId: string, members: Member[]) => void
+  // The people of a group changed: the members in the change are put in (new, or as they are now) and the people
+  // named as gone are taken out. Ignored for a group whose members were never loaded: opening it loads them as they are.
+  applyMembersChange: (change: MembersChange) => void
+  // A group was renamed, or its picture changed.
+  applyConversationUpdate: (update: ConversationUpdate) => void
+  // The signed-in user is no longer in the group. The conversation stays, read-only, with what was said up to leftAt; the
+  // list of its people and who is typing in it are not theirs to see any more, and nothing in it is unread.
+  markLeft: (conversationId: string, leftAt: string) => void
   // selfId is the signed-in user. Without it the message is stored but unread counts are left alone.
   receiveMessage: (message: Message, selfId?: string) => void
   // A message already held was edited or deleted: puts the later version in its place, and fixes the sidebar preview and
@@ -130,6 +140,31 @@ function fresher(existing: Conversation | undefined, incoming: Conversation): Co
   return existing && compareTimestamps(existing.updatedAt, incoming.updatedAt) > 0 ? existing : incoming
 }
 
+// A copy of the record without one key.
+function without<T>(record: Record<string, T>, key: string): Record<string, T> {
+  const next = { ...record }
+  delete next[key]
+  return next
+}
+
+// The later of two read positions; null is "has not read".
+function laterOf(a: string | null, b: string | null): string | null {
+  if (a === null) return b
+  if (b === null) return a
+  return compareTimestamps(a, b) >= 0 ? a : b
+}
+
+function sameMember(a: Member, b: Member): boolean {
+  return (
+    a.userId === b.userId &&
+    a.userName === b.userName &&
+    a.displayName === b.displayName &&
+    a.avatarUrl === b.avatarUrl &&
+    a.role === b.role &&
+    a.lastReadAt === b.lastReadAt
+  )
+}
+
 // The member list with one member's read position moved forward to readAt. The list itself is
 // returned when nothing would change (an unknown member, or a position already at or past readAt),
 // so callers can tell that nothing happened.
@@ -174,13 +209,23 @@ export const useChatStore = create<ChatState>()((set) => ({
       return { conversations: next }
     }),
 
+  // A conversation the signed-in user was added to. When they are added back to one they had left, what this tab holds of
+  // it (its messages up to the time they left, its people) belongs to the time before, and the server shows them only
+  // what is sent from now on: it is forgotten, and the incoming copy replaces the one that said they had left.
   addConversation: (conversation) =>
-    set((state) => ({
-      conversations: {
-        ...state.conversations,
-        [conversation.id]: fresher(state.conversations[conversation.id], conversation),
-      },
-    })),
+    set((state) => {
+      const existing = state.conversations[conversation.id]
+
+      if (existing?.leftAt && !conversation.leftAt) {
+        return {
+          conversations: { ...state.conversations, [conversation.id]: conversation },
+          messages: without(state.messages, conversation.id),
+          members: without(state.members, conversation.id),
+        }
+      }
+
+      return { conversations: { ...state.conversations, [conversation.id]: fresher(existing, conversation) } }
+    }),
 
   // Merges by id, with the loaded copy winning, and re-sorts. A message pushed while the request
   // was in flight is kept; a message in both is kept once. The id a tab invented for its own message
@@ -235,6 +280,62 @@ export const useChatStore = create<ChatState>()((set) => ({
       })
 
       return { members: { ...state.members, [conversationId]: merged } }
+    }),
+
+  // New members join at the end, which is where the server lists them (earliest joiner first), and a member who is already
+  // listed keeps their place. A read position never goes back, whatever order the pushes arrive in. The same state
+  // object is returned when nothing would change.
+  applyMembersChange: ({ conversationId, members, removedUserIds }) =>
+    set((state) => {
+      const held = state.members[conversationId]
+      if (!held) return state
+
+      const gone = new Set(removedUserIds)
+      const next = held.filter((m) => !gone.has(m.userId))
+
+      for (const incoming of members) {
+        const index = next.findIndex((m) => m.userId === incoming.userId)
+        if (index < 0) next.push(incoming)
+        else next[index] = { ...incoming, lastReadAt: laterOf(next[index].lastReadAt, incoming.lastReadAt) }
+      }
+
+      const unchanged = next.length === held.length && next.every((m, i) => sameMember(m, held[i]))
+      return unchanged ? state : { members: { ...state.members, [conversationId]: next } }
+    }),
+
+  applyConversationUpdate: (update) =>
+    set((state) => {
+      const held = state.conversations[update.id]
+      if (!held || held.type !== 'Group') return state
+      if (held.name === update.name && held.avatarUrl === update.avatarUrl) return state
+
+      return {
+        conversations: {
+          ...state.conversations,
+          [update.id]: { ...held, name: update.name, avatarUrl: update.avatarUrl },
+        },
+      }
+    }),
+
+  markLeft: (conversationId, leftAt) =>
+    set((state) => {
+      const held = state.conversations[conversationId]
+      if (!held || held.leftAt !== null) return state
+
+      return {
+        conversations: {
+          ...state.conversations,
+          [conversationId]: {
+            ...held,
+            leftAt,
+            unreadCount: 0,
+            // The list orders a conversation that was left by when it was left, as the server does.
+            updatedAt: compareTimestamps(held.updatedAt, leftAt) > 0 ? leftAt : held.updatedAt,
+          },
+        },
+        members: without(state.members, conversationId),
+        typing: without(state.typing, conversationId),
+      }
     }),
 
   // Called for the push of every message and for the response to this tab's own send, so the same

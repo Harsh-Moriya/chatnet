@@ -37,6 +37,7 @@ function conversation(overrides: Partial<Conversation> = {}): Conversation {
     unreadCount: 0,
     otherUserId: null,
     isMuted: false,
+    leftAt: null,
     ...overrides,
   }
 }
