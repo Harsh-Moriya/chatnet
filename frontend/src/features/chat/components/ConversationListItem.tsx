@@ -55,6 +55,11 @@ export function ConversationListItem({ conversation, currentUserId, now }: Conve
                   {conversation.isMuted && (
                     <BellOff className="h-3.5 w-3.5 shrink-0 text-slate-400" role="img" aria-label="Muted" />
                   )}
+                  {conversation.leftAt !== null && (
+                    <span className="shrink-0 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
+                      Left
+                    </span>
+                  )}
                 </p>
                 <time className="shrink-0 text-xs text-slate-500" dateTime={last?.createdAt ?? conversation.updatedAt}>
                   {formatListTime(last?.createdAt ?? conversation.updatedAt, now)}

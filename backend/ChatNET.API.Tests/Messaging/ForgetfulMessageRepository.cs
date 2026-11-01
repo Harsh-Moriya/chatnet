@@ -1,3 +1,4 @@
+using ChatNET.API.Conversations.Models;
 using ChatNET.API.Messaging.Models;
 using ChatNET.API.Messaging.Persistence;
 using ChatNET.API.Notifications.Models;
@@ -58,18 +59,18 @@ public sealed class ForgetfulMessageRepository : IMessageRepository
         => _inner.TryDeleteAsync(messageId, deletedById, deletedAt, outbox, cancellationToken);
 
     public Task<MessageCursor?> FindCursorAsync(
-        Guid conversationId, Guid messageId, DateTime since, CancellationToken cancellationToken)
-        => _inner.FindCursorAsync(conversationId, messageId, since, cancellationToken);
+        Guid conversationId, Guid messageId, MemberWindow window, CancellationToken cancellationToken)
+        => _inner.FindCursorAsync(conversationId, messageId, window, cancellationToken);
 
     public Task<List<MessageDto>> GetLatestAsync(
-        Guid conversationId, DateTime since, int take, CancellationToken cancellationToken)
-        => _inner.GetLatestAsync(conversationId, since, take, cancellationToken);
+        Guid conversationId, MemberWindow window, int take, CancellationToken cancellationToken)
+        => _inner.GetLatestAsync(conversationId, window, take, cancellationToken);
 
     public Task<List<MessageDto>> GetBeforeAsync(
-        Guid conversationId, DateTime since, MessageCursor cursor, int take, CancellationToken cancellationToken)
-        => _inner.GetBeforeAsync(conversationId, since, cursor, take, cancellationToken);
+        Guid conversationId, MemberWindow window, MessageCursor cursor, int take, CancellationToken cancellationToken)
+        => _inner.GetBeforeAsync(conversationId, window, cursor, take, cancellationToken);
 
     public Task<List<MessageDto>> GetAfterAsync(
-        Guid conversationId, DateTime since, MessageCursor cursor, int take, CancellationToken cancellationToken)
-        => _inner.GetAfterAsync(conversationId, since, cursor, take, cancellationToken);
+        Guid conversationId, MemberWindow window, MessageCursor cursor, int take, CancellationToken cancellationToken)
+        => _inner.GetAfterAsync(conversationId, window, cursor, take, cancellationToken);
 }

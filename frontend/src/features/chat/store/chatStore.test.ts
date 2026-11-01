@@ -30,6 +30,7 @@ function conversation(overrides: Partial<Conversation> & { id: string }): Conver
     unreadCount: 0,
     otherUserId: null,
     isMuted: false,
+    leftAt: null,
     ...overrides,
   }
 }

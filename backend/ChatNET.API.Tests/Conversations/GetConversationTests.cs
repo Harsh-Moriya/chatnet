@@ -98,7 +98,7 @@ public class GetConversationTests
     }
 
     [Fact]
-    public async Task A_member_who_has_left_is_refused()
+    public async Task A_member_who_has_left_still_gets_the_conversation_and_when_they_left()
     {
         var alice = await _factory.RegisterUserAsync("alice");
         var bob = await _factory.RegisterUserAsync("bob");
@@ -111,7 +111,10 @@ public class GetConversationTests
 
         var response = await bobClient.GetAsync($"/api/conversations/{id}");
 
-        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var view = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("Leaving", view.GetProperty("name").GetString());
+        Assert.NotEqual(JsonValueKind.Null, view.GetProperty("leftAt").ValueKind);
     }
 
     [Fact]

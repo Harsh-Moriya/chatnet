@@ -69,6 +69,42 @@ public static class ConversationApi
         return members.EnumerateArray().ToList();
     }
 
+    // ##### Managing a group #####
+
+    public static Task<HttpResponseMessage> AddMembersResponseAsync(
+        this HttpClient client, Guid conversationId, params Guid[] userIds) =>
+        client.PostAsJsonAsync($"/api/conversations/{conversationId}/members", new { userIds });
+
+    // Adds people and returns the people of the group as the server answers.
+    public static async Task<List<JsonElement>> AddMembersAsync(
+        this HttpClient client, Guid conversationId, params Guid[] userIds)
+    {
+        var response = await client.AddMembersResponseAsync(conversationId, userIds);
+        response.EnsureSuccessStatusCode();
+        return (await response.Content.ReadFromJsonAsync<JsonElement>()).EnumerateArray().ToList();
+    }
+
+    public static Task<HttpResponseMessage> RemoveMemberResponseAsync(
+        this HttpClient client, Guid conversationId, Guid userId) =>
+        client.DeleteAsync($"/api/conversations/{conversationId}/members/{userId}");
+
+    public static Task<HttpResponseMessage> ChangeRoleResponseAsync(
+        this HttpClient client, Guid conversationId, Guid userId, string? role) =>
+        client.PutAsJsonAsync($"/api/conversations/{conversationId}/members/{userId}/role", new { role });
+
+    public static Task<HttpResponseMessage> LeaveResponseAsync(this HttpClient client, Guid conversationId) =>
+        client.PostAsync($"/api/conversations/{conversationId}/leave", null);
+
+    public static Task<HttpResponseMessage> RenameResponseAsync(this HttpClient client, Guid conversationId, string? name) =>
+        client.PatchAsJsonAsync($"/api/conversations/{conversationId}", new { name });
+
+    // The people of a group as a list of (user id, role), the order the server gives them in.
+    public static List<(Guid UserId, string Role)> PeopleOf(this IEnumerable<JsonElement> members) =>
+        members.Select(m => (m.GetProperty("userId").GetGuid(), m.GetProperty("role").GetString()!)).ToList();
+
+    public static async Task<List<JsonElement>> ReadMembersAsync(this HttpResponseMessage response) =>
+        (await response.Content.ReadFromJsonAsync<JsonElement>()).EnumerateArray().ToList();
+
     // The unread count of one conversation as the caller sees it in their list.
     public static async Task<int> UnreadInListAsync(this HttpClient client, Guid conversationId) =>
         (await client.ListConversationsAsync()).Single(c => c.IdOf() == conversationId).UnreadOf();

@@ -29,14 +29,16 @@ public class GetAttachmentUrlHandler : IRequestHandler<GetAttachmentUrlQuery, At
     {
         var found = await _attachments.FindForReadAsync(request.AttachmentId, cancellationToken);
 
-        // The same rule as for history: an active member, and only what was sent since they joined. A file of a
-        // deleted message is gone for everyone. Every refusal is the same "not found", so an id says nothing
-        // about files the caller may not read.
-        var joinedAt = found is null
+        // The same rule as for history: a member, and only what was sent while they were one (someone who left a group
+        // keeps the files up to when they left). A file of a deleted message is gone for everyone. Every refusal is the
+        // same "not found", so an id says nothing about files the caller may not read.
+        var window = found is null
             ? null
-            : await _conversations.GetActiveMemberJoinedAtAsync(found.ConversationId, request.UserId, cancellationToken);
+            : await _conversations.GetMemberWindowAsync(found.ConversationId, request.UserId, cancellationToken);
 
-        if (found is null || found.MessageDeleted || joinedAt is null || found.MessageCreatedAt < joinedAt)
+        if (found is null || found.MessageDeleted || window is null
+            || found.MessageCreatedAt < window.JoinedAt
+            || (window.LeftAt is not null && found.MessageCreatedAt > window.LeftAt))
         {
             _logger.LogWarning(
                 "User {UserId} asked for a link to attachment {AttachmentId} that they may not read or that does not exist",

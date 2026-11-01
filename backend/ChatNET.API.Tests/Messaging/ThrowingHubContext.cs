@@ -78,5 +78,11 @@ public sealed class ThrowingHubContext : IHubContext<ChatHub, IChatClient>
         public Task NotificationDismissed(Guid id) => throw Failure();
 
         public Task ConversationMuteChanged(Guid conversationId, bool isMuted) => throw Failure();
+
+        public Task MembersChanged(MembersChangedDto change) => throw Failure();
+
+        public Task ConversationUpdated(ConversationUpdateDto update) => throw Failure();
+
+        public Task RemovedFromConversation(Guid conversationId, DateTime leftAt) => throw Failure();
     }
 }

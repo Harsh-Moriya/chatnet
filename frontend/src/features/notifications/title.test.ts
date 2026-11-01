@@ -13,6 +13,7 @@ function conversation(id: string, unreadCount: number, isMuted = false): Convers
     unreadCount,
     otherUserId: null,
     isMuted,
+    leftAt: null,
   }
 }
 

@@ -5,7 +5,9 @@ namespace ChatNET.API.Conversations.Models;
 // other people sent since the viewer last read the conversation, at most ConversationRepository's cap.
 // OtherUserId is the other participant of a Direct conversation (what presence is shown for) and
 // null for a Group. IsMuted is the viewer's own choice: it only quiets alerts for new messages, and what a
-// conversation shows to its other members does not change.
+// conversation shows to its other members does not change. LeftAt is when the viewer stopped being a member of a group
+// (they left, or were removed), or null while they are one: a conversation they left stays in their list, read-only,
+// showing what was said up to that moment.
 public record ConversationDto(
     Guid Id,
     ConversationType Type,
@@ -15,7 +17,8 @@ public record ConversationDto(
     LastMessageDto? LastMessage,
     int UnreadCount,
     Guid? OtherUserId,
-    bool IsMuted
+    bool IsMuted,
+    DateTime? LeftAt
 );
 
 // Content is null when the last message was deleted. It is truncated to a preview length, and empty when the

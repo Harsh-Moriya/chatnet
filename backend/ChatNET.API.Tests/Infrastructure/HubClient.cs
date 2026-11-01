@@ -12,6 +12,8 @@ public sealed record ReadEvent(Guid ConversationId, Guid UserId, DateTime ReadAt
 
 public sealed record MuteEvent(Guid ConversationId, bool IsMuted);
 
+public sealed record RemovedEvent(Guid ConversationId, DateTime LeftAt);
+
 // A real SignalR client talking to the in-memory test server over WebSockets, as a browser would:
 // it negotiates over HTTP and then upgrades to a WebSocket, passing the token in the query string.
 // Every event the server pushes is recorded so a test can wait for it, or check that none came.
@@ -34,6 +36,9 @@ public sealed class HubClient : IAsyncDisposable
     private readonly ConcurrentQueue<Guid[]> _notificationsRead = new();
     private readonly ConcurrentQueue<Guid> _notificationsDismissed = new();
     private readonly ConcurrentQueue<MuteEvent> _muteChanges = new();
+    private readonly ConcurrentQueue<JsonElement> _membersChanges = new();
+    private readonly ConcurrentQueue<JsonElement> _conversationUpdates = new();
+    private readonly ConcurrentQueue<RemovedEvent> _removals = new();
 
     private HubClient(HubConnection connection)
     {
@@ -53,6 +58,10 @@ public sealed class HubClient : IAsyncDisposable
         _connection.On<Guid>("NotificationDismissed", id => _notificationsDismissed.Enqueue(id));
         _connection.On<Guid, bool>("ConversationMuteChanged", (conversationId, isMuted) =>
             _muteChanges.Enqueue(new MuteEvent(conversationId, isMuted)));
+        _connection.On<JsonElement>("MembersChanged", change => _membersChanges.Enqueue(change));
+        _connection.On<JsonElement>("ConversationUpdated", update => _conversationUpdates.Enqueue(update));
+        _connection.On<Guid, DateTime>("RemovedFromConversation", (conversationId, leftAt) =>
+            _removals.Enqueue(new RemovedEvent(conversationId, leftAt)));
     }
 
     public HubConnectionState State => _connection.State;
@@ -76,6 +85,12 @@ public sealed class HubClient : IAsyncDisposable
     public IReadOnlyList<Guid> NotificationsDismissed => _notificationsDismissed.ToArray();
 
     public IReadOnlyList<MuteEvent> MuteChanges => _muteChanges.ToArray();
+
+    public IReadOnlyList<JsonElement> MembersChanges => _membersChanges.ToArray();
+
+    public IReadOnlyList<JsonElement> ConversationUpdates => _conversationUpdates.ToArray();
+
+    public IReadOnlyList<RemovedEvent> Removals => _removals.ToArray();
 
     public static Task<HubClient> ConnectAsync(WebApplicationFactory<Program> host, TestUser user) =>
         ConnectAsync(host, user.Token);
@@ -214,6 +229,34 @@ public sealed class HubClient : IAsyncDisposable
 
     public Task<MuteEvent> WaitForMuteChangedAsync(Func<MuteEvent, bool> match, TimeSpan? timeout = null) =>
         WaitAsync(_muteChanges, match, timeout);
+
+    // The next change of the people of this group.
+    public Task<JsonElement> WaitForMembersChangedAsync(Guid conversationId, TimeSpan? timeout = null) =>
+        WaitAsync(_membersChanges, c => c.GetProperty("conversationId").GetGuid() == conversationId, timeout);
+
+    public async Task<bool> ReceivedMembersChangedAsync(Guid conversationId)
+    {
+        await Task.Delay(QuietPeriod);
+        return _membersChanges.Any(c => c.GetProperty("conversationId").GetGuid() == conversationId);
+    }
+
+    public Task<JsonElement> WaitForConversationUpdatedAsync(Guid conversationId, TimeSpan? timeout = null) =>
+        WaitAsync(_conversationUpdates, u => u.GetProperty("id").GetGuid() == conversationId, timeout);
+
+    public async Task<bool> ReceivedConversationUpdatedAsync(Guid conversationId)
+    {
+        await Task.Delay(QuietPeriod);
+        return _conversationUpdates.Any(u => u.GetProperty("id").GetGuid() == conversationId);
+    }
+
+    public Task<RemovedEvent> WaitForRemovedAsync(Guid conversationId, TimeSpan? timeout = null) =>
+        WaitAsync(_removals, r => r.ConversationId == conversationId, timeout);
+
+    public async Task<bool> ReceivedRemovedAsync(Guid conversationId)
+    {
+        await Task.Delay(QuietPeriod);
+        return _removals.Any(r => r.ConversationId == conversationId);
+    }
 
     public async Task<bool> ReceivedMuteChangedAsync()
     {

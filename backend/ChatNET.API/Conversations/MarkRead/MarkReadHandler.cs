@@ -1,4 +1,5 @@
 using ChatNET.API.Common.Exceptions;
+using ChatNET.API.Conversations.Models;
 using ChatNET.API.Conversations.Persistence;
 using ChatNET.API.Messaging.Hubs;
 using ChatNET.API.Messaging.Persistence;
@@ -60,7 +61,7 @@ public class MarkReadHandler : IRequestHandler<MarkReadCommand, Unit>
         // The message has to be one the caller may read: in this conversation, sent since they
         // joined. Anything else is "unknown", so the answer reveals nothing about other messages.
         var message = await _messages.FindCursorAsync(
-            request.ConversationId, request.MessageId, joinedAt.Value, cancellationToken);
+            request.ConversationId, request.MessageId, new MemberWindow(joinedAt.Value, null), cancellationToken);
 
         if (message is null)
             throw new ValidationException([new ValidationFailure(nameof(request.MessageId), UnknownMessage)]);

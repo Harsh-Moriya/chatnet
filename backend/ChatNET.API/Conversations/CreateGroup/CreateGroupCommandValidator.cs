@@ -1,16 +1,17 @@
+using ChatNET.API.Conversations.Membership;
 using FluentValidation;
 
 namespace ChatNET.API.Conversations.CreateGroup;
 
 public class CreateGroupCommandValidator : AbstractValidator<CreateGroupCommand>
 {
-    public const int MaxMembers = 100;
+    public const int MaxMembers = GroupLimits.MaxOtherMembers;
 
     public CreateGroupCommandValidator()
     {
         RuleFor(x => x.Name)
             .NotEmpty()
-            .MaximumLength(100);
+            .MaximumLength(GroupLimits.MaxNameLength);
 
         RuleFor(x => x.MemberIds)
             .NotNull()

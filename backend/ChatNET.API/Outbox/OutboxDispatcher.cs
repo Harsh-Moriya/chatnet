@@ -109,6 +109,23 @@ public class OutboxDispatcher
                     .MessageRead(read.ConversationId, read.UserId, read.ReadAt);
                 return;
 
+            case MembersChanged membersChanged:
+                await _notifier.NotifyMembersChangedAsync(
+                    membersChanged.ConversationId, membersChanged.UserIds.ToList(), cancellationToken);
+                return;
+
+            case MembersJoined joined:
+                await _notifier.NotifyJoinedAsync(joined.ConversationId, joined.UserIds.ToList(), cancellationToken);
+                return;
+
+            case MemberLeft left:
+                await _notifier.NotifyLeftAsync(left.ConversationId, left.UserId, cancellationToken);
+                return;
+
+            case ConversationRenamed renamed:
+                await _notifier.NotifyUpdatedAsync(renamed.ConversationId, cancellationToken);
+                return;
+
             default:
                 throw new InvalidOperationException($"The outbox has no push for kind '{row.Kind}'.");
         }

@@ -2,7 +2,7 @@ import { isUnauthorized, reconnectDelay } from '../../../lib/signalr'
 import { useChatStore } from '../store/chatStore'
 import type { NotificationItem } from '../../notifications/types'
 import type { Presence } from '../../presence/types'
-import type { Conversation, Message } from '../types'
+import type { Conversation, ConversationUpdate, MembersChange, Message } from '../types'
 
 // Everything that connects the SignalR hub to the chat store, as plain functions with no React so it
 // can be tested with a fake hub. This is the only place that registers hub event handlers. The
@@ -32,6 +32,9 @@ export interface ChatConnectionDeps {
   onMessageArrived: (message: Message) => void
   // Called with every message that was edited or deleted, held or not, so what else shows its text (the bell) can follow.
   onMessageUpdated: (message: Message) => void
+  // Called when the signed-in user was added back to a group they had left, once the store has forgotten what it held of
+  // it: the owner drops the cached pages of its messages and people, so they load again from the time of the new join.
+  onRejoined: (conversationId: string) => void
   // Called with each notification pushed to the user: someone mentioned them, or added them to a group.
   onNotificationReceived: (notification: NotificationItem) => void
   // Called with the ids of notifications that were marked read, here or in another tab or by reading the
@@ -121,11 +124,28 @@ export function connectChat(hub: ChatHub, deps: ChatConnectionDeps): ChatConnect
   })
 
   hub.on('AddedToConversation', (conversation: Conversation) => {
+    const hadLeft = Boolean(chat().conversations[conversation.id]?.leftAt)
     chat().addConversation(conversation)
+    if (hadLeft && conversation.leftAt === null) deps.onRejoined(conversation.id)
 
     // Nothing else puts this connection into the new conversation's group. A refused join is not
     // retried: the server puts every connection into all of its user's groups on the next connect.
     hub.invoke('JoinConversation', conversation.id).catch(() => {})
+  })
+
+  // The people of a group changed. Sent only to people who are in the group, so it never says who is left to someone who is not.
+  hub.on('MembersChanged', (change: MembersChange) => {
+    chat().applyMembersChange(change)
+  })
+
+  // A group was renamed, or its picture changed.
+  hub.on('ConversationUpdated', (update: ConversationUpdate) => {
+    chat().applyConversationUpdate(update)
+  })
+
+  // The signed-in user left a group, or was removed from it, in this tab or another.
+  hub.on('RemovedFromConversation', (conversationId: string, leftAt: string) => {
+    chat().markLeft(conversationId, leftAt)
   })
 
   hub.on('UserTyping', (conversationId: string, userId: string, displayName: string, isTyping: boolean) => {

@@ -118,7 +118,7 @@ function message(id: string, overrides: Partial<Message> = {}): Message {
 }
 
 function conversation(id: string): Conversation {
-  return { id, type: 'Direct', name: 'Bob', avatarUrl: null, updatedAt: '2026-10-11T09:00:00Z', lastMessage: null, unreadCount: 0, otherUserId: null, isMuted: false }
+  return { id, type: 'Direct', name: 'Bob', avatarUrl: null, updatedAt: '2026-10-11T09:00:00Z', lastMessage: null, unreadCount: 0, otherUserId: null, isMuted: false, leftAt: null }
 }
 
 const RETRY_DELAYS = [100, 200, 400]
@@ -129,6 +129,7 @@ function setup(options: { hub?: FakeHub } = {}) {
   const onPresenceChanged = vi.fn()
   const onMessageArrived = vi.fn()
   const onMessageUpdated = vi.fn()
+  const onRejoined = vi.fn()
   const onNotificationReceived = vi.fn()
   const onNotificationsRead = vi.fn()
   const onNotificationDismissed = vi.fn()
@@ -139,6 +140,7 @@ function setup(options: { hub?: FakeHub } = {}) {
     onPresenceChanged,
     onMessageArrived,
     onMessageUpdated,
+    onRejoined,
     onNotificationReceived,
     onNotificationsRead,
     onNotificationDismissed,
@@ -152,6 +154,7 @@ function setup(options: { hub?: FakeHub } = {}) {
     onPresenceChanged,
     onMessageArrived,
     onMessageUpdated,
+    onRejoined,
     onNotificationReceived,
     onNotificationsRead,
     onNotificationDismissed,
@@ -198,6 +201,9 @@ describe('event handlers', () => {
       'NotificationReceived',
       'NotificationsRead',
       'NotificationDismissed',
+      'MembersChanged',
+      'ConversationUpdated',
+      'RemovedFromConversation',
     ]) {
       const registered = hub.calls.indexOf(`on:${event}`)
       expect(registered, event).toBeGreaterThan(-1)
@@ -221,6 +227,9 @@ describe('event handlers', () => {
     expect(hub.emit('NotificationReceived', mention('n1'))).toBeUndefined()
     expect(hub.emit('NotificationsRead', ['n1'])).toBeUndefined()
     expect(hub.emit('NotificationDismissed', 'n1')).toBeUndefined()
+    expect(hub.emit('MembersChanged', { conversationId: 'c1', members: [], removedUserIds: [] })).toBeUndefined()
+    expect(hub.emit('ConversationUpdated', { id: 'c1', name: 'New', avatarUrl: null })).toBeUndefined()
+    expect(hub.emit('RemovedFromConversation', 'c1', '2026-10-11T10:00:00Z')).toBeUndefined()
   })
 
   it('puts a pushed message into the store', async () => {
@@ -315,6 +324,62 @@ describe('event handlers', () => {
 
     expect(store().conversations.c9.name).toBe('Bob')
     expect(hub.invoked('JoinConversation')).toEqual([{ method: 'JoinConversation', args: ['c9'] }])
+  })
+
+  it('applies a pushed change of the people of a group', async () => {
+    const { hub } = await connected()
+    store().seedMembers('c1', [
+      { userId: 'me', userName: 'me', displayName: 'Me', avatarUrl: null, role: 'Owner', lastReadAt: null },
+      { userId: 'bob', userName: 'bob', displayName: 'Bob', avatarUrl: null, role: 'Member', lastReadAt: null },
+    ])
+
+    hub.emit('MembersChanged', {
+      conversationId: 'c1',
+      members: [{ userId: 'carol', userName: 'carol', displayName: 'Carol', avatarUrl: null, role: 'Member', lastReadAt: null }],
+      removedUserIds: ['bob'],
+    })
+
+    expect(store().members.c1.map((m) => m.userId)).toEqual(['me', 'carol'])
+  })
+
+  it('applies a pushed rename', async () => {
+    const { hub } = await connected()
+    store().seedConversations([{ ...conversation('c1'), type: 'Group', name: 'Team' }])
+
+    hub.emit('ConversationUpdated', { id: 'c1', name: 'Crew', avatarUrl: null })
+
+    expect(store().conversations.c1.name).toBe('Crew')
+  })
+
+  it('marks a conversation as left when the server says the signed-in user left it', async () => {
+    const { hub } = await connected()
+    store().seedConversations([{ ...conversation('c1'), type: 'Group', unreadCount: 3 }])
+
+    hub.emit('RemovedFromConversation', 'c1', '2026-10-11T12:00:00Z')
+
+    expect(store().conversations.c1).toMatchObject({ leftAt: '2026-10-11T12:00:00Z', unreadCount: 0 })
+  })
+
+  it('tells the owner when the signed-in user was added back to a group they had left', async () => {
+    const { hub, onRejoined } = await connected()
+    store().seedConversations([{ ...conversation('c1'), type: 'Group', leftAt: '2026-10-11T12:00:00Z' }])
+    store().seedMessages('c1', [message('m1')])
+
+    hub.emit('AddedToConversation', { ...conversation('c1'), type: 'Group', updatedAt: '2026-10-11T13:00:00Z' })
+
+    expect(onRejoined).toHaveBeenCalledWith('c1')
+    expect(store().conversations.c1.leftAt).toBeNull()
+    expect(store().messages.c1).toBeUndefined()
+  })
+
+  it('does not call it a return when the conversation is new, or the user was already in it', async () => {
+    const { hub, onRejoined } = await connected()
+    store().seedConversations([{ ...conversation('c2'), type: 'Group' }])
+
+    hub.emit('AddedToConversation', conversation('c9'))
+    hub.emit('AddedToConversation', { ...conversation('c2'), type: 'Group' })
+
+    expect(onRejoined).not.toHaveBeenCalled()
   })
 
   it('survives a refused join', async () => {

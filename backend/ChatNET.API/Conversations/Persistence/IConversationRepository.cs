@@ -30,6 +30,10 @@ public interface IConversationRepository
     // or have left it. Doubles as the membership check for features that also need the join time.
     Task<DateTime?> GetActiveMemberJoinedAtAsync(Guid conversationId, Guid userId, CancellationToken cancellationToken);
 
+    // What the user may read of the conversation, if they are or ever were a member (one who left keeps the part up to
+    // when they left); null if they never were. For the endpoints that only read.
+    Task<MemberWindow?> GetMemberWindowAsync(Guid conversationId, Guid userId, CancellationToken cancellationToken);
+
     Task<List<Guid>> GetActiveMemberIdsAsync(Guid conversationId, CancellationToken cancellationToken);
 
     // The role of an active member, or null when the user is not in the conversation or has left it.
@@ -53,4 +57,15 @@ public interface IConversationRepository
     // Stores whether an active member has muted the conversation. Returns false when the user is not an active
     // member, in which case nothing was changed.
     Task<bool> SetMutedAsync(Guid conversationId, Guid userId, bool isMuted, CancellationToken cancellationToken);
+
+    // When the user stopped being a member, or null if they are one (or never were). A push about someone leaving checks
+    // this, so it says nothing about a person who has been added back since.
+    Task<DateTime?> GetLeftAtAsync(Guid conversationId, Guid userId, CancellationToken cancellationToken);
+
+    // The name and picture of a group as they are now; null for a conversation that is not a group or does not exist.
+    Task<ConversationUpdateDto?> GetUpdateAsync(Guid conversationId, CancellationToken cancellationToken);
+
+    // Starts a change to the membership of a conversation: takes the conversation's lock (waiting for anyone who holds
+    // it) and loads the conversation with every one of its member rows. Null when there is no such conversation.
+    Task<IMembershipChange?> BeginMembershipChangeAsync(Guid conversationId, CancellationToken cancellationToken);
 }

@@ -60,6 +60,45 @@ public sealed record ConversationCreated(
     public string Kind => Name;
 }
 
+// The members of a group changed (someone joined, left, or has another role): the people in it are told how those entries
+// are now.
+public sealed record MembersChanged(Guid ConversationId, IReadOnlyList<Guid> UserIds) : IOutboxEvent
+{
+    public const string Name = nameof(MembersChanged);
+
+    [JsonIgnore]
+    public string Kind => Name;
+}
+
+// People were added to a group, or came back to it: each is sent the conversation, which is how their open connections learn
+// to join its group.
+public sealed record MembersJoined(Guid ConversationId, IReadOnlyList<Guid> UserIds) : IOutboxEvent
+{
+    public const string Name = nameof(MembersJoined);
+
+    [JsonIgnore]
+    public string Kind => Name;
+}
+
+// Someone left a group, or was removed: their tabs are told, and every connection of theirs leaves the group's SignalR group,
+// so they hear nothing more that is said in it.
+public sealed record MemberLeft(Guid ConversationId, Guid UserId) : IOutboxEvent
+{
+    public const string Name = nameof(MemberLeft);
+
+    [JsonIgnore]
+    public string Kind => Name;
+}
+
+// A group was renamed: the people in it are told the name it has now.
+public sealed record ConversationRenamed(Guid ConversationId) : IOutboxEvent
+{
+    public const string Name = nameof(ConversationRenamed);
+
+    [JsonIgnore]
+    public string Kind => Name;
+}
+
 // A member's read position moved: the conversation is told how far they have read.
 public sealed record ConversationRead(Guid ConversationId, Guid UserId, DateTime ReadAt) : IOutboxEvent
 {
@@ -84,6 +123,10 @@ public static class OutboxEvents
         NotificationCreated.Name => Deserialize<NotificationCreated>(payload),
         ConversationCreated.Name => Deserialize<ConversationCreated>(payload),
         ConversationRead.Name => Deserialize<ConversationRead>(payload),
+        MembersChanged.Name => Deserialize<MembersChanged>(payload),
+        MembersJoined.Name => Deserialize<MembersJoined>(payload),
+        MemberLeft.Name => Deserialize<MemberLeft>(payload),
+        ConversationRenamed.Name => Deserialize<ConversationRenamed>(payload),
         _ => throw new InvalidOperationException($"The outbox has no event of kind '{kind}'."),
     };
 

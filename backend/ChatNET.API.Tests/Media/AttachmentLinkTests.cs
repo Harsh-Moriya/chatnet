@@ -112,19 +112,24 @@ public class AttachmentLinkTests
     }
 
     [Fact]
-    public async Task A_member_who_has_left_can_no_longer_ask()
+    public async Task A_member_who_has_left_can_still_ask_for_files_from_before_they_left_and_not_for_later_ones()
     {
-        var (_, bob, conversation, attachment, _) = await SentFileAsync();
+        var (alice, bob, conversation, attachment, _) = await SentFileAsync();
+        var leftAt = DateTime.UtcNow;
         await _factory.ExecuteDbAsync(async db =>
         {
-            db.ConversationMembers.Single(m => m.ConversationId == conversation && m.UserId == bob.Id).LeftAt = DateTime.UtcNow;
+            db.ConversationMembers.Single(m => m.ConversationId == conversation && m.UserId == bob.Id).LeftAt = leftAt;
             await db.SaveChangesAsync();
         });
+        var (_, later) = await _factory.AddMessageWithFilesAsync(
+            conversation, alice.Id, "", leftAt.AddMinutes(1), fileCount: 1);
         using var client = _factory.CreateClientFor(bob);
 
-        var response = await client.GetAttachmentLinkResponseAsync(attachment);
+        var before = await client.GetAttachmentLinkResponseAsync(attachment);
+        var after = await client.GetAttachmentLinkResponseAsync(later[0]);
 
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, before.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, after.StatusCode);
     }
 
     // The rule for history: what was sent before a member joined is not theirs to read, and a file is no different.

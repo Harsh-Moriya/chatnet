@@ -3,7 +3,7 @@ import { getApiError } from '../../../lib/errors'
 import { newClientMessageId } from '../../../lib/uuid'
 import { useChatStore } from '../store/chatStore'
 import { waitForConnection } from '../store/waitForConnection'
-import type { Conversation, Member, Message, PendingAttachment, UserSummary } from '../types'
+import type { Conversation, ConversationUpdate, Member, Message, PendingAttachment, UserSummary } from '../types'
 import { fetchAttachmentLink } from './uploadsApi'
 
 // Every REST call the chat makes. Plain functions, so they can be tested without React; the hooks
@@ -139,6 +139,46 @@ export async function deleteMessage(conversationId: string, messageId: string, s
 export async function setMuted(conversationId: string, isMuted: boolean): Promise<void> {
   await api.put(`/conversations/${conversationId}/mute`, { isMuted })
   chat().setMuted(conversationId, isMuted)
+}
+
+// ##### Managing a group #####
+// Each answers with what the server stored, and the store takes it from there, so the screen never shows a change the server
+// refused; the same change is pushed to everyone else in the group. A refusal is the caller's to show.
+
+// Adds people to a group. The answer is the group's people as they are now.
+export async function addMembers(conversationId: string, userIds: string[]): Promise<Member[]> {
+  const { data } = await api.post<Member[]>(`/conversations/${conversationId}/members`, { userIds })
+  chat().seedMembers(conversationId, data)
+  return data
+}
+
+export async function removeMember(conversationId: string, userId: string): Promise<Member[]> {
+  const { data } = await api.delete<Member[]>(`/conversations/${conversationId}/members/${userId}`)
+  chat().seedMembers(conversationId, data)
+  return data
+}
+
+// Makes someone an admin or a plain member, or the owner, which makes the signed-in owner an admin.
+export async function changeMemberRole(
+  conversationId: string,
+  userId: string,
+  role: Member['role'],
+): Promise<Member[]> {
+  const { data } = await api.put<Member[]>(`/conversations/${conversationId}/members/${userId}/role`, { role })
+  chat().seedMembers(conversationId, data)
+  return data
+}
+
+// The signed-in user leaves. The conversation stays in their list, read-only.
+export async function leaveConversation(conversationId: string): Promise<void> {
+  const { data } = await api.post<{ leftAt: string }>(`/conversations/${conversationId}/leave`)
+  chat().markLeft(conversationId, data.leftAt)
+}
+
+export async function renameConversation(conversationId: string, name: string): Promise<ConversationUpdate> {
+  const { data } = await api.patch<ConversationUpdate>(`/conversations/${conversationId}`, { name })
+  chat().applyConversationUpdate(data)
+  return data
 }
 
 // ##### Sending #####

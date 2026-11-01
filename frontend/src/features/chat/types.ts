@@ -19,6 +19,9 @@ export interface Conversation {
   // The signed-in user's own choice to have this conversation quiet: no alert for its new messages, and its
   // unread count stays out of the page title. A mention still alerts.
   isMuted: boolean
+  // When the signed-in user left the group, or was removed from it; null while they are in it. A conversation they
+  // left stays in the list, read-only, showing what was said up to this moment.
+  leftAt: string | null
 }
 
 export interface LastMessage {
@@ -98,6 +101,21 @@ export interface Member {
   avatarUrl: string | null
   role: 'Owner' | 'Admin' | 'Member'
   lastReadAt: string | null
+}
+
+// What changed about the people of a group, as the server pushes it: the members whose entry is new or changed (as it is
+// now), and the people who are no longer in the group. Applying it twice, or after a later change, gives the same list.
+export interface MembersChange {
+  conversationId: string
+  members: Member[]
+  removedUserIds: string[]
+}
+
+// The parts of a group that its members share and any of them may change: what it is called, and its picture.
+export interface ConversationUpdate {
+  id: string
+  name: string
+  avatarUrl: string | null
 }
 
 export interface UserSummary {

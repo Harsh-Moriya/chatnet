@@ -42,6 +42,11 @@ export function useSignalR() {
         onMessageArrived: alerts.message,
         onMessageUpdated: (message) =>
           useNotificationStore.getState().applyMessageChange(message.id, message.isDeleted ? null : message.content),
+        // Back in a group after leaving it: the cached pages and people belong to the time before the new join.
+        onRejoined: (conversationId) => {
+          void queryClient.resetQueries({ queryKey: ['messages', conversationId] })
+          void queryClient.resetQueries({ queryKey: ['members', conversationId] })
+        },
         onNotificationReceived: (notification) => {
           useNotificationStore.getState().receive(notification)
           alerts.notification(notification)

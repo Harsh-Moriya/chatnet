@@ -72,7 +72,7 @@ public class ConversationRepository : IConversationRepository
     {
         var rows = await _db.Database
             .SqlQueryRaw<ConversationRow>(
-                ConversationSelect + ForActiveMemberNewestFirst,
+                ConversationSelect + ForMemberNewestFirst,
                 new NpgsqlParameter("viewerId", userId),
                 new NpgsqlParameter("unreadCap", UnreadCap))
             .ToListAsync(cancellationToken);
@@ -89,6 +89,13 @@ public class ConversationRepository : IConversationRepository
         => _db.ConversationMembers
             .Where(m => m.ConversationId == conversationId && m.UserId == userId && m.LeftAt == null)
             .Select(m => (DateTime?)m.JoinedAt)
+            .FirstOrDefaultAsync(cancellationToken);
+
+    public Task<MemberWindow?> GetMemberWindowAsync(Guid conversationId, Guid userId, CancellationToken cancellationToken)
+        => _db.ConversationMembers
+            .AsNoTracking()
+            .Where(m => m.ConversationId == conversationId && m.UserId == userId)
+            .Select(m => new MemberWindow(m.JoinedAt, m.LeftAt))
             .FirstOrDefaultAsync(cancellationToken);
 
     public Task<List<Guid>> GetActiveMemberIdsAsync(Guid conversationId, CancellationToken cancellationToken)
@@ -165,6 +172,51 @@ public class ConversationRepository : IConversationRepository
             .Where(m => m.ConversationId == conversationId && m.UserId == userId && m.LeftAt == null)
             .ExecuteUpdateAsync(s => s.SetProperty(m => m.IsMuted, isMuted), cancellationToken) > 0;
 
+    public Task<DateTime?> GetLeftAtAsync(Guid conversationId, Guid userId, CancellationToken cancellationToken)
+        => _db.ConversationMembers
+            .Where(m => m.ConversationId == conversationId && m.UserId == userId)
+            .Select(m => m.LeftAt)
+            .FirstOrDefaultAsync(cancellationToken);
+
+    public Task<ConversationUpdateDto?> GetUpdateAsync(Guid conversationId, CancellationToken cancellationToken)
+        => _db.Conversations
+            .AsNoTracking()
+            .Where(c => c.Id == conversationId && c.Type == ConversationType.Group)
+            .Select(c => new ConversationUpdateDto(c.Id, c.Name!, c.AvatarUrl))
+            .FirstOrDefaultAsync(cancellationToken);
+
+    // A transaction-scoped advisory lock on the conversation, as registration takes one on an email: changes to the
+    // same group go one at a time, each reading the rows after the one before it committed (a statement reads what was
+    // committed when it starts), and changes to different groups never wait for each other. It is released by the
+    // commit or the rollback, so a request that fails cannot leave it held.
+    public async Task<IMembershipChange?> BeginMembershipChangeAsync(Guid conversationId, CancellationToken cancellationToken)
+    {
+        var transaction = await _db.Database.BeginTransactionAsync(cancellationToken);
+
+        try
+        {
+            await _db.Database.ExecuteSqlInterpolatedAsync(
+                $"SELECT pg_advisory_xact_lock(hashtextextended({conversationId.ToString()}, 0))", cancellationToken);
+
+            var conversation = await _db.Conversations
+                .Include(c => c.Members)
+                .FirstOrDefaultAsync(c => c.Id == conversationId, cancellationToken);
+
+            if (conversation is null)
+            {
+                await transaction.DisposeAsync();
+                return null;
+            }
+
+            return new MembershipChange(_db, transaction, conversation);
+        }
+        catch
+        {
+            await transaction.DisposeAsync();
+            throw;
+        }
+    }
+
     // ##### Conversation list and detail queries #####
     // Written as SQL by hand because the obvious LINQ form is slow. EF Core translates "latest
     // message of each conversation" to ROW_NUMBER() over the messages of EVERY conversation and only
@@ -176,8 +228,12 @@ public class ConversationRepository : IConversationRepository
     // reaches the database as a parameter. A test checks how many Messages rows the query reads.
     // The reasoning and measurements are in note 08.
     //
-    // Both the preview and the count only look at messages sent since the viewer joined, the same
-    // window history uses (D-90), so nothing from before they joined shows up in the sidebar.
+    // Both the preview and the count only look at the window the viewer may read, the same one history uses (D-90):
+    // nothing from before they joined shows up in the sidebar, and for a group they left, nothing from after. Such a
+    // conversation stays in the list, read-only: nothing in it is unread, its preview is the last message from before
+    // they left, and it is ordered by when they left (or by its own last activity, if that was earlier). The upper
+    // bound is written as a range on the same column the index is ordered by, so a group that went on for a long time
+    // after the viewer left costs no more to show than one that did not.
     //
     // The unread count is a correlated subquery over the same index: the messages of this conversation
     // since the viewer read it (or since they joined), from other people, that were not deleted since, counted by a
@@ -189,23 +245,25 @@ public class ConversationRepository : IConversationRepository
                CASE WHEN c."Type" = 'Direct' THEN other."DisplayName" ELSE c."Name" END AS "Name",
                c."AvatarUrl" AS "AvatarUrl",
                other."UserId" AS "OtherUserId",
-               c."UpdatedAt" AS "UpdatedAt",
+               LEAST(c."UpdatedAt", COALESCE(mine."LeftAt", 'infinity'::timestamptz)) AS "UpdatedAt",
                lm."SenderId" AS "LastMessageSenderId",
                CASE WHEN lm."IsDeleted" THEN NULL ELSE lm."Content" END AS "LastMessageContent",
                lm."CreatedAt" AS "LastMessageCreatedAt",
                CASE WHEN lm."Id" IS NULL OR lm."IsDeleted" THEN 0
                     ELSE (SELECT COUNT(*)::int FROM "MessageAttachments" a WHERE a."MessageId" = lm."Id") END
                    AS "LastMessageAttachmentCount",
-               (SELECT COUNT(*)::int
-                FROM (SELECT 1
-                      FROM "Messages" um
-                      WHERE um."ConversationId" = c."Id"
-                        AND um."CreatedAt" >= mine."JoinedAt"
-                        AND um."CreatedAt" > COALESCE(mine."LastReadAt", '-infinity'::timestamptz)
-                        AND um."SenderId" <> @viewerId
-                        AND NOT um."IsDeleted"
-                      LIMIT @unreadCap) AS counted) AS "UnreadCount",
-               mine."IsMuted" AS "IsMuted"
+               CASE WHEN mine."LeftAt" IS NOT NULL THEN 0
+                    ELSE (SELECT COUNT(*)::int
+                          FROM (SELECT 1
+                                FROM "Messages" um
+                                WHERE um."ConversationId" = c."Id"
+                                  AND um."CreatedAt" >= mine."JoinedAt"
+                                  AND um."CreatedAt" > COALESCE(mine."LastReadAt", '-infinity'::timestamptz)
+                                  AND um."SenderId" <> @viewerId
+                                  AND NOT um."IsDeleted"
+                                LIMIT @unreadCap) AS counted) END AS "UnreadCount",
+               mine."IsMuted" AS "IsMuted",
+               mine."LeftAt" AS "LeftAt"
         FROM "Conversations" c
         JOIN "ConversationMembers" mine
           ON mine."ConversationId" = c."Id" AND mine."UserId" = @viewerId
@@ -222,14 +280,17 @@ public class ConversationRepository : IConversationRepository
             FROM "Messages" m
             WHERE m."ConversationId" = c."Id"
               AND m."CreatedAt" >= mine."JoinedAt"
+              AND m."CreatedAt" <= COALESCE(mine."LeftAt", 'infinity'::timestamptz)
             ORDER BY m."CreatedAt" DESC
             LIMIT 1
         ) lm ON TRUE
         """;
 
-    private const string ForActiveMemberNewestFirst = """
-         WHERE mine."LeftAt" IS NULL
-         ORDER BY c."UpdatedAt" DESC
+    // Every conversation the user is in or was in, the most recently active first. The name in ORDER BY is the output column
+    // above, which is c."UpdatedAt" for a conversation the user is in and the earlier of that and when they left for
+    // one they left.
+    private const string ForMemberNewestFirst = """
+         ORDER BY "UpdatedAt" DESC
         """;
 
     private const string ForOneConversation = """
@@ -244,7 +305,7 @@ public class ConversationRepository : IConversationRepository
 
         return new ConversationDto(
             row.Id, Enum.Parse<ConversationType>(row.Type), row.Name ?? "Unknown", row.AvatarUrl, row.UpdatedAt, last,
-            row.UnreadCount, row.OtherUserId, row.IsMuted);
+            row.UnreadCount, row.OtherUserId, row.IsMuted, row.LeftAt);
     }
 
     // One row of the queries above. Property names match the column aliases in the SQL, which is how
@@ -263,5 +324,6 @@ public class ConversationRepository : IConversationRepository
         public int UnreadCount { get; set; }
         public Guid? OtherUserId { get; set; }
         public bool IsMuted { get; set; }
+        public DateTime? LeftAt { get; set; }
     }
 }

@@ -16,11 +16,8 @@ public class GetConversationHandler : IRequestHandler<GetConversationQuery, Conv
 
     public async Task<ConversationDto> Handle(GetConversationQuery request, CancellationToken cancellationToken)
     {
-        // The repository builds the view for any viewer it is given, so membership is checked first.
-        // A conversation that does not exist gets the same refusal as one the caller is not in.
-        if (!await _conversations.IsActiveMemberAsync(request.ConversationId, request.UserId, cancellationToken))
-            throw new ForbiddenException(ConversationErrors.NotAMember);
-
+        // The view is the caller's own, so someone who is not in the conversation has none: they get the same refusal
+        // whether it exists or not. Someone who left a group still has one, read-only, which says when they left.
         return await _conversations.GetForViewerAsync(request.ConversationId, request.UserId, cancellationToken)
                ?? throw new ForbiddenException(ConversationErrors.NotAMember);
     }
