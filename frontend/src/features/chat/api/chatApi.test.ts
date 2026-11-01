@@ -12,6 +12,7 @@ import {
   fetchMessages,
   markRead,
   refreshAttachmentUrl,
+  requestMessages,
   retryMessage,
   searchUsers,
   sendMessage,
@@ -217,6 +218,45 @@ describe('loading a conversation\'s history', () => {
     await expect(fetchMessages('c1')).rejects.toThrow()
 
     expect(store().messages.c1.map((m) => m.id)).toEqual(['kept'])
+  })
+})
+
+// The same request as loading a page, for a caller that decides whether the page may be added to the store (the catch-up
+// after a reconnect, which must not leave a hole in the history).
+describe('requesting a page of history without adding it to the store', () => {
+  it('returns the page and leaves the store as it was', async () => {
+    store().setConnection('connected')
+    store().seedMessages('c1', [message({ id: 'held' })])
+    vi.spyOn(api, 'get').mockResolvedValue(respond([message({ id: 'requested', createdAt: '2026-10-11T10:00:09Z' })]))
+
+    const page = await requestMessages('c1')
+
+    expect(page.map((m) => m.id)).toEqual(['requested'])
+    expect(store().messages.c1.map((m) => m.id)).toEqual(['held'])
+  })
+
+  it('waits for the live connection before asking the server', async () => {
+    const get = vi.spyOn(api, 'get').mockResolvedValue(respond([]))
+
+    const requesting = requestMessages('c1')
+    await flush()
+    expect(get).not.toHaveBeenCalled()
+
+    store().setConnection('connected')
+    await requesting
+    expect(get.mock.calls[0][0]).toBe('/conversations/c1/messages')
+  })
+
+  it('asks for the page before or after a message, and hands over the cancel signal', async () => {
+    store().setConnection('connected')
+    const get = vi.spyOn(api, 'get').mockResolvedValue(respond([]))
+    const controller = new AbortController()
+
+    await requestMessages('c1', { before: 'b', signal: controller.signal })
+    await requestMessages('c1', { after: 'a' })
+
+    expect(get.mock.calls[0][1]).toMatchObject({ params: { before: 'b', after: undefined }, signal: controller.signal })
+    expect(get.mock.calls[1][1]).toMatchObject({ params: { before: undefined, after: 'a' } })
   })
 })
 
