@@ -1,3 +1,4 @@
+using ChatNET.API.Users.SearchUsers;
 using ChatNET.API.Messaging.Hubs;
 using ChatNET.API.Messaging.Models;
 using ChatNET.API.Conversations.Models;
@@ -82,6 +83,8 @@ public sealed class ThrowingHubContext : IHubContext<ChatHub, IChatClient>
         public Task MembersChanged(MembersChangedDto change) => throw Failure();
 
         public Task ConversationUpdated(ConversationUpdateDto update) => throw Failure();
+
+        public Task ProfileChanged(UserSummaryDto profile) => throw Failure();
 
         public Task RemovedFromConversation(Guid conversationId, DateTime leftAt) => throw Failure();
     }

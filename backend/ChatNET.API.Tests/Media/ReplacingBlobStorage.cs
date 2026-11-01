@@ -31,5 +31,8 @@ public sealed class ReplacingBlobStorage : IBlobStorage
     public Task CopyAsync(string sourceKey, string destinationKey, string sourceETag, CancellationToken cancellationToken)
         => _inner.CopyAsync(sourceKey, destinationKey, sourceETag, cancellationToken);
 
+    public Task<BlobContent?> OpenReadAsync(string key, CancellationToken cancellationToken)
+        => _inner.OpenReadAsync(key, cancellationToken);
+
     public Task DeleteAsync(string key, CancellationToken cancellationToken) => _inner.DeleteAsync(key, cancellationToken);
 }

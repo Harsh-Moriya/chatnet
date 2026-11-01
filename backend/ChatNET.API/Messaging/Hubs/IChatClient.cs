@@ -2,6 +2,7 @@ using ChatNET.API.Conversations.Models;
 using ChatNET.API.Messaging.Models;
 using ChatNET.API.Notifications.Models;
 using ChatNET.API.Presence;
+using ChatNET.API.Users.SearchUsers;
 
 namespace ChatNET.API.Messaging.Hubs;
 
@@ -30,8 +31,12 @@ public interface IChatClient
     // never hears who is left. Carries the entries as they are when it is sent, so it is safe to receive twice.
     Task MembersChanged(MembersChangedDto change);
 
-    // A group was renamed. Sent to the people who are in it.
+    // A group was renamed, or its picture changed. Sent to the people who are in it.
     Task ConversationUpdated(ConversationUpdateDto update);
+
+    // Someone changed their name or picture. Sent to the people who share a conversation with them and to their own tabs,
+    // carrying how they are now, so it is safe to receive twice or late.
+    Task ProfileChanged(UserSummaryDto profile);
 
     // The receiver is no longer in the group: they left it, or were removed. Sent to every open tab of that person. The
     // conversation stays in their list, read-only, with what was said up to leftAt.

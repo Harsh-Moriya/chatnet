@@ -26,6 +26,7 @@ using ChatNET.API.Outbox.Persistence;
 using ChatNET.API.Presence;
 using ChatNET.API.Presence.Persistence;
 using ChatNET.API.Users;
+using ChatNET.API.Users.Persistence;
 using FluentValidation;
 using MediatR;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -301,6 +302,10 @@ try
     builder.Services.AddScoped<AttachmentIntake>();
     builder.Services.AddScoped<AttachmentLoader>();
     builder.Services.AddScoped<AttachmentRemover>();
+    builder.Services.AddScoped<AvatarIntake>();
+    builder.Services.AddScoped<AvatarRemover>();
+    builder.Services.AddScoped<IProfileRepository, ProfileRepository>();
+    builder.Services.AddScoped<ProfileNotifier>();
 
     // ##### Rate limiting #####
     // Login and registration are limited per client address to slow down password guessing and
@@ -425,6 +430,7 @@ try
     app.MapConversationEndpoints();
     app.MapMessagingEndpoints();
     app.MapMediaEndpoints();
+    app.MapAvatarEndpoints();
     app.MapNotificationEndpoints();
     app.MapPresenceEndpoints();
 

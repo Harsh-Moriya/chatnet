@@ -90,7 +90,28 @@ public sealed record MemberLeft(Guid ConversationId, Guid UserId) : IOutboxEvent
     public string Kind => Name;
 }
 
-// A group was renamed: the people in it are told the name it has now.
+// A person changed their name or picture: the people who share a conversation with them, and their own tabs, are told how
+// they are now.
+public sealed record ProfileChanged(Guid UserId) : IOutboxEvent
+{
+    public const string Name = nameof(ProfileChanged);
+
+    [JsonIgnore]
+    public string Kind => Name;
+}
+
+// A picture was replaced or removed: the object it was is taken out of the bucket. Like MessageFilesRemoved it is not a push;
+// it is here because a failure to remove an object has to be retried, and a picture that is never removed stays readable by
+// anyone who kept its address. The key is a path made by the server (see AvatarKeys), not content.
+public sealed record AvatarFileRemoved(string Key) : IOutboxEvent
+{
+    public const string Name = nameof(AvatarFileRemoved);
+
+    [JsonIgnore]
+    public string Kind => Name;
+}
+
+// A group was renamed, or its picture changed: the people in it are told the name and picture it has now.
 public sealed record ConversationRenamed(Guid ConversationId) : IOutboxEvent
 {
     public const string Name = nameof(ConversationRenamed);
@@ -127,6 +148,8 @@ public static class OutboxEvents
         MembersJoined.Name => Deserialize<MembersJoined>(payload),
         MemberLeft.Name => Deserialize<MemberLeft>(payload),
         ConversationRenamed.Name => Deserialize<ConversationRenamed>(payload),
+        ProfileChanged.Name => Deserialize<ProfileChanged>(payload),
+        AvatarFileRemoved.Name => Deserialize<AvatarFileRemoved>(payload),
         _ => throw new InvalidOperationException($"The outbox has no event of kind '{kind}'."),
     };
 

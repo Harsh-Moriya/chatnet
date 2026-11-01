@@ -15,9 +15,12 @@ namespace ChatNET.API.Tests.Common;
 public class EndpointAuthorizationTests
 {
     // Sign-in, registration, renewing and ending a session (their credential is the refresh cookie or the password,
-    // not a bearer token) and the health probe.
+    // not a bearer token), the health probe, and the pictures (an <img> cannot send a token; the address is the
+    // credential: it holds random ids and a file name that is new for every picture).
     private static readonly string[] OpenInProduction =
     [
+        "GET /api/avatars/groups/{ownerId:guid}/{fileId:guid}",
+        "GET /api/avatars/users/{ownerId:guid}/{fileId:guid}",
         "GET /health",
         "POST /api/auth/login",
         "POST /api/auth/logout",

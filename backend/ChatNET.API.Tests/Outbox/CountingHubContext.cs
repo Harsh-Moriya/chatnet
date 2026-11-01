@@ -1,3 +1,4 @@
+using ChatNET.API.Users.SearchUsers;
 using System.Collections.Concurrent;
 using ChatNET.API.Conversations.Models;
 using ChatNET.API.Messaging.Hubs;
@@ -94,6 +95,8 @@ public sealed class CountingHubContext : IHubContext<ChatHub, IChatClient>
         public Task MembersChanged(MembersChangedDto change) => throw new NotSupportedException();
 
         public Task ConversationUpdated(ConversationUpdateDto update) => throw new NotSupportedException();
+
+        public Task ProfileChanged(UserSummaryDto profile) => throw new NotSupportedException();
 
         public Task RemovedFromConversation(Guid conversationId, DateTime leftAt) => throw new NotSupportedException();
     }
