@@ -4,8 +4,8 @@ A mutation check breaks one line of the code on purpose (a changed condition, a 
 
 ## Why it is built this way
 
-- **The real working tree is never edited.** Each worker has its own copy of `backend/` and `frontend/` in a work directory (by default `chatnet-mutation` under the system temp folder). An earlier version edited the tree in place; a commit made during a run captured a broken line (`a44d93e`, fixed in `c8cf9b9`).
-- **Mutants run in parallel**, 3 workers by default. Measured on 2026-11-01 (Ryzen 5 5500U, 6 cores, Docker with 12 CPUs and 7 GiB): 12 backend mutants took about 146 s with 3 workers, and 6 workers were no faster, so more workers do not help on that machine.
+- **The real working tree is never edited.** Each worker has its own copy of `backend/` and `frontend/` in a work directory (by default `chatnet-mutation` under the system temp folder), so a run cannot leave a broken line in a tree that is about to be committed.
+- **Mutants run in parallel**, 3 workers by default. Each backend mutant needs a build and a test run that starts containers, so the useful number of workers is limited by the machine and by Docker; if more workers are not faster, use fewer.
 - **Each mutant lists its tests in stages**, cheapest first, and stops at the first stage that fails. A mutant is dead as soon as one test fails, so the single test aimed at the rule goes first and the whole class or suite only runs if that one passes.
 
 ## Running it
