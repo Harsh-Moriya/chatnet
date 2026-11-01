@@ -185,7 +185,7 @@ public class ListConversationsTests
     }
 
     [Fact]
-    public async Task A_conversation_the_user_has_left_disappears_for_them_only()
+    public async Task A_conversation_the_user_has_left_stays_in_their_list_marked_as_left_and_is_unchanged_for_the_others()
     {
         var alice = await _factory.RegisterUserAsync("alice");
         var bob = await _factory.RegisterUserAsync("bob");
@@ -198,8 +198,11 @@ public class ListConversationsTests
             .Where(m => m.ConversationId == id && m.UserId == bob.Id)
             .ExecuteUpdateAsync(s => s.SetProperty(m => m.LeftAt, DateTime.UtcNow)));
 
-        Assert.Empty(await bobClient.ListConversationsAsync());
-        Assert.Single(await aliceClient.ListConversationsAsync());
+        var bobsView = Assert.Single(await bobClient.ListConversationsAsync());
+        Assert.Equal(id, bobsView.IdOf());
+        Assert.NotEqual(JsonValueKind.Null, bobsView.GetProperty("leftAt").ValueKind);
+        var alicesView = Assert.Single(await aliceClient.ListConversationsAsync());
+        Assert.Equal(JsonValueKind.Null, alicesView.GetProperty("leftAt").ValueKind);
     }
 
     [Fact]

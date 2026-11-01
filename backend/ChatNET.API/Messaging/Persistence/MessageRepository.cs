@@ -166,11 +166,10 @@ public class MessageRepository : IMessageRepository
             .FirstOrDefaultAsync(cancellationToken);
 
     public async Task<MessageCursor?> FindCursorAsync(
-        Guid conversationId, Guid messageId, DateTime since, CancellationToken cancellationToken)
+        Guid conversationId, Guid messageId, MemberWindow window, CancellationToken cancellationToken)
     {
-        var found = await _db.Messages
-            .AsNoTracking()
-            .Where(m => m.Id == messageId && m.ConversationId == conversationId && m.CreatedAt >= since)
+        var found = await InConversation(conversationId, window)
+            .Where(m => m.Id == messageId)
             .Select(m => new { m.CreatedAt, m.Id })
             .FirstOrDefaultAsync(cancellationToken);
 
@@ -178,25 +177,25 @@ public class MessageRepository : IMessageRepository
     }
 
     public Task<List<MessageDto>> GetLatestAsync(
-        Guid conversationId, DateTime since, int take, CancellationToken cancellationToken)
-        => ReadNewestFirstAsync(InConversation(conversationId, since), take, cancellationToken);
+        Guid conversationId, MemberWindow window, int take, CancellationToken cancellationToken)
+        => ReadNewestFirstAsync(InConversation(conversationId, window), take, cancellationToken);
 
     // Positions are compared as (CreatedAt, Id). "CreatedAt <= t" comes first and is what the index
     // on (ConversationId, CreatedAt DESC) uses to start its walk; the id comparison only decides
     // among messages stamped exactly t, so the rows it filters out are a handful at most.
     public Task<List<MessageDto>> GetBeforeAsync(
-        Guid conversationId, DateTime since, MessageCursor cursor, int take, CancellationToken cancellationToken)
+        Guid conversationId, MemberWindow window, MessageCursor cursor, int take, CancellationToken cancellationToken)
         => ReadNewestFirstAsync(
-            InConversation(conversationId, since).Where(m =>
+            InConversation(conversationId, window).Where(m =>
                 m.CreatedAt <= cursor.CreatedAt && (m.CreatedAt < cursor.CreatedAt || m.Id.CompareTo(cursor.Id) < 0)),
             take,
             cancellationToken);
 
     public async Task<List<MessageDto>> GetAfterAsync(
-        Guid conversationId, DateTime since, MessageCursor cursor, int take, CancellationToken cancellationToken)
+        Guid conversationId, MemberWindow window, MessageCursor cursor, int take, CancellationToken cancellationToken)
     {
         // Reading forwards already yields reading order, so the page is not turned around.
-        return await InConversation(conversationId, since)
+        return await InConversation(conversationId, window)
             .Where(m => m.CreatedAt >= cursor.CreatedAt && (m.CreatedAt > cursor.CreatedAt || m.Id.CompareTo(cursor.Id) > 0))
             .OrderBy(m => m.CreatedAt).ThenBy(m => m.Id)
             .Take(take)
@@ -204,10 +203,19 @@ public class MessageRepository : IMessageRepository
             .ToListAsync(cancellationToken);
     }
 
-    private IQueryable<Message> InConversation(Guid conversationId, DateTime since)
-        => _db.Messages
+    // The messages of the conversation the window lets through. The upper bound is added only when there is one, as a
+    // plain range on CreatedAt, so Postgres starts its walk of the (ConversationId, CreatedAt DESC) index at the
+    // moment the reader left. A condition that was always there ("or no bound") is only a range while Postgres plans
+    // for the value it was given; once it has cached a plan for any value it is a filter on rows already walked past,
+    // and a group that went on for years after someone left would cost them every one of them.
+    private IQueryable<Message> InConversation(Guid conversationId, MemberWindow window)
+    {
+        var inWindow = _db.Messages
             .AsNoTracking()
-            .Where(m => m.ConversationId == conversationId && m.CreatedAt >= since);
+            .Where(m => m.ConversationId == conversationId && m.CreatedAt >= window.JoinedAt);
+
+        return window.LeftAt is { } leftAt ? inWindow.Where(m => m.CreatedAt <= leftAt) : inWindow;
+    }
 
     // Sorting newest first lets Postgres walk the (ConversationId, CreatedAt DESC) index from the
     // newest message and stop after "take" rows, whatever the size of the conversation. The id is the

@@ -231,7 +231,7 @@ public class MessageHistoryTests
     }
 
     [Fact]
-    public async Task A_member_who_has_left_can_no_longer_read_the_history()
+    public async Task A_member_who_has_left_reads_the_history_up_to_when_they_left()
     {
         var alice = await _factory.RegisterUserAsync("alice");
         var bob = await _factory.RegisterUserAsync("bob");
@@ -245,7 +245,8 @@ public class MessageHistoryTests
 
         var response = await bobClient.GetHistoryResponseAsync(group);
 
-        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(["while bob was here"], (await bobClient.GetHistoryAsync(group)).Select(m => m.ContentOf()));
     }
 
     [Fact]

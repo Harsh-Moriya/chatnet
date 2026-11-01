@@ -1,3 +1,4 @@
+using ChatNET.API.Conversations.Models;
 using ChatNET.API.Messaging.Models;
 using ChatNET.API.Notifications.Models;
 using ChatNET.API.Outbox.Models;
@@ -41,24 +42,24 @@ public interface IMessageRepository
     Task<MessageDto?> FindByClientMessageIdAsync(
         Guid conversationId, Guid senderId, Guid clientMessageId, CancellationToken cancellationToken);
 
-    // The position of a message, or null when the conversation has no such message sent at or after
-    // "since". A message of another conversation, or one sent before the caller joined, is "no such
-    // message", so a cursor reveals nothing about what the caller may not read.
+    // The position of a message, or null when the conversation has no such message inside the window the caller may
+    // read. A message of another conversation, one sent before the caller joined, or one sent after they left, is "no
+    // such message", so a cursor reveals nothing about what the caller may not read.
     Task<MessageCursor?> FindCursorAsync(
-        Guid conversationId, Guid messageId, DateTime since, CancellationToken cancellationToken);
+        Guid conversationId, Guid messageId, MemberWindow window, CancellationToken cancellationToken);
 
-    // The three reads below return at most "take" messages sent at or after "since", oldest first. A
-    // deleted message is returned with its content removed, so the timeline has no gaps.
+    // The three reads below return at most "take" messages sent inside the window, oldest first. A deleted message is
+    // returned with its content removed, so the timeline has no gaps.
 
     // The newest messages of the conversation.
     Task<List<MessageDto>> GetLatestAsync(
-        Guid conversationId, DateTime since, int take, CancellationToken cancellationToken);
+        Guid conversationId, MemberWindow window, int take, CancellationToken cancellationToken);
 
     // The messages just older than the cursor: the newest "take" of those positioned before it.
     Task<List<MessageDto>> GetBeforeAsync(
-        Guid conversationId, DateTime since, MessageCursor cursor, int take, CancellationToken cancellationToken);
+        Guid conversationId, MemberWindow window, MessageCursor cursor, int take, CancellationToken cancellationToken);
 
     // The messages just newer than the cursor: the oldest "take" of those positioned after it.
     Task<List<MessageDto>> GetAfterAsync(
-        Guid conversationId, DateTime since, MessageCursor cursor, int take, CancellationToken cancellationToken);
+        Guid conversationId, MemberWindow window, MessageCursor cursor, int take, CancellationToken cancellationToken);
 }

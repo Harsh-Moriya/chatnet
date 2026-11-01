@@ -30,6 +30,10 @@ public interface IConversationRepository
     // or have left it. Doubles as the membership check for features that also need the join time.
     Task<DateTime?> GetActiveMemberJoinedAtAsync(Guid conversationId, Guid userId, CancellationToken cancellationToken);
 
+    // What the user may read of the conversation, if they are or ever were a member (one who left keeps the part up to
+    // when they left); null if they never were. For the endpoints that only read.
+    Task<MemberWindow?> GetMemberWindowAsync(Guid conversationId, Guid userId, CancellationToken cancellationToken);
+
     Task<List<Guid>> GetActiveMemberIdsAsync(Guid conversationId, CancellationToken cancellationToken);
 
     // The role of an active member, or null when the user is not in the conversation or has left it.
