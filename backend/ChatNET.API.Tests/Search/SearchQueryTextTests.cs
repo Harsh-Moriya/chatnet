@@ -53,6 +53,31 @@ public class SearchQueryTextTests
         Assert.Equal("ba", hyphenated.LastWord);
     }
 
+    // "cat or dog" asks for either word. With the last word made a prefix and joined to the rest, it would ask for "cat" and
+    // anything starting "dog".
+    [Theory]
+    [InlineData("cat or dog")]
+    [InlineData("cat OR dog")]
+    [InlineData("budget cat Or dog")]
+    [InlineData("\"two words\" or dog")]
+    public void A_word_after_or_is_an_exact_alternative_and_not_one_more_word_to_require(string typed)
+    {
+        var text = SearchQueryText.From(typed);
+
+        Assert.Null(text.LastWord);
+        Assert.Null(text.PrefixQuery);
+        Assert.Equal(typed, text.Head);
+    }
+
+    [Fact]
+    public void A_word_that_only_looks_like_or_is_still_a_prefix_word()
+    {
+        Assert.Equal("color", SearchQueryText.From("cat color").LastWord);
+        Assert.Equal("orange", SearchQueryText.From("or orange").LastWord);
+        Assert.Equal("or", SearchQueryText.From("cat or").LastWord);
+        Assert.Equal("dog", SearchQueryText.From("cat for dog").LastWord);
+    }
+
     [Theory]
     [InlineData("!!")]
     [InlineData("-")]

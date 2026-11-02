@@ -117,6 +117,24 @@ public class SearchMessagesTests
     }
 
     [Fact]
+    public async Task Or_finds_messages_with_either_word_even_when_the_second_is_the_last_word_typed()
+    {
+        var (alice, _, conversation) = await _factory.DirectChatAsync();
+        using var client = _factory.CreateClientFor(alice);
+        var one = Unique();
+        var two = Unique();
+        var first = await client.SendMessageAsync(conversation, $"{one} only");
+        var second = await client.SendMessageAsync(conversation, $"{two} only");
+        await client.SendMessageAsync(conversation, "neither of them");
+
+        var either = await client.SearchAsync($"{one} or {two}");
+        var either_in_capitals = await client.SearchAsync($"{one} OR {two}");
+
+        Assert.Equal([second.MessageIdOf(), first.MessageIdOf()], either.Select(h => h.HitIdOf()));
+        Assert.Equal([second.MessageIdOf(), first.MessageIdOf()], either_in_capitals.Select(h => h.HitIdOf()));
+    }
+
+    [Fact]
     public async Task Nothing_found_is_an_empty_list_and_not_an_error()
     {
         var (alice, _, _) = await _factory.DirectChatAsync();
