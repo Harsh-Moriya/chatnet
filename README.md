@@ -26,6 +26,7 @@ Under active development.
 | Editing and deleting messages: the sender edits for 15 minutes (marked "edited"), deletes at any time, and a group owner or admin can delete anyone's; everyone sees the change live and the files of a deleted message are removed | Implemented |
 | Group management: add people, remove someone, make people admins, hand the group over, rename, leave. The owner can do everything and an admin can add people, remove members and rename; when the owner leaves the group goes to the admin who has been in longest. Someone who left keeps the conversation read-only up to when they left, and stops hearing it at once on every server | Implemented |
 | Profiles and pictures: change your display name, and give yourself or a group (owner or admin) a picture. The browser crops and shrinks the picture before it is uploaded straight to object storage; the server checks what was stored, serves it with a one-year cache (a changed picture gets a new address), removes the old file, and tells everyone who shares a conversation | Implemented |
+| Message search: a search box above the list finds what was said, in the conversations you are in and within the time you were in them (text and file names, the last word matched from its start, quoted phrases, `-excluded`, `a or b`); opening a result shows the conversation at that message, however far back it is, and reading on or jumping to the latest messages works from there. The people search became cheaper too | Implemented |
 | Pushes that survive an outage: a message, a notification, a new conversation and a read position are written to an outbox table in the same transaction as the change, and a background relay on every server delivers any push that failed, for example while Redis was down | Implemented |
 | File attachments: pictures, videos and documents sent straight to object storage, shown in the conversation | Implemented |
 | Notifications: a bell with an unread count and a panel, @mentions (with autocomplete and highlighting), being added to a group, browser alerts, an unread count in the tab title, and muting a conversation | Implemented |
@@ -196,6 +197,7 @@ GitHub Actions runs both on every push and pull request, along with the frontend
 backend/ChatNET.API/
   Auth/            registration, login, JWT
   Users/           user search
+  Search/          searching messages: the query, snippets
   Conversations/   direct and group conversations, membership
   Messaging/       messages and the SignalR hub
   Media/           file uploads and attachments: object storage, upload tickets, links
