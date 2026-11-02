@@ -3,7 +3,7 @@ using System.Text.Json.Serialization;
 using ChatNET.API.Auth;
 using ChatNET.API.Auth.Models;
 using ChatNET.API.Auth.Persistence;
-using ChatNET.API.Auth.RateLimiting;
+using ChatNET.API.RateLimiting;
 using ChatNET.API.Auth.Services;
 using ChatNET.API.Common.Behaviours;
 using ChatNET.API.Common.Health;
@@ -311,19 +311,26 @@ try
     builder.Services.AddScoped<ProfileNotifier>();
 
     // ##### Rate limiting #####
-    // Login and registration are limited per client address to slow down password guessing and
-    // mass account creation. The limits come from configuration (RateLimiting:Auth) and are
-    // validated at startup; the policy itself is defined in AuthRateLimiterSetup.
-    builder.Services.AddOptions<AuthRateLimitOptions>()
-        .BindConfiguration(AuthRateLimitOptions.SectionName)
+    // Login, registration and session renewal are limited per client address, to slow down password guessing and mass account
+    // creation; sending, upload tickets, edits and search are limited per signed-in person. The counts are in Redis, so every
+    // API instance applies one limit and not one each (D-279). The limits come from configuration (RateLimiting:<Policy>)
+    // and are validated at startup; the policies are defined in RateLimiterSetup.
+    foreach (var (policy, section) in RateLimitPolicies.All)
+    {
+        builder.Services.AddOptions<RateLimitPolicyOptions>(policy)
+            .BindConfiguration(section)
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+    }
+    builder.Services.AddOptions<RateLimitStoreOptions>()
+        .BindConfiguration(RateLimitStoreOptions.SectionName)
         .ValidateDataAnnotations()
         .ValidateOnStart();
-    builder.Services.AddOptions<RefreshRateLimitOptions>()
-        .BindConfiguration(RefreshRateLimitOptions.SectionName)
-        .ValidateDataAnnotations()
-        .ValidateOnStart();
+    builder.Services.AddSingleton<RedisSlidingWindowStore>();
+    builder.Services.AddSingleton<ISlidingWindowStore>(provider =>
+        ActivatorUtilities.CreateInstance<ResilientSlidingWindowStore>(provider, provider.GetRequiredService<RedisSlidingWindowStore>()));
     builder.Services.AddRateLimiter(_ => { });
-    builder.Services.AddSingleton<IConfigureOptions<RateLimiterOptions>, AuthRateLimiterSetup>();
+    builder.Services.AddSingleton<IConfigureOptions<RateLimiterOptions>, RateLimiterSetup>();
 
     // ##### Reverse proxy #####
     // The client address and scheme come from the proxy's forwarded headers, but only from the networks
@@ -419,10 +426,11 @@ try
 
     app.UseCors("AllowFrontend");
 
-    // After CORS so browser preflight requests are answered without being counted, and before
-    // authentication so over-limit requests are rejected before any password work happens.
-    app.UseRateLimiter();
+    // After CORS so browser preflight requests are answered without being counted. After authentication, because the
+    // per-person policies count the signed-in person; before authorization and the endpoints, so over-limit requests are
+    // rejected before any password work or database work happens.
     app.UseAuthentication();
+    app.UseRateLimiter();
     app.UseAuthorization();
 
     // ##### Endpoints #####

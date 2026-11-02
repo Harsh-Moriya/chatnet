@@ -8,6 +8,7 @@ using ChatNET.API.Common.Persistence;
 using ChatNET.API.Media;
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -47,6 +48,13 @@ public sealed class ChatApiFactory : WebApplicationFactory<Program>, IAsyncLifet
             .Build();
     }
 
+    // Every host built from this factory counts its rate limits under keys of its own. They share one Redis, and a limit test
+    // that also counted the requests other tests made from the same address would see them. A test that needs two hosts to
+    // share their counts names one prefix for both, which outranks this one.
+    protected override void ConfigureWebHost(IWebHostBuilder builder) =>
+        builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(
+            new Dictionary<string, string?> { ["RateLimiting:Store:KeyPrefix"] = $"t{Guid.NewGuid():N}" }));
+
     // A client for the test bucket, to put objects where the API will look and to see what it left behind.
     public IAmazonS3 Storage { get; private set; } = null!;
 
@@ -68,9 +76,10 @@ public sealed class ChatApiFactory : WebApplicationFactory<Program>, IAsyncLifet
         Environment.SetEnvironmentVariable("Storage__AccessKey", _storageAccessKey);
         Environment.SetEnvironmentVariable("Storage__SecretKey", _storageSecretKey);
 
-        // Effectively disables the login and registration rate limit for ordinary tests, which
-        // register many users from one address. Rate limit tests build a host with a tight limit.
-        Environment.SetEnvironmentVariable("RateLimiting__Auth__PermitLimit", "1000000");
+        // Effectively disables the rate limits for ordinary tests, which register many users from one address and send, edit
+        // and search many times as one person. Rate limit tests build a host with a tight limit.
+        foreach (var policy in new[] { "Auth", "Send", "Uploads", "Edit", "Search" })
+            Environment.SetEnvironmentVariable($"RateLimiting__{policy}__PermitLimit", "1000000");
 
         // Presence timers are set so they never fire by themselves while other tests run: the refresh loop
         // ticks once an hour, entries last three, and a user is taken offline at once when their last
