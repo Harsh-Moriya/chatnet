@@ -224,6 +224,25 @@ public class SearchMessagesTests
         Assert.Empty(await client.SearchAsync(word));
     }
 
+    // The recent phase reads the newest 300 messages of a conversation; what is older is found through the full text index, a second
+    // query with rules of its own (the window, deletion) that a small conversation never reaches.
+    [Fact]
+    public async Task What_is_older_than_the_recent_messages_is_found_through_the_index_without_the_deleted_ones()
+    {
+        var (alice, _, conversation) = await _factory.DirectChatAsync();
+        using var client = _factory.CreateClientFor(alice);
+        await _factory.BackdateJoinAsync(conversation);
+        var word = Unique();
+        var kept = Unique();
+        await _factory.AddMessageAsync(conversation, alice.Id, $"{word} {kept}", Ago(60 * 20));
+        await _factory.AddMessageAsync(conversation, alice.Id, $"{word} removed", Ago(60 * 20 - 1), deleted: true);
+        await _factory.AddMessagesAsync(conversation, alice.Id, count: 350, firstAt: Ago(600), step: TimeSpan.FromSeconds(10));
+
+        var hits = await client.SearchAsync(word);
+
+        Assert.Equal([$"{word} {kept}"], hits.Select(h => h.SnippetOf()));
+    }
+
     [Fact]
     public async Task A_group_is_named_as_it_is_and_a_direct_chat_after_the_other_person_for_each_side()
     {
@@ -518,6 +537,38 @@ public class SearchMessagesTests
         Assert.Equal(Detail(await unknown.Content.ReadAsStringAsync()), Detail(await foreign.Content.ReadAsStringAsync()));
         Assert.Equal(Detail(await unknown.Content.ReadAsStringAsync()), Detail(await elsewhere.Content.ReadAsStringAsync()));
         Assert.Equal(HttpStatusCode.OK, fine.StatusCode);
+    }
+
+    // A cursor from outside the window the person may read would tell them that the message exists, so it is as unknown as one that
+    // does not.
+    [Fact]
+    public async Task A_cursor_from_before_the_person_joined_or_after_they_left_is_refused_like_an_unknown_one()
+    {
+        var owner = await _factory.RegisterUserAsync("owner");
+        var late = await _factory.RegisterUserAsync("late");
+        var leaver = await _factory.RegisterUserAsync("leaver");
+        using var ownerClient = _factory.CreateClientFor(owner);
+        using var lateClient = _factory.CreateClientFor(late);
+        using var leaverClient = _factory.CreateClientFor(leaver);
+        var group = (await ownerClient.CreateGroupAsync("Team", leaver.Id)).IdOf();
+        var word = Unique();
+        var early = await ownerClient.SendMessageAsync(group, $"{word} early");
+        await ownerClient.AddMembersAsync(group, late.Id);
+        (await leaverClient.LeaveResponseAsync(group)).EnsureSuccessStatusCode();
+        var after = await ownerClient.SendMessageAsync(group, $"{word} after");
+
+        var beforeJoining = await lateClient.SearchResponseAsync(word, before: early.MessageIdOf());
+        var afterLeaving = await leaverClient.SearchResponseAsync(word, before: after.MessageIdOf());
+        var unknown = await lateClient.SearchResponseAsync(word, before: Guid.NewGuid());
+
+        Assert.Equal(HttpStatusCode.BadRequest, beforeJoining.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, afterLeaving.StatusCode);
+        Assert.Equal(Detail(await unknown.Content.ReadAsStringAsync()), Detail(await beforeJoining.Content.ReadAsStringAsync()));
+        Assert.Equal(Detail(await unknown.Content.ReadAsStringAsync()), Detail(await afterLeaving.Content.ReadAsStringAsync()));
+
+        // The owner may read both, so the same cursors are theirs to use.
+        Assert.Equal(HttpStatusCode.OK, (await ownerClient.SearchResponseAsync(word, before: early.MessageIdOf())).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await ownerClient.SearchResponseAsync(word, before: after.MessageIdOf())).StatusCode);
     }
 
     // ##### Asking #####
