@@ -136,6 +136,20 @@ public class PersonRateLimitTests
         Assert.Equal(HttpStatusCode.TooManyRequests, (await onSecond.PostMessageAsync(conversation, "6")).StatusCode);
     }
 
+    // A wait of less than a second is still a second to wait: a Retry-After of 0 would send a client straight back.
+    [Fact]
+    public async Task The_wait_is_never_told_as_less_than_a_second()
+    {
+        using var host = HostWith(Limit("Send", 1, windowSeconds: 1));
+        var (alice, _, conversation) = await _factory.DirectChatAsync();
+        using var client = ClientFor(host, alice);
+
+        await client.SendMessageAsync(conversation, "one");
+        var refused = await client.PostMessageAsync(conversation, "two");
+
+        await AssertRefusedWithTheWaitAsync(refused, atMostSeconds: 1);
+    }
+
     // ##### Editing #####
 
     [Fact]

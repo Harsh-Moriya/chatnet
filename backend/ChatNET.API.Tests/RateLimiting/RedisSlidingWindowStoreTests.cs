@@ -104,10 +104,14 @@ public class RedisSlidingWindowStoreTests
         var window = TimeSpan.FromSeconds(1);
 
         await store.TryAcquireAsync(key, 1, window, Ct);
-        for (var i = 0; i < 20; i++)
+
+        // Refused in the middle of the window. If it were counted, it would still be in the window when the first request
+        // has left it, and the wait would start again from here.
+        await Task.Delay(TimeSpan.FromSeconds(0.6));
+        for (var i = 0; i < 5; i++)
             Assert.False((await store.TryAcquireAsync(key, 1, window, Ct)).Allowed);
 
-        await Task.Delay(TimeSpan.FromSeconds(1.2));
+        await Task.Delay(TimeSpan.FromSeconds(0.6));
 
         Assert.True((await store.TryAcquireAsync(key, 1, window, Ct)).Allowed);
     }

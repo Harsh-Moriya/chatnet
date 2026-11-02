@@ -82,7 +82,11 @@ public class ResilientSlidingWindowStoreTests
         // Within the pause every request goes ahead without a call, so an outage does not add a wait to each of them.
         _clock.Advance(TimeSpan.FromSeconds(4));
         for (var i = 0; i < 10; i++)
-            Assert.True((await AskAsync(store)).StoreUnavailable);
+        {
+            var decision = await AskAsync(store);
+            Assert.True(decision.Allowed);
+            Assert.True(decision.StoreUnavailable);
+        }
         Assert.Equal(1, _inner.Calls);
 
         _clock.Advance(TimeSpan.FromSeconds(1.5));
