@@ -6,6 +6,7 @@ using ChatNET.API.Messaging.EditMessage;
 using ChatNET.API.Messaging.GetMessageHistory;
 using ChatNET.API.Messaging.Models;
 using ChatNET.API.Messaging.SendMessage;
+using ChatNET.API.RateLimiting;
 using MediatR;
 
 namespace ChatNET.API.Messaging;
@@ -37,9 +38,10 @@ public static class MessagingEndpoints
                 result.Message,
                 statusCode: result.Created ? StatusCodes.Status201Created : StatusCodes.Status200OK);
         })
+        .RequireRateLimiting(RateLimitPolicies.Send)
         .Returns<MessageDto>(
             StatusCodes.Status201Created, StatusCodes.Status400BadRequest, StatusCodes.Status401Unauthorized,
-            StatusCodes.Status403Forbidden)
+            StatusCodes.Status403Forbidden, StatusCodes.Status429TooManyRequests)
         .Produces<MessageDto>(StatusCodes.Status200OK);
 
         // Replaces the text of the caller's own message, within Messaging:EditWindow of sending it. 200 with the message as it
@@ -52,9 +54,11 @@ public static class MessagingEndpoints
                 new EditMessageCommand(conversationId, messageId, http.User.GetUserId(), body.Content));
             return Results.Ok(result);
         })
+        .RequireRateLimiting(RateLimitPolicies.Edit)
         .Returns<MessageDto>(
             StatusCodes.Status200OK, StatusCodes.Status400BadRequest, StatusCodes.Status401Unauthorized,
-            StatusCodes.Status403Forbidden, StatusCodes.Status404NotFound, StatusCodes.Status409Conflict);
+            StatusCodes.Status403Forbidden, StatusCodes.Status404NotFound, StatusCodes.Status409Conflict,
+            StatusCodes.Status429TooManyRequests);
 
         // Deletes a message: the caller's own, or anyone's when the caller owns or administers the group. 200 with the
         // deleted message, also when it already was.

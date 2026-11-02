@@ -1,5 +1,6 @@
 using ChatNET.API.Common.Auth;
 using ChatNET.API.Common.OpenApi;
+using ChatNET.API.RateLimiting;
 using ChatNET.API.Search.Models;
 using ChatNET.API.Search.SearchMessages;
 using MediatR;
@@ -21,9 +22,10 @@ public static class SearchEndpoints
             var hits = await mediator.Send(new SearchMessagesQuery(http.User.GetUserId(), q, conversationId, before));
             return Results.Ok(hits);
         })
+        .RequireRateLimiting(RateLimitPolicies.Search)
         .Returns<List<SearchHitDto>>(
             StatusCodes.Status200OK, StatusCodes.Status400BadRequest, StatusCodes.Status401Unauthorized,
-            StatusCodes.Status403Forbidden);
+            StatusCodes.Status403Forbidden, StatusCodes.Status429TooManyRequests);
 
         return app;
     }
