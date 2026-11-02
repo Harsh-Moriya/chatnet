@@ -2,6 +2,7 @@ using ChatNET.API.Common.Auth;
 using ChatNET.API.Common.OpenApi;
 using ChatNET.API.Media.CreateUpload;
 using ChatNET.API.Media.GetAttachmentUrl;
+using ChatNET.API.RateLimiting;
 using MediatR;
 
 namespace ChatNET.API.Media;
@@ -25,9 +26,10 @@ public static class MediaEndpoints
         })
         .WithTags("Media")
         .RequireAuthorization()
+        .RequireRateLimiting(RateLimitPolicies.Uploads)
         .Returns<UploadTicketDto>(
             StatusCodes.Status200OK, StatusCodes.Status400BadRequest, StatusCodes.Status401Unauthorized,
-            StatusCodes.Status403Forbidden);
+            StatusCodes.Status403Forbidden, StatusCodes.Status429TooManyRequests);
 
         // A new link to a file the caller can read, for when the link that came with the message has expired.
         app.MapGet("/api/attachments/{attachmentId:guid}/url", async (

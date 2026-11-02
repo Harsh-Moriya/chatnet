@@ -3,6 +3,7 @@ using ChatNET.API.Common.Exceptions;
 using ChatNET.API.Common.OpenApi;
 using ChatNET.API.Media.Avatars;
 using ChatNET.API.Media.CreateUpload;
+using ChatNET.API.RateLimiting;
 using MediatR;
 
 namespace ChatNET.API.Media;
@@ -30,9 +31,10 @@ public static class AvatarEndpoints
 
             return Results.Ok(ticket);
         })
+        .RequireRateLimiting(RateLimitPolicies.Uploads)
         .Returns<UploadTicketDto>(
             StatusCodes.Status200OK, StatusCodes.Status400BadRequest, StatusCodes.Status401Unauthorized,
-            StatusCodes.Status403Forbidden);
+            StatusCodes.Status403Forbidden, StatusCodes.Status429TooManyRequests);
 
         me.MapPut("/", async (SetAvatarRequest body, HttpContext http, IMediator mediator) =>
         {
@@ -66,9 +68,10 @@ public static class AvatarEndpoints
 
             return Results.Ok(ticket);
         })
+        .RequireRateLimiting(RateLimitPolicies.Uploads)
         .Returns<UploadTicketDto>(
             StatusCodes.Status200OK, StatusCodes.Status400BadRequest, StatusCodes.Status401Unauthorized,
-            StatusCodes.Status403Forbidden);
+            StatusCodes.Status403Forbidden, StatusCodes.Status429TooManyRequests);
 
         group.MapPut("/", async (Guid conversationId, SetAvatarRequest body, HttpContext http, IMediator mediator) =>
             Results.Ok(await mediator.Send(new SetAvatarCommand(
