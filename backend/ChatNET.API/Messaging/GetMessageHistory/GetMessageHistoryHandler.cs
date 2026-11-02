@@ -1,5 +1,6 @@
 using ChatNET.API.Common.Exceptions;
 using ChatNET.API.Conversations;
+using ChatNET.API.Conversations.Models;
 using ChatNET.API.Conversations.Persistence;
 using ChatNET.API.Media;
 using ChatNET.API.Messaging.Models;
@@ -49,11 +50,14 @@ public class GetMessageHistoryHandler : IRequestHandler<GetMessageHistoryQuery, 
             throw new ForbiddenException(ConversationErrors.NotAMember);
         }
 
-        if (request.Before is null && request.After is null)
+        if (request.Before is null && request.After is null && request.Around is null)
         {
             return await _attachments.AttachToAsync(
                 await _messages.GetLatestAsync(request.ConversationId, window, PageSize, cancellationToken), cancellationToken);
         }
+
+        if (request.Around is { } aroundId)
+            return await AroundAsync(request.ConversationId, window, aroundId, cancellationToken);
 
         var reading = request.Before.HasValue ? nameof(request.Before) : nameof(request.After);
         var anchorId = request.Before ?? request.After!.Value;
@@ -69,5 +73,28 @@ public class GetMessageHistoryHandler : IRequestHandler<GetMessageHistoryQuery, 
             : await _messages.GetAfterAsync(request.ConversationId, window, cursor.Value, PageSize, cancellationToken);
 
         return await _attachments.AttachToAsync(page, cancellationToken);
+    }
+
+    // A message in its place: a page just older than it, the message, and a page just newer. The cursor is looked up inside the
+    // caller's window like any other, so a message they may not read is as unknown as one that does not exist. The three reads are
+    // separate; the history is append-only apart from edits and deletions, which the client merges by version, so they need
+    // no common snapshot.
+    private async Task<List<MessageDto>> AroundAsync(
+        Guid conversationId, MemberWindow window, Guid messageId, CancellationToken cancellationToken)
+    {
+        var cursor = await _messages.FindCursorAsync(conversationId, messageId, window, cancellationToken);
+        if (cursor is null)
+            throw new ValidationException([new ValidationFailure(nameof(GetMessageHistoryQuery.Around), UnknownCursor)]);
+
+        var older = await _messages.GetBeforeAsync(conversationId, window, cursor.Value, PageSize, cancellationToken);
+        var message = await _messages.FindByIdAsync(messageId, cancellationToken);
+        var newer = await _messages.GetAfterAsync(conversationId, window, cursor.Value, PageSize, cancellationToken);
+
+        List<MessageDto> around = [.. older];
+        if (message is not null)
+            around.Add(message);
+        around.AddRange(newer);
+
+        return await _attachments.AttachToAsync(around, cancellationToken);
     }
 }

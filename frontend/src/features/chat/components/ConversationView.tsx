@@ -1,11 +1,15 @@
-import { useCallback } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
+import { Link, useLocation, useParams } from 'react-router-dom'
 import { AlertCircle, LoaderCircle } from 'lucide-react'
 import { getApiError } from '../../../lib/errors'
 import { formatClock, formatDayLabel } from '../../../lib/format'
+import { focusedMessageId } from '../../notifications/navigation'
+import { openMessage } from '../api/chatApi'
 import { useConversations } from '../api/useConversations'
 import { useMembers } from '../api/useMembers'
 import { useMessages } from '../api/useMessages'
+import { useWindowPaging } from '../hooks/useWindowPaging'
 import { useChatStore } from '../store/chatStore'
 import type { Conversation } from '../types'
 import { ChatHeader } from './ChatHeader'
@@ -53,7 +57,44 @@ export function ConversationView() {
 }
 
 function ConversationPane({ conversation }: { conversation: Conversation }) {
-  const history = useMessages(conversation.id)
+  const queryClient = useQueryClient()
+  const location = useLocation()
+
+  // Set while the messages are read from a window of the history (a search result, or a mention far back) and not from the
+  // latest page. The latest page is not loaded then: it would join the window with a hole between them.
+  const readingWindow = useChatStore((state) => state.windows[conversation.id])
+  const paging = useWindowPaging(conversation.id)
+  const history = useMessages(conversation.id, readingWindow === undefined)
+
+  // Leaving the window (to the latest messages, or by sending one) drops what was held, so the latest page has to be asked for again.
+  const wasReadingWindow = useRef(false)
+  useEffect(() => {
+    if (wasReadingWindow.current && readingWindow === undefined) {
+      void queryClient.resetQueries({ queryKey: ['messages', conversation.id] })
+    }
+    wasReadingWindow.current = readingWindow !== undefined
+  }, [readingWindow, queryClient, conversation.id])
+
+  // A navigation can name a message to show (a notification, a search result). If it is not among what is held, the window around
+  // it is opened once per navigation, after the latest page is in, because the message may be in it.
+  const focusId = focusedMessageId(location.state)
+  const holdsFocus = useChatStore((state) =>
+    focusId === null ? true : (state.messages[conversation.id] ?? []).some((m) => m.id === focusId),
+  )
+  const latestLoaded = history.isSuccess
+  const [focusError, setFocusError] = useState<string | null>(null)
+  const attempted = useRef<string | null>(null)
+
+  useEffect(() => {
+    if (focusId === null || holdsFocus || attempted.current === location.key) return
+    if (readingWindow === undefined && !latestLoaded) return
+
+    attempted.current = location.key
+    openMessage(conversation.id, focusId).then(
+      () => setFocusError(null),
+      (failure: unknown) => setFocusError(getApiError(failure)),
+    )
+  }, [focusId, holdsFocus, location.key, readingWindow, latestLoaded, conversation.id])
   // A group the reader left stays readable, up to the moment they left, and can no longer be written to.
   const left = conversation.leftAt !== null
   // Loaded for who has read what; the members land in the store, which the list reads. A failure only
@@ -65,22 +106,35 @@ function ConversationPane({ conversation }: { conversation: Conversation }) {
   // A failure to load an older page is shown at the top of the list, next to its "Try again", and
   // is not the failure of the conversation as a whole.
   const olderFailed = history.isFetchNextPageError
-  const older: OlderMessages = {
-    hasMore: history.hasNextPage,
-    isLoading: history.isFetchingNextPage,
-    error: olderFailed ? getApiError(history.error) : null,
-    onLoad: loadOlder,
-  }
+  const older: OlderMessages = readingWindow
+    ? paging.older
+    : {
+        hasMore: history.hasNextPage,
+        isLoading: history.isFetchingNextPage,
+        error: olderFailed ? getApiError(history.error) : null,
+        onLoad: loadOlder,
+      }
+
+  // Reading a window that stops short of the newest message.
+  const detached = readingWindow?.buffer != null
 
   return (
     <>
       <ChatHeader conversation={conversation} />
+      {focusError && (
+        <div role="alert" className="flex shrink-0 items-start gap-2 border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-600">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>{focusError}</span>
+        </div>
+      )}
       <MessageList
         conversation={conversation}
-        isLoading={history.isPending}
-        errorMessage={history.isError && !olderFailed ? getApiError(history.error) : null}
+        isLoading={readingWindow ? false : history.isPending}
+        errorMessage={!readingWindow && history.isError && !olderFailed ? getApiError(history.error) : null}
         onRetry={() => void history.refetch()}
         older={older}
+        newer={detached ? paging.newer : undefined}
+        onJumpToLatest={() => useChatStore.getState().leaveWindow(conversation.id)}
       />
       {conversation.leftAt !== null ? (
         <LeftNotice leftAt={conversation.leftAt} />

@@ -124,6 +124,55 @@ public class MessageHistoryPlanTests
         }
     }
 
+    // Opening a search result in the middle of a long history is the same kind of read twice over, with the cursor looked up and
+    // the message fetched: it must cost a couple of pages and not the conversation.
+    [Fact]
+    public async Task Loading_around_a_message_in_the_middle_of_a_long_history_reads_about_two_pages()
+    {
+        var tag = $"plan-{Guid.NewGuid():N}";
+        var recorder = new CommandRecorder();
+        using var host = _factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+            services.ConfigureDbContext<AppDbContext>(options => options.AddInterceptors(recorder))));
+        var alice = await _factory.RegisterUserAsync("alice");
+        var bob = await _factory.RegisterUserAsync("bob");
+        using var setup = _factory.CreateClientFor(alice);
+        var conversation = (await setup.CreateDirectAsync(bob.Id)).IdOf();
+
+        await _factory.BackdateJoinAsync(conversation);
+        await SeedAsync(tag, conversation, bob.Id);
+        try
+        {
+            using var client = host.CreateClient();
+            client.DefaultRequestHeaders.Authorization =
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", alice.Token);
+            var anchor = await _factory.QueryDbAsync(db => db.Messages
+                .Where(m => m.ConversationId == conversation && m.Content == "bulk 3000")
+                .Select(m => m.Id)
+                .SingleAsync());
+            recorder.Clear();
+            var page = await client.GetHistoryAsync(conversation, around: anchor);
+
+            // Fifty newer than "bulk 3000" (bulk 3050 to 3001, oldest first), the message, and fifty older (2999 to 2950).
+            Assert.Equal(101, page.Count);
+            Assert.Equal("bulk 3050", page[0].ContentOf());
+            Assert.Equal("bulk 3000", page[50].ContentOf());
+            Assert.Equal("bulk 2950", page[^1].ContentOf());
+
+            long rowsRead = 0;
+            foreach (var query in recorder.Commands.Where(c => c.Sql.Contains("\"Messages\"")))
+                rowsRead += await _factory.QueryDbAsync(db => QueryPlan.RowsReadFromTableAsync(db, query, "Messages"));
+
+            // Two pages and a few single rows; the whole conversation would be 6,000.
+            Assert.True(rowsRead <= 300,
+                $"Loading around a message read {rowsRead} Messages rows to return 101, " +
+                $"from a conversation with {MessagesInTheConversation} messages.");
+        }
+        finally
+        {
+            await RemoveAsync(tag, conversation);
+        }
+    }
+
     // Newest-first numbering ("bulk 0" is the newest) makes the expected page easy to state.
     // generate_series is far faster than the API, and ANALYZE gives the planner the real table
     // sizes, as it would have in production.

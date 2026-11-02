@@ -7,7 +7,7 @@ import { useNow } from '../../../lib/useNow'
 import { useAuth } from '../../auth/hooks/useAuth'
 import { focusedMessageId } from '../../notifications/navigation'
 import { deleteMessage, dismissMessage, editMessage, retryMessage } from '../api/chatApi'
-import { scrollTopAfterPrepend, wasPrepended } from '../history'
+import { type ReadingMore, scrollTopAfterPrepend, wasPrepended } from '../history'
 import { useMarkRead } from '../hooks/useMarkRead'
 import { canDelete, canEdit } from '../messageChanges'
 import { messageDomId } from '../messageDom'
@@ -35,15 +35,14 @@ const BOTTOM_THRESHOLD = 96
 // usually there before the reader reaches the top.
 const PRELOAD_MARGIN = '200px'
 
-// Reading further back than the latest page.
-export interface OlderMessages {
-  hasMore: boolean
-  isLoading: boolean
-  // Why the last attempt failed. While it is set nothing is requested by itself, so a server that
-  // keeps refusing is not asked again in a loop; the reader's "Try again" asks once more.
-  error: string | null
-  onLoad: () => void
-}
+// Reading further back than what is held. While an error is set nothing is requested by itself, so a server that keeps
+// refusing is not asked again in a loop; the reader's "Try again" asks once more.
+export type OlderMessages = ReadingMore
+
+// Reading further forward than what is held, which is only possible from a window of the history (see chatStore.windows).
+export type NewerMessages = ReadingMore
+
+const NO_MORE: ReadingMore = { hasMore: false, isLoading: false, error: null, onLoad: () => {} }
 
 interface MessageListProps {
   conversation: Conversation
@@ -51,9 +50,14 @@ interface MessageListProps {
   errorMessage: string | null
   onRetry: () => void
   older: OlderMessages
+  // Set while the messages are a window of the history that does not reach the newest message: the list does not follow new
+  // messages or mark anything read, reads further forward as the end of the window is reached, and offers the way back.
+  newer?: NewerMessages
+  onJumpToLatest?: () => void
 }
 
-export function MessageList({ conversation, isLoading, errorMessage, onRetry, older }: MessageListProps) {
+export function MessageList({ conversation, isLoading, errorMessage, onRetry, older, newer, onJumpToLatest }: MessageListProps) {
+  const inWindow = newer !== undefined
   const { user } = useAuth()
   const now = useNow()
 
@@ -94,7 +98,9 @@ export function MessageList({ conversation, isLoading, errorMessage, onRetry, ol
     if (element) element.scrollTop = element.scrollHeight
   }
 
-  useMarkRead(conversation.id, isAtBottom)
+  // The bottom of a window is not the bottom of the conversation: nothing there is the newest, and nothing is read by being
+  // there.
+  useMarkRead(conversation.id, isAtBottom && !inWindow)
 
   // The "seen" mark under the reader's newest message, and who the mentions in the text can name.
   const members = useChatStore((state) => state.members[conversation.id])
@@ -130,10 +136,16 @@ export function MessageList({ conversation, isLoading, errorMessage, onRetry, ol
   // browser's own scroll anchoring off (overflow-anchor) so that this is the only adjustment.
   const previous = useRef<{ items: typeof items; firstId: string | undefined; scrollHeight: number } | null>(null)
   const firstId = messages[0]?.id
+  const wasInWindow = useRef(false)
 
   useLayoutEffect(() => {
     const element = scroller.current
     if (!element) return
+
+    // Leaving a window (the jump to the latest messages, or sending from it) shows the newest messages from their end,
+    // wherever in the window the reader was. The messages arrive after this render, so it is remembered as being at the bottom.
+    if (wasInWindow.current && !inWindow) atBottom.current = true
+    wasInWindow.current = inWindow
 
     const before = previous.current
 
@@ -147,7 +159,7 @@ export function MessageList({ conversation, isLoading, errorMessage, onRetry, ol
       // messages appears once the first page is known), which would otherwise leave a reader who
       // was at the bottom a little above it.
       const sentJustNow = items[items.length - 1]?.kind === 'pending'
-      if (atBottom.current || sentJustNow) element.scrollTop = element.scrollHeight
+      if ((atBottom.current && !inWindow) || sentJustNow) element.scrollTop = element.scrollHeight
     }
 
     previous.current = { items, firstId, scrollHeight: element.scrollHeight }
@@ -173,6 +185,25 @@ export function MessageList({ conversation, isLoading, errorMessage, onRetry, ol
 
     return () => observer.disconnect()
   }, [hasMore, loadingOlder, olderError, loadOlder])
+
+  // Asks for newer messages when the end of the window comes into view, as the top does for older ones.
+  const bottomOfList = useRef<HTMLDivElement>(null)
+  const { hasMore: hasNewer, isLoading: loadingNewer, error: newerError, onLoad: loadNewer } = newer ?? NO_MORE
+
+  useEffect(() => {
+    const target = bottomOfList.current
+    if (!target || !hasNewer || loadingNewer || newerError) return
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) loadNewer()
+      },
+      { root: scroller.current, rootMargin: `0px 0px ${PRELOAD_MARGIN} 0px` },
+    )
+    observer.observe(target)
+
+    return () => observer.disconnect()
+  }, [hasNewer, loadingNewer, newerError, loadNewer])
 
   const nothingToShow = items.length === 0
   const reachedStart = !nothingToShow && !isLoading && !errorMessage && !hasMore && !loadingOlder && !olderError
@@ -316,9 +347,41 @@ export function MessageList({ conversation, isLoading, errorMessage, onRetry, ol
         )
       })}
 
+      {inWindow && loadingNewer && (
+        <div className="flex h-8 items-center justify-center gap-2 text-xs text-slate-500">
+          <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
+          Loading newer messages…
+        </div>
+      )}
+
+      {inWindow && !loadingNewer && newerError && (
+        <div className="mt-2 flex flex-col items-center gap-2 text-center">
+          <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>{newerError}</span>
+          </div>
+          <Button variant="ghost" size="sm" onClick={loadNewer}>
+            Try again
+          </Button>
+        </div>
+      )}
+
+      {inWindow && !loadingNewer && !newerError && hasNewer && <div ref={bottomOfList} className="h-8" />}
+
       {/* Zero height, so it takes no room at the end of the messages; it stays pinned to the bottom edge
           of the visible area while the reader is further up. */}
-      {!isAtBottom && conversation.unreadCount > 0 && (
+      {inWindow && (
+        <div className="sticky bottom-3 flex h-0 justify-center">
+          <Button size="sm" className="-translate-y-full shadow-md" onClick={onJumpToLatest}>
+            <ChevronDown className="h-4 w-4" />
+            {conversation.unreadCount > 0
+              ? `Jump to latest, ${unreadLabel(conversation.unreadCount)} new`
+              : 'Jump to latest'}
+          </Button>
+        </div>
+      )}
+
+      {!inWindow && !isAtBottom && conversation.unreadCount > 0 && (
         <div className="sticky bottom-3 flex h-0 justify-center">
           <Button size="sm" className="-translate-y-full shadow-md" onClick={jumpToNewest}>
             <ChevronDown className="h-4 w-4" />

@@ -25,6 +25,8 @@ using ChatNET.API.Outbox;
 using ChatNET.API.Outbox.Persistence;
 using ChatNET.API.Presence;
 using ChatNET.API.Presence.Persistence;
+using ChatNET.API.Search;
+using ChatNET.API.Search.Persistence;
 using ChatNET.API.Users;
 using ChatNET.API.Users.Persistence;
 using FluentValidation;
@@ -242,6 +244,7 @@ try
     builder.Services.TryAddSingleton(TimeProvider.System);
 
     builder.Services.AddScoped<IConversationRepository, ConversationRepository>();
+    builder.Services.AddScoped<ISearchRepository, SearchRepository>();
     builder.Services.AddScoped<IMessageRepository, MessageRepository>();
     builder.Services.AddOptions<MessagingOptions>()
         .BindConfiguration(MessagingOptions.SectionName)
@@ -431,6 +434,7 @@ try
     app.MapMessagingEndpoints();
     app.MapMediaEndpoints();
     app.MapAvatarEndpoints();
+    app.MapSearchEndpoints();
     app.MapNotificationEndpoints();
     app.MapPresenceEndpoints();
 

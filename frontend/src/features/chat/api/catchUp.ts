@@ -70,7 +70,9 @@ export function catchUp(conversationId: string, options: CatchUpOptions): Promis
 // Every conversation the store has loaded. One that failed is left as it was and tried again from
 // the same message after the next reconnect, so a failure here is not worth interrupting the others.
 export async function catchUpAll(options: CatchUpOptions): Promise<void> {
-  const loaded = Object.keys(chat().messages)
+  // A conversation read from a window that does not reach the newest message has nothing to catch up to: it reaches the newest
+  // message by reading on from the window, which asks the server for them.
+  const loaded = Object.keys(chat().messages).filter((id) => chat().windows[id]?.buffer == null)
   let next = 0
 
   async function worker() {

@@ -70,12 +70,14 @@ public static class MessagingEndpoints
 
         // Returns at most one page (50), oldest first. Without a cursor it is the latest page;
         // "before" is the id of the oldest message the caller has, and returns the page just older;
-        // "after" is the id of the newest message the caller has, and returns the page just newer.
+        // "after" is the id of the newest message the caller has, and returns the page just newer;
+        // "around" is the id of a message the caller wants to see in its place (a search result): it returns a page just older,
+        // the message, and a page just newer, up to 101 messages in all.
         messages.MapGet("/", async (
-            Guid conversationId, Guid? before, Guid? after, HttpContext http, IMediator mediator) =>
+            Guid conversationId, Guid? before, Guid? after, Guid? around, HttpContext http, IMediator mediator) =>
         {
             var result = await mediator.Send(
-                new GetMessageHistoryQuery(conversationId, http.User.GetUserId(), before, after));
+                new GetMessageHistoryQuery(conversationId, http.User.GetUserId(), before, after, around));
             return Results.Ok(result);
         })
         .Returns<List<MessageDto>>(

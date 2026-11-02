@@ -1,6 +1,7 @@
 import { api } from '../../../lib/api'
 import { getApiError } from '../../../lib/errors'
 import { newClientMessageId } from '../../../lib/uuid'
+import { HISTORY_PAGE_SIZE } from '../history'
 import { useChatStore } from '../store/chatStore'
 import { waitForConnection } from '../store/waitForConnection'
 import type { Conversation, ConversationUpdate, Member, Message, PendingAttachment, UserSummary } from '../types'
@@ -36,6 +37,8 @@ export async function fetchConversations(signal?: AbortSignal): Promise<Conversa
 export interface MessagePageOptions {
   before?: string
   after?: string
+  // A message to be shown in its place: the page is a page just older than it, the message, and a page just newer.
+  around?: string
   signal?: AbortSignal
 }
 
@@ -52,15 +55,57 @@ export async function fetchMessages(
 // go in: a page that does not join up with what the store holds would leave a hole in the history (the catch-up).
 export async function requestMessages(
   conversationId: string,
-  { before, after, signal }: MessagePageOptions = {},
+  { before, after, around, signal }: MessagePageOptions = {},
 ): Promise<Message[]> {
   await waitForConnection(signal)
 
   const { data } = await api.get<Message[]>(`/conversations/${conversationId}/messages`, {
-    params: { before, after },
+    params: { before, after, around },
     signal,
   })
   return data
+}
+
+// ##### Reading a window of the history #####
+// A search result or a notification can name a message far back. The conversation then shows a window of its history
+// around that message (chatStore.showWindow), read in both directions from there until it reaches the newest message and is
+// live again. These three requests are that: they put the window up, and extend it upwards and downwards.
+
+// Shows the message in its place. The page comes back with up to a page on each side, so it says by its length whether there
+// is more on either side.
+export async function openMessage(conversationId: string, messageId: string, signal?: AbortSignal): Promise<void> {
+  const page = await requestMessages(conversationId, { around: messageId, signal })
+
+  const index = page.findIndex((m) => m.id === messageId)
+  const older = index < 0 ? 0 : index
+  const newer = index < 0 ? 0 : page.length - index - 1
+
+  chat().showWindow(conversationId, page, {
+    hasOlder: older >= HISTORY_PAGE_SIZE,
+    reachesNewest: newer < HISTORY_PAGE_SIZE,
+  })
+}
+
+// The page of messages just older than the first one held.
+export async function loadOlderInWindow(conversationId: string, signal?: AbortSignal): Promise<void> {
+  const first = chat().messages[conversationId]?.[0]
+  if (!first) return
+
+  const page = await requestMessages(conversationId, { before: first.id, signal })
+  chat().seedMessages(conversationId, page)
+  chat().setWindowHasOlder(conversationId, page.length >= HISTORY_PAGE_SIZE)
+}
+
+// The page of messages just newer than the last one held. A short page is the newest there is: what was pushed meanwhile joins the
+// window and the conversation is live again.
+export async function loadNewerInWindow(conversationId: string, signal?: AbortSignal): Promise<void> {
+  const held = chat().messages[conversationId]
+  const last = held?.[held.length - 1]
+  if (!last) return
+
+  const page = await requestMessages(conversationId, { after: last.id, signal })
+  chat().seedMessages(conversationId, page)
+  if (page.length < HISTORY_PAGE_SIZE) chat().reattach(conversationId)
 }
 
 // The people in a conversation and how far each has read. Read positions are pushed too, so this
@@ -194,6 +239,9 @@ export async function sendMessage(
 ): Promise<void> {
   const content = text.trim()
   if (content === '' && attachments.length === 0) return
+
+  // A message sent while reading far back must appear where the conversation is: back at the newest messages.
+  if (chat().windows[conversationId]?.buffer) chat().leaveWindow(conversationId)
 
   const clientMessageId = newClientMessageId()
   chat().addPending({
