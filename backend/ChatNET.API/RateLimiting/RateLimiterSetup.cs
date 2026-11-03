@@ -28,6 +28,7 @@ public sealed class RateLimiterSetup : IConfigureOptions<RateLimiterOptions>
         // One count per client address, so one abusive client uses up only its own allowance.
         AddPolicy(options, RateLimitPolicies.Auth, ClientAddress);
         AddPolicy(options, RateLimitPolicies.Refresh, ClientAddress);
+        AddPolicy(options, RateLimitPolicies.Avatars, ClientAddress);
 
         // One count per signed-in person, so many people behind one address (an office, a school) do not share a budget and
         // one person cannot use several addresses to get more. A request without a person (a token that does not check out

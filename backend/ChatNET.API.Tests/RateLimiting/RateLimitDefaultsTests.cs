@@ -18,6 +18,7 @@ public class RateLimitDefaultsTests
     [InlineData("uploads", 60, 3600)]
     [InlineData("edit", 20, 60)]
     [InlineData("search", 30, 10)]
+    [InlineData("avatars", 600, 60)]
     public void A_policy_starts_at_the_agreed_limit(string policy, int permits, int windowSeconds)
     {
         var section = RateLimitPolicies.All.Single(p => p.Name == policy).Section;
