@@ -1,6 +1,7 @@
 // How a notification (or its alert) takes the user to the place it is about: the conversation, and for a mention
 // the message, which the list scrolls to once it is loaded. The message travels in the navigation state, not the
-// URL, so a reload or a shared link opens the conversation plainly.
+// URL, so a pasted link opens the conversation plainly. The state is kept in the browser's history entry and would come
+// back with a reload or the back button, so the list that shows the message clears it once it has (MessageList).
 
 export interface FocusState {
   focusMessageId: string
