@@ -39,3 +39,29 @@ export interface ScrollMeasure {
 export function scrollTopAfterPrepend(before: ScrollMeasure, scrollHeightNow: number): number {
   return before.scrollTop + (scrollHeightNow - before.scrollHeight)
 }
+
+export interface FollowState {
+  atBottom: boolean
+  inWindow: boolean
+  justSent: boolean
+}
+
+// Whether the list shows its end when its content changes. A reader at the bottom follows new messages, one who scrolled away is
+// left where they are, and a message the reader just sent always comes into view. A window of the history never follows: the
+// bottom of a window is not the bottom of the conversation, and following it would undo a jump to a message.
+export function followsEnd({ atBottom, inWindow, justSent }: FollowState): boolean {
+  return justSent || (atBottom && !inWindow)
+}
+
+// Whether the last item of the list is a message the reader has just sent: a pending message that was not already the last item.
+// A failed message waits for "Retry" at the end for as long as the reader likes, and being there is not being sent again.
+export function justSent(previousLastKey: string | undefined, last: { kind: string; key: string } | undefined): boolean {
+  return last?.kind === 'pending' && last.key !== previousLastKey
+}
+
+// Whether leaving a window shows the newest messages from their end. The jump to the latest messages and sending from a window
+// drop what was held, which empties the list until the latest page arrives, and the reader expects to land at the end. A window
+// that merely reached the newest message by reading on keeps its messages, and the reader stays where they are.
+export function returnsToEnd(state: { wasInWindow: boolean; inWindow: boolean; messageCount: number }): boolean {
+  return state.wasInWindow && !state.inWindow && state.messageCount === 0
+}
