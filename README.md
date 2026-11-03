@@ -179,6 +179,7 @@ Set `DOMAIN=localhost` in `.env.prod`. Caddy then uses its own certificate autho
 
 - The rate limits are counted in Redis. While Redis cannot be reached they are not applied (only the account lockout, in Postgres, still protects a password), and a Redis that loses its data starts the counts again from zero. Behind the proxy an outage of Redis also takes the API out of the rotation within ten seconds, because `/health` includes Redis.
 - One Postgres and one Redis, with no replication and no automatic backups.
+- The migrations create two Postgres extensions, `btree_gin` and `pg_trgm`, for message search and the people search. Both ship with Postgres, and the owner of the database may create them (they are trusted extensions), so the compose Postgres and a managed one both work. The indexes are built inside the migration, which holds writes to the messages and users tables while they build: seconds on a small database, longer on a large one. Take a `pg_dump` before the first update that includes them, and keep autovacuum on, which the search plans rely on.
 - Nothing here has run on a real server or against Cloudflare R2; it has been run on one machine with the object store left unconfigured. The ARM64 images have been built and checked, and the whole stack has run as ARM64 only under emulation on an x86-64 machine, not on a real ARM server.
 
 ## Tests
