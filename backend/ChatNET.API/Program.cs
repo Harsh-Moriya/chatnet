@@ -25,6 +25,8 @@ using ChatNET.API.Outbox;
 using ChatNET.API.Outbox.Persistence;
 using ChatNET.API.Presence;
 using ChatNET.API.Presence.Persistence;
+using ChatNET.API.Push;
+using ChatNET.API.Push.Persistence;
 using ChatNET.API.Search;
 using ChatNET.API.Search.Persistence;
 using ChatNET.API.Users;
@@ -291,6 +293,17 @@ try
     builder.Services.AddHostedService(provider => provider.GetRequiredService<PresenceRefreshService>());
     builder.Services.AddScoped<IPresenceRepository, PresenceRepository>();
 
+    // ##### Push #####
+    // A browser that allowed alerts registers an address of its vendor's push service; the server posts an encrypted alert
+    // there for a person who has no live connection. The keys that identify the server come from configuration, and with none
+    // set the feature is off: no registration is kept and no alert is made. Settings are validated when the host starts.
+    builder.Services.AddOptions<PushOptions>()
+        .BindConfiguration(PushOptions.SectionName)
+        .ValidateOnStart();
+    builder.Services.AddSingleton<IValidateOptions<PushOptions>, PushOptionsValidator>();
+    builder.Services.AddSingleton<PushEndpointPolicy>();
+    builder.Services.AddScoped<IPushSubscriptionRepository, PushSubscriptionRepository>();
+
     // ##### Storage #####
     // Attachments live in an S3-compatible bucket (Cloudflare R2 in production, RustFS locally). The browser
     // uploads and downloads with presigned URLs; the server only signs them, looks at what was uploaded and
@@ -445,6 +458,7 @@ try
     app.MapSearchEndpoints();
     app.MapNotificationEndpoints();
     app.MapPresenceEndpoints();
+    app.MapPushEndpoints();
 
     // A token is checked once, when the connection is made. Without this an open connection would keep
     // receiving messages long after its token expired; with it the server closes the connection at the

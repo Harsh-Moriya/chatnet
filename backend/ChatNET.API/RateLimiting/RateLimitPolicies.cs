@@ -16,6 +16,7 @@ public static class RateLimitPolicies
     public const string Uploads = "uploads";
     public const string Edit = "edit";
     public const string Search = "search";
+    public const string Push = "push";
 
     public static readonly IReadOnlyList<(string Name, string Section)> All =
     [
@@ -26,5 +27,6 @@ public static class RateLimitPolicies
         (Edit, "RateLimiting:Edit"),
         (Search, "RateLimiting:Search"),
         (Avatars, "RateLimiting:Avatars"),
+        (Push, "RateLimiting:Push"),
     ];
 }
