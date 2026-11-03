@@ -94,6 +94,24 @@ public class PictureRouteLimitTests
         Assert.Equal(HttpStatusCode.NotFound, (await bystander.GetAsync(Missing())).StatusCode);
     }
 
+    // Counted by address and not by person, also for a request that carries a token: a person who signs in gets no more reads of the
+    // object store than one who does not, and an office behind one address shares one count.
+    [Fact]
+    public async Task People_behind_one_address_share_one_count_even_when_they_are_signed_in()
+    {
+        var first = await _factory.RegisterUserAsync("picture");
+        var second = await _factory.RegisterUserAsync("picture");
+        using var host = HostWith(permitLimit: 1);
+        using var firstClient = ClientAt(host, "10.6.6.13");
+        using var secondClient = ClientAt(host, "10.6.6.13");
+        firstClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", first.Token);
+        secondClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", second.Token);
+
+        Assert.Equal(HttpStatusCode.NotFound, (await firstClient.GetAsync(Missing())).StatusCode);
+
+        Assert.Equal(HttpStatusCode.TooManyRequests, (await secondClient.GetAsync(Missing())).StatusCode);
+    }
+
     [Fact]
     public async Task The_other_endpoints_do_not_share_the_count_of_the_pictures()
     {
