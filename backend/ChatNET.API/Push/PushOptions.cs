@@ -1,5 +1,5 @@
+using System.Security.Cryptography;
 using Microsoft.Extensions.Options;
-using WebPush;
 
 namespace ChatNET.API.Push;
 
@@ -25,6 +25,12 @@ public sealed class PushOptions
     // How many browsers one person can have registered. A new one beyond it replaces the one least recently used.
     public int MaxSubscriptionsPerUser { get; set; } = 10;
 
+    // How long a push service keeps a push for a browser that is switched off. An alert that old is of no use.
+    public TimeSpan TimeToLive { get; set; } = TimeSpan.FromDays(1);
+
+    // How long one request to a push service may take.
+    public TimeSpan RequestTimeout { get; set; } = TimeSpan.FromSeconds(10);
+
     public bool Enabled => PublicKey.Length > 0 && PrivateKey.Length > 0 && Subject.Length > 0;
 }
 
@@ -43,17 +49,17 @@ public sealed class PushOptionsValidator : IValidateOptions<PushOptions>
 
         if (given == 3)
         {
-            Check(failures, "Push:PublicKey", () => VapidHelper.ValidatePublicKey(options.PublicKey));
-            Check(failures, "Push:PrivateKey", () => VapidHelper.ValidatePrivateKey(options.PrivateKey));
-            Check(failures, "Push:Subject", () =>
-            {
-                VapidHelper.ValidateSubject(options.Subject);
+            Check(failures, "Push:PublicKey", () => VapidKeys.DecodePublicKey(options.PublicKey));
+            Check(failures, "Push:PrivateKey", () => VapidKeys.DecodePrivateKey(options.PrivateKey));
 
-                // The library takes any well formed address; RFC 8292 asks for a contact a push service can use.
-                if (!options.Subject.StartsWith("mailto:", StringComparison.Ordinal)
-                    && !options.Subject.StartsWith("https://", StringComparison.Ordinal))
-                    throw new ArgumentException("It must be a mailto: or an https: address.");
-            });
+            // Only when each is well formed on its own: then they are checked as a pair.
+            if (failures.Count == 0)
+                Check(failures, "Push:PublicKey", () => VapidKeys.CreateSigner(options.PublicKey, options.PrivateKey).Dispose());
+
+            // RFC 8292 asks for a contact a push service can use.
+            if (!options.Subject.StartsWith("mailto:", StringComparison.Ordinal)
+                && !options.Subject.StartsWith("https://", StringComparison.Ordinal))
+                failures.Add("Push:Subject must be a mailto: or an https: address.");
 
             if (options.AllowedHosts.Count == 0 || options.AllowedHosts.Any(host => !IsHostName(host)))
                 failures.Add("Push:AllowedHosts must name at least one host, each a plain host name such as push.example.com.");
@@ -62,18 +68,23 @@ public sealed class PushOptionsValidator : IValidateOptions<PushOptions>
         if (options.MaxSubscriptionsPerUser < 1)
             failures.Add("Push:MaxSubscriptionsPerUser must be at least 1.");
 
+        if (options.TimeToLive < TimeSpan.FromSeconds(1) || options.TimeToLive.TotalSeconds > int.MaxValue)
+            failures.Add("Push:TimeToLive must be at least one second.");
+
+        if (options.RequestTimeout <= TimeSpan.Zero)
+            failures.Add("Push:RequestTimeout must be greater than zero.");
+
         return failures.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(failures);
     }
 
-    // The library checks the format (length, base64url, https or mailto) and says what is wrong; the setting is named here and
-    // its value is not repeated, because two of the three are secrets.
+    // What is wrong with a key is said without repeating the key, which is a secret (or, for the public half, no use to a reader).
     private static void Check(List<string> failures, string setting, Action validate)
     {
         try
         {
             validate();
         }
-        catch (Exception ex) when (ex is ArgumentException or FormatException)
+        catch (Exception ex) when (ex is ArgumentException or FormatException or CryptographicException or PlatformNotSupportedException)
         {
             failures.Add($"{setting} is not valid: {ex.Message}");
         }

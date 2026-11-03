@@ -15,12 +15,17 @@ public static class PushApi
 {
     // Made once for the run, the way an operator would make them for a deployment. A host that is given them has push on; the
     // shared test host has none, so the tests of everything else are not changed by it.
-    public static readonly WebPush.VapidDetails Vapid = MakeVapid();
+    public static readonly VapidSettings Vapid = MakeVapid();
 
-    private static WebPush.VapidDetails MakeVapid()
+    private static VapidSettings MakeVapid()
     {
-        var keys = WebPush.VapidHelper.GenerateVapidKeys();
-        return new WebPush.VapidDetails("mailto:push@example.test", keys.PublicKey, keys.PrivateKey);
+        using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        var parameters = key.ExportParameters(includePrivateParameters: true);
+
+        return new VapidSettings(
+            Base64Url.EncodeToString([0x04, .. parameters.Q.X!, .. parameters.Q.Y!]),
+            Base64Url.EncodeToString(parameters.D!),
+            "mailto:push@example.test");
     }
 
     // A host with push set up, and the settings a test wants to change on top.
@@ -93,6 +98,9 @@ public static class PushApi
     public static Task RemoveSubscriptionsAsync(this ChatApiFactory factory) =>
         factory.ExecuteDbAsync(db => db.PushSubscriptions.ExecuteDeleteAsync());
 }
+
+// The keys of the server as an operator would make and set them.
+public sealed record VapidSettings(string PublicKey, string PrivateKey, string Subject);
 
 // A browser that subscribed: the address its vendor's push service gave it, and the key pair and secret it keeps to read what
 // is pushed. A test that holds the private key can decrypt what the server sent, which is how it checks the payload.

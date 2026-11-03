@@ -143,10 +143,38 @@ public class PushOptionsTests
         Assert.False(options.Enabled);
     }
 
-    // The default is what was agreed: ten browsers a person.
-    [Fact]
-    public void A_person_may_have_ten_browsers_unless_told_otherwise()
+    [Theory]
+    [InlineData("Push:TimeToLive")]
+    [InlineData("Push:RequestTimeout")]
+    public void A_duration_that_is_zero_is_refused(string setting)
     {
-        Assert.Equal(10, new PushOptions().MaxSubscriptionsPerUser);
+        var options = Valid();
+        if (setting == "Push:TimeToLive")
+            options.TimeToLive = TimeSpan.Zero;
+        else
+            options.RequestTimeout = TimeSpan.Zero;
+
+        Assert.Contains(setting, Check(options).FailureMessage);
+    }
+
+    // The header that carries it counts whole seconds, so less than one is not a time to live.
+    [Fact]
+    public void A_time_to_live_of_less_than_a_second_is_refused()
+    {
+        var options = Valid();
+        options.TimeToLive = TimeSpan.FromMilliseconds(500);
+
+        Assert.Contains("Push:TimeToLive", Check(options).FailureMessage);
+    }
+
+    // The defaults are what was agreed: ten browsers a person, a push held for a day, ten seconds for a push service to answer.
+    [Fact]
+    public void The_defaults_are_the_agreed_ones()
+    {
+        var options = new PushOptions();
+
+        Assert.Equal(10, options.MaxSubscriptionsPerUser);
+        Assert.Equal(TimeSpan.FromDays(1), options.TimeToLive);
+        Assert.Equal(TimeSpan.FromSeconds(10), options.RequestTimeout);
     }
 }

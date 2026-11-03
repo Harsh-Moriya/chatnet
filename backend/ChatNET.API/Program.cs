@@ -304,6 +304,17 @@ try
     builder.Services.AddSingleton<PushEndpointPolicy>();
     builder.Services.AddScoped<IPushSubscriptionRepository, PushSubscriptionRepository>();
 
+    // The client the pushes go out through. It does not follow redirects, so a push service cannot send the server on to an
+    // address that was never checked, and it gives up after the configured time so one slow service cannot hold a pass of the
+    // relay. The connections are renewed now and then so a change of address at a push service is found.
+    builder.Services.AddHttpClient<IPushSender, WebPushSender>((provider, client) =>
+            client.Timeout = provider.GetRequiredService<IOptions<PushOptions>>().Value.RequestTimeout)
+        .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+        {
+            AllowAutoRedirect = false,
+            PooledConnectionLifetime = TimeSpan.FromMinutes(2),
+        });
+
     // ##### Storage #####
     // Attachments live in an S3-compatible bucket (Cloudflare R2 in production, RustFS locally). The browser
     // uploads and downloads with presigned URLs; the server only signs them, looks at what was uploaded and
