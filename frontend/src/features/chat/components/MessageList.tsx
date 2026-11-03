@@ -143,8 +143,8 @@ export function MessageList({ conversation, isLoading, errorMessage, onRetry, ol
 
     const timer = setTimeout(() => setHighlight({ key: highlight.key, id: '' }), HIGHLIGHT_MS)
     return () => clearTimeout(timer)
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- this runs when the highlight starts, not when the location changes: clearing the state changes it
-  }, [highlight])
+    // The path and the query do not change when the state is cleared, so this still runs once per highlight.
+  }, [highlight, navigate, location.pathname, location.search])
 
   // The first message and the content height as of the previous render. When the first message
   // changes, older messages were added above the reader; browsers would let the content jump down by
