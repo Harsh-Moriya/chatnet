@@ -229,10 +229,12 @@ public class PushSubscriptionEndpointTests
         yield return ["no address", "", good.P256dh, good.Auth, "endpoint"];
         yield return ["an address that is too long", "https://fcm.googleapis.com/" + new string('a', 2100), good.P256dh, good.Auth, "endpoint"];
         yield return ["a public key that is not base64url", good.Endpoint, "not base64 at all!", good.Auth, "p256dh"];
+        yield return ["a public key of the right length made of characters that are not base64url", good.Endpoint, new string('!', 87), good.Auth, "p256dh"];
         yield return ["a public key of the wrong length", good.Endpoint, "AAAA", good.Auth, "p256dh"];
         yield return ["a public key that is not an uncompressed point", good.Endpoint, Convert.ToBase64String(new byte[65]).Replace('+', '-').Replace('/', '_').TrimEnd('='), good.Auth, "p256dh"];
         yield return ["no public key", good.Endpoint, "", good.Auth, "p256dh"];
         yield return ["a public key that is one byte too long", good.Endpoint, Base64Url.EncodeToString([0x04, .. new byte[65]]), good.Auth, "p256dh"];
+        yield return ["a secret of the right length made of characters that are not base64url", good.Endpoint, good.P256dh, new string('#', 22), "auth"];
         yield return ["a secret of the wrong length", good.Endpoint, good.P256dh, "AAAA", "auth"];
         yield return ["a secret that is one byte too long", good.Endpoint, good.P256dh, Base64Url.EncodeToString(new byte[17]), "auth"];
         yield return ["a secret that is not base64url", good.Endpoint, good.P256dh, "###", "auth"];

@@ -28,6 +28,7 @@ public class PushEndpointPolicyTests
     [InlineData("https://fcm.googleapis.com:8443/fcm/send/abc", "another port")]
     [InlineData("https://fcm.googleapis.com@evil.example/fcm/send/abc", "a user name that makes another host the host")]
     [InlineData("https://fcm.googleapis.com:pass@evil.example/x", "a user name and password")]
+    [InlineData("https://user:pass@fcm.googleapis.com/fcm/send/abc", "credentials in the address of an allowed host")]
     [InlineData("https://evil.example/fcm.googleapis.com", "the allowed name only in the path")]
     [InlineData("https://fcm.googleapis.com.evil.example/x", "the allowed name as the start of another host")]
     [InlineData("https://evilfcm.googleapis.com/x", "a host that only ends with the allowed text")]
