@@ -129,6 +129,28 @@ public sealed class PresenceStore : IPresenceStore
         return new PresenceSnapshot(FromMilliseconds(timeReply![0] * 1000 + timeReply[1] / 1000), online);
     }
 
+    public async Task<IReadOnlySet<Guid>> GetConnectedAsync(
+        IReadOnlyCollection<Guid> userIds, CancellationToken cancellationToken)
+    {
+        var ids = userIds.Distinct().ToList();
+        if (ids.Count == 0)
+            return new HashSet<Guid>();
+
+        var db = await _redis.GetDatabaseAsync();
+        var counts = (long[]?)await db
+            .ScriptEvaluateAsync(PresenceScripts.Connected, ids.Select(UserKey).ToArray())
+            .WaitAsync(cancellationToken);
+
+        var connected = new HashSet<Guid>();
+        for (var i = 0; i < ids.Count; i++)
+        {
+            if (counts![i] > 0)
+                connected.Add(ids[i]);
+        }
+
+        return connected;
+    }
+
     private object TouchParameters(Guid userId, string connectionId) => new
     {
         userKey = UserKey(userId),

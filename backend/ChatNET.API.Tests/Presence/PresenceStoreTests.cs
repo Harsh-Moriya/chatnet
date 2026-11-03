@@ -410,6 +410,87 @@ public class PresenceStoreTests
         Assert.InRange((DateTime.UtcNow - snapshot.At).TotalSeconds, -5, 5);
     }
 
+    // ##### Who has a connection right now #####
+
+    [Fact]
+    public async Task A_user_with_a_live_connection_is_connected_and_one_without_is_not()
+    {
+        var store = NewStore(TimeSpan.FromSeconds(30));
+        var connected = Guid.NewGuid();
+        var neverSeen = Guid.NewGuid();
+        await store.TouchAsync(connected, "tab-1", default);
+
+        var result = await store.GetConnectedAsync([connected, neverSeen], default);
+
+        Assert.Equal([connected], result);
+    }
+
+    // What this is for: a user is online for the wait after their last connection closes, so that a refresh is not announced,
+    // but a push that has to reach them cannot go over a connection that is no longer there.
+    [Fact]
+    public async Task During_the_wait_before_offline_a_user_is_online_but_not_connected()
+    {
+        var store = NewStore(TimeSpan.FromSeconds(30));
+        var user = Guid.NewGuid();
+        await store.TouchAsync(user, "tab-1", default);
+        await store.CloseAsync(user, "tab-1", Grace, default);
+
+        var snapshot = await store.GetSnapshotAsync([user], default);
+        var connected = await store.GetConnectedAsync([user], default);
+
+        Assert.Contains(user, snapshot.Online);
+        Assert.Empty(connected);
+    }
+
+    [Fact]
+    public async Task A_user_is_still_connected_while_any_of_their_tabs_is()
+    {
+        var store = NewStore(TimeSpan.FromSeconds(30));
+        var user = Guid.NewGuid();
+        await store.TouchAsync(user, "tab-1", default);
+        await store.TouchAsync(user, "tab-2", default);
+
+        await store.CloseAsync(user, "tab-1", Grace, default);
+        Assert.Equal([user], await store.GetConnectedAsync([user], default));
+
+        await store.CloseAsync(user, "tab-2", Grace, default);
+        Assert.Empty(await store.GetConnectedAsync([user], default));
+    }
+
+    // A server that died leaves its connections' entries behind; they stop counting when they expire, without anyone settling them.
+    [Fact]
+    public async Task A_connection_that_was_not_renewed_stops_counting_when_it_expires()
+    {
+        var store = NewStore();
+        var user = Guid.NewGuid();
+        await store.TouchAsync(user, "tab-1", default);
+        Assert.Equal([user], await store.GetConnectedAsync([user], default));
+
+        await WaitForExpiryAsync();
+
+        Assert.Empty(await store.GetConnectedAsync([user], default));
+    }
+
+    [Fact]
+    public async Task Only_the_users_asked_about_come_back_and_a_user_named_twice_is_one()
+    {
+        var store = NewStore(TimeSpan.FromSeconds(30));
+        var asked = Guid.NewGuid();
+        var notAsked = Guid.NewGuid();
+        await store.TouchAsync(asked, "tab-1", default);
+        await store.TouchAsync(notAsked, "tab-1", default);
+
+        var result = await store.GetConnectedAsync([asked, asked, Guid.NewGuid()], default);
+
+        Assert.Equal([asked], result);
+    }
+
+    [Fact]
+    public async Task Asking_about_nobody_gives_nobody()
+    {
+        Assert.Empty(await NewStore().GetConnectedAsync([], default));
+    }
+
     // ##### Order #####
 
     // Events are ordered by these times, so a later step must never have an earlier time.

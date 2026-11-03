@@ -39,6 +39,12 @@ public interface IPresenceStore
 
     // Which of these users are online, in the sense above, as of the returned time.
     Task<PresenceSnapshot> GetSnapshotAsync(IReadOnlyCollection<Guid> userIds, CancellationToken cancellationToken);
+
+    // Which of these users have a connection that is alive this moment. Not the same as online: a user whose last connection
+    // closed a moment ago is still online for the length of the wait, but nothing can reach them over a connection, so they are
+    // not in this set. It is the question for whoever has to decide whether something will arrive live or has to be delivered
+    // another way (a push to a browser that is closed).
+    Task<IReadOnlySet<Guid>> GetConnectedAsync(IReadOnlyCollection<Guid> userIds, CancellationToken cancellationToken);
 }
 
 public readonly record struct TouchResult(bool CameOnline, DateTime At);
