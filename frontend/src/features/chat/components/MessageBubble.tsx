@@ -65,6 +65,8 @@ export function MessageBubble({
   const deleted = content === null
   // While it is being edited the bubble is a plain white box, so the editor's buttons and text read on any message.
   const editing = editor !== undefined && !deleted
+  // The colour of the bubble decides the colour of the ring drawn inside it.
+  const onBlue = own && !failed && !editing
 
   return (
     <div
@@ -79,12 +81,14 @@ export function MessageBubble({
         <div
           className={cn(
             'min-w-0 rounded-lg px-3 py-2 text-sm transition-shadow',
-            highlighted && 'ring-2 ring-blue-500 ring-offset-2',
+            // Inside the bubble and not around it: messages of one sender sit 2 pixels apart, and a ring outside would be drawn
+            // over the next message.
+            highlighted && cn('ring-2 ring-inset', onBlue ? 'ring-sky-300' : 'ring-blue-500'),
             // One tone only. Two background or text colours in the same class list would be decided
             // by their order in the stylesheet, and a failed message once ended up white on pale red.
             failed
               ? 'border border-red-400 bg-red-50 text-slate-900'
-              : own && !editing
+              : onBlue
                 ? 'bg-blue-600 text-white'
                 : 'border border-line bg-white text-slate-900',
             status === 'sending' && 'opacity-70',

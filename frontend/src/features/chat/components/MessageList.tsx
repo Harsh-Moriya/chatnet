@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { AlertCircle, ChevronDown, LoaderCircle, Pencil, Trash2 } from 'lucide-react'
 import { Button } from '../../../components/ui/Button'
 import type { MenuItem } from '../../../components/ui/Menu'
@@ -7,7 +7,7 @@ import { useNow } from '../../../lib/useNow'
 import { useAuth } from '../../auth/hooks/useAuth'
 import { focusedMessageId } from '../../notifications/navigation'
 import { deleteMessage, dismissMessage, editMessage, retryMessage } from '../api/chatApi'
-import { type ReadingMore, scrollTopAfterPrepend, wasPrepended } from '../history'
+import { type ReadingMore, followsEnd, justSent, returnsToEnd, scrollTopAfterPrepend, wasPrepended } from '../history'
 import { useMarkRead } from '../hooks/useMarkRead'
 import { canDelete, canEdit } from '../messageChanges'
 import { messageDomId } from '../messageDom'
@@ -30,6 +30,8 @@ const NO_PENDING: PendingMessage[] = []
 
 // How close to the bottom still counts as "at the bottom", in pixels.
 const BOTTOM_THRESHOLD = 96
+
+const isNearBottom = (element: HTMLElement) => element.scrollHeight - element.scrollTop - element.clientHeight < BOTTOM_THRESHOLD
 
 // How far above the visible area the top of the list starts loading older messages, so they are
 // usually there before the reader reaches the top.
@@ -88,7 +90,7 @@ export function MessageList({ conversation, isLoading, errorMessage, onRetry, ol
   function handleScroll() {
     const element = scroller.current
     if (element) {
-      atBottom.current = element.scrollHeight - element.scrollTop - element.clientHeight < BOTTOM_THRESHOLD
+      atBottom.current = isNearBottom(element)
       setIsAtBottom(atBottom.current)
     }
   }
@@ -115,6 +117,7 @@ export function MessageList({ conversation, isLoading, errorMessage, onRetry, ol
   // and load more messages, any number of times after that. Setting state while rendering, guarded by the key, is
   // how a value is derived from props without an extra render pass.
   const location = useLocation()
+  const navigate = useNavigate()
   const focusId = focusedMessageId(location.state)
   const [highlight, setHighlight] = useState<{ key: string; id: string } | null>(null)
   if (focusId && highlight?.key !== location.key && messages.some((m) => m.id === focusId)) {
@@ -126,15 +129,28 @@ export function MessageList({ conversation, isLoading, errorMessage, onRetry, ol
 
     document.getElementById(messageDomId(highlight.id))?.scrollIntoView({ block: 'center' })
 
+    // The scroll event that tells whether the reader is at the bottom comes a frame after this, and a render in between that
+    // still believed they were would follow the end and undo the jump. So it is worked out here, from where the jump landed.
+    const element = scroller.current
+    if (element) {
+      atBottom.current = isNearBottom(element)
+      setIsAtBottom(atBottom.current)
+    }
+
+    // The message was asked for once. The navigation state outlives a reload and comes back with the back button, which
+    // would open the old message again, so it is cleared now that it has been used.
+    navigate(location.pathname + location.search, { replace: true, state: null })
+
     const timer = setTimeout(() => setHighlight({ key: highlight.key, id: '' }), HIGHLIGHT_MS)
     return () => clearTimeout(timer)
-  }, [highlight])
+    // The path and the query do not change when the state is cleared, so this still runs once per highlight.
+  }, [highlight, navigate, location.pathname, location.search])
 
   // The first message and the content height as of the previous render. When the first message
   // changes, older messages were added above the reader; browsers would let the content jump down by
   // their height, so the scroll position is moved by the same amount. The scroller turns the
   // browser's own scroll anchoring off (overflow-anchor) so that this is the only adjustment.
-  const previous = useRef<{ items: typeof items; firstId: string | undefined; scrollHeight: number } | null>(null)
+  const previous = useRef<{ items: typeof items; firstId: string | undefined; lastKey: string | undefined; scrollHeight: number } | null>(null)
   const firstId = messages[0]?.id
   const wasInWindow = useRef(false)
 
@@ -142,9 +158,10 @@ export function MessageList({ conversation, isLoading, errorMessage, onRetry, ol
     const element = scroller.current
     if (!element) return
 
-    // Leaving a window (the jump to the latest messages, or sending from it) shows the newest messages from their end,
-    // wherever in the window the reader was. The messages arrive after this render, so it is remembered as being at the bottom.
-    if (wasInWindow.current && !inWindow) atBottom.current = true
+    // Leaving a window by dropping it (the jump to the latest messages, or sending from it) shows the newest messages from their
+    // end, wherever in the window the reader was. The messages arrive after this render, so it is remembered as being at the
+    // bottom. A window that reached the newest message by reading on is not left this way: the reader stays where they are.
+    if (returnsToEnd({ wasInWindow: wasInWindow.current, inWindow, messageCount: messages.length })) atBottom.current = true
     wasInWindow.current = inWindow
 
     const before = previous.current
@@ -158,11 +175,11 @@ export function MessageList({ conversation, isLoading, errorMessage, onRetry, ol
       // The height can change without the items changing (the row at the top that offers older
       // messages appears once the first page is known), which would otherwise leave a reader who
       // was at the bottom a little above it.
-      const sentJustNow = items[items.length - 1]?.kind === 'pending'
-      if ((atBottom.current && !inWindow) || sentJustNow) element.scrollTop = element.scrollHeight
+      const sentJustNow = justSent(before?.lastKey, items[items.length - 1])
+      if (followsEnd({ atBottom: atBottom.current, inWindow, justSent: sentJustNow })) element.scrollTop = element.scrollHeight
     }
 
-    previous.current = { items, firstId, scrollHeight: element.scrollHeight }
+    previous.current = { items, firstId, lastKey: items[items.length - 1]?.key, scrollHeight: element.scrollHeight }
   })
 
   // Asks for older messages when the top of the list comes into view. A new observer reports where
