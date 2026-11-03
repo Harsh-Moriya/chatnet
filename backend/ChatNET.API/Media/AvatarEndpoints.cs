@@ -92,19 +92,26 @@ public static class AvatarEndpoints
         // a random file name that is new for every picture, so it cannot be guessed or listed, and a changed picture is a
         // new address. That is also what makes it safe to tell browsers to keep the answer for a year: nothing that is
         // ever served under one address changes.
-        app.MapGet("/api/avatars/users/{ownerId:guid}/{fileId:guid}",
+        //
+        // Every request reads the object store, also one for an address that holds nothing, and anyone may make it. So the whole
+        // group is limited per client address, and a route added to it later is limited too (D-289).
+        var pictures = app.MapGroup("/api/avatars")
+            .WithTags("Avatars")
+            .RequireRateLimiting(RateLimitPolicies.Avatars);
+
+        pictures.MapGet("/users/{ownerId:guid}/{fileId:guid}",
             (Guid ownerId, Guid fileId, HttpContext http, IBlobStorage storage, CancellationToken cancellationToken)
                 => ServeAsync(AvatarOwner.User, ownerId, fileId, http, storage, cancellationToken))
-            .WithTags("Avatars")
             .Produces(StatusCodes.Status200OK, contentType: "image/png", additionalContentTypes: ["image/jpeg", "image/webp", "image/gif"])
-            .ProducesProblem(StatusCodes.Status404NotFound);
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status429TooManyRequests);
 
-        app.MapGet("/api/avatars/groups/{ownerId:guid}/{fileId:guid}",
+        pictures.MapGet("/groups/{ownerId:guid}/{fileId:guid}",
             (Guid ownerId, Guid fileId, HttpContext http, IBlobStorage storage, CancellationToken cancellationToken)
                 => ServeAsync(AvatarOwner.Group, ownerId, fileId, http, storage, cancellationToken))
-            .WithTags("Avatars")
             .Produces(StatusCodes.Status200OK, contentType: "image/png", additionalContentTypes: ["image/jpeg", "image/webp", "image/gif"])
-            .ProducesProblem(StatusCodes.Status404NotFound);
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status429TooManyRequests);
 
         return app;
     }
@@ -112,8 +119,12 @@ public static class AvatarEndpoints
     private static async Task<IResult> ServeAsync(
         AvatarOwner owner, Guid ownerId, Guid fileId, HttpContext http, IBlobStorage storage, CancellationToken cancellationToken)
     {
-        var blob = await storage.OpenReadAsync(AvatarKeys.StoredKey(owner, ownerId, fileId), cancellationToken)
-            ?? throw new NotFoundException("Picture", fileId);
+        var blob = await storage.OpenReadAsync(AvatarKeys.StoredKey(owner, ownerId, fileId), cancellationToken);
+
+        // A plain 404, which the status code pages give the usual problem body, and not an exception: anyone may ask for any
+        // address, and a thrown NotFoundException is a warning in the log for each miss.
+        if (blob is null)
+            return Results.NotFound();
 
         // Closed when the response has been sent.
         http.Response.RegisterForDispose(blob);

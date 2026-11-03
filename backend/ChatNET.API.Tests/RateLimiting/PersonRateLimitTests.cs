@@ -276,6 +276,8 @@ public class PersonRateLimitTests
     [InlineData("RateLimiting:Edit:WindowSeconds", "0")]
     [InlineData("RateLimiting:Search:PermitLimit", "0")]
     [InlineData("RateLimiting:Search:WindowSeconds", "0")]
+    [InlineData("RateLimiting:Avatars:PermitLimit", "0")]
+    [InlineData("RateLimiting:Avatars:WindowSeconds", "0")]
     [InlineData("RateLimiting:Store:KeyPrefix", "")]
     [InlineData("RateLimiting:Store:KeyPrefix", "has a space")]
     [InlineData("RateLimiting:Store:TimeoutMilliseconds", "0")]
