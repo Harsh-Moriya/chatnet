@@ -25,6 +25,9 @@ public sealed class PushOptions
     // How many browsers one person can have registered. A new one beyond it replaces the one least recently used.
     public int MaxSubscriptionsPerUser { get; set; } = 10;
 
+    // A registration that has not been renewed (the page does it every time it loads) or pushed to for this long is removed.
+    public TimeSpan SubscriptionRetention { get; set; } = TimeSpan.FromDays(60);
+
     // How long a push service keeps a push for a browser that is switched off. An alert that old is of no use.
     public TimeSpan TimeToLive { get; set; } = TimeSpan.FromDays(1);
 
@@ -71,6 +74,9 @@ public sealed class PushOptionsValidator : IValidateOptions<PushOptions>
 
         if (options.MaxSubscriptionsPerUser < 1)
             failures.Add("Push:MaxSubscriptionsPerUser must be at least 1.");
+
+        if (options.SubscriptionRetention <= TimeSpan.Zero)
+            failures.Add("Push:SubscriptionRetention must be greater than zero.");
 
         if (options.TimeToLive < TimeSpan.FromSeconds(1) || options.TimeToLive.TotalSeconds > int.MaxValue)
             failures.Add("Push:TimeToLive must be at least one second.");

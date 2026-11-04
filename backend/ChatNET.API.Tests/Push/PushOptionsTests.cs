@@ -143,6 +143,15 @@ public class PushOptionsTests
         Assert.False(options.Enabled);
     }
 
+    [Fact]
+    public void A_retention_of_nothing_is_refused()
+    {
+        var options = Valid();
+        options.SubscriptionRetention = TimeSpan.Zero;
+
+        Assert.Contains("Push:SubscriptionRetention", Check(options).FailureMessage);
+    }
+
     [Theory]
     [InlineData("Push:TimeToLive")]
     [InlineData("Push:RequestTimeout")]
@@ -176,7 +185,7 @@ public class PushOptionsTests
         Assert.Contains("Push:TimeToLive", Check(options).FailureMessage);
     }
 
-    // The defaults are what was agreed: ten browsers a person, a push held for a day, ten seconds for a push service to answer, eight
+    // The defaults are what was agreed: ten browsers a person, 60 days unused, a push held for a day, ten seconds for a push service to answer, eight
     // pushes at a time.
     [Fact]
     public void The_defaults_are_the_agreed_ones()
@@ -184,6 +193,7 @@ public class PushOptionsTests
         var options = new PushOptions();
 
         Assert.Equal(10, options.MaxSubscriptionsPerUser);
+        Assert.Equal(TimeSpan.FromDays(60), options.SubscriptionRetention);
         Assert.Equal(TimeSpan.FromDays(1), options.TimeToLive);
         Assert.Equal(TimeSpan.FromSeconds(10), options.RequestTimeout);
         Assert.Equal(8, options.MaxParallelSends);
