@@ -35,6 +35,45 @@ public class PushSenderRegistrationTests
         Assert.IsType<WebPushSender>(_factory.Services.GetRequiredService<IPushSender>());
     }
 
+    // A mistake in the keys shows when the host starts, not on the first push of a deployment that has been up for a day.
+    [Fact]
+    public void The_host_does_not_start_when_only_some_of_the_keys_are_set()
+    {
+        using var host = _factory.WithPush(settings: new Dictionary<string, string?> { ["Push:Subject"] = string.Empty });
+
+        var failure = Record.Exception(() => host.CreateClient());
+
+        Assert.NotNull(failure);
+        Assert.Contains("must all be set, or none of them", AllMessages(failure));
+    }
+
+    [Fact]
+    public void The_host_does_not_start_when_the_public_key_belongs_to_another_private_key()
+    {
+        using var other = System.Security.Cryptography.ECDsa.Create(System.Security.Cryptography.ECCurve.NamedCurves.nistP256);
+        var q = other.ExportParameters(false).Q;
+        var publicKey = System.Buffers.Text.Base64Url.EncodeToString([0x04, .. q.X!, .. q.Y!]);
+        using var host = _factory.WithPush(settings: new Dictionary<string, string?> { ["Push:PublicKey"] = publicKey });
+
+        var failure = Record.Exception(() => host.CreateClient());
+
+        Assert.NotNull(failure);
+        var messages = AllMessages(failure);
+        Assert.Contains("public half of the private key", messages);
+
+        // The private key is a secret and a failure to start is logged.
+        Assert.DoesNotContain(PushApi.Vapid.PrivateKey, messages);
+    }
+
+    private static string AllMessages(Exception failure)
+    {
+        var messages = new List<string>();
+        for (var current = failure; current is not null; current = current.InnerException)
+            messages.Add(current.Message);
+
+        return string.Join(" | ", messages);
+    }
+
     [Fact]
     public void The_client_gives_up_after_the_configured_time()
     {

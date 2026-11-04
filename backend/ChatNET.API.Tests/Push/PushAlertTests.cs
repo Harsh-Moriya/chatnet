@@ -56,7 +56,7 @@ public class PushAlertTests : IAsyncLifetime
         public void Dispose() => Host.Dispose();
     }
 
-    private Rig NewRig(IDictionary<string, string?>? settings = null)
+    private Rig NewRig(IDictionary<string, string?>? settings = null, Action<IServiceCollection>? configureServices = null)
     {
         var service = new FakePushService();
         var log = new CapturingLoggerProvider();
@@ -69,6 +69,7 @@ public class PushAlertTests : IAsyncLifetime
                     services.RemoveAll<TimeProvider>();
                     services.AddSingleton<TimeProvider>(clock);
                     services.AddHttpClient<IPushSender, WebPushSender>().ConfigurePrimaryHttpMessageHandler(() => service);
+                    configureServices?.Invoke(services);
                 })
                 .ConfigureLogging(logging => logging.AddProvider(log)),
             settings);
@@ -399,6 +400,72 @@ public class PushAlertTests : IAsyncLifetime
             await Task.Delay(25);
 
         Assert.DoesNotContain(user.Id, await presence.GetConnectedAsync([user.Id], default));
+    }
+
+    // The relay asks Redis who is connected. When it cannot be asked it is not known who is away, so nothing is sent (someone who is
+    // connected would be alerted twice) and nothing is lost: the row fails with the reason and is made when Redis is back.
+    [Fact]
+    public async Task When_presence_cannot_be_asked_the_alert_waits_and_is_made_when_it_can()
+    {
+        var (alice, bob, _, team) = await TeamAsync();
+        var bobsBrowser = await SubscribeAsync(bob);
+        var presence = new SwitchablePresenceStore();
+        using var rig = NewRig(configureServices: services =>
+        {
+            services.RemoveAll<IPresenceStore>();
+            services.AddSingleton<IPresenceStore>(provider =>
+            {
+                presence.Real = ActivatorUtilities.CreateInstance<PresenceStore>(provider);
+                return presence;
+            });
+        });
+        using var client = rig.ClientFor(alice);
+        var message = await client.SendMessageAsync(team, "hello team");
+
+        presence.Down = true;
+        await rig.RunRelayAsync();
+
+        Assert.Empty(rig.Service.Received);
+        var row = (await _factory.OutboxRowsAboutAsync("messageId", message.MessageIdOf())).Single(r => r.Kind == "MessageAlertRequested");
+        Assert.Null(row.DispatchedAt);
+        Assert.Equal(1, row.Attempts);
+        Assert.StartsWith("TimeoutException:", row.LastError);
+
+        presence.Down = false;
+        rig.Clock.Advance(TimeSpan.FromMinutes(1));
+        await rig.RunRelayAsync();
+
+        Assert.Single(rig.Service.ReceivedBy(bobsBrowser));
+        Assert.NotNull((await _factory.OutboxRowAsync(row.Id)).DispatchedAt);
+    }
+
+    // The real store, except that asking who is connected fails while it is down, the way a Redis that cannot be reached does.
+    private sealed class SwitchablePresenceStore : IPresenceStore
+    {
+        public IPresenceStore Real { get; set; } = null!;
+        public bool Down { get; set; }
+
+        public Task<IReadOnlySet<Guid>> GetConnectedAsync(IReadOnlyCollection<Guid> userIds, CancellationToken cancellationToken) =>
+            Down ? throw new TimeoutException("Redis did not answer.") : Real.GetConnectedAsync(userIds, cancellationToken);
+
+        public Task<TouchResult> TouchAsync(Guid userId, string connectionId, CancellationToken cancellationToken) =>
+            Real.TouchAsync(userId, connectionId, cancellationToken);
+
+        public Task<IReadOnlyList<TouchResult>> TouchManyAsync(
+            IReadOnlyList<(Guid UserId, string ConnectionId)> connections, CancellationToken cancellationToken) =>
+            Real.TouchManyAsync(connections, cancellationToken);
+
+        public Task<SettleResult> CloseAsync(Guid userId, string connectionId, TimeSpan grace, CancellationToken cancellationToken) =>
+            Real.CloseAsync(userId, connectionId, grace, cancellationToken);
+
+        public Task<SettleResult> FinishAsync(Guid userId, CancellationToken cancellationToken) =>
+            Real.FinishAsync(userId, cancellationToken);
+
+        public Task<ExpiredUsers> GetExpiredAsync(int max, CancellationToken cancellationToken) =>
+            Real.GetExpiredAsync(max, cancellationToken);
+
+        public Task<PresenceSnapshot> GetSnapshotAsync(IReadOnlyCollection<Guid> userIds, CancellationToken cancellationToken) =>
+            Real.GetSnapshotAsync(userIds, cancellationToken);
     }
 
     // ##### Mentions #####
