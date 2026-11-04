@@ -101,6 +101,11 @@ services:
       Storage__SecretKey: ${STORAGE_SECRET_KEY:?set STORAGE_SECRET_KEY in .env.prod}
       # Where traces are sent. Empty, the default, exports nothing. With --profile tracing, set it to http://jaeger:4317.
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      # The keys that identify the server to the push services of the browsers (see .env.prod.example). Empty, the default,
+      # switches alerts for closed browsers off: the page does not offer them and nothing is pushed.
+      Push__PublicKey: ${PUSH_PUBLIC_KEY:-}
+      Push__PrivateKey: ${PUSH_PRIVATE_KEY:-}
+      Push__Subject: ${PUSH_SUBJECT:-}
     read_only: true
     tmpfs:
       - /tmp
