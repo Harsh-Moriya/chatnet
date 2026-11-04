@@ -83,6 +83,30 @@ public class NotificationListPlanTests
         }
     }
 
+    // A limit without an order is a different set of rows each time, and EF Core says so in the log (a warning on the first use of
+    // every server instance). The count does not care which rows it stops at, but it orders them by the column the index is in, so
+    // the answer is the same and the index still ends the walk at the cap.
+    [Fact]
+    public async Task The_badge_limits_an_ordered_set_so_that_no_warning_is_logged()
+    {
+        var (me, recorder, host, client) = await SetUpAsync();
+        using var _ = host;
+        using var __ = client;
+        try
+        {
+            recorder.Clear();
+            await client.GetNotificationsAsync();
+
+            var count = Assert.Single(recorder.Commands, c => c.Sql.Contains("count(", StringComparison.OrdinalIgnoreCase) && c.Sql.Contains("\"Notifications\""));
+            Assert.Contains("ORDER BY", count.Sql, StringComparison.Ordinal);
+            Assert.Contains("LIMIT", count.Sql, StringComparison.Ordinal);
+        }
+        finally
+        {
+            await RemoveAsync(me);
+        }
+    }
+
     [Fact]
     public async Task The_badge_counts_no_further_than_its_cap()
     {

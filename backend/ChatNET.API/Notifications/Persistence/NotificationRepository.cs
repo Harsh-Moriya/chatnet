@@ -109,9 +109,12 @@ public class NotificationRepository : INotificationRepository
             .Take(take);
     }
 
+    // Which hundred does not matter to a count, but a limit without an order makes EF Core log a warning on the first use of every
+    // instance. The order is the one of the index (UserId, IsRead, CreatedAt DESC), so the walk still stops at the cap.
     public Task<int> CountUnreadAsync(Guid userId, CancellationToken cancellationToken)
         => _db.Notifications
             .Where(n => n.UserId == userId && !n.IsRead)
+            .OrderByDescending(n => n.CreatedAt)
             .Take(UnreadCap)
             .CountAsync(cancellationToken);
 
