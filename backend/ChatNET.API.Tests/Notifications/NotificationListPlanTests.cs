@@ -85,7 +85,9 @@ public class NotificationListPlanTests
 
     // A limit without an order is a different set of rows each time, and EF Core says so in the log (a warning on the first use of
     // every server instance). The count does not care which rows it stops at, but it orders them by the column the index is in, so
-    // the answer is the same and the index still ends the walk at the cap.
+    // the answer is the same and the index still ends the walk at the cap. The column is checked in the SQL because the rows read
+    // cannot tell the two orders apart at this size: a walk of the primary key finds the hundredth unread row just as soon here, and
+    // would not on a table of millions.
     [Fact]
     public async Task The_badge_limits_an_ordered_set_so_that_no_warning_is_logged()
     {
@@ -99,6 +101,8 @@ public class NotificationListPlanTests
 
             var count = Assert.Single(recorder.Commands, c => c.Sql.Contains("count(", StringComparison.OrdinalIgnoreCase) && c.Sql.Contains("\"Notifications\""));
             Assert.Contains("ORDER BY", count.Sql, StringComparison.Ordinal);
+            var orderedBy = count.Sql[count.Sql.IndexOf("ORDER BY", StringComparison.Ordinal)..];
+            Assert.Contains("\"CreatedAt\" DESC", orderedBy, StringComparison.Ordinal);
             Assert.Contains("LIMIT", count.Sql, StringComparison.Ordinal);
         }
         finally
