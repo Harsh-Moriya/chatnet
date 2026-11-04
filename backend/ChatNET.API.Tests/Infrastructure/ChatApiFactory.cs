@@ -51,9 +51,19 @@ public sealed class ChatApiFactory : WebApplicationFactory<Program>, IAsyncLifet
     // Every host built from this factory counts its rate limits under keys of its own. They share one Redis, and a limit test
     // that also counted the requests other tests made from the same address would see them. A test that needs two hosts to
     // share their counts names one prefix for both, which outranks this one.
+    //
+    // No host has push keys unless a test gives it some (see PushApi.WithPush). The test host runs in the Development environment,
+    // which reads the developer's user-secrets, and an environment variable cannot say "empty" (setting one to nothing removes it),
+    // so the keys are named here as empty to keep a developer's own from switching push on in every test.
     protected override void ConfigureWebHost(IWebHostBuilder builder) =>
         builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(
-            new Dictionary<string, string?> { ["RateLimiting:Store:KeyPrefix"] = $"t{Guid.NewGuid():N}" }));
+            new Dictionary<string, string?>
+            {
+                ["RateLimiting:Store:KeyPrefix"] = $"t{Guid.NewGuid():N}",
+                ["Push:PublicKey"] = string.Empty,
+                ["Push:PrivateKey"] = string.Empty,
+                ["Push:Subject"] = string.Empty,
+            }));
 
     // A client for the test bucket, to put objects where the API will look and to see what it left behind.
     public IAmazonS3 Storage { get; private set; } = null!;
