@@ -12,6 +12,7 @@ using ChatNET.API.Notifications.Models;
 using ChatNET.API.Notifications.Persistence;
 using ChatNET.API.Outbox;
 using ChatNET.API.Outbox.Models;
+using ChatNET.API.Push;
 using FluentValidation;
 using FluentValidation.Results;
 using MediatR;
@@ -36,6 +37,7 @@ public class EditMessageHandler : IRequestHandler<EditMessageCommand, MessageDto
     private readonly UserManager<AppUser> _userManager;
     private readonly AttachmentLoader _attachmentLoader;
     private readonly OutboxPublisher _outbox;
+    private readonly PushAlertRows _alerts;
     private readonly IHubContext<ChatHub, IChatClient> _hub;
     private readonly TimeProvider _time;
     private readonly MessagingOptions _options;
@@ -48,6 +50,7 @@ public class EditMessageHandler : IRequestHandler<EditMessageCommand, MessageDto
         UserManager<AppUser> userManager,
         AttachmentLoader attachmentLoader,
         OutboxPublisher outbox,
+        PushAlertRows alerts,
         IHubContext<ChatHub, IChatClient> hub,
         TimeProvider time,
         IOptions<MessagingOptions> options,
@@ -59,6 +62,7 @@ public class EditMessageHandler : IRequestHandler<EditMessageCommand, MessageDto
         _userManager = userManager;
         _attachmentLoader = attachmentLoader;
         _outbox = outbox;
+        _alerts = alerts;
         _hub = hub;
         _time = time;
         _options = options.Value;
@@ -118,9 +122,10 @@ public class EditMessageHandler : IRequestHandler<EditMessageCommand, MessageDto
         var mentionRows = mentions
             .Select(mention => _outbox.Create(new NotificationCreated(mention.Id, mention.UserId)))
             .ToList();
+        var alertRows = _alerts.ForNotifications(mentions);
 
         var edited = await _messages.TryEditAsync(
-            message.Id, content, now, notBefore, mentions, [updateRow, .. mentionRows], cancellationToken);
+            message.Id, content, now, notBefore, mentions, [updateRow, .. mentionRows, .. alertRows], cancellationToken);
 
         if (!edited)
             throw new ConflictException(TooLate);

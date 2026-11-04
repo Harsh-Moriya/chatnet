@@ -157,6 +157,15 @@ public class PushOptionsTests
         Assert.Contains(setting, Check(options).FailureMessage);
     }
 
+    [Fact]
+    public void Sending_to_no_browsers_at_a_time_is_refused()
+    {
+        var options = Valid();
+        options.MaxParallelSends = 0;
+
+        Assert.Contains("Push:MaxParallelSends", Check(options).FailureMessage);
+    }
+
     // The header that carries it counts whole seconds, so less than one is not a time to live.
     [Fact]
     public void A_time_to_live_of_less_than_a_second_is_refused()
@@ -167,7 +176,8 @@ public class PushOptionsTests
         Assert.Contains("Push:TimeToLive", Check(options).FailureMessage);
     }
 
-    // The defaults are what was agreed: ten browsers a person, a push held for a day, ten seconds for a push service to answer.
+    // The defaults are what was agreed: ten browsers a person, a push held for a day, ten seconds for a push service to answer, eight
+    // pushes at a time.
     [Fact]
     public void The_defaults_are_the_agreed_ones()
     {
@@ -176,5 +186,6 @@ public class PushOptionsTests
         Assert.Equal(10, options.MaxSubscriptionsPerUser);
         Assert.Equal(TimeSpan.FromDays(1), options.TimeToLive);
         Assert.Equal(TimeSpan.FromSeconds(10), options.RequestTimeout);
+        Assert.Equal(8, options.MaxParallelSends);
     }
 }

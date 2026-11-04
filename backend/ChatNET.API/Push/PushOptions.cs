@@ -31,6 +31,10 @@ public sealed class PushOptions
     // How long one request to a push service may take.
     public TimeSpan RequestTimeout { get; set; } = TimeSpan.FromSeconds(10);
 
+    // How many pushes one alert has in flight at once, so a person with many browsers, or a message that reaches many people who are
+    // away, does not open that many connections together.
+    public int MaxParallelSends { get; set; } = 8;
+
     public bool Enabled => PublicKey.Length > 0 && PrivateKey.Length > 0 && Subject.Length > 0;
 }
 
@@ -73,6 +77,9 @@ public sealed class PushOptionsValidator : IValidateOptions<PushOptions>
 
         if (options.RequestTimeout <= TimeSpan.Zero)
             failures.Add("Push:RequestTimeout must be greater than zero.");
+
+        if (options.MaxParallelSends < 1)
+            failures.Add("Push:MaxParallelSends must be at least 1.");
 
         return failures.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(failures);
     }

@@ -8,6 +8,7 @@ using ChatNET.API.Messaging.Hubs;
 using ChatNET.API.Notifications.Models;
 using ChatNET.API.Outbox;
 using ChatNET.API.Outbox.Models;
+using ChatNET.API.Push;
 using MediatR;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.SignalR;
@@ -21,6 +22,7 @@ public class AddMembersHandler : IRequestHandler<AddMembersCommand, List<MemberD
     private readonly UserManager<AppUser> _userManager;
     private readonly ConversationNotifier _notifier;
     private readonly OutboxPublisher _outbox;
+    private readonly PushAlertRows _alerts;
     private readonly IHubContext<ChatHub, IChatClient> _hub;
     private readonly TimeProvider _time;
     private readonly ILogger<AddMembersHandler> _logger;
@@ -30,6 +32,7 @@ public class AddMembersHandler : IRequestHandler<AddMembersCommand, List<MemberD
         UserManager<AppUser> userManager,
         ConversationNotifier notifier,
         OutboxPublisher outbox,
+        PushAlertRows alerts,
         IHubContext<ChatHub, IChatClient> hub,
         TimeProvider time,
         ILogger<AddMembersHandler> logger)
@@ -38,6 +41,7 @@ public class AddMembersHandler : IRequestHandler<AddMembersCommand, List<MemberD
         _userManager = userManager;
         _notifier = notifier;
         _outbox = outbox;
+        _alerts = alerts;
         _hub = hub;
         _time = time;
         _logger = logger;
@@ -88,6 +92,7 @@ public class AddMembersHandler : IRequestHandler<AddMembersCommand, List<MemberD
                 _outbox.Create(new MembersChanged(request.ConversationId, outcome.Joined)),
                 _outbox.Create(new MembersJoined(request.ConversationId, outcome.Joined)),
                 .. invitations.Select(n => _outbox.Create(new NotificationCreated(n.Id, n.UserId))),
+                .. _alerts.ForNotifications(invitations),
             ];
 
             await change.CommitAsync(invitations, rows, cancellationToken);

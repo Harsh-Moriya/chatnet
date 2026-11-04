@@ -20,7 +20,7 @@ public sealed class WebPushSender : IPushSender, IDisposable
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
     private readonly HttpClient _http;
-    private readonly VapidSigner? _signer;
+    private readonly Lazy<VapidSigner>? _signer;
     private readonly int _timeToLiveSeconds;
     private readonly PushEndpointPolicy _endpoints;
     private readonly ILogger<WebPushSender> _logger;
@@ -40,11 +40,16 @@ public sealed class WebPushSender : IPushSender, IDisposable
         if (!settings.Enabled)
             return;
 
-        _signer = new VapidSigner(settings.PublicKey, settings.PrivateKey, settings.Subject, time);
+        // Made when the first push is sent: the sender is built for every pass of the relay, and most passes send nothing.
+        _signer = new Lazy<VapidSigner>(() => new VapidSigner(settings.PublicKey, settings.PrivateKey, settings.Subject, time));
         _timeToLiveSeconds = (int)settings.TimeToLive.TotalSeconds;
     }
 
-    public void Dispose() => _signer?.Dispose();
+    public void Dispose()
+    {
+        if (_signer is { IsValueCreated: true })
+            _signer.Value.Dispose();
+    }
 
     public async Task<PushOutcome> SendAsync(PushTarget target, PushAlert alert, CancellationToken cancellationToken)
     {
@@ -108,7 +113,7 @@ public sealed class WebPushSender : IPushSender, IDisposable
         request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
         request.Content.Headers.ContentEncoding.Add("aes128gcm");
 
-        request.Headers.Authorization = _signer!.AuthorizationFor(request.RequestUri!);
+        request.Headers.Authorization = _signer!.Value.AuthorizationFor(request.RequestUri!);
         request.Headers.TryAddWithoutValidation("TTL", _timeToLiveSeconds.ToString(CultureInfo.InvariantCulture));
 
         // A person writing to someone is the reason a phone wakes up: without this a push service may hold it back.

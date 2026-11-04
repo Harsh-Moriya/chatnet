@@ -22,6 +22,8 @@ public class OutboxEventsTests
         var joined = new MembersJoined(Guid.NewGuid(), [Guid.NewGuid()]);
         var left = new MemberLeft(Guid.NewGuid(), Guid.NewGuid());
         var renamed = new ConversationRenamed(Guid.NewGuid());
+        var messageAlert = new MessageAlertRequested(Guid.NewGuid(), Guid.NewGuid(), [Guid.NewGuid(), Guid.NewGuid()]);
+        var notificationAlert = new NotificationAlertRequested(Guid.NewGuid(), Guid.NewGuid());
 
         Assert.Equal(message, OutboxEvents.Read(message.Kind, OutboxEvents.Serialize(message)));
         Assert.Equal(notification, OutboxEvents.Read(notification.Kind, OutboxEvents.Serialize(notification)));
@@ -30,6 +32,11 @@ public class OutboxEventsTests
         Assert.Equal(read, OutboxEvents.Read(read.Kind, OutboxEvents.Serialize(read)));
         Assert.Equal(left, OutboxEvents.Read(left.Kind, OutboxEvents.Serialize(left)));
         Assert.Equal(renamed, OutboxEvents.Read(renamed.Kind, OutboxEvents.Serialize(renamed)));
+        var alertBack = Assert.IsType<MessageAlertRequested>(OutboxEvents.Read(messageAlert.Kind, OutboxEvents.Serialize(messageAlert)));
+        Assert.Equal(messageAlert.MessageId, alertBack.MessageId);
+        Assert.Equal(messageAlert.ConversationId, alertBack.ConversationId);
+        Assert.Equal(messageAlert.MentionedUserIds, alertBack.MentionedUserIds);
+        Assert.Equal(notificationAlert, OutboxEvents.Read(notificationAlert.Kind, OutboxEvents.Serialize(notificationAlert)));
 
         var changedBack = Assert.IsType<MembersChanged>(OutboxEvents.Read(changed.Kind, OutboxEvents.Serialize(changed)));
         Assert.Equal(changed.ConversationId, changedBack.ConversationId);
@@ -70,6 +77,8 @@ public class OutboxEventsTests
         Assert.Equal("MembersJoined", new MembersJoined(Guid.Empty, []).Kind);
         Assert.Equal("MemberLeft", new MemberLeft(Guid.Empty, Guid.Empty).Kind);
         Assert.Equal("ConversationRenamed", new ConversationRenamed(Guid.Empty).Kind);
+        Assert.Equal("MessageAlertRequested", new MessageAlertRequested(Guid.Empty, Guid.Empty, []).Kind);
+        Assert.Equal("NotificationAlertRequested", new NotificationAlertRequested(Guid.Empty, Guid.Empty).Kind);
     }
 
     [Fact]

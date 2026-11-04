@@ -12,6 +12,7 @@ using ChatNET.API.Notifications.Models;
 using ChatNET.API.Notifications.Persistence;
 using ChatNET.API.Outbox;
 using ChatNET.API.Outbox.Models;
+using ChatNET.API.Push;
 using MediatR;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.SignalR;
@@ -27,6 +28,7 @@ public class SendMessageHandler : IRequestHandler<SendMessageCommand, SendMessag
     private readonly AttachmentLoader _attachmentLoader;
     private readonly INotificationRepository _notifications;
     private readonly OutboxPublisher _outbox;
+    private readonly PushAlertRows _alerts;
     private readonly IHubContext<ChatHub, IChatClient> _hub;
     private readonly ILogger<SendMessageHandler> _logger;
 
@@ -38,6 +40,7 @@ public class SendMessageHandler : IRequestHandler<SendMessageCommand, SendMessag
         AttachmentLoader attachmentLoader,
         INotificationRepository notifications,
         OutboxPublisher outbox,
+        PushAlertRows alerts,
         IHubContext<ChatHub, IChatClient> hub,
         ILogger<SendMessageHandler> logger)
     {
@@ -48,6 +51,7 @@ public class SendMessageHandler : IRequestHandler<SendMessageCommand, SendMessag
         _attachmentLoader = attachmentLoader;
         _notifications = notifications;
         _outbox = outbox;
+        _alerts = alerts;
         _hub = hub;
         _logger = logger;
     }
@@ -126,11 +130,13 @@ public class SendMessageHandler : IRequestHandler<SendMessageCommand, SendMessag
         var mentions = await MentionsAsync(message, cancellationToken);
 
         // One row for the message and one for each mention, saved with them. If this request stops before it has
-        // pushed, or the push fails, the relay makes the push from these rows.
+        // pushed, or the push fails, the relay makes the push from these rows. The rows that alert the people who are away
+        // are for the relay alone.
         var messageRow = _outbox.Create(new MessageCreated(message.Id, message.ConversationId));
         var mentionRows = mentions
             .Select(mention => _outbox.Create(new NotificationCreated(mention.Id, mention.UserId)))
             .ToList();
+        var alertRows = _alerts.ForMessage(message, mentions);
 
         // Two copies of one send can arrive together, both find nothing above, and both insert. The unique
         // index lets one in; the other is told so here, and answers with the winner's message. The files this
@@ -138,7 +144,7 @@ public class SendMessageHandler : IRequestHandler<SendMessageCommand, SendMessag
         bool added;
         try
         {
-            added = await _messages.TryAddAsync(message, mentions, [messageRow, .. mentionRows], cancellationToken);
+            added = await _messages.TryAddAsync(message, mentions, [messageRow, .. mentionRows, .. alertRows], cancellationToken);
         }
         catch
         {

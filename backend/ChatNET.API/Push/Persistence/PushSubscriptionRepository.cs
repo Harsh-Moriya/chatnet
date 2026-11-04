@@ -46,4 +46,43 @@ public class PushSubscriptionRepository : IPushSubscriptionRepository
         await _db.PushSubscriptions
             .Where(s => s.UserId == userId && s.Endpoint == endpoint)
             .ExecuteDeleteAsync(cancellationToken) > 0;
+
+    public Task<List<PushTarget>> GetForUsersAsync(IReadOnlyCollection<Guid> userIds, CancellationToken cancellationToken) =>
+        _db.PushSubscriptions
+            .AsNoTracking()
+            .Where(s => userIds.Contains(s.UserId))
+            .Select(s => new PushTarget(s.Id, s.UserId, s.Endpoint, s.P256dh, s.Auth))
+            .ToListAsync(cancellationToken);
+
+    public async Task MarkUsedAsync(IReadOnlyCollection<Guid> ids, DateTime now, CancellationToken cancellationToken)
+    {
+        if (ids.Count == 0)
+            return;
+
+        await _db.PushSubscriptions
+            .Where(s => ids.Contains(s.Id))
+            .ExecuteUpdateAsync(set => set.SetProperty(s => s.LastUsedAt, now), cancellationToken);
+    }
+
+    public async Task RemoveByIdsAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken)
+    {
+        if (ids.Count == 0)
+            return;
+
+        await _db.PushSubscriptions.Where(s => ids.Contains(s.Id)).ExecuteDeleteAsync(cancellationToken);
+    }
+
+    public Task<List<Guid>> FindMessageRecipientsAsync(
+        Guid conversationId, Guid senderId, IReadOnlyCollection<Guid> excluded, CancellationToken cancellationToken) =>
+        _db.ConversationMembers
+            .AsNoTracking()
+            .Where(m => m.ConversationId == conversationId
+                        && m.LeftAt == null
+                        && !m.IsMuted
+                        && m.UserId != senderId
+                        && !m.User.IsDeactivated
+                        && !excluded.Contains(m.UserId)
+                        && _db.PushSubscriptions.Any(s => s.UserId == m.UserId))
+            .Select(m => m.UserId)
+            .ToListAsync(cancellationToken);
 }

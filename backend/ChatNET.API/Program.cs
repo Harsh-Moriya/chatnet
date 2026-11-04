@@ -303,6 +303,8 @@ try
     builder.Services.AddSingleton<IValidateOptions<PushOptions>, PushOptionsValidator>();
     builder.Services.AddSingleton<PushEndpointPolicy>();
     builder.Services.AddScoped<IPushSubscriptionRepository, PushSubscriptionRepository>();
+    builder.Services.AddScoped<PushAlertRows>();
+    builder.Services.AddScoped<PushAlerts>();
 
     // The client the pushes go out through. It does not follow redirects, so a push service cannot send the server on to an
     // address that was never checked, and it gives up after the configured time so one slow service cannot hold a pass of the

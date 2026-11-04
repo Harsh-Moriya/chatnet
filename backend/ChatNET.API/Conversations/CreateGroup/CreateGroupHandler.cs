@@ -8,6 +8,7 @@ using ChatNET.API.Notifications;
 using ChatNET.API.Notifications.Models;
 using ChatNET.API.Outbox;
 using ChatNET.API.Outbox.Models;
+using ChatNET.API.Push;
 using MediatR;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.SignalR;
@@ -22,6 +23,7 @@ public class CreateGroupHandler : IRequestHandler<CreateGroupCommand, Conversati
     private readonly ILogger<CreateGroupHandler> _logger;
     private readonly ConversationNotifier _notifier;
     private readonly OutboxPublisher _outbox;
+    private readonly PushAlertRows _alerts;
     private readonly IHubContext<ChatHub, IChatClient> _hub;
 
     public CreateGroupHandler(
@@ -30,6 +32,7 @@ public class CreateGroupHandler : IRequestHandler<CreateGroupCommand, Conversati
         ILogger<CreateGroupHandler> logger,
         ConversationNotifier notifier,
         OutboxPublisher outbox,
+        PushAlertRows alerts,
         IHubContext<ChatHub, IChatClient> hub)
     {
         _conversations = conversations;
@@ -37,6 +40,7 @@ public class CreateGroupHandler : IRequestHandler<CreateGroupCommand, Conversati
         _logger = logger;
         _notifier = notifier;
         _outbox = outbox;
+        _alerts = alerts;
         _hub = hub;
     }
 
@@ -104,7 +108,7 @@ public class CreateGroupHandler : IRequestHandler<CreateGroupCommand, Conversati
             .Select(invitation => _outbox.Create(new NotificationCreated(invitation.Id, invitation.UserId)))
             .ToList();
 
-        await _conversations.AddAsync(conversation, invitations, [announcementRow, .. invitationRows], cancellationToken);
+        await _conversations.AddAsync(conversation, invitations, [announcementRow, .. invitationRows, .. _alerts.ForNotifications(invitations)], cancellationToken);
 
         _logger.LogInformation(
             "Group conversation {ConversationId} created by {UserId} with {MemberCount} members",

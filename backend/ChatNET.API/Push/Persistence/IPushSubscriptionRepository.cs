@@ -12,4 +12,19 @@ public interface IPushSubscriptionRepository
     // Removes the caller's own registration of this browser. Another person's is left alone, and nothing says whether it
     // exists. True when a row was removed.
     Task<bool> RemoveAsync(Guid userId, string endpoint, CancellationToken cancellationToken);
+
+    // Every browser these people have registered.
+    Task<List<PushTarget>> GetForUsersAsync(IReadOnlyCollection<Guid> userIds, CancellationToken cancellationToken);
+
+    // The browsers a push reached: they were used, which keeps them from being removed as unused.
+    Task MarkUsedAsync(IReadOnlyCollection<Guid> ids, DateTime now, CancellationToken cancellationToken);
+
+    // Browsers the push service said are gone, or that may no longer be posted to.
+    Task RemoveByIdsAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken);
+
+    // The people a new message alerts when they are away: active members of the conversation other than the sender, who have
+    // not muted it and have at least one browser registered, leaving out the people in "excluded" (the ones the message names,
+    // who are alerted by the mention, which also reaches a muted conversation).
+    Task<List<Guid>> FindMessageRecipientsAsync(
+        Guid conversationId, Guid senderId, IReadOnlyCollection<Guid> excluded, CancellationToken cancellationToken);
 }

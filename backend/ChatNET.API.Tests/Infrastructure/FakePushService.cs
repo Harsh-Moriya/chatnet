@@ -21,6 +21,14 @@ public sealed record RecordedPush(Uri Uri, HttpMethod Method, IReadOnlyDictionar
 public sealed class FakePushService : HttpMessageHandler
 {
     private readonly List<RecordedPush> _received = [];
+    private int _inFlight;
+    private int _mostInFlight;
+
+    // How long each request takes to be answered, so a test can see how many are in flight together.
+    public TimeSpan Delay { get; set; }
+
+    // The most requests that were being answered at the same moment.
+    public int MostInFlight => Volatile.Read(ref _mostInFlight);
 
     // Answers every request unless a test changes it. A real push service answers 201 for a push it has taken.
     public Func<RecordedPush, HttpResponseMessage> Respond { get; set; } = _ => new HttpResponseMessage(HttpStatusCode.Created);
@@ -56,7 +64,23 @@ public sealed class FakePushService : HttpMessageHandler
         lock (_received)
             _received.Add(push);
 
-        return Respond(push);
+        var inFlight = Interlocked.Increment(ref _inFlight);
+        int most;
+        while (inFlight > (most = Volatile.Read(ref _mostInFlight)) && Interlocked.CompareExchange(ref _mostInFlight, inFlight, most) != most)
+        {
+        }
+
+        try
+        {
+            if (Delay > TimeSpan.Zero)
+                await Task.Delay(Delay, cancellationToken);
+
+            return Respond(push);
+        }
+        finally
+        {
+            Interlocked.Decrement(ref _inFlight);
+        }
     }
 }
 

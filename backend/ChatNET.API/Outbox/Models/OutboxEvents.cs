@@ -50,6 +50,28 @@ public sealed record NotificationCreated(Guid NotificationId, Guid UserId) : IOu
     public string Kind => Name;
 }
 
+// A message was stored: the members who are away from the application (no live connection) and have allowed alerts are alerted by
+// push. Not the same row as MessageCreated, which the request that stored the message pushes itself: this one is for the relay,
+// which looks at who is away when it takes the row. The people the message names are in it, because they are alerted by the mention
+// and not by the message, and that must not change if the mention is read or dismissed before the relay gets here.
+public sealed record MessageAlertRequested(
+    Guid MessageId, Guid ConversationId, IReadOnlyList<Guid> MentionedUserIds) : IOutboxEvent
+{
+    public const string Name = nameof(MessageAlertRequested);
+
+    [JsonIgnore]
+    public string Kind => Name;
+}
+
+// A notification (a mention, or being added to a group) was stored: its recipient is alerted by push if they are away.
+public sealed record NotificationAlertRequested(Guid NotificationId, Guid UserId) : IOutboxEvent
+{
+    public const string Name = nameof(NotificationAlertRequested);
+
+    [JsonIgnore]
+    public string Kind => Name;
+}
+
 // A conversation was stored: its members' open connections are told, which is how they learn to join its group.
 public sealed record ConversationCreated(
     Guid ConversationId, Guid CreatorId, IReadOnlyList<Guid> MemberIds) : IOutboxEvent
@@ -142,6 +164,8 @@ public static class OutboxEvents
         MessageUpdated.Name => Deserialize<MessageUpdated>(payload),
         MessageFilesRemoved.Name => Deserialize<MessageFilesRemoved>(payload),
         NotificationCreated.Name => Deserialize<NotificationCreated>(payload),
+        MessageAlertRequested.Name => Deserialize<MessageAlertRequested>(payload),
+        NotificationAlertRequested.Name => Deserialize<NotificationAlertRequested>(payload),
         ConversationCreated.Name => Deserialize<ConversationCreated>(payload),
         ConversationRead.Name => Deserialize<ConversationRead>(payload),
         MembersChanged.Name => Deserialize<MembersChanged>(payload),
