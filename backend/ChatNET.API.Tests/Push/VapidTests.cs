@@ -34,10 +34,19 @@ public class VapidTests
     {
         var other = PushApiMakeKeys();
 
-        var failure = Record.Exception(() => VapidKeys.CreateSigner(other.PublicKey, Keys.PrivateKey));
+        var failure = Assert.Throws<ArgumentException>(() => VapidKeys.CreateSigner(other.PublicKey, Keys.PrivateKey));
 
-        // The pair check says so; a platform that refuses to import a mismatched pair says so earlier.
-        Assert.True(failure is ArgumentException or CryptographicException, failure?.ToString());
+        Assert.Contains("public half of the private key", failure.Message);
+        Assert.DoesNotContain(Keys.PrivateKey, failure.Message);
+    }
+
+    // Well formed (65 bytes, the first of them 0x04) and still not a point on the curve.
+    [Fact]
+    public void A_public_key_that_is_not_a_point_on_the_curve_is_refused()
+    {
+        var notAPoint = Base64Url.EncodeToString([0x04, .. new byte[64]]);
+
+        Assert.Throws<ArgumentException>(() => VapidKeys.CreateSigner(notAPoint, Keys.PrivateKey));
     }
 
     [Theory]

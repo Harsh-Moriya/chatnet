@@ -30,37 +30,32 @@ public static class VapidKeys
         return bytes;
     }
 
-    // A key that signs with the private key, after proving that the two belong together: something is signed with one and
-    // checked with the other. A public key that was copied from another deployment would otherwise only show as every push
-    // being refused by the push services.
+    private const string NotAPair = "The public key is not the public half of the private key, or is not a point on the curve.";
+
+    // A key that signs with the private key, after the platform has checked the pair. Importing both makes it refuse a public key that
+    // belongs to another private key (Windows and OpenSSL both do, which was tried), and importing the public key alone makes it
+    // refuse a point that is not on the curve, which Windows did not when the private key came with it (an all-zero public key was
+    // taken without a word). A public key copied from another deployment would otherwise only show as every push being refused by
+    // the push services, and the platforms' own messages for these ("the requested operation is not supported") say nothing, so
+    // the failure is turned into one that does.
     public static ECDsa CreateSigner(string publicKey, string privateKey)
     {
         var point = DecodePublicKey(publicKey);
-        var signer = ECDsa.Create(new ECParameters
-        {
-            Curve = ECCurve.NamedCurves.nistP256,
-            D = DecodePrivateKey(privateKey),
-            Q = new ECPoint { X = point[1..33], Y = point[33..65] },
-        });
+        var q = new ECPoint { X = point[1..33], Y = point[33..65] };
+        var d = DecodePrivateKey(privateKey);
 
+        ECDsa? signer = null;
         try
         {
-            using var verifier = ECDsa.Create(new ECParameters
-            {
-                Curve = ECCurve.NamedCurves.nistP256,
-                Q = new ECPoint { X = point[1..33], Y = point[33..65] },
-            });
-
-            byte[] proof = [1, 2, 3];
-            if (!verifier.VerifyData(proof, signer.SignData(proof, HashAlgorithmName.SHA256), HashAlgorithmName.SHA256))
-                throw new ArgumentException("The public key is not the public half of the private key.");
+            signer = ECDsa.Create(new ECParameters { Curve = ECCurve.NamedCurves.nistP256, D = d, Q = q });
+            using var onCurve = ECDsa.Create(new ECParameters { Curve = ECCurve.NamedCurves.nistP256, Q = q });
 
             return signer;
         }
-        catch
+        catch (Exception ex) when (ex is CryptographicException or PlatformNotSupportedException)
         {
-            signer.Dispose();
-            throw;
+            signer?.Dispose();
+            throw new ArgumentException(NotAPair);
         }
     }
 

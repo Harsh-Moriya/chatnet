@@ -144,6 +144,22 @@ public class PushOptionsTests
     }
 
     [Fact]
+    public void A_public_key_that_belongs_to_another_private_key_is_refused_with_what_is_wrong()
+    {
+        using var other = System.Security.Cryptography.ECDsa.Create(System.Security.Cryptography.ECCurve.NamedCurves.nistP256);
+        var q = other.ExportParameters(false).Q;
+        var options = Valid();
+        options.PublicKey = System.Buffers.Text.Base64Url.EncodeToString([0x04, .. q.X!, .. q.Y!]);
+
+        var result = Check(options);
+
+        Assert.True(result.Failed);
+        Assert.Contains("Push:PublicKey is not valid: The public key is not the public half of the private key", result.FailureMessage);
+        Assert.DoesNotContain(options.PublicKey, result.FailureMessage);
+        Assert.DoesNotContain(options.PrivateKey, result.FailureMessage);
+    }
+
+    [Fact]
     public void A_retention_of_nothing_is_refused()
     {
         var options = Valid();
