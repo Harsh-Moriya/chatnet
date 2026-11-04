@@ -6,6 +6,7 @@ using ChatNET.API.Messaging.Models;
 using ChatNET.API.Messaging.Persistence;
 using ChatNET.API.Notifications.Persistence;
 using ChatNET.API.Outbox.Models;
+using ChatNET.API.Push;
 using ChatNET.API.Users;
 using Microsoft.AspNetCore.SignalR;
 
@@ -29,6 +30,7 @@ public class OutboxDispatcher
     private readonly AttachmentRemover _remover;
     private readonly ProfileNotifier _profileNotifier;
     private readonly AvatarRemover _avatarRemover;
+    private readonly PushAlerts _alerts;
     private readonly ILogger<OutboxDispatcher> _logger;
 
     public OutboxDispatcher(
@@ -42,6 +44,7 @@ public class OutboxDispatcher
         AttachmentRemover remover,
         ProfileNotifier profileNotifier,
         AvatarRemover avatarRemover,
+        PushAlerts alerts,
         ILogger<OutboxDispatcher> logger)
     {
         _hub = hub;
@@ -54,6 +57,7 @@ public class OutboxDispatcher
         _remover = remover;
         _profileNotifier = profileNotifier;
         _avatarRemover = avatarRemover;
+        _alerts = alerts;
         _logger = logger;
     }
 
@@ -96,6 +100,15 @@ public class OutboxDispatcher
                 }
 
                 await _hub.Clients.User(notification.UserId.ToString()).NotificationReceived(dto);
+                return;
+
+            case MessageAlertRequested messageAlert:
+                await _alerts.AlertForMessageAsync(
+                    messageAlert.MessageId, messageAlert.ConversationId, messageAlert.MentionedUserIds, cancellationToken);
+                return;
+
+            case NotificationAlertRequested notificationAlert:
+                await _alerts.AlertForNotificationAsync(notificationAlert.NotificationId, notificationAlert.UserId, cancellationToken);
                 return;
 
             case ConversationCreated conversation:

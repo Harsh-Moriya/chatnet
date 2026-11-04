@@ -26,11 +26,12 @@ Under active development.
 | Editing and deleting messages: the sender edits for 15 minutes (marked "edited"), deletes at any time, and a group owner or admin can delete anyone's; everyone sees the change live and the files of a deleted message are removed | Implemented |
 | Group management: add people, remove someone, make people admins, hand the group over, rename, leave. The owner can do everything and an admin can add people, remove members and rename; when the owner leaves the group goes to the admin who has been in longest. Someone who left keeps the conversation read-only up to when they left, and stops hearing it at once on every server | Implemented |
 | Profiles and pictures: change your display name, and give yourself or a group (owner or admin) a picture. The browser crops and shrinks the picture before it is uploaded straight to object storage; the server checks what was stored, serves it with a one-year cache (a changed picture gets a new address), removes the old file, and tells everyone who shares a conversation | Implemented |
-| Rate limits shared by every server: the counts live in Redis, so two API servers apply one limit between them. Sign-in, registration, renewal and the open route that serves pictures are limited per address; sending (30 per 10 seconds), upload tickets (60 per hour), edits (20 per minute) and search (30 per 10 seconds) are limited per person. Over the limit the answer is a 429 with a `Retry-After`; while Redis cannot be reached the limits are not applied and one warning says so | Implemented |
+| Rate limits shared by every server: the counts live in Redis, so two API servers apply one limit between them. Sign-in, registration, renewal and the open route that serves pictures are limited per address; sending (30 per 10 seconds), upload tickets (60 per hour), edits (20 per minute), search (30 per 10 seconds) and registering a browser for alerts (20 per minute) are limited per person. Over the limit the answer is a 429 with a `Retry-After`; while Redis cannot be reached the limits are not applied and one warning says so | Implemented |
 | Message search: a search box above the list finds what was said, in the conversations you are in and within the time you were in them (text and file names, the last word matched from its start, quoted phrases, `-excluded`, `a or b`); opening a result shows the conversation at that message, however far back it is, and reading on or jumping to the latest messages works from there. The people search became cheaper too | Implemented |
 | Pushes that survive an outage: a message, a notification, a new conversation and a read position are written to an outbox table in the same transaction as the change, and a background relay on every server delivers any push that failed, for example while Redis was down | Implemented |
 | File attachments: pictures, videos and documents sent straight to object storage, shown in the conversation | Implemented |
 | Notifications: a bell with an unread count and a panel, @mentions (with autocomplete and highlighting), being added to a group, browser alerts, an unread count in the tab title, and muting a conversation | Implemented |
+| Alerts while the app is closed: a switch in the profile turns on push alerts for one browser, and a person with no live connection gets an alert for a new message, a mention or an invitation (the words are encrypted to the browser, so the browser vendor's push service cannot read them). Optional: the server offers it only when it is given keys. Tried with Chrome and Google's push service; Firefox, Safari and Edge use the same standard but were not tried, and an iPhone needs an installable app, which this is not yet | Implemented |
 | Structured logging (JSON in production) and tracing (OpenTelemetry, viewed in Jaeger) | Implemented |
 | Deployment: Docker images for the API, a migration job and the web server, one Compose file for a single machine with Caddy (automatic HTTPS) in front of two API instances, Postgres and Redis | Implemented (run on one machine; not deployed to a server) |
 
@@ -106,6 +107,15 @@ dotnet ef database update   # creates the schema
 dotnet run                  # http://localhost:5045
 ```
 
+**Alerts while the app is closed (optional).** Without these three settings the app works as before and does not offer them. Make a key pair once, set the three, and the profile gets a switch (a browser needs a secure page, and `localhost` counts):
+
+```bash
+node -e "const c=require('crypto');const e=c.createECDH('prime256v1');e.generateKeys();console.log('Push:PublicKey  ',e.getPublicKey('base64url'));console.log('Push:PrivateKey ',Buffer.from(e.getPrivateKey('hex').padStart(64,'0'),'hex').toString('base64url'))"
+dotnet user-secrets set "Push:PublicKey" "<the first value>"
+dotnet user-secrets set "Push:PrivateKey" "<the second value>"
+dotnet user-secrets set "Push:Subject" "mailto:you@example.com"
+```
+
 In Development the OpenAPI document is served at `/openapi/v1.json` and the Scalar API reference at `/scalar/v1`; every endpoint documents its success body and its errors.
 
 To see traces, set `OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317` before `dotnet run` and open Jaeger at http://localhost:16686. With the variable unset nothing is exported. Logs go to the console: readable lines in Development, one JSON object per line in any other environment.
@@ -177,6 +187,7 @@ Set `DOMAIN=localhost` in `.env.prod`. Caddy then uses its own certificate autho
 
 ### Limits
 
+- Alerts while the app is closed need `PUSH_PUBLIC_KEY`, `PUSH_PRIVATE_KEY` and `PUSH_SUBJECT` in `.env.prod` (the recipe is in `.env.prod.example`); without them the feature is off and nothing else changes. Changing the pair makes every browser subscribe again, which they do by themselves the next time the page is open. Only Chrome's push service has been reached for real; a browser opens the connection to its own vendor's push service, so the API container needs to reach `fcm.googleapis.com`, `updates.push.services.mozilla.com`, `push.apple.com` and `notify.windows.com` on port 443.
 - The rate limits are counted in Redis. While Redis cannot be reached they are not applied (only the account lockout, in Postgres, still protects a password), and a Redis that loses its data starts the counts again from zero. Behind the proxy an outage of Redis also takes the API out of the rotation within ten seconds, because `/health` includes Redis.
 - One Postgres and one Redis, with no replication and no automatic backups.
 - The migrations create two Postgres extensions, `btree_gin` and `pg_trgm`, for message search and the people search. Both ship with Postgres, and the owner of the database may create them (they are trusted extensions), so the compose Postgres and a managed one both work. The indexes are built inside the migration, which holds writes to the messages and users tables while they build: seconds on a small database, longer on a large one. Take a `pg_dump` before the first update that includes them, and keep autovacuum on, which the search plans rely on.

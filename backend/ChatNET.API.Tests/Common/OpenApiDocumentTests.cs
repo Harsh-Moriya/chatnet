@@ -45,6 +45,9 @@ public class OpenApiDocumentTests
         ("post", "/api/notifications/read", "204", "", "400,401"),
         ("delete", "/api/notifications/{notificationId}", "204", "", "401,404"),
         ("get", "/api/presence", "200", "PresenceDto[]", "401"),
+        ("get", "/api/push/key", "200", "PushKeyDto", "401,404"),
+        ("put", "/api/push/subscriptions", "204", "", "400,401,404,429"),
+        ("delete", "/api/push/subscriptions", "204", "", "400,401,429"),
     ];
 
     // Operations that can also succeed with another status, which is documented too. Sending a message answers 200

@@ -26,7 +26,12 @@ public class OutboxPublisher
 
     // A row that is not saved yet. The relay may take it only after ClaimAfter, so the request that made it has that
     // long to push without anyone else pushing the same thing.
-    public OutboxMessage Create(IOutboxEvent outboxEvent)
+    public OutboxMessage Create(IOutboxEvent outboxEvent) => Make(outboxEvent, _options.ClaimAfter);
+
+    // A row for the relay alone: no request pushes it, so there is nothing to wait for and the relay may take it at its next pass.
+    public OutboxMessage CreateForRelay(IOutboxEvent outboxEvent) => Make(outboxEvent, TimeSpan.Zero);
+
+    private OutboxMessage Make(IOutboxEvent outboxEvent, TimeSpan claimAfter)
     {
         var now = _time.GetUtcNow().UtcDateTime.TruncateToMicroseconds();
 
@@ -36,7 +41,7 @@ public class OutboxPublisher
             Kind = outboxEvent.Kind,
             Payload = OutboxEvents.Serialize(outboxEvent),
             CreatedAt = now,
-            NextAttemptAt = now + _options.ClaimAfter,
+            NextAttemptAt = now + claimAfter,
         };
     }
 

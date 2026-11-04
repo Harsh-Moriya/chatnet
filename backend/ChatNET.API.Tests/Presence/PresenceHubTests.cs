@@ -598,6 +598,9 @@ public class PresenceHubTests
 
         public Task<PresenceSnapshot> GetSnapshotAsync(IReadOnlyCollection<Guid> userIds, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
+
+        public Task<IReadOnlySet<Guid>> GetConnectedAsync(IReadOnlyCollection<Guid> userIds, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
     }
 
     // A store that holds the next batch renewal back until released, so a test can do something while a
@@ -652,6 +655,9 @@ public class PresenceHubTests
 
         public Task<PresenceSnapshot> GetSnapshotAsync(IReadOnlyCollection<Guid> userIds, CancellationToken cancellationToken)
             => _real.GetSnapshotAsync(userIds, cancellationToken);
+
+        public Task<IReadOnlySet<Guid>> GetConnectedAsync(IReadOnlyCollection<Guid> userIds, CancellationToken cancellationToken)
+            => _real.GetConnectedAsync(userIds, cancellationToken);
     }
 
     // A store that answers the first request to finish a user with "a wait is still running, for another
@@ -706,6 +712,9 @@ public class PresenceHubTests
 
         public Task<PresenceSnapshot> GetSnapshotAsync(IReadOnlyCollection<Guid> userIds, CancellationToken cancellationToken)
             => _real.GetSnapshotAsync(userIds, cancellationToken);
+
+        public Task<IReadOnlySet<Guid>> GetConnectedAsync(IReadOnlyCollection<Guid> userIds, CancellationToken cancellationToken)
+            => _real.GetConnectedAsync(userIds, cancellationToken);
     }
 
     // A store that fails like an unreachable Redis until told it is healthy again, then behaves like the
@@ -744,5 +753,8 @@ public class PresenceHubTests
 
         public Task<PresenceSnapshot> GetSnapshotAsync(IReadOnlyCollection<Guid> userIds, CancellationToken cancellationToken)
             => Real.GetSnapshotAsync(userIds, cancellationToken);
+
+        public Task<IReadOnlySet<Guid>> GetConnectedAsync(IReadOnlyCollection<Guid> userIds, CancellationToken cancellationToken)
+            => Real.GetConnectedAsync(userIds, cancellationToken);
     }
 }

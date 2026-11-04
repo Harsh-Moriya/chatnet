@@ -3,6 +3,8 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useNotificationStore } from '../../notifications/store/notificationStore'
 import { usePresenceStore } from '../../presence/store/presenceStore'
 import { useProfileSync } from '../../profile/hooks/useProfileSync'
+import { usePushSync } from '../../push/hooks/usePushSync'
+import { useServiceWorkerNavigation } from '../../push/hooks/useServiceWorkerNavigation'
 import { ChatConnectionContext } from '../hooks/chatConnectionContext'
 import { useSignalR } from '../hooks/useSignalR'
 import { useChatStore } from '../store/chatStore'
@@ -13,6 +15,8 @@ export function ChatConnectionProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient()
   const connection = useSignalR()
   useProfileSync()
+  usePushSync()
+  useServiceWorkerNavigation()
 
   // Leaving the chat, by signing out or because the session expired, must not leave one person's
   // conversations in memory for the next person to sign in on this browser. The store and the

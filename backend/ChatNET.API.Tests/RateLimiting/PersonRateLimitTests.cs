@@ -255,6 +255,8 @@ public class PersonRateLimitTests
     [InlineData("POST", "/api/users/me/avatar/uploads", "uploads")]
     [InlineData("POST", "/api/conversations/{conversationId:guid}/avatar/uploads", "uploads")]
     [InlineData("GET", "/api/search/messages", "search")]
+    [InlineData("PUT", "/api/push/subscriptions", "push")]
+    [InlineData("DELETE", "/api/push/subscriptions", "push")]
     public void Each_of_these_endpoints_names_its_rate_limit_policy(string method, string pattern, string policy)
     {
         var endpoint = _factory.Services.GetRequiredService<EndpointDataSource>().Endpoints
@@ -278,6 +280,8 @@ public class PersonRateLimitTests
     [InlineData("RateLimiting:Search:WindowSeconds", "0")]
     [InlineData("RateLimiting:Avatars:PermitLimit", "0")]
     [InlineData("RateLimiting:Avatars:WindowSeconds", "0")]
+    [InlineData("RateLimiting:Push:PermitLimit", "0")]
+    [InlineData("RateLimiting:Push:WindowSeconds", "0")]
     [InlineData("RateLimiting:Store:KeyPrefix", "")]
     [InlineData("RateLimiting:Store:KeyPrefix", "has a space")]
     [InlineData("RateLimiting:Store:TimeoutMilliseconds", "0")]

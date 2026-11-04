@@ -72,6 +72,18 @@ internal static class PresenceScripts
         return { 3, now, 0 }
         """;
 
+    // How many live connections each of the given users has, in the order of the keys. An entry is alive while its score (the
+    // time it expires) is still ahead of Redis's clock; this reads and removes nothing. The user keys are passed as KEYS, so
+    // the number of users is whatever the caller has.
+    public const string Connected = Now + """
+
+        local counts = {}
+        for i = 1, #KEYS do
+            counts[i] = redis.call('ZCOUNT', KEYS[i], '(' .. now, '+inf')
+        end
+        return counts
+        """;
+
     // Users in the expiring set whose newest entry has expired: { Redis time, id, score, id, score ... }.
     public const string Expired = Now + """
 

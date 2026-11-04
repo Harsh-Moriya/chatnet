@@ -76,6 +76,12 @@ fi
 
 expect_header "responses are compressed" "$public" / "content-encoding: gzip" "Accept-Encoding: gzip"
 
+# The service worker is fetched by the browser from a fixed address, and a copy kept in a cache would keep a fix to it from
+# reaching browsers that already have one. Were the file missing, the page's fallback would answer with html, which a browser
+# refuses to run as a worker, so the type is checked too.
+expect_header "the service worker is served as a script" "$public" /sw.js "content-type: text/javascript"
+expect_header "the service worker is not cached"         "$public" /sw.js "cache-control: no-cache"
+
 # The access token SignalR puts in a query string must not be written to the log. No API is behind this proxy, so the
 # answer is an error; the line is what matters.
 curl -s -o /dev/null -X POST -H "Host: $public" "http://localhost:$port/hubs/chat/negotiate?negotiateVersion=1&access_token=SMOKESECRET"

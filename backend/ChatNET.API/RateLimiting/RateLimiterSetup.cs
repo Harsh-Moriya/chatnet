@@ -37,6 +37,7 @@ public sealed class RateLimiterSetup : IConfigureOptions<RateLimiterOptions>
         AddPolicy(options, RateLimitPolicies.Uploads, SignedInPerson);
         AddPolicy(options, RateLimitPolicies.Edit, SignedInPerson);
         AddPolicy(options, RateLimitPolicies.Search, SignedInPerson);
+        AddPolicy(options, RateLimitPolicies.Push, SignedInPerson);
 
         options.OnRejected = WriteRejectionAsync;
     }

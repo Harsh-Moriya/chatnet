@@ -48,14 +48,29 @@ function runExclusively<T>(work: () => Promise<T>): Promise<T> {
 
 const SIGNED_OUT = 'signed-out'
 
+// Work that has to happen before the session ends, while the access token still works: the alert registration of this browser
+// has to be taken off the server by someone who is still signed in. Features add theirs here and take it off when they go; the
+// session does not need to know them, and a feature that imports the API client cannot be imported here (the client imports
+// this file).
+const signOutTasks = new Set<() => Promise<void>>()
+
+export function onSignOut(task: () => Promise<void>): () => void {
+  signOutTasks.add(task)
+  return () => {
+    signOutTasks.delete(task)
+  }
+}
+
 // Created when the session starts and not when this file is loaded, so importing it (in a test, say) opens
 // nothing. Null where the browser has no BroadcastChannel; tabs then simply do not hear about each other.
 let channel: BroadcastChannel | null = null
 
 export const session = createSessionManager({
   requestRefresh,
+  // The tasks and the request together, so signing out is no slower than the slowest of them, and a task that fails does not stop
+  // the session from ending.
   requestLogout: async () => {
-    await sessionApi.post('/auth/logout')
+    await Promise.allSettled([...[...signOutTasks].map((task) => task()), sessionApi.post('/auth/logout')])
   },
   getAuth: () => {
     const { status, token, tokenExpiresAt, user } = useAuthStore.getState()
