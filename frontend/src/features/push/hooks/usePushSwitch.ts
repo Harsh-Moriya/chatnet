@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
-import { getApiError } from '../../../lib/errors'
 import { useAuthStore } from '../../auth/store/authStore'
+import { pushErrorMessage } from '../pushErrors'
 import { readFacts, turnOffPush, turnOnPush } from '../pushController'
 import { type PushFacts, type SwitchState, switchState } from '../pushPlan'
 import { usePushKey } from './usePushKey'
@@ -47,7 +47,7 @@ export function usePushSwitch() {
       setProblem(await action())
       await reload()
     } catch (failure) {
-      setProblem(getApiError(failure))
+      setProblem(pushErrorMessage(failure))
     } finally {
       setBusy(false)
     }
