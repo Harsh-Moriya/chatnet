@@ -52,4 +52,4 @@ A deleted message's files are removed through the outbox job `MessageFilesRemove
 - A ticket holder can park a file under `pending/` until the send looks at it or the lifecycle rule removes it (a day).
 - Upload tickets are limited to 60 per hour per person.
 - No virus scan, no thumbnails, and files are served from the storage host, not a separate origin.
-- The bucket needs CORS rules that allow PUT and GET from the app's origin, and a lifecycle rule for `pending/`; the setup is in `docker/storage`.
+- The bucket needs a CORS rule that allows `PUT`, `GET` and `HEAD` from the app's origin and exposes the `ETag` header, and a lifecycle rule that expires `pending/` after a day; both are in `docker/storage` (`cors.json`, `lifecycle.json`).
