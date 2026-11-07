@@ -1,15 +1,13 @@
 using System.Security.Cryptography;
-using System.Text;
 using ChatNET.API.Auth.Models;
 using ChatNET.API.Auth.Persistence;
+using ChatNET.API.Common.Exceptions;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Options;
 
 namespace ChatNET.API.Auth.Services;
 
-// Makes refresh tokens. A token is 32 random bytes (256 bits), which cannot be guessed, so the stored
-// copy is a plain SHA-256 hash: a slow password hash would protect nothing extra here and would add
-// cost to every refresh.
+// Makes refresh tokens. A token is 32 random bytes (256 bits); the stored copy is its hash (see TokenHash).
 public class RefreshTokenIssuer
 {
     private readonly IRefreshTokenRepository _tokens;
@@ -23,14 +21,15 @@ public class RefreshTokenIssuer
         _time = time;
     }
 
-    public static string Hash(string token)
-        => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
-
-    // Starts a new family, for a sign-in or a registration, and stores its first token.
-    public async Task<IssuedRefreshToken> StartSessionAsync(Guid userId, CancellationToken cancellationToken)
+    // Starts a new family, for a sign-in or a registration, and stores its first token. The person was found and their password
+    // checked a moment ago, with the security stamp they have now; if a password reset has changed the stamp since, the password
+    // that was checked is no longer the password, and no session is started.
+    public async Task<IssuedRefreshToken> StartSessionAsync(AppUser user, CancellationToken cancellationToken)
     {
-        var (entity, issued) = Create(userId, Guid.NewGuid(), _time.GetUtcNow().UtcDateTime);
-        await _tokens.AddAsync(entity, cancellationToken);
+        var (entity, issued) = Create(user.Id, Guid.NewGuid(), _time.GetUtcNow().UtcDateTime);
+
+        if (!await _tokens.AddIfSecurityStampUnchangedAsync(entity, user.SecurityStamp, cancellationToken))
+            throw new UnauthorizedException("Invalid email or password.");
 
         return issued;
     }
@@ -44,13 +43,14 @@ public class RefreshTokenIssuer
     {
         var value = WebEncoders.Base64UrlEncode(RandomNumberGenerator.GetBytes(32));
         var expiresAt = now.AddDays(_options.RefreshTokenDays);
+        var hash = TokenHash.Of(value);
 
         var entity = new RefreshToken
         {
             Id = Guid.NewGuid(),
             UserId = userId,
             FamilyId = familyId,
-            TokenHash = Hash(value),
+            TokenHash = hash,
             CreatedAt = now,
             ExpiresAt = expiresAt,
         };

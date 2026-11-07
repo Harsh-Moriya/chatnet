@@ -72,6 +72,9 @@ public class PushSubscriptionRepository : IPushSubscriptionRepository
         await _db.PushSubscriptions.Where(s => ids.Contains(s.Id)).ExecuteDeleteAsync(cancellationToken);
     }
 
+    public Task<int> RemoveAllForUserAsync(Guid userId, CancellationToken cancellationToken) =>
+        _db.PushSubscriptions.Where(s => s.UserId == userId).ExecuteDeleteAsync(cancellationToken);
+
     public Task<int> RemoveUnusedSinceAsync(DateTime cutoff, CancellationToken cancellationToken) =>
         _db.PushSubscriptions.Where(s => s.LastUsedAt < cutoff).ExecuteDeleteAsync(cancellationToken);
 

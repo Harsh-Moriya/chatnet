@@ -64,7 +64,7 @@ public class LoginHandler : IRequestHandler<LoginCommand, AuthResult>
             throw new ForbiddenException("This account has been deactivated.");
 
         var accessToken = _jwtTokenService.GenerateToken(user);
-        var refreshToken = await _refreshTokens.StartSessionAsync(user.Id, cancellationToken);
+        var refreshToken = await _refreshTokens.StartSessionAsync(user, cancellationToken);
 
         return new AuthResult(AuthResponse.For(user, accessToken), refreshToken);
     }

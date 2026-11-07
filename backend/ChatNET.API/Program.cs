@@ -241,7 +241,8 @@ try
     builder.Services.AddScoped<JwtTokenService>();
     builder.Services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
     builder.Services.AddScoped<RefreshTokenIssuer>();
-    builder.Services.AddHostedService<RefreshTokenCleanupService>();
+    builder.Services.AddScoped<IPasswordResetTokenRepository, PasswordResetTokenRepository>();
+    builder.Services.AddHostedService<AuthTokenCleanupService>();
     // The clock the application's own logic reads, so a test can move it. The access token itself is
     // issued and checked against the system clock.
     builder.Services.TryAddSingleton(TimeProvider.System);

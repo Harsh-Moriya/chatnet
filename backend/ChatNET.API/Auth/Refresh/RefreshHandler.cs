@@ -43,7 +43,7 @@ public class RefreshHandler : IRequestHandler<RefreshCommand, AuthResult>
 
         var now = _time.GetUtcNow().UtcDateTime;
 
-        var current = await _tokens.FindByHashAsync(RefreshTokenIssuer.Hash(request.RefreshToken), cancellationToken)
+        var current = await _tokens.FindByHashAsync(TokenHash.Of(request.RefreshToken), cancellationToken)
                       ?? throw new SessionRejectedException(clearCookie: true);
 
         if (current.RevokedAt is { } revokedAt)
