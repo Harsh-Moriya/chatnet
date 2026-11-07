@@ -8,7 +8,7 @@ A message was saved and then pushed. A failure or crash between the commit and t
 
 ## Decision
 
-The change and a row in `OutboxMessages` are saved in one `SaveChanges`. The request still pushes right after the commit and marks the row. A relay (a `BackgroundService` on every instance) takes rows that are older than `Outbox:ClaimAfter` (5 s) and not dispatched with one `UPDATE ... WHERE Id IN (SELECT ... FOR UPDATE SKIP LOCKED) RETURNING ...` that also moves `NextAttemptAt`, so the date is both the lease and the retry delay (doubling, capped at 64 times the base). After 10 attempts a row is left with its last error; finished rows are removed after a day. A row holds ids, not the payload: the relay builds the push from stored data, so it never sends old text after an edit or keeps signed links in a table.
+The change and a row in `OutboxMessages` are saved in one `SaveChanges`. The request still pushes right after the commit and marks the row. A relay (a `BackgroundService` on every instance) takes rows that are older than `Outbox:ClaimAfter` (5 s) and not dispatched with one `UPDATE ... WHERE Id IN (SELECT ... FOR UPDATE SKIP LOCKED) RETURNING ...` that also moves `NextAttemptAt`, so the date is both the lease and the retry delay (doubling, capped at 64 times the base). After 10 attempts the relay gives up on a row and leaves it with its last error; dispatched rows and given-up rows are both removed once they are a day old. A row holds ids, not the payload: the relay builds the push from stored data, so it never sends old text after an edit or keeps signed links in a table.
 
 ## Alternatives considered
 

@@ -64,7 +64,7 @@ Counts live in Redis, so every API instance applies one limit. A refused request
 | `search` | person | 30 per 10 s |
 | `push` | person | 20 per 60 s |
 
-Not limited: reading, marking read, muting, deleting, typing and presence. When Redis cannot be reached the limits fail open: they are skipped for 5 seconds after a failure, one warning is logged per outage, and a bug in the limiter code is not hidden as an outage. Behind a proxy, the client address is the one the trusted proxy reports.
+Not covered by these policies: reading, marking read, muting, deleting and presence. Typing is not counted in Redis; the hub delivers at most one start event per second per conversation per connection. When Redis cannot be reached the limits fail open: they are skipped for 5 seconds after a failure, one warning is logged per outage, and a bug in the limiter code is not hidden as an outage. Behind a proxy, the client address is the one the trusted proxy reports.
 
 ## Push endpoints and keys
 

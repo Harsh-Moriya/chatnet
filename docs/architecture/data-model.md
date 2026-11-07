@@ -41,6 +41,7 @@ The Identity user table, extended with ChatNET's own columns.
 | `UserName` (`NormalizedUserName`) | varchar(256) | the handle used in `@mentions`; unique |
 | `Email` (`NormalizedEmail`) | varchar(256) | unique through `EmailIndex` |
 | `PasswordHash`, `SecurityStamp`, `ConcurrencyStamp`, `LockoutEnd`, `LockoutEnabled`, `AccessFailedCount` | Identity | lockout after five failures |
+| `EmailConfirmed`, `PhoneNumber`, `PhoneNumberConfirmed`, `TwoFactorEnabled` | Identity | present and unused |
 
 Indexes: `UserNameIndex` (unique), `EmailIndex` (unique), and two trigram GIN indexes on `DisplayName` and `UserName` (extension `pg_trgm`) that serve the people search.
 

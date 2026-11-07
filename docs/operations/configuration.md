@@ -59,7 +59,7 @@ Options are bound to classes and **validated when the host starts**, so a missin
 | `Outbox:RetryDelay` | 5 s | above zero. Doubles per attempt, up to 64 times the base. |
 | `Outbox:BatchSize` | 100 | at least 1 |
 | `Outbox:MaxAttempts` | 10 | at least 1 |
-| `Outbox:Retention` | 1 day | above zero. How long a dispatched row stays. |
+| `Outbox:Retention` | 1 day | above zero. How old a row must be before the clean-up removes it, whether it was dispatched or given up on after `Outbox:MaxAttempts`. |
 | `Outbox:CleanupInterval` | 1 hour | above zero |
 
 Time values are `hh:mm:ss` (or `d.hh:mm:ss`) strings, for example `Messaging__EditWindow=00:15:00`.

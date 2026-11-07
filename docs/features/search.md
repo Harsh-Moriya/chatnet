@@ -31,7 +31,7 @@ One query, in two phases per conversation:
 1. The newest 300 messages of the window, read in order, for a quick answer from recent chat.
 2. If more is needed, the full-text index `IX_Messages_Search` on `(ConversationId, to_tsvector('simple', Content))`.
 
-Plan tests assert how many rows are read after a `VACUUM`. The first version read 16,666 rows for 3 results.
+Plan tests assert how many rows are read after a `VACUUM`.
 
 Snippets are made by `ts_headline` for the page only, with markers from the private use area so message text cannot forge a highlight; the browser draws the snippet as text.
 
