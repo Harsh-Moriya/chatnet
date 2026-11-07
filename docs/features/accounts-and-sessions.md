@@ -1,5 +1,7 @@
 # Accounts and sessions
 
+![The sign-in page](../assets/screenshots/sign-in.png)
+
 People register with an email, a handle and a password, and stay signed in through a short-lived access token that renews itself.
 
 ## Behaviour

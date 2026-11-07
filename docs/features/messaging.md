@@ -1,5 +1,7 @@
 # Messaging and history
 
+![A group conversation with an image, a mention, and a read receipt, next to the conversation list](../assets/screenshots/chat.png)
+
 ## Sending
 
 `POST /api/conversations/{id}/messages` with `{ content, clientMessageId, attachments }`.

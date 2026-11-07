@@ -1,5 +1,7 @@
 # Conversations
 
+![A conversation on a 375 pixel wide phone screen](../assets/screenshots/chat-phone.png)
+
 Direct (1:1) and group conversations share one model. A conversation is a row; who is in it is a set of membership rows.
 
 ## Behaviour

@@ -1,5 +1,7 @@
 # Message search
 
+![Message search replacing the conversation list with matching messages](../assets/screenshots/search.png)
+
 A search box above the conversation list finds what was said, in the conversations the person is in and within the time they were in them.
 
 ## Behaviour
