@@ -45,16 +45,11 @@ public class AttachmentLinkTests
     {
         var (_, bob, _, attachment, content) = await SentFileAsync();
         using var client = _factory.CreateClientFor(bob);
-        var before = DateTimeOffset.UtcNow;
-
         var response = await client.GetAttachmentLinkResponseAsync(attachment);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var link = await response.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.InRange(
-            link.GetProperty("expiresAt").GetDateTimeOffset(),
-            before.AddMinutes(60).AddSeconds(-5),
-            DateTimeOffset.UtcNow.AddMinutes(60).AddSeconds(5));
+        link.AssertExpiryIsWholeSecondsUtc(minutes: 60);
         var download = await new HttpClient().GetAsync(link.GetProperty("url").GetString());
         Assert.Equal(content, await download.Content.ReadAsByteArrayAsync());
     }

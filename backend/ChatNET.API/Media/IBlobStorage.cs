@@ -1,7 +1,8 @@
 namespace ChatNET.API.Media;
 
-// A link and the moment it stops working.
-public sealed record SignedUrl(string Url, DateTimeOffset ExpiresAt);
+// A link and the moment it stops working, in UTC and in whole seconds (the signature itself counts in seconds, and
+// a client parsing the text is only promised three fractional digits).
+public sealed record SignedUrl(string Url, DateTime ExpiresAt);
 
 // What the storage reports about an object without sending it: the size and type it was stored with, and the
 // ETag that names this exact content.

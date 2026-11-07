@@ -81,12 +81,14 @@ public class BlobStorageTests
     [Fact]
     public void An_upload_link_points_at_the_configured_endpoint_and_lasts_the_configured_time()
     {
-        var before = DateTimeOffset.UtcNow;
+        var before = DateTime.UtcNow;
 
         var ticket = _storage.CreateUploadUrl(NewKey(), "image/png");
 
         Assert.StartsWith(_factory.StorageServiceUrl + "/" + ChatApiFactory.StorageBucket + "/", ticket.Url);
-        Assert.InRange(ticket.ExpiresAt, before.AddMinutes(10).AddSeconds(-5), DateTimeOffset.UtcNow.AddMinutes(10).AddSeconds(5));
+        Assert.InRange(ticket.ExpiresAt, before.AddMinutes(10).AddSeconds(-5), DateTime.UtcNow.AddMinutes(10).AddSeconds(5));
+        Assert.Equal(DateTimeKind.Utc, ticket.ExpiresAt.Kind);
+        Assert.Equal(0, ticket.ExpiresAt.Ticks % TimeSpan.TicksPerSecond);
     }
 
     // ##### Looking at an object #####

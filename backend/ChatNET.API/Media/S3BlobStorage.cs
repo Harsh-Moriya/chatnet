@@ -24,9 +24,17 @@ public sealed class S3BlobStorage : IBlobStorage
         _protocol = new Uri(_options.ServiceUrl).Scheme == Uri.UriSchemeHttps ? Protocol.HTTPS : Protocol.HTTP;
     }
 
+    // The moment a link stops working, cut to whole seconds. The same value is signed into the link and reported
+    // to the client, so the two cannot disagree.
+    private DateTime ExpiryIn(int minutes)
+    {
+        var ticks = _time.GetUtcNow().UtcDateTime.AddMinutes(minutes).Ticks;
+        return new DateTime(ticks - ticks % TimeSpan.TicksPerSecond, DateTimeKind.Utc);
+    }
+
     public SignedUrl CreateUploadUrl(string key, string contentType)
     {
-        var expiresAt = _time.GetUtcNow().AddMinutes(_options.UploadUrlMinutes);
+        var expiresAt = ExpiryIn(_options.UploadUrlMinutes);
 
         var url = _s3.GetPreSignedURL(new GetPreSignedUrlRequest
         {
@@ -34,7 +42,7 @@ public sealed class S3BlobStorage : IBlobStorage
             Key = key,
             Verb = HttpVerb.PUT,
             ContentType = contentType,
-            Expires = expiresAt.UtcDateTime,
+            Expires = expiresAt,
             Protocol = _protocol,
         });
 
@@ -43,7 +51,7 @@ public sealed class S3BlobStorage : IBlobStorage
 
     public SignedUrl CreateDownloadUrl(string key, string fileName, bool inline)
     {
-        var expiresAt = _time.GetUtcNow().AddMinutes(_options.DownloadUrlMinutes);
+        var expiresAt = ExpiryIn(_options.DownloadUrlMinutes);
 
         // The header builder writes a non-ASCII or quoted name in the encoded form browsers understand, so a
         // file name cannot break out of the header.
@@ -55,7 +63,7 @@ public sealed class S3BlobStorage : IBlobStorage
             BucketName = _options.Bucket,
             Key = key,
             Verb = HttpVerb.GET,
-            Expires = expiresAt.UtcDateTime,
+            Expires = expiresAt,
             Protocol = _protocol,
             ResponseHeaderOverrides = new ResponseHeaderOverrides { ContentDisposition = disposition.ToString() },
         });
