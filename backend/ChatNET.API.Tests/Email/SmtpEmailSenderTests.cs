@@ -76,6 +76,65 @@ public class SmtpEmailSenderTests
         Assert.Null(failure.InnerException);
     }
 
+
+    // StartTls is required, not tried: a server that does not offer it is refused, so a login is never sent in the clear because
+    // of a relay that was set up without encryption.
+    [Fact]
+    public async Task With_starttls_a_server_that_does_not_offer_it_is_refused_and_nothing_is_sent()
+    {
+        await using var server = new FakeSmtpServer();
+        var sender = new SmtpEmailSender(Options.Create(new EmailOptions
+        {
+            Smtp = new SmtpOptions { Host = "127.0.0.1", Port = server.Port, Security = SmtpSecurity.StartTls, Timeout = TimeSpan.FromSeconds(5) },
+            From = new SenderOptions { Address = "noreply@example.test" },
+        }));
+
+        var failure = await Assert.ThrowsAsync<EmailDeliveryException>(() => sender.SendAsync(MessageTo(NewAddress()), CancellationToken.None));
+
+        Assert.False(failure.IsPermanent);
+        Assert.Equal(0, server.MessagesReceived);
+    }
+
+    [Fact]
+    public async Task With_tls_from_the_first_byte_a_server_that_speaks_plain_text_is_refused()
+    {
+        await using var server = new FakeSmtpServer();
+        var sender = new SmtpEmailSender(Options.Create(new EmailOptions
+        {
+            Smtp = new SmtpOptions { Host = "127.0.0.1", Port = server.Port, Security = SmtpSecurity.SslOnConnect, Timeout = TimeSpan.FromSeconds(5) },
+            From = new SenderOptions { Address = "noreply@example.test" },
+        }));
+
+        var failure = await Assert.ThrowsAsync<EmailDeliveryException>(() => sender.SendAsync(MessageTo(NewAddress()), CancellationToken.None));
+
+        Assert.False(failure.IsPermanent);
+        Assert.Equal(0, server.MessagesReceived);
+    }
+
+
+    [Fact]
+    public async Task A_login_the_server_refuses_is_an_authentication_failure_that_repeats_neither_the_user_nor_the_key()
+    {
+        await using var server = new FakeSmtpServer { RejectLogins = true };
+        var sender = new SmtpEmailSender(Options.Create(new EmailOptions
+        {
+            Smtp = new SmtpOptions
+            {
+                Host = "127.0.0.1", Port = server.Port, Security = SmtpSecurity.None,
+                UserName = "resend", Password = "a-secret-value", Timeout = TimeSpan.FromSeconds(5),
+            },
+            From = new SenderOptions { Address = "noreply@example.test" },
+        }));
+
+        var failure = await Assert.ThrowsAsync<EmailDeliveryException>(() => sender.SendAsync(MessageTo(NewAddress()), CancellationToken.None));
+
+        Assert.False(failure.IsPermanent);
+        Assert.Equal("SMTP authentication failed", failure.Message);
+        Assert.DoesNotContain("a-secret-value", failure.ToString());
+        Assert.DoesNotContain("resend", failure.ToString());
+        Assert.Equal(0, server.MessagesReceived);
+    }
+
     [Fact]
     public async Task A_server_that_never_answers_ends_as_a_timeout_that_can_be_tried_again()
     {

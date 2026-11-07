@@ -5,18 +5,23 @@ using System.Text;
 namespace ChatNET.API.Tests.Infrastructure;
 
 // An SMTP server that answers as a test says, for what a real mail catcher will not do: refuse a recipient for good, ask to
-// try later, or say nothing at all. It speaks just enough of the protocol for MailKit to get as far as the recipient.
+// try later, refuse a login, or say nothing at all. It speaks just enough of the protocol for MailKit to get as far as the
+// recipient.
 public sealed class FakeSmtpServer : IAsyncDisposable
 {
     private readonly TcpListener _listener = new(IPAddress.Loopback, 0);
     private readonly CancellationTokenSource _stop = new();
     private readonly Task _accepting;
+    private int _messages;
 
     // What the server says to RCPT TO. "{0}" is replaced with the address, as many servers repeat it in their refusals.
     public string RecipientReply { get; init; } = "250 ok";
 
     // Accepts the connection and never says anything.
     public bool Silent { get; init; }
+
+    // Offers a login (AUTH PLAIN) and refuses whatever login is given, quoting it, as a relay does for a wrong key.
+    public bool RejectLogins { get; init; }
 
     public FakeSmtpServer()
     {
@@ -25,6 +30,9 @@ public sealed class FakeSmtpServer : IAsyncDisposable
     }
 
     public int Port => ((IPEndPoint)_listener.LocalEndpoint).Port;
+
+    // How many messages the server took (answered the end of DATA for).
+    public int MessagesReceived => Volatile.Read(ref _messages);
 
     private async Task AcceptAsync()
     {
@@ -62,7 +70,17 @@ public sealed class FakeSmtpServer : IAsyncDisposable
             {
                 var command = line.ToUpperInvariant();
                 if (command.StartsWith("EHLO") || command.StartsWith("HELO"))
-                    await writer.WriteLineAsync("250 fake");
+                {
+                    if (RejectLogins)
+                    {
+                        await writer.WriteLineAsync("250-fake");
+                        await writer.WriteLineAsync("250 AUTH PLAIN");
+                    }
+                    else
+                        await writer.WriteLineAsync("250 fake");
+                }
+                else if (command.StartsWith("AUTH"))
+                    await writer.WriteLineAsync($"535 5.7.8 credentials rejected: {line}");
                 else if (command.StartsWith("MAIL FROM"))
                     await writer.WriteLineAsync("250 ok");
                 else if (command.StartsWith("RCPT TO"))
@@ -74,6 +92,7 @@ public sealed class FakeSmtpServer : IAsyncDisposable
                     {
                     }
 
+                    Interlocked.Increment(ref _messages);
                     await writer.WriteLineAsync("250 queued");
                 }
                 else if (command.StartsWith("QUIT"))
