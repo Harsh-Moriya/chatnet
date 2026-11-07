@@ -4,6 +4,8 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using ChatNET.API.Conversations.Persistence;
+using ChatNET.API.Outbox.Persistence;
+using ChatNET.API.Tests.Outbox;
 using ChatNET.API.Tests.Conversations;
 using ChatNET.API.Tests.Infrastructure;
 using Microsoft.AspNetCore.Hosting;
@@ -103,6 +105,25 @@ public class LoggingTests
         AssertNoErrors(capture);
         Assert.StartsWith("[Information]", RequestLine(capture, "POST", "/api/auth/forgot-password", 503));
         Assert.Single(capture.Entries, e => e.StartsWith("[Warning]") && e.Contains("ServiceUnavailableException"));
+    }
+
+    // The other side of the rule above: what really went wrong is still an error, on the request line as well as in the handler.
+    [Fact]
+    public async Task An_unhandled_failure_is_an_error_on_the_request_line()
+    {
+        var capture = new CapturingLoggerProvider();
+        using var host = _factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+        {
+            services.AddLogging(logging => logging.AddProvider(capture));
+            services.RemoveAll<IOutboxRepository>();
+            services.AddScoped<IOutboxRepository>(_ => new FailingOutboxRepository(() => new InvalidOperationException("The database is away.")));
+        }));
+        using var client = host.CreateClient();
+
+        var response = await client.ForgotAsync($"nobody_{Guid.NewGuid():N}@example.test");
+
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+        Assert.StartsWith("[Error]", RequestLine(capture, "POST", "/api/auth/forgot-password", 500));
     }
 
     [Fact]
