@@ -106,7 +106,7 @@ services:
     restart: "no"
 
   # ##### Adminer #####
-  # Lightweight browser-based database UI. Open http://localhost:8080 then:
+  # Lightweight browser-based database UI. Open http://localhost:8081 then:
   # System: PostgreSQL, Server: postgres, Username/Password/Database from your .env file.
   # The tag is pinned so every machine runs the same image; "latest" changes silently.
   adminer:
