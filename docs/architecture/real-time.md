@@ -44,8 +44,8 @@ sequenceDiagram
 - A change and its outbox row are saved in the **same transaction**. A row records what happened by id (`MessageCreated(messageId, conversationId)`), not the payload. The relay builds the push from the stored data when it makes it, so a late push of an edited or deleted message carries no text it should not.
 - The request pushes right after the commit and marks the row. That is the fast path.
 - The relay runs on every instance every 2 seconds. It takes rows that are at least 5 seconds old and not dispatched, oldest first, in batches of 100. One statement, an `UPDATE` over a subquery that uses `FOR UPDATE SKIP LOCKED` and returns the rows, chooses and holds them and schedules their retry at the same time, so two relays never take the same row.
-- A failed attempt is retried after a delay that starts at 5 seconds and doubles per attempt, up to 64 times the base. After 10 attempts the row stays in the table with its last error (the exception type and a count only, no content).
-- Dispatched rows are removed after a day.
+- A failed attempt is retried after a delay that starts at 5 seconds and doubles per attempt, up to 64 times the base. After 10 attempts the relay gives up on the row: it keeps its last error (the exception type and a count only, no content) and is not tried again.
+- A clean-up pass removes rows once they are a day old, both dispatched rows and rows that were given up on. Until then a given-up row stays in the table for inspection. A row that is still being retried is never removed.
 - Delivery is **at least once**. Receivers merge by id, so a repeated push is harmless.
 - Only cancellation of the token a pass was given ends it. A push, storage call or table read that times out is a failed attempt, never the end of the relay.
 
@@ -71,7 +71,7 @@ Typing, presence, the mute echo and the notification read and dismissed events a
 
 ## Presence
 
-Who is online is held in Redis, in two sorted sets and a short-lived marker per user, changed only by Lua scripts so each step is atomic across instances.
+Who is online is held in Redis: a sorted set of connections for each user, one sorted set of users ordered by when their entries expire, and a short-lived marker per user while the offline wait runs. Only Lua scripts change them, so each step is atomic across instances.
 
 - `ChatHub` reports every connect and disconnect to the presence service. The first connection of a user announces online. When the last one closes, a wait (`Presence:OfflineGrace`, 5 seconds, counted from the last close) starts; after it, offline is announced. A page refresh therefore does not flash the person offline. Going offline first stores `LastSeenAt` in Postgres, then pushes.
 - Each instance renews the connections it holds every 30 seconds and sweeps users whose entries expired (the connections of an instance that died). Whoever removes a user from the expiring set is the only one to announce them. Clients send no heartbeats.

@@ -15,7 +15,7 @@ Limits slow down password guessing, mass account creation and flooding. The coun
 | `search` | message search | person | 30 per 10 s |
 | `push` | registering and removing a browser for alerts | person | 20 per 60 s |
 
-Not limited: reading, marking read, muting, deleting, typing and presence.
+Not covered by these policies: reading, marking read, muting, deleting and presence. Typing is not counted in Redis; the hub delivers at most one start event per second per conversation per connection.
 
 Configure each as `RateLimiting:<Policy>:PermitLimit` and `WindowSeconds` (for example `RateLimiting__Send__PermitLimit`). Values are validated at startup.
 

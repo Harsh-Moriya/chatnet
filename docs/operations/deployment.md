@@ -28,7 +28,7 @@ flowchart LR
 
 Start order: Postgres and Redis healthy, then `migrate` finishes, then the API instances become healthy (`/health`), then Caddy.
 
-Containers run read-only with no capabilities and no new privileges, and the API runs as an unprivileged user. Files live in object storage that is **not** part of this stack.
+The API and Caddy containers drop all Linux capabilities and cannot gain new privileges. The API container also has a read-only filesystem and runs as an unprivileged user. Files live in object storage that is **not** part of this stack.
 
 ## What you need
 
@@ -76,7 +76,7 @@ The migration job runs first and does nothing when the database is already up to
 
 ## Trying it on one machine
 
-Set `DOMAIN=localhost` in `.env.prod`. Caddy then uses its own certificate authority, which a browser does not trust, so the browser warns once; `curl -k https://localhost/health` shows the stack answering. To skip TLS altogether, also set `SITE_ADDRESS=http://localhost`. The development file and this stack use different Compose project names (`chatnet` and `chatnet-prod`), so they never share volumes.
+Set `DOMAIN=localhost` in `.env.prod`. Caddy then uses its own certificate authority, which a browser does not trust, so the browser warns once; `curl -k https://localhost/health` shows the stack answering. To skip TLS altogether, also set `SITE_ADDRESS=http://localhost`. This stack is named `chatnet-prod`, so it never shares volumes with the development file, whose project name comes from the folder it is in.
 
 ## Web Push
 

@@ -35,7 +35,7 @@ sequenceDiagram
     participant H as Handler
     participant R as Repository
     participant D as PostgreSQL
-    C->>E: POST /api/conversations/direct {userId}
+    C->>E: POST /api/conversations/direct {otherUserId}
     E->>E: bind body, read caller id from the JWT
     E->>M: Send(CreateDirectCommand)
     M->>V: pipeline

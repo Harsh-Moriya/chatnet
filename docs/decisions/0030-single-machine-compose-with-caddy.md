@@ -8,7 +8,7 @@ The first target is a single small server, and a stack proven on one machine mov
 
 ## Decision
 
-Production is one Compose file for one host: Caddy (the only published service), the API instances, a one-shot migration job, Postgres and Redis. Caddy serves the built frontend, proxies `/api`, `/hubs` and `/health` to the API instances (found through DNS every 5 s, health-checked, with a cookie that keeps a browser on one instance), and obtains and renews certificates itself. The page and the API share one origin, so the `SameSite=Strict` cookie stays first-party and no CORS is needed. The database is migrated by an EF migration bundle that runs as a job before the API starts; the API does not migrate itself. Containers run read-only with no capabilities.
+Production is one Compose file for one host: Caddy (the only published service), the API instances, a one-shot migration job, Postgres and Redis. Caddy serves the built frontend, proxies `/api`, `/hubs` and `/health` to the API instances (found through DNS every 5 s, health-checked, with a cookie that keeps a browser on one instance), and obtains and renews certificates itself. The page and the API share one origin, so the `SameSite=Strict` cookie stays first-party and no CORS is needed. The database is migrated by an EF migration bundle that runs as a job before the API starts; the API does not migrate itself. The API and Caddy containers drop all capabilities, and the API container is read-only.
 
 ## Alternatives considered
 
