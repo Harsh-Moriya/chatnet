@@ -151,6 +151,19 @@ public sealed record ConversationRead(Guid ConversationId, Guid UserId, DateTime
     public string Kind => Name;
 }
 
+// Someone asked for a password reset link. The person is named only when the address belongs to an account that may be sent one:
+// for an address nobody has, a deactivated account, or a request over the per-address limit it is null, and the relay does nothing
+// for the row. The row exists in every case so a request costs the same whichever it was, and an answer that came back faster
+// for a real account would tell a stranger which addresses have one. The token is not in the row: it is made, and stored hashed,
+// when the relay sends the email, so the outbox table never holds a working link.
+public sealed record PasswordResetRequested(Guid? UserId) : IOutboxEvent
+{
+    public const string Name = nameof(PasswordResetRequested);
+
+    [JsonIgnore]
+    public string Kind => Name;
+}
+
 public static class OutboxEvents
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
@@ -174,6 +187,7 @@ public static class OutboxEvents
         ConversationRenamed.Name => Deserialize<ConversationRenamed>(payload),
         ProfileChanged.Name => Deserialize<ProfileChanged>(payload),
         AvatarFileRemoved.Name => Deserialize<AvatarFileRemoved>(payload),
+        PasswordResetRequested.Name => Deserialize<PasswordResetRequested>(payload),
         _ => throw new InvalidOperationException($"The outbox has no event of kind '{kind}'."),
     };
 

@@ -37,6 +37,7 @@ public class GlobalExceptionHandler : IExceptionHandler
             ForbiddenException     => (StatusCodes.Status403Forbidden,         "Forbidden"),
             ConflictException      => (StatusCodes.Status409Conflict,          "Conflict"),
             TooManyAttemptsException => (StatusCodes.Status429TooManyRequests, "Too Many Requests"),
+            ServiceUnavailableException => (StatusCodes.Status503ServiceUnavailable, "Service Unavailable"),
             ValidationException    => (StatusCodes.Status400BadRequest,        "Validation Failed"),
 
             // Thrown by the framework when the request cannot be bound: bad JSON, an empty

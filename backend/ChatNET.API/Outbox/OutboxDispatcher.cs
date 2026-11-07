@@ -1,3 +1,4 @@
+using ChatNET.API.Auth.PasswordReset;
 using ChatNET.API.Conversations;
 using ChatNET.API.Conversations.Persistence;
 using ChatNET.API.Media;
@@ -31,6 +32,7 @@ public class OutboxDispatcher
     private readonly ProfileNotifier _profileNotifier;
     private readonly AvatarRemover _avatarRemover;
     private readonly PushAlerts _alerts;
+    private readonly PasswordResetMailer _passwordResets;
     private readonly ILogger<OutboxDispatcher> _logger;
 
     public OutboxDispatcher(
@@ -45,6 +47,7 @@ public class OutboxDispatcher
         ProfileNotifier profileNotifier,
         AvatarRemover avatarRemover,
         PushAlerts alerts,
+        PasswordResetMailer passwordResets,
         ILogger<OutboxDispatcher> logger)
     {
         _hub = hub;
@@ -58,6 +61,7 @@ public class OutboxDispatcher
         _profileNotifier = profileNotifier;
         _avatarRemover = avatarRemover;
         _alerts = alerts;
+        _passwordResets = passwordResets;
         _logger = logger;
     }
 
@@ -152,6 +156,10 @@ public class OutboxDispatcher
 
             case AvatarFileRemoved avatar:
                 await _avatarRemover.RemoveAsync(avatar.Key, cancellationToken);
+                return;
+
+            case PasswordResetRequested passwordReset:
+                await _passwordResets.SendAsync(row, passwordReset.UserId, cancellationToken);
                 return;
 
             default:

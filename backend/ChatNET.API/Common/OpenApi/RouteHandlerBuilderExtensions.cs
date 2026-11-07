@@ -13,6 +13,13 @@ public static class RouteHandlerBuilderExtensions
         return DocumentErrors(builder, errorStatuses);
     }
 
+    // The same for an endpoint whose success is 202 Accepted with no body: the request was taken and the work happens later.
+    public static RouteHandlerBuilder ReturnsAccepted(this RouteHandlerBuilder builder, params int[] errorStatuses)
+    {
+        builder.Produces(StatusCodes.Status202Accepted);
+        return DocumentErrors(builder, errorStatuses);
+    }
+
     // The same for an endpoint whose success is 204 No Content.
     public static RouteHandlerBuilder ReturnsNoContent(this RouteHandlerBuilder builder, params int[] errorStatuses)
     {

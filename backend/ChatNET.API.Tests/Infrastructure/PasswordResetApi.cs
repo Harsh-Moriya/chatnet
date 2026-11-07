@@ -1,10 +1,14 @@
+using System.Net.Http.Json;
 using System.Security.Cryptography;
 using ChatNET.API.Auth.Models;
 using ChatNET.API.Auth.Services;
+using ChatNET.API.Outbox;
+using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Npgsql;
 
 namespace ChatNET.API.Tests.Infrastructure;
@@ -36,6 +40,38 @@ public static class PasswordResetApi
 
         return token;
     }
+
+
+    public static Task<HttpResponseMessage> ForgotAsync(this HttpClient client, string email) =>
+        client.PostAsJsonAsync("/api/auth/forgot-password", new { email });
+
+    // One pass of the outbox relay of this host, by hand: the shared test host's relay ticks once an hour so it never runs on
+    // its own while other tests do.
+    public static Task RunRelayAsync(this WebApplicationFactory<Program> host) => host.Services
+        .GetServices<IHostedService>()
+        .OfType<OutboxRelayService>()
+        .Single()
+        .RunOnceAsync(CancellationToken.None);
+
+    // The token in the link of an email, read from its text part.
+    public static string TokenIn(ReceivedMail mail)
+    {
+        var match = System.Text.RegularExpressions.Regex.Match(mail.Text, @"/reset-password#token=([A-Za-z0-9_-]+)");
+        Assert.True(match.Success, "The email has no reset link.");
+        return match.Groups[1].Value;
+    }
+
+    // How many requests for a link were saved for an address that gets no email (nobody has it, the account is deactivated,
+    // or it was over the limit).
+    public static Task<int> ResetRowsForNobodyAsync(this ChatApiFactory factory) => factory.QueryDbAsync(db =>
+        db.Database.SqlQuery<int>($"""
+            SELECT count(*)::int AS "Value" FROM "OutboxMessages"
+            WHERE "Kind" = 'PasswordResetRequested' AND "Payload" ->> 'userId' IS NULL
+            """).SingleAsync());
+
+    public static Task DeactivateAsync(this ChatApiFactory factory, Guid userId) =>
+        factory.ExecuteDbAsync(db => db.Users.Where(u => u.Id == userId)
+            .ExecuteUpdateAsync(s => s.SetProperty(u => u.IsDeactivated, true)));
 
     public static Task<List<PasswordResetToken>> ResetTokensOfAsync(this ChatApiFactory factory, Guid userId) =>
         factory.QueryDbAsync(db => db.PasswordResetTokens.AsNoTracking().Where(t => t.UserId == userId).ToListAsync());

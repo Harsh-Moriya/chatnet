@@ -1,3 +1,4 @@
+using ChatNET.API.Auth.ForgotPassword;
 using ChatNET.API.Auth.Login;
 using ChatNET.API.Auth.Logout;
 using ChatNET.API.Auth.Models;
@@ -21,6 +22,10 @@ public static class AuthEndpoints
         // ending a session take a token that cannot be guessed, so their limit is looser and separate.
         var credentials = auth.MapGroup(string.Empty).RequireRateLimiting(RateLimitPolicies.Auth);
         var session = auth.MapGroup(string.Empty).RequireRateLimiting(RateLimitPolicies.Refresh);
+
+        // Asking for a reset link and using one are anonymous and each counted per client address on a policy of its own, so a person
+        // who mistypes a new password does not use up the allowance for asking, and neither shares the sign-in limit.
+        var forgot = auth.MapGroup(string.Empty).RequireRateLimiting(RateLimitPolicies.ForgotPassword);
 
         credentials.MapPost("/register", async (RegisterCommand command, HttpContext http, IMediator mediator) =>
         {
@@ -65,6 +70,15 @@ public static class AuthEndpoints
             return Results.NoContent();
         })
         .ReturnsNoContent(StatusCodes.Status403Forbidden, StatusCodes.Status429TooManyRequests)
+        .AllowAnonymous();
+
+        // Always 202, whether or not the address has an account: the answer must not tell a stranger which addresses are registered.
+        forgot.MapPost("/forgot-password", async (ForgotPasswordCommand command, IMediator mediator) =>
+        {
+            await mediator.Send(command);
+            return Results.Accepted();
+        })
+        .ReturnsAccepted(StatusCodes.Status400BadRequest, StatusCodes.Status429TooManyRequests, StatusCodes.Status503ServiceUnavailable)
         .AllowAnonymous();
 
         return app;

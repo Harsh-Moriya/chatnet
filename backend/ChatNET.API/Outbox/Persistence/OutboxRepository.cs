@@ -39,6 +39,12 @@ public class OutboxRepository : IOutboxRepository
         _db = db;
     }
 
+    public async Task AddAsync(OutboxMessage row, CancellationToken cancellationToken)
+    {
+        _db.OutboxMessages.Add(row);
+        await _db.SaveChangesAsync(cancellationToken);
+    }
+
     public async Task<List<OutboxMessage>> ClaimDueAsync(
         DateTime now, int batchSize, int maxAttempts, TimeSpan retryDelay, CancellationToken cancellationToken)
     {

@@ -52,6 +52,44 @@ public class StartupLogTests
         Assert.True(noisy.Count == 0, "The start logged: " + string.Join(" || ", noisy));
     }
 
+    // Without a mail relay the application runs, and says so once, so an operator who sees "not available" knows why. It is
+    // information and not a warning: a deployment with no relay is a valid way to run.
+    [Fact]
+    public async Task An_instance_with_email_off_starts_without_a_warning_and_says_once_that_email_is_off()
+    {
+        var capture = new CapturingLoggerProvider();
+        using var host = _factory.WithWebHostBuilder(builder =>
+        {
+            builder.UseEnvironment("Production");
+            builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(
+                new Dictionary<string, string?> { ["Email:Smtp:Host"] = string.Empty, ["ForwardedHeaders:KnownNetworks:0"] = "10.0.0.0/8" }));
+            builder.ConfigureTestServices(services => services.AddLogging(logging => logging.AddProvider(capture)));
+        });
+        using var client = host.CreateClient();
+
+        (await client.GetAsync("/health")).EnsureSuccessStatusCode();
+
+        var noisy = capture.Entries
+            .Where(e => e.StartsWith("[Warning]") || e.StartsWith("[Error]") || e.StartsWith("[Critical]"))
+            .Select(e => e.Length > 200 ? e[..200] : e)
+            .ToList();
+        Assert.True(noisy.Count == 0, "The start logged: " + string.Join(" || ", noisy));
+        Assert.Single(capture.Entries, e => e.StartsWith("[Information]") && e.Contains("Email is off"));
+    }
+
+    [Fact]
+    public async Task An_instance_with_email_on_does_not_say_that_email_is_off()
+    {
+        var capture = new CapturingLoggerProvider();
+        using var host = _factory.WithWebHostBuilder(builder =>
+            builder.ConfigureTestServices(services => services.AddLogging(logging => logging.AddProvider(capture))));
+        using var client = host.CreateClient();
+
+        (await client.GetAsync("/health")).EnsureSuccessStatusCode();
+
+        Assert.DoesNotContain(capture.Entries, e => e.Contains("Email is off"));
+    }
+
     // Nothing in the application protects data with a data protection key. The framework nevertheless
     // creates the first key when the host starts, and the first thing that asks for the data protection provider (the
     // token providers Identity builds the first time someone signs up or in) makes it look for somewhere to keep
@@ -85,7 +123,11 @@ public class StartupLogTests
         })).EnsureSuccessStatusCode();
         (await client.PostAsJsonAsync("/api/auth/login", credentials)).EnsureSuccessStatusCode();
 
-        Assert.False(watcher.Touched, "Signing up or in touched the key ring.");
+        // Asking for a reset link makes a token and sends an email; neither protects anything with the framework's keys.
+        (await client.ForgotAsync(credentials.email)).EnsureSuccessStatusCode();
+        await host.RunRelayAsync();
+
+        Assert.False(watcher.Touched, "Signing up or in, or asking for a reset link, touched the key ring.");
     }
 
     private sealed class KeyRingWatcher : IXmlRepository
