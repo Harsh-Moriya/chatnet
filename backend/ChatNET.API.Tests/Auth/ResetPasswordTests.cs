@@ -119,6 +119,24 @@ public class ResetPasswordTests
         Assert.Equal(HttpStatusCode.OK, (await client.LoginAsync(user with { Password = NewPassword })).StatusCode);
     }
 
+    // A person who mistyped a few times, short of the lockout, is not left with that count after choosing a new password.
+    [Fact]
+    public async Task Failed_sign_ins_that_were_counted_are_forgotten()
+    {
+        var user = await _factory.RegisterUserAsync("resetcount");
+        using var client = _factory.CreateClient();
+        for (var attempt = 0; attempt < 3; attempt++)
+            await client.LoginAsync(user with { Password = "Wrong1Password" });
+        var before = await _factory.QueryDbAsync(db => db.Users.AsNoTracking().SingleAsync(u => u.Id == user.Id));
+        Assert.Equal(3, before.AccessFailedCount);
+        var token = await _factory.AddResetTokenAsync(user.Id);
+
+        Assert.Equal(HttpStatusCode.NoContent, (await ResetAsync(client, token)).StatusCode);
+
+        var after = await _factory.QueryDbAsync(db => db.Users.AsNoTracking().SingleAsync(u => u.Id == user.Id));
+        Assert.Equal(0, after.AccessFailedCount);
+    }
+
     [Fact]
     public async Task The_push_registrations_of_the_person_are_removed_and_nobody_elses()
     {
@@ -279,6 +297,30 @@ public class ResetPasswordTests
         // A few of the others, not all: five wrong sign-ins in a row lock the account.
         foreach (var loser in passwords.Where(p => p != winner).Take(3))
             Assert.Equal(HttpStatusCode.Unauthorized, (await client.LoginAsync(user with { Password = loser })).StatusCode);
+    }
+
+    // A wrong password at the very moment of a reset counts as a failed sign-in, which changes the person's row. The reset takes the
+    // row for update before it reads it, so it waits for that change and reads the result. Reading first and then updating would
+    // find the row changed under it and fail, and a person who is being guessed at could never get a reset through.
+    [Fact]
+    public async Task A_failed_sign_in_that_lands_during_a_reset_does_not_make_the_reset_fail()
+    {
+        var user = await _factory.RegisterUserAsync("resetvsfail");
+        var token = await _factory.AddResetTokenAsync(user.Id);
+        using var client = _factory.CreateClient();
+        await using var failedSignIn = await _factory.HoldUserRowAsync(user.Id);
+        await failedSignIn.ExecuteAsync(
+            "UPDATE \"AspNetUsers\" SET \"AccessFailedCount\" = 1, \"ConcurrencyStamp\" = @stamp WHERE \"Id\" = @id",
+            ("stamp", Guid.NewGuid().ToString()), ("id", user.Id));
+
+        var reset = Task.Run(() => ResetAsync(client, token));
+        await Task.Delay(TimeSpan.FromMilliseconds(700));
+        Assert.False(reset.IsCompleted, "The reset went ahead while a change to the person's row was in progress.");
+
+        await failedSignIn.CommitAsync();
+
+        Assert.Equal(HttpStatusCode.NoContent, (await reset).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.LoginAsync(user with { Password = NewPassword })).StatusCode);
     }
 
     // A renewal or a sign-in that is being made at this moment holds a share lock on the person. The reset takes the row for update,

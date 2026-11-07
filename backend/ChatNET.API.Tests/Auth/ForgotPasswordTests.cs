@@ -1,5 +1,6 @@
 using System.Net;
 using ChatNET.API.Auth.PasswordReset;
+using ChatNET.API.Common.Time;
 using ChatNET.API.Email;
 using ChatNET.API.Outbox.Models;
 using ChatNET.API.Tests.Infrastructure;
@@ -420,7 +421,8 @@ public class ForgotPasswordTests : IAsyncLifetime
         var sender = new RecordingEmailSender();
         var clock = new ManualTimeProvider();
         using var host = RelayHost(sender, clock);
-        var now = clock.GetUtcNow().UtcDateTime;
+        // Truncated as the mailer truncates its own, so the age below is exactly the window and not a few ticks short of it.
+        var now = clock.GetUtcNow().UtcDateTime.TruncateToMicroseconds();
         var window = TimeSpan.FromMinutes(10);
 
         using (var scope = host.Services.CreateScope())
