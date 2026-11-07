@@ -56,10 +56,24 @@ public sealed class SmtpEmailSender : IEmailSender
     {
         var mime = new MimeMessage();
         mime.From.Add(new MailboxAddress(_options.From.Name, _options.From.Address));
-        mime.To.Add(MailboxAddress.Parse(message.To));
+        mime.To.Add(Recipient(message.To));
         mime.Subject = message.Subject;
         mime.Body = new BodyBuilder { TextBody = message.TextBody, HtmlBody = message.HtmlBody }.ToMessageBody();
         return mime;
+    }
+
+    // The address comes from a stored account. One that MimeKit cannot read would fail the same way on every try, and its error text
+    // repeats the address, so it is a refusal for good with a fixed text.
+    private static MailboxAddress Recipient(string address)
+    {
+        try
+        {
+            return MailboxAddress.Parse(address);
+        }
+        catch (ParseException)
+        {
+            throw new EmailDeliveryException("The recipient address cannot be used", isPermanent: true);
+        }
     }
 
     private static SecureSocketOptions Options(SmtpSecurity security) => security switch

@@ -61,6 +61,24 @@ public class SmtpEmailSenderTests
         Assert.Null(failure.InnerException);
     }
 
+
+    // The address of an account was accepted at registration by a more lenient rule than MimeKit's. It cannot be sent to, which no
+    // retry changes, and the library's error text repeats it.
+    [Fact]
+    public async Task An_address_the_mail_library_cannot_read_is_a_permanent_failure_that_does_not_repeat_it()
+    {
+        await using var server = new FakeSmtpServer();
+        const string unreadable = "not an address@@secret-host";
+
+        var failure = await Assert.ThrowsAsync<EmailDeliveryException>(
+            () => SenderFor(server.Port).SendAsync(MessageTo(unreadable), CancellationToken.None));
+
+        Assert.True(failure.IsPermanent);
+        Assert.Equal("The recipient address cannot be used", failure.Message);
+        Assert.DoesNotContain("secret-host", failure.ToString());
+        Assert.Equal(0, server.MessagesReceived);
+    }
+
     [Fact]
     public async Task A_request_to_try_later_is_not_permanent_and_does_not_repeat_what_the_server_said()
     {
