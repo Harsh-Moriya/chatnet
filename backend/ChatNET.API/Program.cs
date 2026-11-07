@@ -340,7 +340,7 @@ try
     // ##### Rate limiting #####
     // Login, registration and session renewal are limited per client address, to slow down password guessing and mass account
     // creation; sending, upload tickets, edits and search are limited per signed-in person. The counts are in Redis, so every
-    // API instance applies one limit and not one each (D-279). The limits come from configuration (RateLimiting:<Policy>)
+    // API instance applies one limit and not one each. The limits come from configuration (RateLimiting:<Policy>)
     // and are validated at startup; the policies are defined in RateLimiterSetup.
     foreach (var (policy, section) in RateLimitPolicies.All)
     {
@@ -367,7 +367,7 @@ try
     // ##### Data protection #####
     // The framework keeps a key ring for anything an application protects with its data protection API. Nothing
     // here does: tokens are signed with the JWT key, refresh tokens are random values stored hashed, and no
-    // confirmation or reset token is made (D-217). Authentication still registers the API, and the framework starts a
+    // confirmation or reset token is made. Authentication still registers the API, and the framework starts a
     // hosted service that creates the first key as soon as the host starts. In a container there is nowhere to keep
     // it, so every start of every instance logged three warnings about keys that nothing uses. Without the hosted
     // service the key ring is created, with the same warnings, the first time something does protect data, which is

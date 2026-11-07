@@ -16,7 +16,7 @@ using ChatNET.API.Tests.Infrastructure;
 namespace ChatNET.API.Tests.Common;
 
 // A running instance's log is where an operator looks first, so an ordinary start must not put warnings in it. Each
-// warning here was found by reading the log of the real containers (note 22) and would be there on every start of
+// warning here was found by reading the log of the real containers and would be there on every start of
 // every instance.
 [Collection(IntegrationTestCollection.Name)]
 public class StartupLogTests
@@ -52,7 +52,7 @@ public class StartupLogTests
         Assert.True(noisy.Count == 0, "The start logged: " + string.Join(" || ", noisy));
     }
 
-    // Nothing in the application protects data with a data protection key (D-217). The framework nevertheless
+    // Nothing in the application protects data with a data protection key. The framework nevertheless
     // creates the first key when the host starts, and the first thing that asks for the data protection provider (the
     // token providers Identity builds the first time someone signs up or in) makes it look for somewhere to keep
     // keys; in a container it finds nowhere and warns, on every instance. The watcher below notices a key being

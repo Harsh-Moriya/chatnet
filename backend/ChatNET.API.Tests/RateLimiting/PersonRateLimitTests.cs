@@ -12,7 +12,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace ChatNET.API.Tests.RateLimiting;
 
-// Sending, upload tickets, edits and search are limited per signed-in person (D-279). The shared test host has limits that no
+// Sending, upload tickets, edits and search are limited per signed-in person. The shared test host has limits that no
 // test reaches; each test here builds a host with the limit it needs, and every host counts under keys of its own.
 [Collection(IntegrationTestCollection.Name)]
 public class PersonRateLimitTests
@@ -115,7 +115,7 @@ public class PersonRateLimitTests
         Assert.Equal(HttpStatusCode.Created, (await client.PostMessageAsync(conversation, "two")).StatusCode);
     }
 
-    // Two servers of one deployment count under one prefix, so a person who sends to both has one budget (D-279).
+    // Two servers of one deployment count under one prefix, so a person who sends to both has one budget.
     [Fact]
     public async Task A_persons_sends_are_counted_across_servers()
     {

@@ -3,7 +3,7 @@ using StackExchange.Redis;
 
 namespace ChatNET.API.RateLimiting;
 
-// Puts the policy for "Redis cannot be reached" around a store (D-280): the limit is skipped, the request goes ahead, and the
+// Puts the policy for "Redis cannot be reached" around a store: the limit is skipped, the request goes ahead, and the
 // person is not made to wait for a store that is down. Redis already shows in /health, and the account lockout, which is in
 // Postgres, still protects passwords, so an outage of Redis does not also stop people from signing in and sending.
 public sealed class ResilientSlidingWindowStore : ISlidingWindowStore

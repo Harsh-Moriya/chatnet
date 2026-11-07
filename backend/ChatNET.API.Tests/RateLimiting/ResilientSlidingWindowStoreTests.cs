@@ -6,7 +6,7 @@ using StackExchange.Redis;
 
 namespace ChatNET.API.Tests.RateLimiting;
 
-// While Redis cannot be reached the limits are not applied: requests go ahead and one Warning says so (D-280). These tests
+// While Redis cannot be reached the limits are not applied: requests go ahead and one Warning says so. These tests
 // fake the store underneath, so each way it can fail is made on purpose and the clock is moved by hand.
 public class ResilientSlidingWindowStoreTests
 {

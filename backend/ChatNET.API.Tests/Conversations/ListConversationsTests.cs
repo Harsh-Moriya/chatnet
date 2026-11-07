@@ -147,7 +147,7 @@ public class ListConversationsTests
         Assert.Equal(JsonValueKind.Null, forAlice.Single(c => c.IdOf() == group).GetProperty("otherUserId").ValueKind);
     }
 
-    // History and the unread count only cover messages sent since a member joined (D-90). The
+    // History and the unread count only cover messages sent since a member joined. The
     // preview is made of a message too, so it must follow the same rule: otherwise a late joiner could
     // read the last thing said before they arrived in the sidebar even though history hides it.
     [Fact]

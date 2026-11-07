@@ -11,7 +11,7 @@ namespace ChatNET.API.Tests.Search;
 // common, and whether the person is in one conversation or many, and it must never read the conversations they are not in.
 // The test fills the database with tens of thousands of messages, runs the real endpoint, then asks Postgres (EXPLAIN ANALYZE)
 // how many rows of Messages and MessageAttachments that exact query read. The same technique guards history and the
-// conversation list (notes 08 and 12).
+// conversation list.
 [Collection(IntegrationTestCollection.Name)]
 public class SearchPlanTests : IAsyncLifetime
 {

@@ -14,7 +14,7 @@ namespace ChatNET.API.Tests.Conversations;
 //
 // It fills the database with tens of thousands of messages in conversations the caller does not
 // belong to, runs the real endpoint, then asks Postgres (EXPLAIN ANALYZE) how many Messages rows
-// that exact query read. See note 08 for the full story behind this test.
+// that exact query read.
 [Collection(IntegrationTestCollection.Name)]
 public class ConversationListPlanTests
 {

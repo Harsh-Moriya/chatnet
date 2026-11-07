@@ -27,7 +27,7 @@
 
 	# The access log is written to the container's output. The SignalR client sends its access token in the
 	# query string of the WebSocket request (a browser cannot set a header on one), so that value is removed
-	# before a line is written; the API's own log does the same (D-156). Cookie and Authorization headers are
+	# before a line is written; the API's own log does the same. Cookie and Authorization headers are
 	# redacted by Caddy itself.
 	log {
 		output stdout
@@ -40,7 +40,7 @@
 	}
 
 	# Not for the machine's own names: a browser that remembered HSTS for localhost would refuse every other local
-	# project that does not use https (the API leaves it out for the same reason, D-114).
+	# project that does not use https (the API leaves it out for the same reason).
 	@publicHost not host localhost 127.0.0.1 [::1] ::1
 	header @publicHost Strict-Transport-Security "max-age=31536000"
 

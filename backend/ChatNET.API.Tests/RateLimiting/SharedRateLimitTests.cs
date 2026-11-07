@@ -14,8 +14,8 @@ using Microsoft.Extensions.Logging;
 namespace ChatNET.API.Tests.RateLimiting;
 
 // With the counts in Redis, two servers of the application apply one limit between them, where before each counted for itself
-// and a client got up to twice its allowance (D-218, replaced by D-279). And with Redis out of reach the application still
-// answers (D-280). Signing in is the request used, because every host has it.
+// and a client got up to twice its allowance. And with Redis out of reach the application still
+// answers. Signing in is the request used, because every host has it.
 [Collection(IntegrationTestCollection.Name)]
 public class SharedRateLimitTests
 {

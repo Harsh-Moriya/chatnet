@@ -165,7 +165,7 @@ public class MentionNotificationTests
         Assert.DoesNotContain(await NotificationsOfAsync(group), n => n.Type == NotificationType.Mention);
     }
 
-    // Someone addressed the person by name, so muting the conversation does not hide it (D-194).
+    // Someone addressed the person by name, so muting the conversation does not hide it.
     [Fact]
     public async Task A_member_who_muted_the_conversation_is_still_notified_of_a_mention()
     {

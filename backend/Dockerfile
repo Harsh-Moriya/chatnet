@@ -51,8 +51,8 @@ USER $APP_UID
 ENTRYPOINT ["./efbundle"]
 
 # ##### API #####
-# The runtime is pinned to 10.0.13 or later: earlier releases carry a SignalR denial of service fix this app needs
-# (D-132). The container runs as a user without privileges and listens on 8080, behind the reverse proxy.
+# The runtime is pinned to 10.0.13 or later: earlier releases carry a SignalR denial of service fix this app needs.
+# The container runs as a user without privileges and listens on 8080, behind the reverse proxy.
 FROM mcr.microsoft.com/dotnet/aspnet:10.0.13 AS api
 WORKDIR /app
 COPY --from=build /app/publish .
