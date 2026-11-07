@@ -4,8 +4,6 @@
 
 A real-time, multi-user chat application with direct (1:1) and group conversations. The backend is **ASP.NET Core (.NET 10)** with **SignalR**, the frontend is **React 19 and TypeScript**, data is in **PostgreSQL**, and **Redis** carries live state between server instances.
 
-![A group conversation with an image, a mention and a read receipt, next to the conversation list](docs/assets/screenshots/chat.png)
-
 ## Features
 
 - **Conversations.** Direct chats and groups on one model. Groups have an owner, admins and members; people can be added, removed, promoted and can leave, and the owner role is handed on automatically.

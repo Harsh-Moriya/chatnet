@@ -1,7 +1,5 @@
 # Group management
 
-![The Group info dialog: rename, people with roles, add people, leave](../assets/screenshots/group-info.png)
-
 Add people, remove someone, change roles, hand the group over, rename and leave.
 
 ## Roles
