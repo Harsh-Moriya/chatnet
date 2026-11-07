@@ -12,7 +12,7 @@ The HTTP API. In Development the running API also serves its OpenAPI document at
 | Nulls | present as `null`, not omitted. |
 | Enums | strings (`"Direct"`, `"Member"`), in REST and SignalR. |
 | IDs | UUID strings. Treat them as opaque. |
-| Timestamps | ISO 8601 in UTC. Most end in `Z` with up to microseconds (`2026-11-05T16:01:09.227119Z`); `expiresAt` of an upload ticket or a file link is written with `+00:00` and seven fractional digits. Parse them with a date parser and do not depend on the number of fractional digits. |
+| Timestamps | ISO 8601 in UTC. Always `Z`. Most carry up to microseconds (`2026-11-05T16:01:09.227119Z`); the expiry of an access token, an upload ticket or a file link is whole seconds (`2026-11-07T06:27:33Z`). Parse them with a date parser and do not depend on the number of fractional digits. |
 | Success | The object itself, with no envelope. A list is a bare JSON array. |
 | Caller identity | Always from the token's `sub` claim. A body never says who the caller is. |
 | Authentication | `Authorization: Bearer <access token>`. On `/hubs/chat` the token may also be sent as `?access_token=`. |
@@ -260,7 +260,7 @@ A deleted message has `content: null`, `isDeleted: true` and no attachments.
 {
   "uploadKey": "pending/01a1ac73-c01d-74ae-8845-418d508257b9/01a1ac73-bb4d-7e51-9759-fcb0091ef152/c3f66325-d14b-42dd-b0c2-dcc5b9a028d6",
   "url": "http://localhost:9000/chatnet/pending/01a1ac73-c01d-74ae-8845-418d508257b9/01a1ac73-bb4d-7e51-9759-fcb0091ef152/c3f66325-d14b-42dd-b0c2-dcc5b9a028d6?<signature parameters>",
-  "expiresAt": "2026-11-05T16:13:50.342607+00:00"
+  "expiresAt": "2026-11-07T06:27:33Z"
 }
 ```
 
@@ -273,7 +273,7 @@ A deleted message has `content: null`, `isDeleted: true` and no attachments.
 ```json
 {
   "url": "http://localhost:9000/chatnet/attachments/01a1ac73-c01d-74ae-8845-418d508257b9/01a1ac73-c402-7602-980a-c745754dedc3?<signature parameters>",
-  "expiresAt": "2026-11-05T17:03:50.5413155+00:00"
+  "expiresAt": "2026-11-07T07:17:34Z"
 }
 ```
 

@@ -74,6 +74,19 @@ public static class MediaApi
     public static List<JsonElement> AttachmentsOf(this JsonElement message) =>
         message.GetProperty("attachments").EnumerateArray().ToList();
 
+    // A client parses this text. A fraction of seconds with more than three digits is outside what the JavaScript
+    // date format promises to read, and an offset other than Z is a second shape to handle, so a link's expiry is
+    // UTC in whole seconds like every other timestamp.
+    public static void AssertExpiryIsWholeSecondsUtc(this JsonElement ticketOrLink, int minutes)
+    {
+        var text = ticketOrLink.GetProperty("expiresAt").GetString()!;
+        Assert.Matches(@"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$", text);
+        Assert.InRange(
+            ticketOrLink.GetProperty("expiresAt").GetDateTime().ToUniversalTime(),
+            DateTime.UtcNow.AddMinutes(minutes).AddSeconds(-10),
+            DateTime.UtcNow.AddMinutes(minutes).AddSeconds(5));
+    }
+
     public static string UrlOf(this JsonElement attachment) => attachment.GetProperty("url").GetString()!;
 
     // What a browser gets by following a link from a message.

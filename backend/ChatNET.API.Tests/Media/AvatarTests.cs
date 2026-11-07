@@ -53,6 +53,7 @@ public partial class AvatarTests
         Assert.True(AvatarKeys.IsUploadKeyFor(key, AvatarOwner.User, alice.Id));
         Assert.StartsWith(
             _factory.StorageServiceUrl + "/" + ChatApiFactory.StorageBucket + "/" + key, ticket.GetProperty("url").GetString());
+        ticket.AssertExpiryIsWholeSecondsUtc(minutes: 10);
 
         var wrongType = await MediaApi.PutToTicketAsync(ticket, ProfileApi.SmallPicture, "image/jpeg");
         Assert.False(wrongType.IsSuccessStatusCode);

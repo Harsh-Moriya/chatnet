@@ -31,8 +31,6 @@ public class UploadTicketTests
     {
         var (alice, _, conversation) = await _factory.DirectChatAsync();
         using var client = _factory.CreateClientFor(alice);
-        var before = DateTimeOffset.UtcNow;
-
         var response = await client.RequestUploadAsync(conversation, "photo.png", "image/png", 1234);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -40,10 +38,7 @@ public class UploadTicketTests
         var key = ticket.GetProperty("uploadKey").GetString()!;
         Assert.True(AttachmentKeys.IsUploadKeyFor(key, conversation, alice.Id));
         Assert.StartsWith(_factory.StorageServiceUrl + "/" + ChatApiFactory.StorageBucket + "/" + key, ticket.GetProperty("url").GetString());
-        Assert.InRange(
-            ticket.GetProperty("expiresAt").GetDateTimeOffset(),
-            before.AddMinutes(10).AddSeconds(-5),
-            DateTimeOffset.UtcNow.AddMinutes(10).AddSeconds(5));
+        ticket.AssertExpiryIsWholeSecondsUtc(minutes: 10);
     }
 
     [Fact]

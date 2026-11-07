@@ -14,4 +14,4 @@ public record CreateUploadCommand(
 
 // Permission to upload one file. UploadKey is what the message names later to attach it, and Url is where the
 // browser sends the file (a PUT with exactly this content type) before ExpiresAt.
-public record UploadTicketDto(string UploadKey, string Url, DateTimeOffset ExpiresAt);
+public record UploadTicketDto(string UploadKey, string Url, DateTime ExpiresAt);

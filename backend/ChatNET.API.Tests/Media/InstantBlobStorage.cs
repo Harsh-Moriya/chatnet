@@ -23,5 +23,5 @@ public sealed class InstantBlobStorage : IBlobStorage
 
     public Task DeleteAsync(string key, CancellationToken cancellationToken) => Task.CompletedTask;
 
-    private static SignedUrl Link(string key) => new($"https://files.test/{key}", DateTimeOffset.UtcNow.AddMinutes(10));
+    private static SignedUrl Link(string key) => new($"https://files.test/{key}", DateTime.UtcNow.AddMinutes(10));
 }
