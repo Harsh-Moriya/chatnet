@@ -1,6 +1,6 @@
 import { AxiosError, type AxiosResponse } from 'axios'
 import { describe, expect, it } from 'vitest'
-import { getApiError } from './errors'
+import { getApiError, getFieldErrors } from './errors'
 
 function responseError(status: number, data: unknown): AxiosError {
   return new AxiosError(`Request failed with status code ${status}`, 'ERR_BAD_RESPONSE', undefined, undefined, {
@@ -44,5 +44,35 @@ describe('getApiError', () => {
   it('handles an error that did not come from a request', () => {
     expect(getApiError(new Error('boom'))).toBe('An unexpected error occurred')
     expect(getApiError('text')).toBe('An unexpected error occurred')
+  })
+})
+
+// The API names a field the way its C# property is written; the screen uses camel case.
+describe('getFieldErrors', () => {
+  it('maps the fields of a validation error, with the first letter lowered', () => {
+    const error = responseError(400, {
+      detail: 'Email is not valid.',
+      errors: { Email: ['Email is not valid.'], NewPassword: ['Too short.'] },
+    })
+
+    expect(getFieldErrors(error)).toEqual({ email: 'Email is not valid.', newPassword: 'Too short.' })
+  })
+
+  it('takes the first message of a field that has several', () => {
+    expect(getFieldErrors(responseError(400, { errors: { Token: ['First.', 'Second.'] } }))).toEqual({ token: 'First.' })
+  })
+
+  it('finds nothing in an error that is not about fields', () => {
+    expect(getFieldErrors(responseError(503, { detail: 'Password reset is not available.' }))).toEqual({})
+    expect(getFieldErrors(responseError(500, ''))).toEqual({})
+    expect(getFieldErrors(new AxiosError('Network Error', 'ERR_NETWORK'))).toEqual({})
+    expect(getFieldErrors(new Error('boom'))).toEqual({})
+    expect(getFieldErrors('text')).toEqual({})
+  })
+
+  it('ignores an errors value that is not a map of lists of text', () => {
+    expect(getFieldErrors(responseError(400, { errors: 'nope' }))).toEqual({})
+    expect(getFieldErrors(responseError(400, { errors: null }))).toEqual({})
+    expect(getFieldErrors(responseError(400, { errors: { Email: 'not a list', Other: [1], Empty: [] } }))).toEqual({})
   })
 })

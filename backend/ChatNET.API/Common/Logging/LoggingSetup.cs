@@ -57,9 +57,11 @@ public static class LoggingSetup
 
             options.MessageTemplate = "HTTP {RequestMethod:l} {RequestPath:l} responded {StatusCode} in {Elapsed:0.0000} ms";
 
+            // An Error means "unhandled". The only 503 the API sends on purpose is a feature this deployment is not set up for (no mail
+            // relay), which the exception handler already reports as a warning, so it is not an error at every request.
             options.GetLevel = (http, _, exception) =>
                 http.Request.Path.StartsWithSegments("/health") ? LogEventLevel.Verbose
-                : exception is not null || http.Response.StatusCode >= 500 ? LogEventLevel.Error
+                : exception is not null || http.Response.StatusCode is >= 500 and not StatusCodes.Status503ServiceUnavailable ? LogEventLevel.Error
                 : LogEventLevel.Information;
 
             options.EnrichDiagnosticContext = (diagnostics, http) =>

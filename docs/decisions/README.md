@@ -30,6 +30,7 @@ All records here are **Accepted**. Where a choice replaced an earlier one, the r
 |---|---|
 | [0011: A short access token and a rotating refresh token](0011-access-and-refresh-tokens.md) | A 15-minute JWT kept in memory, plus a 14-day refresh token in an httpOnly cookie that the server can revoke. |
 | [0012: Refresh tokens rotate in families and reuse is detected](0012-refresh-token-rotation-and-reuse-detection.md) | Each refresh retires the token and issues its successor; a retired token reused after a grace period revokes the family. |
+| [0035: Password reset links are random values stored hashed, not Identity tokens](0035-hashed-password-reset-tokens.md) | A reset link is 32 random bytes whose SHA-256 is stored in its own table, used up by one conditional UPDATE, so no key ring has to be shared between instances. |
 
 ## Real-time
 
@@ -67,6 +68,7 @@ All records here are **Accepted**. Where a choice replaced an earlier one, the r
 | [0027: Web Push written on System.Security.Cryptography](0027-web-push-implementation.md) | The RFC 8291 encryption and RFC 8292 VAPID signing are implemented in the repository, with no package. |
 | [0028: A push endpoint is a capability checked against an allowlist](0028-push-endpoint-allowlist.md) | Only https addresses of listed push services are accepted, checked again before every push, with no redirects followed. |
 | [0029: Forwarded headers are believed only from known networks](0029-forwarded-headers-from-known-networks.md) | `X-Forwarded-For` and `-Proto` are applied first in the pipeline, for one hop, only from configured networks. |
+| [0036: Asking for a reset link does the same work and gives the same answer for every address](0036-no-account-enumeration-in-password-reset.md) | The request only writes one outbox row, so an address with no account, a deactivated one and a request over a limit are indistinguishable from a real one by answer or by time. |
 
 ## Operations
 

@@ -27,6 +27,7 @@ docker-compose up -d
 | `storage-init` | none | a one-off job that creates the bucket and applies its CORS and lifecycle rules |
 | Jaeger | 16686 (UI), 4317 and 4318 (OTLP) | trace viewer |
 | Adminer | 8081 | a database browser |
+| Mailpit | 1025 (SMTP), 8025 (web page) | a mail catcher: it accepts any message and shows it at `http://localhost:8025`, so password reset emails can be read without a mail provider. Nothing is delivered anywhere, and the mail is gone when the container stops. |
 
 ## 2. Configure and run the backend
 
@@ -61,6 +62,19 @@ curl http://localhost:5045/health
 ```
 
 which answers `{"status":"healthy","checks":{"postgres":"healthy","redis":"healthy"}}` when Postgres and Redis are reachable.
+
+### Password reset emails (optional)
+
+Without a mail relay the app works as before, and asking for a password reset link answers that it is not available. To try it, point the API at Mailpit:
+
+```bash
+dotnet user-secrets set "Email:Smtp:Host" "localhost"
+dotnet user-secrets set "Email:Smtp:Port" "1025"
+dotnet user-secrets set "Email:Smtp:Security" "None"
+dotnet user-secrets set "Email:From:Address" "noreply@chatnet.local"
+```
+
+Restart the API, choose "Forgot password?" on the sign-in page, and open `http://localhost:8025` for the email. The link in it opens the reset page. The mail is sent by the outbox relay, which runs every 2 seconds, so it arrives a moment after the request. Asking is limited to 5 requests per 15 minutes per address and 3 emails an hour per email address; see [rate limits](../features/rate-limits.md).
 
 ### Alerts while the app is closed (optional)
 

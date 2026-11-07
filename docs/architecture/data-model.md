@@ -10,6 +10,7 @@ erDiagram
     AspNetUsers ||--o{ Messages : "sends"
     Messages ||--o{ MessageAttachments : "carries"
     AspNetUsers ||--o{ RefreshTokens : "holds"
+    AspNetUsers ||--o{ PasswordResetTokens : "can reset with"
     AspNetUsers ||--o{ Notifications : "receives"
     AspNetUsers ||--o{ PushSubscriptions : "registers"
     Messages |o--o{ Notifications : "mentioned in"
@@ -122,6 +123,18 @@ The table stores keys, never links. A link is signed for the reader each time it
 | `ReplacedById` | uuid, null | the token that replaced this one |
 
 Indexes on `TokenHash` (unique), `FamilyId`, `UserId` and `ExpiresAt`.
+
+## PasswordResetTokens
+
+| Column | Type | Notes |
+|---|---|---|
+| `Id` | uuid | primary key |
+| `UserId` | uuid | foreign key, cascade |
+| `TokenHash` | text | SHA-256 of the token; unique. The token itself is never stored |
+| `CreatedAt`, `ExpiresAt` | timestamptz | a link is usable while the time is before `ExpiresAt` (30 minutes after it was made, by default) |
+| `UsedAt` | timestamptz, null | set when the link is used, or voided by a reset made with another link |
+
+Indexes on `TokenHash` (unique), `UserId` and `ExpiresAt`. Using a link is one conditional `UPDATE ... WHERE "UsedAt" IS NULL AND "ExpiresAt" > now RETURNING "UserId"`. A daily job removes rows that expired more than a week ago.
 
 ## Notifications
 

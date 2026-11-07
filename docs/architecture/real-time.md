@@ -65,6 +65,7 @@ sequenceDiagram
 | `ConversationRenamed` | pushes `ConversationUpdated` |
 | `ProfileChanged` | pushes `ProfileChanged` to everyone who shares a conversation with the person |
 | `AvatarFileRemoved` | removes a replaced picture from the bucket |
+| `PasswordResetRequested` | makes a reset token and sends the email with the link (not a push); does nothing when the row names nobody |
 | `ConversationRead` | pushes `MessageRead` to the group |
 
 Typing, presence, the mute echo and the notification read and dismissed events are pushed directly and may be lost. The client treats REST as the source of truth after a reconnect.

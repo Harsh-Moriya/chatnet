@@ -13,6 +13,8 @@ public sealed class FailingOutboxRepository : IOutboxRepository
         _failure = failure;
     }
 
+    public Task AddAsync(OutboxMessage row, CancellationToken cancellationToken) => throw _failure();
+
     public Task<List<OutboxMessage>> ClaimDueAsync(
         DateTime now, int batchSize, int maxAttempts, TimeSpan retryDelay, CancellationToken cancellationToken) =>
         throw _failure();

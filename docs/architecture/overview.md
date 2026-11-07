@@ -18,6 +18,7 @@ flowchart LR
     API2 --- Redis
     API1 -- "sign, inspect, copy" --> Bucket
     API1 -- "encrypted alerts" --> Push["Browser vendors'<br/>push services"]
+    API1 -- "reset links" --> Mail["SMTP relay"]
     Browser -. "push" .- Push
 ```
 
@@ -39,6 +40,7 @@ The browser follows the same split: TanStack Query owns REST data, and hub event
 | Object storage | Attachments and pictures. Designed for Cloudflare R2 (the S3 API is the contract); RustFS locally and in tests. The browser uploads straight to it with presigned links. |
 | Outbox and relay | A push that follows a change is recorded in the same transaction as the change, so it is delivered even if the request fails after the commit. See [real-time design](real-time.md). |
 | Web Push | Alerts for people with no live connection, encrypted to the browser (RFC 8291) and signed with VAPID (RFC 8292). Optional: off unless the server is given keys. |
+| Email | Password reset links are sent through an SMTP relay (MailKit): a mail catcher locally, a provider in production. The relay job sends them, so a request never waits for a mail server. Optional: off unless `Email:Smtp:Host` is set. |
 
 ## Code organisation
 
@@ -46,7 +48,8 @@ The backend is organised as **vertical slices**: a feature owns its endpoint, co
 
 ```
 backend/ChatNET.API/
-  Auth/            registration, login, refresh tokens, JWT
+  Auth/            registration, login, refresh tokens, password reset, JWT
+  Email/           the SMTP sender
   Users/           profile, user search
   Conversations/   direct and group conversations, membership, read state, mute
   Messaging/       sending, history, edit, delete, the SignalR hub

@@ -6,6 +6,12 @@ public interface IRefreshTokenRepository
 {
     Task AddAsync(RefreshToken token, CancellationToken cancellationToken);
 
+    // Stores the first token of a new session, only if the person's security stamp is still the one the caller saw when it checked
+    // their password. The check and the insert are one transaction behind a share lock on the person's row, which a password
+    // reset takes exclusively before it revokes their sessions: a sign-in that raced a reset either exists before the reset
+    // revokes it or is refused. Returns false when the stamp has changed.
+    Task<bool> AddIfSecurityStampUnchangedAsync(RefreshToken token, string? expectedSecurityStamp, CancellationToken cancellationToken);
+
     // With its user, so a refresh can build the new access token without a second query.
     Task<RefreshToken?> FindByHashAsync(string tokenHash, CancellationToken cancellationToken);
 
@@ -16,6 +22,10 @@ public interface IRefreshTokenRepository
 
     // Revokes every token of the family that is still usable.
     Task RevokeFamilyAsync(Guid familyId, DateTime now, CancellationToken cancellationToken);
+
+    // Revokes every token of the person that is still usable, in every family: every browser and device they are signed in on.
+    // Returns how many.
+    Task<int> RevokeAllForUserAsync(Guid userId, DateTime now, CancellationToken cancellationToken);
 
     // Removes tokens that expired before the given moment. Returns how many.
     Task<int> DeleteExpiredBeforeAsync(DateTime expiredBefore, CancellationToken cancellationToken);

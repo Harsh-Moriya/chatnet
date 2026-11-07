@@ -106,6 +106,15 @@ services:
       Push__PublicKey: ${PUSH_PUBLIC_KEY:-}
       Push__PrivateKey: ${PUSH_PRIVATE_KEY:-}
       Push__Subject: ${PUSH_SUBJECT:-}
+      # The mail relay the password reset email goes through (see .env.prod.example). Without a host, the default, email is off: the
+      # app works as before and asking for a reset link answers that it is not available.
+      Email__Smtp__Host: ${SMTP_HOST:-}
+      Email__Smtp__Port: ${SMTP_PORT:-587}
+      Email__Smtp__Security: ${SMTP_SECURITY:-StartTls}
+      Email__Smtp__UserName: ${SMTP_USERNAME:-}
+      Email__Smtp__Password: ${SMTP_PASSWORD:-}
+      Email__From__Address: ${MAIL_FROM_ADDRESS:-}
+      Email__From__Name: ${MAIL_FROM_NAME:-ChatNET}
     read_only: true
     tmpfs:
       - /tmp

@@ -25,7 +25,7 @@ public class LogoutHandler : IRequestHandler<LogoutCommand, Unit>
         if (string.IsNullOrEmpty(request.RefreshToken))
             return Unit.Value;
 
-        var token = await _tokens.FindByHashAsync(RefreshTokenIssuer.Hash(request.RefreshToken), cancellationToken);
+        var token = await _tokens.FindByHashAsync(TokenHash.Of(request.RefreshToken), cancellationToken);
 
         // An unknown or already revoked token is a successful sign-out: the outcome asked for is true.
         if (token is null)

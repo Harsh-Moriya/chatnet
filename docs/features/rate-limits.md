@@ -14,6 +14,11 @@ Limits slow down password guessing, mass account creation and flooding. The coun
 | `edit` | editing a message | person | 20 per 60 s |
 | `search` | message search | person | 30 per 10 s |
 | `push` | registering and removing a browser for alerts | person | 20 per 60 s |
+| `forgot-password` | `POST /api/auth/forgot-password` | client address | 5 per 900 s |
+| `reset-password` | `POST /api/auth/reset-password` | client address | 10 per 900 s |
+| `password-reset-email` | the emails sent for a reset link (counted by the handler, not the pipeline) | email address | 3 per 3,600 s |
+
+The per-email count is made by the handler that asks for a link, because the address is in the request body, which the limiter in the pipeline has not read. Its key holds a keyed hash of the normalised address, never the address. Going over it gives the same `202` and no email; see [account recovery](account-recovery.md).
 
 Not covered by these policies: reading, marking read, muting, deleting and presence. Typing is not counted in Redis; the hub delivers at most one start event per second per conversation per connection.
 

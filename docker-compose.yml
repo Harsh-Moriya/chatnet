@@ -118,6 +118,17 @@ services:
       postgres:
         condition: service_healthy
 
+  # ##### Mailpit #####
+  # A local mail catcher: it accepts any SMTP message on 1025 and shows it in a web page at http://localhost:8025, so the
+  # password reset email can be read without a real mail provider. Nothing is delivered anywhere. Mail is kept in memory
+  # and is gone when the container stops. The tag is pinned like the others.
+  mailpit:
+    image: axllent/mailpit:v1.33.0
+    container_name: chatnet-mailpit
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
 # Docker manages where named volumes live on disk.
 # Data persists across "docker-compose down" but is wiped by "docker-compose down -v".
 volumes:

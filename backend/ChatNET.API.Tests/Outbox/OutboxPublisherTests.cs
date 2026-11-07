@@ -137,6 +137,8 @@ public class OutboxPublisherTests
             return Task.CompletedTask;
         }
 
+        public Task AddAsync(OutboxMessage row, CancellationToken cancellationToken) => throw new NotSupportedException();
+
         public Task<List<OutboxMessage>> ClaimDueAsync(
             DateTime now, int batchSize, int maxAttempts, TimeSpan retryDelay, CancellationToken cancellationToken) =>
             throw new NotSupportedException();

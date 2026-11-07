@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using ChatNET.API.Auth;
 using ChatNET.API.Auth.Models;
 using ChatNET.API.Auth.Persistence;
+using ChatNET.API.Auth.PasswordReset;
 using ChatNET.API.RateLimiting;
 using ChatNET.API.Auth.Services;
 using ChatNET.API.Common.Behaviours;
@@ -15,6 +16,7 @@ using ChatNET.API.Common.OpenApi;
 using ChatNET.API.Common.Persistence;
 using ChatNET.API.Conversations;
 using ChatNET.API.Conversations.Persistence;
+using ChatNET.API.Email;
 using ChatNET.API.Media;
 using ChatNET.API.Messaging;
 using ChatNET.API.Messaging.Hubs;
@@ -154,8 +156,9 @@ try
     .AddEntityFrameworkStores<AppDbContext>();
 
     // The default token providers (for confirming an e-mail address, resetting a password, two-factor codes) are not
-    // registered: none of those flows exists, and building them makes Identity ask for the data protection provider
-    // the first time someone signs up or in, which logs warnings in a container and creates a key nothing uses.
+    // registered: building them makes Identity ask for the data protection provider the first time someone signs up or in,
+    // which logs warnings in a container and creates a key nothing uses. The reset link is a random value stored hashed
+    // instead (see PasswordResetToken), so no key ring is needed and every instance accepts a link any instance made.
 
     // ##### Auth #####
     // JwtBearer middleware validates the token on every request: it decodes the JWT,
@@ -240,7 +243,21 @@ try
     builder.Services.AddScoped<JwtTokenService>();
     builder.Services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
     builder.Services.AddScoped<RefreshTokenIssuer>();
-    builder.Services.AddHostedService<RefreshTokenCleanupService>();
+    builder.Services.AddScoped<IPasswordResetTokenRepository, PasswordResetTokenRepository>();
+    builder.Services.AddHostedService<AuthTokenCleanupService>();
+
+    // ##### Password reset #####
+    // A person who forgot their password asks for a link, which the outbox relay emails; using it sets a new password and ends
+    // every session. Asking is limited per address and per email address (see PasswordResetEmailLimiter), and it answers the
+    // same for every address. The link points at Frontend:Url. Settings are validated when the host starts.
+    builder.Services.AddOptions<FrontendOptions>()
+        .BindConfiguration(FrontendOptions.SectionName);
+    builder.Services.AddOptions<PasswordResetOptions>()
+        .BindConfiguration(PasswordResetOptions.SectionName)
+        .ValidateOnStart();
+    builder.Services.AddSingleton<IValidateOptions<PasswordResetOptions>, PasswordResetOptionsValidator>();
+    builder.Services.AddSingleton<PasswordResetEmailLimiter>();
+    builder.Services.AddScoped<PasswordResetMailer>();
     // The clock the application's own logic reads, so a test can move it. The access token itself is
     // issued and checked against the system clock.
     builder.Services.TryAddSingleton(TimeProvider.System);
@@ -318,6 +335,15 @@ try
             PooledConnectionLifetime = TimeSpan.FromMinutes(2),
         });
 
+    // ##### Email #####
+    // Mail goes out through an SMTP relay (Mailpit locally, a provider in production). With no host set the feature is off and
+    // nothing that needs it sends. Settings are validated when the host starts.
+    builder.Services.AddOptions<EmailOptions>()
+        .BindConfiguration(EmailOptions.SectionName)
+        .ValidateOnStart();
+    builder.Services.AddSingleton<IValidateOptions<EmailOptions>, EmailOptionsValidator>();
+    builder.Services.AddSingleton<IEmailSender, SmtpEmailSender>();
+
     // ##### Storage #####
     // Attachments live in an S3-compatible bucket (Cloudflare R2 in production, RustFS locally). The browser
     // uploads and downloads with presigned URLs; the server only signs them, looks at what was uploaded and
@@ -366,8 +392,8 @@ try
 
     // ##### Data protection #####
     // The framework keeps a key ring for anything an application protects with its data protection API. Nothing
-    // here does: tokens are signed with the JWT key, refresh tokens are random values stored hashed, and no
-    // confirmation or reset token is made. Authentication still registers the API, and the framework starts a
+    // here does: tokens are signed with the JWT key, and refresh tokens and password reset links are random values
+    // stored hashed. Authentication still registers the API, and the framework starts a
     // hosted service that creates the first key as soon as the host starts. In a container there is nowhere to keep
     // it, so every start of every instance logged three warnings about keys that nothing uses. Without the hosted
     // service the key ring is created, with the same warnings, the first time something does protect data, which is
@@ -408,6 +434,11 @@ try
     builder.Services.AddHsts(options => options.MaxAge = TimeSpan.FromDays(365));
 
     var app = builder.Build();
+
+    // Said once at start so the operator is not left wondering why asking for a reset link answers 503. Information, not a warning:
+    // a deployment without a mail relay is a valid way to run.
+    if (!app.Services.GetRequiredService<IOptions<EmailOptions>>().Value.Enabled)
+        app.Logger.LogInformation("Email is off because Email:Smtp:Host is not set; password reset is not available");
 
     // Middleware order is a hard constraint, not a style choice. Each middleware wraps
     // everything registered after it, so:

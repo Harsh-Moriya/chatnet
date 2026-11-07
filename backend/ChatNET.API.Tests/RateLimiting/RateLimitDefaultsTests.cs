@@ -20,6 +20,9 @@ public class RateLimitDefaultsTests
     [InlineData("search", 30, 10)]
     [InlineData("avatars", 600, 60)]
     [InlineData("push", 20, 60)]
+    [InlineData("forgot-password", 5, 900)]
+    [InlineData("reset-password", 10, 900)]
+    [InlineData("password-reset-email", 3, 3600)]
     public void A_policy_starts_at_the_agreed_limit(string policy, int permits, int windowSeconds)
     {
         var section = RateLimitPolicies.All.Single(p => p.Name == policy).Section;

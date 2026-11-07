@@ -4,11 +4,15 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using ChatNET.API.Conversations.Persistence;
+using ChatNET.API.Outbox.Persistence;
+using ChatNET.API.Tests.Outbox;
 using ChatNET.API.Tests.Conversations;
 using ChatNET.API.Tests.Infrastructure;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
@@ -79,6 +83,47 @@ public class LoggingTests
         var providers = _factory.Services.GetServices<ILoggerProvider>().Select(p => p.GetType().FullName);
 
         Assert.Empty(providers);
+    }
+
+    // A feature the deployment has not been set up for (no mail relay) answers 503 on purpose. An alert on the Error level would fire
+    // at every request for it, so the request line is information and the handler's warning says what was refused.
+    [Fact]
+    public async Task A_feature_that_is_switched_off_answers_503_without_an_error_in_the_log()
+    {
+        var capture = new CapturingLoggerProvider();
+        using var host = _factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(
+                new Dictionary<string, string?> { ["Email:Smtp:Host"] = string.Empty }));
+            builder.ConfigureTestServices(services => services.AddLogging(logging => logging.AddProvider(capture)));
+        });
+        using var client = host.CreateClient();
+
+        var response = await client.ForgotAsync($"nobody_{Guid.NewGuid():N}@example.test");
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        AssertNoErrors(capture);
+        Assert.StartsWith("[Information]", RequestLine(capture, "POST", "/api/auth/forgot-password", 503));
+        Assert.Single(capture.Entries, e => e.StartsWith("[Warning]") && e.Contains("ServiceUnavailableException"));
+    }
+
+    // The other side of the rule above: what really went wrong is still an error, on the request line as well as in the handler.
+    [Fact]
+    public async Task An_unhandled_failure_is_an_error_on_the_request_line()
+    {
+        var capture = new CapturingLoggerProvider();
+        using var host = _factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+        {
+            services.AddLogging(logging => logging.AddProvider(capture));
+            services.RemoveAll<IOutboxRepository>();
+            services.AddScoped<IOutboxRepository>(_ => new FailingOutboxRepository(() => new InvalidOperationException("The database is away.")));
+        }));
+        using var client = host.CreateClient();
+
+        var response = await client.ForgotAsync($"nobody_{Guid.NewGuid():N}@example.test");
+
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+        Assert.StartsWith("[Error]", RequestLine(capture, "POST", "/api/auth/forgot-password", 500));
     }
 
     [Fact]

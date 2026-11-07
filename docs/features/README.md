@@ -5,6 +5,7 @@ One page per feature: what it does, the endpoints and hub events it uses, and it
 | Feature | What it covers |
 |---|---|
 | [Accounts and sessions](accounts-and-sessions.md) | Registration, sign-in, short-lived access tokens, rotating refresh tokens, sign-out |
+| [Account recovery](account-recovery.md) | Forgot and reset password by email, single-use links, every session ended |
 | [Conversations](conversations.md) | Direct and group conversations, the list, user search |
 | [Messaging and history](messaging.md) | Sending (idempotent), history paging, catch-up after a reconnect, optimistic sending |
 | [Editing and deleting](edit-and-delete.md) | The edit window, who can delete, live updates |

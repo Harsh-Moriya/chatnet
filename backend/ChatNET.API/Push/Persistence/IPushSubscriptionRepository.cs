@@ -9,6 +9,10 @@ public interface IPushSubscriptionRepository
         Guid userId, string endpoint, string p256dh, string auth, int maxPerUser, DateTime now,
         CancellationToken cancellationToken);
 
+    // Removes every browser a person has registered. A password reset does this: an alert carries the start of a message, and
+    // the person who knows the new password is not the person who registered those browsers. Returns how many.
+    Task<int> RemoveAllForUserAsync(Guid userId, CancellationToken cancellationToken);
+
     // Removes the caller's own registration of this browser. Another person's is left alone, and nothing says whether it
     // exists. True when a row was removed.
     Task<bool> RemoveAsync(Guid userId, string endpoint, CancellationToken cancellationToken);

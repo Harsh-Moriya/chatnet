@@ -71,7 +71,7 @@ public class RegisterHandler : IRequestHandler<RegisterCommand, AuthResult>
             throw FailureFor(result);
 
         // Stored in the same transaction, so there is never an account whose first sign-in has no session.
-        var refreshToken = await _refreshTokens.StartSessionAsync(user.Id, cancellationToken);
+        var refreshToken = await _refreshTokens.StartSessionAsync(user, cancellationToken);
 
         await transaction.CommitAsync(cancellationToken);
 

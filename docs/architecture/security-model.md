@@ -8,6 +8,7 @@ What protects the system, how each protection works, and where its limits are. T
 |---|---|---|
 | Who is calling | A JWT access token, signed HS256, validated for signature, issuer, audience and lifetime. It lives 15 minutes and is kept in memory only. Claims: `sub`, `email`, `unique_name`, `display_name`, `jti`. | A token cannot be taken back. A deactivated user keeps what they hold for at most 15 minutes and is not renewed; sending is refused for them at once. An expired token is rejected after a 30-second tolerance. |
 | Staying signed in | A refresh token: 32 random bytes in the `chatnet_refresh` cookie, `HttpOnly`, `Secure`, `SameSite=Strict`, `Path=/api/auth`. Only its SHA-256 hash is stored. Each refresh retires the token and issues the next in the same family. A retired token presented again after 30 seconds revokes the whole family. | A thief who refreshes first and an owner who refreshes second are both signed out, and nothing says which was which. A copied token that is never used again goes unnoticed until it expires (14 days). A refresh whose reply is lost leaves the browser with a retired token; presented after the grace period it looks like theft and the session ends. |
+| Forgotten passwords | A single-use link by email. The token is 32 random bytes and only its SHA-256 hash is stored. It works for 30 minutes and once, and is in the URL fragment, so it is in no request line, proxy log or `Referer`. Asking answers 202 for every address and does the same work for each, and the email goes to the stored address with no name in it. A reset runs in one transaction under a row lock: it changes the password and the security stamp, clears the lockout, revokes every refresh token, removes the push registrations and voids the other links. | Whoever can read the mailbox of an account can reset it, because the address is not confirmed at registration. An access token issued before a reset works for up to 15 minutes more. Someone can use up the three emails an hour of an address they do not own. |
 | Cross-site requests to refresh and sign-out | `SameSite=Strict` keeps the cookie off cross-site requests, and both endpoints also refuse a request without `X-Requested-With: ChatNET`. | |
 | Passwords | Identity's salted PBKDF2 hashing, never logged. At least 8 characters with a digit, a lowercase and an uppercase letter. Email length is capped at 254 and password length at 128, so a request cannot ask the server to hash an enormous value. | |
 | Guessing passwords | A per-address rate limit on sign-in (10 per minute) and account lockout (5 failures, 15 minutes). | While Redis cannot be reached the rate limit is not applied and only the lockout, stored in Postgres, protects a password. |
@@ -18,7 +19,7 @@ What protects the system, how each protection works, and where its limits are. T
 
 ## Authorization
 
-Every endpoint requires authentication unless it is marked anonymous (sign-in, registration, refresh, sign-out, `/health`, and the two picture routes). The set of anonymous endpoints is pinned by a test.
+Every endpoint requires authentication unless it is marked anonymous (sign-in, registration, asking for and using a password reset link, refresh, sign-out, `/health`, and the two picture routes). The set of anonymous endpoints is pinned by a test.
 
 - **Identity comes from the token.** A request body never says who the caller is.
 - **Membership is checked in the handler or the hub**, never trusted from the client. A conversation that does not exist and one the caller is not in get the identical 403, so ids reveal nothing.
@@ -38,6 +39,8 @@ Races are settled by the database, not by check-then-write.
 - An edit and a delete are each one conditional `UPDATE`, so a delete that arrives first wins.
 - Every change to a group's members runs in a transaction behind a per-conversation advisory lock, with the rules applied to the rows read after the lock was taken, so there is exactly one owner at every moment.
 - Refresh rotation is one conditional `UPDATE`: of simultaneous refreshes exactly one wins and the others get a 409 and retry.
+- Using a password reset link is one conditional `UPDATE` that marks it used and returns the person, so of simultaneous requests with one link exactly one succeeds.
+- A password reset locks the person's row, and renewing a refresh token and starting a session take a share lock on it, so a session being made at the moment of a reset is either revoked by it or refused.
 
 ## Files
 
@@ -63,6 +66,9 @@ Counts live in Redis, so every API instance applies one limit. A refused request
 | `edit` | person | 20 per 60 s |
 | `search` | person | 30 per 10 s |
 | `push` | person | 20 per 60 s |
+| `forgot-password` (asking for a reset link) | client address | 5 per 900 s |
+| `reset-password` (using a link) | client address | 10 per 900 s |
+| `password-reset-email` (the emails sent for a link) | email address | 3 per 3,600 s |
 
 Not covered by these policies: reading, marking read, muting, deleting and presence. Typing is not counted in Redis; the hub delivers at most one start event per second per conversation per connection. When Redis cannot be reached the limits fail open: they are skipped for 5 seconds after a failure, one warning is logged per outage, and a bug in the limiter code is not hidden as an outage. Behind a proxy, the client address is the one the trusted proxy reports.
 

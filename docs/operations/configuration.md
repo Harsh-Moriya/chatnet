@@ -15,6 +15,7 @@ Options are bound to classes and **validated when the host starts**, so a missin
 | `Jwt:SigningKey` | Signs access tokens | A secret. At least 32 bytes. Changing it signs everyone out. |
 | `Storage:AccessKey`, `Storage:SecretKey` | Credentials of the bucket | Secrets; both required; never printed. |
 | `Push:PublicKey`, `Push:PrivateKey`, `Push:Subject` | Identify the server to push services | See [Web Push](#web-push). The private key is a secret. |
+| `Email:Smtp:UserName`, `Email:Smtp:Password` | The login of the mail relay | See [Email](#email). The password is a secret. |
 
 ## Tokens
 
@@ -29,7 +30,7 @@ Options are bound to classes and **validated when the host starts**, so a missin
 
 | Key | Default | Purpose |
 |---|---|---|
-| `Frontend:Url` | `http://localhost:5173` | The one origin CORS allows (with credentials). |
+| `Frontend:Url` | `http://localhost:5173` | The one origin CORS allows (with credentials), and the address the links in emails point at. When email is on it must be the address of the web app: absolute, `https` (plain `http` only for localhost), with no path, query or fragment. |
 | `AllowedHosts` | `*` | Host names the API answers, separated by semicolons; any other `Host` gets a 400. |
 | `ForwardedHeaders:KnownNetworks` | empty | Networks (CIDR, for example `172.16.0.0/12`) the reverse proxy connects from. Empty means no proxy and forwarded headers are ignored. Each entry must parse. In an environment variable: `ForwardedHeaders__KnownNetworks__0`, `__1`, and so on. |
 
@@ -78,6 +79,9 @@ Time values are `hh:mm:ss` (or `d.hh:mm:ss`) strings, for example `Messaging__Ed
 | `Search` | 30 per 10 s |
 | `Avatars` | 600 per 60 s |
 | `Push` | 20 per 60 s |
+| `ForgotPassword` | 5 per 900 s |
+| `ResetPassword` | 10 per 900 s |
+| `PasswordResetEmail` | 3 per 3600 s (counted per email address by the handler that asks for a link, not by the pipeline) |
 
 | Key | Default | Validation |
 |---|---|---|
@@ -86,6 +90,24 @@ Time values are `hh:mm:ss` (or `d.hh:mm:ss`) strings, for example `Messaging__Ed
 | `RateLimiting:Store:PauseSeconds` | 5 | 1 to 600. How long the limits are skipped after a failure. |
 
 See [rate limits](../features/rate-limits.md).
+
+## Email
+
+Password reset links are sent through an SMTP relay. Email is **off** unless `Email:Smtp:Host` is set: the API still starts, and asking for a reset link answers 503. With a host set, `Email:From:Address` is required and the rest is checked when the host starts.
+
+| Key | Default | Validation |
+|---|---|---|
+| `Email:Smtp:Host` | none | Empty means email is off. |
+| `Email:Smtp:Port` | 587 | 1 to 65535. |
+| `Email:Smtp:Security` | `StartTls` | `StartTls` (required, not merely tried), `SslOnConnect` (TLS from the first byte) or `None`. `None` is refused together with a login. |
+| `Email:Smtp:UserName`, `Email:Smtp:Password` | none | Both or neither. A secret: set it with user-secrets or the environment. |
+| `Email:Smtp:Timeout` | 10 s | Above zero. How long connecting and each exchange may take; the whole send is cut off after three times this. |
+| `Email:From:Address` | none | A valid email address, on a domain the relay allows. Required when the host is set. |
+| `Email:From:Name` | `ChatNET` | The sender name. |
+| `PasswordReset:TokenLifetime` | 30 minutes | At least one minute. How long a reset link works. |
+| `PasswordReset:SendWithin` | 10 minutes | Above zero. A request older than this when the relay reaches it is dropped, not sent, because a link that arrives late is of no use. |
+
+See [account recovery](../features/account-recovery.md).
 
 ## Web Push
 
@@ -144,6 +166,7 @@ Compose refuses a missing required value and names it.
 | `JWT_SIGNING_KEY` | yes | At least 32 bytes |
 | `STORAGE_SERVICE_URL`, `STORAGE_BUCKET`, `STORAGE_ACCESS_KEY`, `STORAGE_SECRET_KEY` | yes | The S3-compatible bucket |
 | `PUSH_PUBLIC_KEY`, `PUSH_PRIVATE_KEY`, `PUSH_SUBJECT` | no | Web Push; empty means off |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURITY`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `MAIL_FROM_ADDRESS`, `MAIL_FROM_NAME` | no | The mail relay for password reset emails; an empty `SMTP_HOST` means email is off. The port defaults to 587 and the security to `StartTls`. |
 | `ALLOWED_HOSTS` | no | Host names the API answers; default is `DOMAIN` and `localhost` |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | no | Send traces here (with `--profile tracing`, `http://jaeger:4317`) |
 | `API_REPLICAS` | no | How many API instances run (default 2) |

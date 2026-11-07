@@ -35,10 +35,21 @@ public sealed class ChatApiFactory : WebApplicationFactory<Program>, IAsyncLifet
     private readonly string _storageSecretKey = Convert.ToHexString(RandomNumberGenerator.GetBytes(24)).ToLowerInvariant();
     private readonly IContainer _storage;
 
+    // A mail catcher: the API sends through it as it would through a provider's relay, and the tests read what arrived.
+    private readonly IContainer _mail;
+
     public const string StorageBucket = "chatnet-tests";
+
+    public const string MailFromAddress = "noreply@chatnet.test";
 
     public ChatApiFactory()
     {
+        _mail = new ContainerBuilder("axllent/mailpit:v1.33.0")
+            .WithPortBinding(1025, true)
+            .WithPortBinding(8025, true)
+            .WithWaitStrategy(Wait.ForUnixContainer().UntilHttpRequestIsSucceeded(request => request.ForPort(8025).ForPath("/api/v1/info")))
+            .Build();
+
         _storage = new ContainerBuilder("rustfs/rustfs:1.0.3")
             .WithEnvironment("RUSTFS_ACCESS_KEY", _storageAccessKey)
             .WithEnvironment("RUSTFS_SECRET_KEY", _storageSecretKey)
@@ -63,6 +74,11 @@ public sealed class ChatApiFactory : WebApplicationFactory<Program>, IAsyncLifet
                 ["Push:PublicKey"] = string.Empty,
                 ["Push:PrivateKey"] = string.Empty,
                 ["Push:Subject"] = string.Empty,
+
+                // The same for the login of an SMTP relay, which a developer may have in user-secrets. The test host talks to
+                // the mail catcher, which takes no login, and a developer's real one would be refused with it.
+                ["Email:Smtp:UserName"] = string.Empty,
+                ["Email:Smtp:Password"] = string.Empty,
             }));
 
     // A client for the test bucket, to put objects where the API will look and to see what it left behind.
@@ -70,9 +86,16 @@ public sealed class ChatApiFactory : WebApplicationFactory<Program>, IAsyncLifet
 
     public string StorageServiceUrl => $"http://{_storage.Hostname}:{_storage.GetMappedPublicPort(9000)}";
 
+    public string SmtpHost => _mail.Hostname;
+
+    public int SmtpPort => _mail.GetMappedPublicPort(1025);
+
+    // The mail the API sent to the catcher, found by recipient (see MailpitApi).
+    public MailpitApi Mail { get; private set; } = null!;
+
     public async Task InitializeAsync()
     {
-        await Task.WhenAll(_postgres.StartAsync(), _redis.StartAsync(), _storage.StartAsync());
+        await Task.WhenAll(_postgres.StartAsync(), _redis.StartAsync(), _storage.StartAsync(), _mail.StartAsync());
 
         // Configuration is supplied through environment variables on purpose. Program.cs reads
         // some settings while the app is still being assembled, and the environment is the one
@@ -85,10 +108,14 @@ public sealed class ChatApiFactory : WebApplicationFactory<Program>, IAsyncLifet
         Environment.SetEnvironmentVariable("Storage__Bucket", StorageBucket);
         Environment.SetEnvironmentVariable("Storage__AccessKey", _storageAccessKey);
         Environment.SetEnvironmentVariable("Storage__SecretKey", _storageSecretKey);
+        Environment.SetEnvironmentVariable("Email__Smtp__Host", SmtpHost);
+        Environment.SetEnvironmentVariable("Email__Smtp__Port", SmtpPort.ToString());
+        Environment.SetEnvironmentVariable("Email__Smtp__Security", "None");
+        Environment.SetEnvironmentVariable("Email__From__Address", MailFromAddress);
 
         // Effectively disables the rate limits for ordinary tests, which register many users from one address and send, edit
         // and search many times as one person. Rate limit tests build a host with a tight limit.
-        foreach (var policy in new[] { "Auth", "Send", "Uploads", "Edit", "Search", "Avatars", "Push" })
+        foreach (var policy in new[] { "Auth", "Send", "Uploads", "Edit", "Search", "Avatars", "Push", "ForgotPassword", "ResetPassword", "PasswordResetEmail" })
             Environment.SetEnvironmentVariable($"RateLimiting__{policy}__PermitLimit", "1000000");
 
         // Presence timers are set so they never fire by themselves while other tests run: the refresh loop
@@ -117,6 +144,8 @@ public sealed class ChatApiFactory : WebApplicationFactory<Program>, IAsyncLifet
         });
         await Storage.PutBucketAsync(new PutBucketRequest { BucketName = StorageBucket });
 
+        Mail = new MailpitApi(new Uri($"http://{_mail.Hostname}:{_mail.GetMappedPublicPort(8025)}"));
+
         using var scope = Services.CreateScope();
         await scope.ServiceProvider.GetRequiredService<AppDbContext>().Database.MigrateAsync();
     }
@@ -127,7 +156,9 @@ public sealed class ChatApiFactory : WebApplicationFactory<Program>, IAsyncLifet
         await _postgres.DisposeAsync();
         await _redis.DisposeAsync();
         Storage?.Dispose();
+        Mail?.Dispose();
         await _storage.DisposeAsync();
+        await _mail.DisposeAsync();
     }
 
     // Registers a brand new user through the public API and returns their identity and token.
@@ -189,7 +220,9 @@ public sealed class ChatApiFactory : WebApplicationFactory<Program>, IAsyncLifet
 
         if (config.GetConnectionString("DefaultConnection") != _postgres.GetConnectionString()
             || config.GetConnectionString("Redis") != _redis.GetConnectionString()
-            || config["Storage:ServiceUrl"] != StorageServiceUrl)
+            || config["Storage:ServiceUrl"] != StorageServiceUrl
+            || config["Email:Smtp:Host"] != SmtpHost
+            || config["Email:Smtp:Port"] != SmtpPort.ToString())
         {
             throw new InvalidOperationException(
                 "The API under test is not using the test containers. Refusing to run tests.");

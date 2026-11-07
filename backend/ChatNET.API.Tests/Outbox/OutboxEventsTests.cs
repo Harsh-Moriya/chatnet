@@ -24,6 +24,8 @@ public class OutboxEventsTests
         var renamed = new ConversationRenamed(Guid.NewGuid());
         var messageAlert = new MessageAlertRequested(Guid.NewGuid(), Guid.NewGuid(), [Guid.NewGuid(), Guid.NewGuid()]);
         var notificationAlert = new NotificationAlertRequested(Guid.NewGuid(), Guid.NewGuid());
+        var passwordReset = new PasswordResetRequested(Guid.NewGuid());
+        var passwordResetOfNobody = new PasswordResetRequested(null);
 
         Assert.Equal(message, OutboxEvents.Read(message.Kind, OutboxEvents.Serialize(message)));
         Assert.Equal(notification, OutboxEvents.Read(notification.Kind, OutboxEvents.Serialize(notification)));
@@ -37,6 +39,8 @@ public class OutboxEventsTests
         Assert.Equal(messageAlert.ConversationId, alertBack.ConversationId);
         Assert.Equal(messageAlert.MentionedUserIds, alertBack.MentionedUserIds);
         Assert.Equal(notificationAlert, OutboxEvents.Read(notificationAlert.Kind, OutboxEvents.Serialize(notificationAlert)));
+        Assert.Equal(passwordReset, OutboxEvents.Read(passwordReset.Kind, OutboxEvents.Serialize(passwordReset)));
+        Assert.Equal(passwordResetOfNobody, OutboxEvents.Read(passwordResetOfNobody.Kind, OutboxEvents.Serialize(passwordResetOfNobody)));
 
         var changedBack = Assert.IsType<MembersChanged>(OutboxEvents.Read(changed.Kind, OutboxEvents.Serialize(changed)));
         Assert.Equal(changed.ConversationId, changedBack.ConversationId);

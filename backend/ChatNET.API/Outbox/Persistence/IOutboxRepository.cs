@@ -6,6 +6,9 @@ namespace ChatNET.API.Outbox.Persistence;
 // in the same SaveChanges.
 public interface IOutboxRepository
 {
+    // Saves a row on its own, for a request that has no other change to save it with.
+    Task AddAsync(OutboxMessage row, CancellationToken cancellationToken);
+
     // Takes up to batchSize rows that are due (not pushed, not given up on, past their NextAttemptAt), oldest first,
     // and holds them for the delay of their attempt (retryDelay, doubling), so no other relay takes them meanwhile.
     // One statement, and rows another relay is taking at this moment are skipped, not waited for. The returned rows

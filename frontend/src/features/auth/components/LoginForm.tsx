@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Eye, EyeOff, AlertCircle } from 'lucide-react'
 import type { LoginRequest } from '../types'
 import { FormField } from '../../../components/ui/FormField'
@@ -58,6 +59,12 @@ export function LoginForm({ onSubmit, isLoading, error }: Props) {
           </button>
         }
       />
+
+      <div className="-mt-2 text-right">
+        <Link to="/forgot-password" className="text-sm font-medium text-blue-600 hover:underline">
+          Forgot password?
+        </Link>
+      </div>
 
       <Button type="submit" fullWidth isLoading={isLoading} className="mt-1">
         Sign in

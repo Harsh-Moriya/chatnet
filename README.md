@@ -14,6 +14,7 @@ A real-time, multi-user chat application with direct (1:1) and group conversatio
 - **Search.** Full-text search over the messages you can read, by words or file names.
 - **Notifications.** `@mentions`, group invitations, a bell with an unread count, browser alerts, per-conversation mute, and optional Web Push alerts while the app is closed.
 - **Sessions.** Short-lived access tokens with rotating refresh tokens in an httpOnly cookie, and sign-out that ends the session.
+- **Account recovery.** A forgotten password is reset by email with a single-use link that expires. The server answers the same for every address, and a reset ends every session of the account.
 - **Delivery that survives failures.** Every push is recorded with the change that causes it (a transactional outbox), so a message saved while Redis was down is still delivered.
 - **Limits that hold across servers.** Rate limits are counted in Redis, so several API instances apply one limit between them.
 - **Observability.** Structured logs and OpenTelemetry traces that carry ids, never message content.
@@ -30,6 +31,7 @@ flowchart LR
     API --- Postgres[("PostgreSQL")]
     API --- Redis[("Redis<br/>backplane, presence, rate limits")]
     API -- "sign, inspect, copy" --> Storage
+    API -- "reset links" --> Mail["SMTP relay"]
 ```
 
 REST loads data and performs every change that must be confirmed. SignalR only pushes events. The API is organised as vertical slices (one folder per feature, with its endpoint, MediatR handler, validator and data access). Read the [architecture overview](docs/architecture/overview.md), then the [real-time design](docs/architecture/real-time.md).
@@ -52,7 +54,7 @@ REST loads data and performs every change that must be confirmed. SignalR only p
 
 You need the [.NET 10 SDK](https://dotnet.microsoft.com/download), a current [Node.js](https://nodejs.org) LTS, [Docker](https://www.docker.com/products/docker-desktop), and the EF Core CLI (`dotnet tool install --global dotnet-ef`).
 
-**1. Infrastructure.** Copy `.env.example` to `.env`, fill in the values (the file explains them), and start Postgres, Redis, object storage, Jaeger and Adminer:
+**1. Infrastructure.** Copy `.env.example` to `.env`, fill in the values (the file explains them), and start Postgres, Redis, object storage, Jaeger, Adminer and a local mail catcher (Mailpit):
 
 ```bash
 cp .env.example .env
@@ -84,7 +86,7 @@ npm install
 npm run dev
 ```
 
-Open `http://localhost:5173`. Vite proxies `/api` and `/hubs` to the backend. [Running locally](docs/operations/running-locally.md) covers optional push alerts, traces and trying the app as two people at once.
+Open `http://localhost:5173`. Vite proxies `/api` and `/hubs` to the backend. [Running locally](docs/operations/running-locally.md) covers password reset emails, optional push alerts, traces and trying the app as two people at once.
 
 ## Tests
 

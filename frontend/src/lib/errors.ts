@@ -20,3 +20,22 @@ export function getApiError(error: unknown): string {
 
   return 'An unexpected error occurred'
 }
+
+// The messages the API attached to single fields of a rejected request (validation errors), by field. The API names a field the
+// way its C# property is written (Email, NewPassword), and the screen uses camel case, so the first letter is lowered. A field
+// with several messages gets the first. Empty when the error has none: a failure that is not about a field, or no response.
+export function getFieldErrors(error: unknown): Record<string, string> {
+  if (!axios.isAxiosError(error)) return {}
+
+  const errors: unknown = error.response?.data?.errors
+  if (typeof errors !== 'object' || errors === null) return {}
+
+  const fields: Record<string, string> = {}
+  for (const [name, messages] of Object.entries(errors)) {
+    if (Array.isArray(messages) && typeof messages[0] === 'string' && name !== '') {
+      fields[name[0].toLowerCase() + name.slice(1)] = messages[0]
+    }
+  }
+
+  return fields
+}
