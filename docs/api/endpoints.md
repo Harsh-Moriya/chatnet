@@ -1,6 +1,6 @@
 # Endpoints
 
-The HTTP API. In Development the running API also serves its OpenAPI document at `/openapi/v1.json` and an interactive reference at `/scalar/v1`; every operation there declares its success body and each error it can return. The tables below list every route (42 operations) with its authentication, its rate-limit policy and what it does. Request and response bodies in the examples were copied from a running API.
+The HTTP API. In Development the running API also serves its OpenAPI document at `/openapi/v1.json` and an interactive reference at `/scalar/v1`; every operation there declares its success body and each error it can return. The tables below list every route (44 operations) with its authentication, its rate-limit policy and what it does. Request and response bodies in the examples were copied from a running API.
 
 ## Conventions
 
@@ -36,6 +36,8 @@ Authentication column: **Bearer** needs an access token; **Refresh cookie** need
 | `POST /api/auth/login` | None | auth | 200, 400, 401, 403, 429 | Signs in. 401 for a wrong email or password (same text), 403 for a deactivated account, 429 for the rate limit or a locked account. |
 | `POST /api/auth/refresh` | Refresh cookie | refresh | 200, 401, 403, 409, 429 | Exchanges the refresh cookie for a new access token and a new cookie; the old refresh token stops working. Needs `X-Requested-With: ChatNET`. 409 means another request replaced the token a moment ago: retry. |
 | `POST /api/auth/logout` | Refresh cookie | refresh | 204, 403, 429 | Revokes the session and removes the cookie. A missing cookie is also a 204. Needs `X-Requested-With: ChatNET`. |
+| `POST /api/auth/forgot-password` | None | forgot-password | 202, 400, 429, 503 | Asks for an email with a link to choose a new password (`email`). Answers 202 with no body for every address, so it never says whether one has an account. At most 3 emails an hour go to one address. 503 when the server has no mail relay. |
+| `POST /api/auth/reset-password` | None | reset-password | 204, 400, 429 | Sets a new password from the link in that email (`token`, `newPassword`) and ends every session of the account. 204 with no body and no cookie. One 400 for an unknown, used, expired or voided link; a password that breaks a rule is a 400 on `NewPassword` and leaves the link usable. |
 
 ## Users and profile
 
@@ -130,10 +132,10 @@ Examples are real responses. Where a list is shown, it is cut to its first entry
 ```json
 {
   "token": "<access token>",
-  "userId": "01a1ac73-bb4d-7e51-9759-fcb0091ef152",
-  "userName": "ana_9111g",
+  "userId": "01a1b535-a9eb-74c3-ad63-7d4ce3e5a23c",
+  "userName": "ana_hlqpp",
   "displayName": "Ana Example",
-  "accessTokenExpiresAt": "2026-11-05T16:18:48Z"
+  "accessTokenExpiresAt": "2026-11-07T09:07:35Z"
 }
 ```
 
@@ -145,8 +147,8 @@ The refresh token is in the `Set-Cookie` header, not the body: `chatnet_refresh=
 
 ```json
 {
-  "id": "01a1ac73-bb4d-7e51-9759-fcb0091ef152",
-  "userName": "ana_9111g",
+  "id": "01a1b535-a9eb-74c3-ad63-7d4ce3e5a23c",
+  "userName": "ana_hlqpp",
   "displayName": "Ana Example",
   "avatarUrl": null
 }
@@ -158,14 +160,14 @@ The refresh token is in the `Set-Cookie` header, not the body: `chatnet_refresh=
 
 ```json
 {
-  "id": "01a1ac73-bf97-73fc-9a16-77a1085bc2b3",
+  "id": "01a1b535-b18e-7865-8b72-13617328f38c",
   "type": "Direct",
   "name": "Ben Example",
   "avatarUrl": null,
-  "updatedAt": "2026-11-05T16:03:49.271669Z",
+  "updatedAt": "2026-11-07T08:52:37.38997Z",
   "lastMessage": null,
   "unreadCount": 0,
-  "otherUserId": "01a1ac73-bbff-77e7-962c-3a6c26c96f52",
+  "otherUserId": "01a1b535-abad-77a7-a8ad-aad0ec6c1972",
   "isMuted": false,
   "leftAt": null
 }
@@ -175,9 +177,9 @@ For a direct chat `name` is the other person's display name and `otherUserId` is
 
 ```json
 {
-  "senderId": "01a1ac73-bbff-77e7-962c-3a6c26c96f52",
+  "senderId": "01a1b535-abad-77a7-a8ad-aad0ec6c1972",
   "content": "Sounds good 3",
-  "createdAt": "2026-11-05T16:03:49.980704Z",
+  "createdAt": "2026-11-07T08:52:38.95065Z",
   "attachmentCount": 0
 }
 ```
@@ -186,13 +188,13 @@ For a direct chat `name` is the other person's display name and `otherUserId` is
 
 ```json
 {
-  "id": "01a1ac73-c1b3-7117-acd5-2aa6a2698db0",
-  "conversationId": "01a1ac73-c01d-74ae-8845-418d508257b9",
-  "senderId": "01a1ac73-bb4d-7e51-9759-fcb0091ef152",
+  "id": "01a1b535-b662-73ed-b3bb-082e84acb467",
+  "conversationId": "01a1b535-b41e-761a-91ea-5cb6239f7221",
+  "senderId": "01a1b535-a9eb-74c3-ad63-7d4ce3e5a23c",
   "senderDisplayName": "Ana Example",
   "content": "Hi everyone, shall we meet on Saturday?",
-  "createdAt": "2026-11-05T16:03:49.811643Z",
-  "clientMessageId": "72855c7e-d51e-44a1-9a47-267e022f2e03",
+  "createdAt": "2026-11-07T08:52:38.625789Z",
+  "clientMessageId": "4fb3a9f7-a04b-46bf-9b70-b91819c71af9",
   "attachments": [],
   "editedAt": null,
   "editCount": 0,
@@ -204,12 +206,12 @@ A message with a file carries its attachments:
 
 ```json
 {
-  "id": "01a1ac73-c402-7602-980a-c745754dedc3",
+  "id": "01a1b535-bd0c-7499-948d-1e64c60e58c8",
   "type": "Image",
   "fileName": "map.png",
   "contentType": "image/png",
   "sizeBytes": 70,
-  "url": "http://localhost:9000/chatnet/attachments/01a1ac73-c01d-74ae-8845-418d508257b9/01a1ac73-c402-7602-980a-c745754dedc3?<signature parameters>"
+  "url": "http://localhost:9000/chatnet/attachments/01a1b535-b41e-761a-91ea-5cb6239f7221/01a1b535-bd0c-7499-948d-1e64c60e58c8?<signature parameters>"
 }
 ```
 
@@ -222,12 +224,12 @@ A deleted message has `content: null`, `isDeleted: true` and no attachments.
 ```json
 [
   {
-    "userId": "01a1ac73-bb4d-7e51-9759-fcb0091ef152",
-    "userName": "ana_9111g",
+    "userId": "01a1b535-a9eb-74c3-ad63-7d4ce3e5a23c",
+    "userName": "ana_hlqpp",
     "displayName": "Ana Example",
     "avatarUrl": null,
     "role": "Owner",
-    "lastReadAt": "2026-11-05T16:03:49.893547Z"
+    "lastReadAt": "2026-11-07T08:52:38.808191Z"
   }
 ]
 ```
@@ -238,7 +240,7 @@ A deleted message has `content: null`, `isDeleted: true` and no attachments.
 
 ```json
 {
-  "id": "01a1ac73-c01d-74ae-8845-418d508257b9",
+  "id": "01a1b535-b41e-761a-91ea-5cb6239f7221",
   "name": "Weekend plans (Sunday)",
   "avatarUrl": null
 }
@@ -248,7 +250,7 @@ A deleted message has `content: null`, `isDeleted: true` and no attachments.
 
 ```json
 {
-  "leftAt": "2026-11-05T16:03:51.413588Z"
+  "leftAt": "2026-11-07T08:52:41.574666Z"
 }
 ```
 
@@ -258,9 +260,9 @@ A deleted message has `content: null`, `isDeleted: true` and no attachments.
 
 ```json
 {
-  "uploadKey": "pending/01a1ac73-c01d-74ae-8845-418d508257b9/01a1ac73-bb4d-7e51-9759-fcb0091ef152/c3f66325-d14b-42dd-b0c2-dcc5b9a028d6",
-  "url": "http://localhost:9000/chatnet/pending/01a1ac73-c01d-74ae-8845-418d508257b9/01a1ac73-bb4d-7e51-9759-fcb0091ef152/c3f66325-d14b-42dd-b0c2-dcc5b9a028d6?<signature parameters>",
-  "expiresAt": "2026-11-07T06:27:33Z"
+  "uploadKey": "pending/01a1b535-b41e-761a-91ea-5cb6239f7221/01a1b535-a9eb-74c3-ad63-7d4ce3e5a23c/466f5d5b-edc8-40bb-a32a-ea6132ed489a",
+  "url": "http://localhost:9000/chatnet/pending/01a1b535-b41e-761a-91ea-5cb6239f7221/01a1b535-a9eb-74c3-ad63-7d4ce3e5a23c/466f5d5b-edc8-40bb-a32a-ea6132ed489a?<signature parameters>",
+  "expiresAt": "2026-11-07T09:02:39Z"
 }
 ```
 
@@ -272,8 +274,8 @@ A deleted message has `content: null`, `isDeleted: true` and no attachments.
 
 ```json
 {
-  "url": "http://localhost:9000/chatnet/attachments/01a1ac73-c01d-74ae-8845-418d508257b9/01a1ac73-c402-7602-980a-c745754dedc3?<signature parameters>",
-  "expiresAt": "2026-11-07T07:17:34Z"
+  "url": "http://localhost:9000/chatnet/attachments/01a1b535-b41e-761a-91ea-5cb6239f7221/01a1b535-bd0c-7499-948d-1e64c60e58c8?<signature parameters>",
+  "expiresAt": "2026-11-07T09:52:40Z"
 }
 ```
 
@@ -285,15 +287,15 @@ A deleted message has `content: null`, `isDeleted: true` and no attachments.
 {
   "items": [
     {
-      "id": "01a1ac73-c208-77a0-ad01-4043fb7cc747",
+      "id": "01a1b535-b746-7d09-8a48-5ba47a7e75a0",
       "type": "Mention",
-      "conversationId": "01a1ac73-c01d-74ae-8845-418d508257b9",
-      "actorId": "01a1ac73-bb4d-7e51-9759-fcb0091ef152",
+      "conversationId": "01a1b535-b41e-761a-91ea-5cb6239f7221",
+      "actorId": "01a1b535-a9eb-74c3-ad63-7d4ce3e5a23c",
       "actorDisplayName": "Ana Example",
-      "messageId": "01a1ac73-c205-75ed-abd3-8b9c3e17d17b",
-      "messagePreview": "@ben_9111g can you book a table?",
+      "messageId": "01a1b535-b718-7856-b9d7-e488b9274463",
+      "messagePreview": "@ben_hlqpp can you book a table?",
       "isRead": false,
-      "createdAt": "2026-11-05T16:03:49.893547Z"
+      "createdAt": "2026-11-07T08:52:38.808191Z"
     }
   ],
   "unreadCount": 2
@@ -307,10 +309,10 @@ A deleted message has `content: null`, `isDeleted: true` and no attachments.
 ```json
 [
   {
-    "userId": "01a1ac73-bbff-77e7-962c-3a6c26c96f52",
+    "userId": "01a1b535-abad-77a7-a8ad-aad0ec6c1972",
     "isOnline": true,
     "lastSeenAt": null,
-    "at": "2026-11-05T16:03:50.184Z"
+    "at": "2026-11-07T08:52:39.541Z"
   }
 ]
 ```
@@ -322,13 +324,13 @@ A hit found by its text:
 ```json
 [
   {
-    "messageId": "01a1ac73-c41e-732e-a651-9c052a377232",
-    "conversationId": "01a1ac73-c01d-74ae-8845-418d508257b9",
+    "messageId": "01a1b535-bd63-7c02-a405-e9a37141e284",
+    "conversationId": "01a1b535-b41e-761a-91ea-5cb6239f7221",
     "conversationName": "Weekend plans (Sunday)",
     "conversationType": "Group",
-    "senderId": "01a1ac73-bb4d-7e51-9759-fcb0091ef152",
+    "senderId": "01a1b535-a9eb-74c3-ad63-7d4ce3e5a23c",
     "senderDisplayName": "Ana Example-Jones",
-    "createdAt": "2026-11-05T16:03:50.389276Z",
+    "createdAt": "2026-11-07T08:52:40.092618Z",
     "snippet": [
       {
         "text": "Meeting",
@@ -360,10 +362,10 @@ A hit found by the name of a file has `"snippet": []` and `"fileName": "map.png"
 
 ```json
 {
-  "endpoint": "https://fcm.googleapis.com/fcm/send/example-9111g",
+  "endpoint": "https://fcm.googleapis.com/fcm/send/example-hlqpp",
   "keys": {
-    "p256dh": "BKL-OfQ1ZwA-xAi3sKDdehzHvXibqRNatZk9oJnbX7thR7_akdei2Fjx5aletpbhMjc9idid1qibh0P_Kl3s4G4",
-    "auth": "2uUG_duRsHGX9OhzZSmq2Q"
+    "p256dh": "BJ8Vt4V5wG_-kks91CspLt_PAt08tPDlpgmh4kfMcoB1ciNFXHcIX-epmzq8ZuWq5e56qvQJ8XXMCdyWpeHAByk",
+    "auth": "I3gmnvKWizrTB8lPDtS_sQ"
   }
 }
 ```

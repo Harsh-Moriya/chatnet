@@ -53,5 +53,5 @@ sequenceDiagram
 
 - Sign-in and registration are limited to 10 per minute per client address; refresh and sign-out to 60 per minute per address, counted separately.
 - Only one person can be signed in per browser host, because the refresh cookie is per host. To try two users at once, open the app from two different host names (`localhost` and `127.0.0.1`).
-- There is no email confirmation and no password reset.
+- There is no email confirmation. A forgotten password is recovered by email: see [account recovery](account-recovery.md).
 - An access token cannot be revoked before it expires; a deactivated user's token works for up to 15 minutes, though they cannot renew it.

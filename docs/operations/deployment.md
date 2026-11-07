@@ -82,6 +82,16 @@ Set `DOMAIN=localhost` in `.env.prod`. Caddy then uses its own certificate autho
 
 Alerts for closed browsers need `PUSH_PUBLIC_KEY`, `PUSH_PRIVATE_KEY` and `PUSH_SUBJECT` in `.env.prod`; the recipe to generate the pair is in `.env.prod.example`. Without them the feature is off and nothing else changes. Changing the pair makes every browser subscribe again, which they do by themselves the next time the page is open. A browser opens the connection to its own vendor's push service, so the API container must reach `fcm.googleapis.com`, `updates.push.services.mozilla.com`, `push.apple.com` and `notify.windows.com` on port 443.
 
+## Email
+
+Password reset needs a mail relay. Without `SMTP_HOST` in `.env.prod` the stack runs as before and asking for a reset link answers 503; links that were sent earlier still work. The variables are listed in `.env.prod.example`. Any SMTP relay works. For Resend:
+
+- Verify the domain you send from at resend.com/domains and add the DNS records it generates (DKIM and SPF); a DMARC record is recommended. It suggests sending from a subdomain such as `auth.<your domain>`.
+- Create an API key. Set `SMTP_HOST=smtp.resend.com`, `SMTP_USERNAME=resend`, `SMTP_PASSWORD=<the API key>`, and `MAIL_FROM_ADDRESS` to an address on the verified domain. Port 587 with `StartTls` is the default; port 465 needs `SMTP_SECURITY=SslOnConnect`.
+- Keep open and click tracking off for that domain. Resend has them off by default and turns them on per domain. A tracked link goes through the provider's own address and carries the reset token with it.
+
+The API container must reach the relay on its port, outbound. The reset link points at `https://<DOMAIN>/reset-password`. Mail is sent by the outbox relay within a few seconds of the request, and a request that waits more than ten minutes (the relay was down) is dropped.
+
 ## Limits
 
 - One Postgres and one Redis, with no replication and no automatic backups.
