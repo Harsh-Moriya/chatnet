@@ -83,14 +83,15 @@ public static class PasswordResetApi
     }
 
     // Holds a person's row the way a password reset does: a transaction, on a connection of its own, that has locked the row for
-    // update. What runs meanwhile on the API's side shows whether it waits. The lock is released by Commit or by disposing.
-    public static async Task<HeldUserRow> HoldUserRowAsync(this ChatApiFactory factory, Guid userId)
+    // update (or, with shared, the way a renewal or a sign-in in progress does, with a share lock). What runs meanwhile on the API's
+    // side shows whether it waits. The lock is released by Commit or by disposing.
+    public static async Task<HeldUserRow> HoldUserRowAsync(this ChatApiFactory factory, Guid userId, bool shared = false)
     {
         var connection = new NpgsqlConnection(factory.Services.GetRequiredService<IConfiguration>().GetConnectionString("DefaultConnection"));
         await connection.OpenAsync();
         var transaction = await connection.BeginTransactionAsync();
 
-        await using (var command = new NpgsqlCommand("SELECT 1 FROM \"AspNetUsers\" WHERE \"Id\" = @id FOR UPDATE", connection, transaction))
+        await using (var command = new NpgsqlCommand($"SELECT 1 FROM \"AspNetUsers\" WHERE \"Id\" = @id {(shared ? "FOR SHARE" : "FOR UPDATE")}", connection, transaction))
         {
             command.Parameters.AddWithValue("id", userId);
             await command.ExecuteNonQueryAsync();

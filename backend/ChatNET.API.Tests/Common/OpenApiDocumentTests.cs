@@ -26,6 +26,7 @@ public class OpenApiDocumentTests
         ("post", "/api/auth/refresh", "200", "AuthResponse", "401,403,409,429"),
         ("post", "/api/auth/logout", "204", "", "403,429"),
         ("post", "/api/auth/forgot-password", "202", "", "400,429,503"),
+        ("post", "/api/auth/reset-password", "204", "", "400,429"),
         ("get", "/api/users", "200", "UserSummaryDto[]", "400,401"),
         ("get", "/api/conversations", "200", "ConversationDto[]", "401"),
         ("get", "/api/conversations/{conversationId}", "200", "ConversationDto", "401,403"),

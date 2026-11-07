@@ -14,7 +14,7 @@ namespace ChatNET.API.Tests.Common;
 [Collection(IntegrationTestCollection.Name)]
 public class EndpointAuthorizationTests
 {
-    // Sign-in, registration, asking for a password reset link, renewing and ending a session (their credential is the refresh cookie or the password,
+    // Sign-in, registration, asking for a password reset link and using one, renewing and ending a session (their credential is the refresh cookie or the password,
     // not a bearer token), the health probe, and the pictures (an <img> cannot send a token; the address is the
     // credential: it holds random ids and a file name that is new for every picture).
     private static readonly string[] OpenInProduction =
@@ -27,6 +27,7 @@ public class EndpointAuthorizationTests
         "POST /api/auth/logout",
         "POST /api/auth/refresh",
         "POST /api/auth/register",
+        "POST /api/auth/reset-password",
     ];
 
     private readonly ChatApiFactory _factory;

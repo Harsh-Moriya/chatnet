@@ -126,8 +126,11 @@ public class StartupLogTests
         // Asking for a reset link makes a token and sends an email; neither protects anything with the framework's keys.
         (await client.ForgotAsync(credentials.email)).EnsureSuccessStatusCode();
         await host.RunRelayAsync();
+        var reset = await _factory.Mail.WaitForAsync(credentials.email);
+        var token = PasswordResetApi.TokenIn(Assert.Single(reset));
+        (await client.PostAsJsonAsync("/api/auth/reset-password", new { token, newPassword = "Brand1NewPassword" })).EnsureSuccessStatusCode();
 
-        Assert.False(watcher.Touched, "Signing up or in, or asking for a reset link, touched the key ring.");
+        Assert.False(watcher.Touched, "Signing up or in, or asking for a reset link or using one, touched the key ring.");
     }
 
     private sealed class KeyRingWatcher : IXmlRepository

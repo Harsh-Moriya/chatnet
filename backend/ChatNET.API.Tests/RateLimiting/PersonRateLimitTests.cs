@@ -258,6 +258,7 @@ public class PersonRateLimitTests
     [InlineData("PUT", "/api/push/subscriptions", "push")]
     [InlineData("DELETE", "/api/push/subscriptions", "push")]
     [InlineData("POST", "/api/auth/forgot-password", "forgot-password")]
+    [InlineData("POST", "/api/auth/reset-password", "reset-password")]
     public void Each_of_these_endpoints_names_its_rate_limit_policy(string method, string pattern, string policy)
     {
         var endpoint = _factory.Services.GetRequiredService<EndpointDataSource>().Endpoints

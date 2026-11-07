@@ -6,6 +6,7 @@ using ChatNET.API.Common.OpenApi;
 using ChatNET.API.RateLimiting;
 using ChatNET.API.Auth.Refresh;
 using ChatNET.API.Auth.Register;
+using ChatNET.API.Auth.ResetPassword;
 using MediatR;
 
 namespace ChatNET.API.Auth;
@@ -26,6 +27,7 @@ public static class AuthEndpoints
         // Asking for a reset link and using one are anonymous and each counted per client address on a policy of its own, so a person
         // who mistypes a new password does not use up the allowance for asking, and neither shares the sign-in limit.
         var forgot = auth.MapGroup(string.Empty).RequireRateLimiting(RateLimitPolicies.ForgotPassword);
+        var reset = auth.MapGroup(string.Empty).RequireRateLimiting(RateLimitPolicies.ResetPassword);
 
         credentials.MapPost("/register", async (RegisterCommand command, HttpContext http, IMediator mediator) =>
         {
@@ -79,6 +81,16 @@ public static class AuthEndpoints
             return Results.Accepted();
         })
         .ReturnsAccepted(StatusCodes.Status400BadRequest, StatusCodes.Status429TooManyRequests, StatusCodes.Status503ServiceUnavailable)
+        .AllowAnonymous();
+
+        // The credential is the token from the email, in the body. No cookie and no X-Requested-With header: nothing is signed in by
+        // this call, and the answer sets no cookie. Every session of the person ends.
+        reset.MapPost("/reset-password", async (ResetPasswordCommand command, IMediator mediator) =>
+        {
+            await mediator.Send(command);
+            return Results.NoContent();
+        })
+        .ReturnsNoContent(StatusCodes.Status400BadRequest, StatusCodes.Status429TooManyRequests)
         .AllowAnonymous();
 
         return app;
