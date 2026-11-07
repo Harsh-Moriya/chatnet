@@ -8,7 +8,7 @@ Attachments and pictures need durable storage that is cheap, reachable with pres
 
 ## Decision
 
-Files are kept in an S3-compatible bucket through the AWS SDK. Production uses Cloudflare R2; development and the tests use RustFS. The API depends on a small `IBlobStorage` interface. The local server was chosen after running candidates through a scripted check of the S3 operations the application uses.
+Files are kept in an S3-compatible bucket through the AWS SDK. It is designed for Cloudflare R2 in production, and development and the tests use RustFS. The API depends on a small `IBlobStorage` interface. The local server was chosen after running candidates through a scripted check of the S3 operations the application uses.
 
 ## Alternatives considered
 

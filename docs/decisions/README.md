@@ -55,7 +55,7 @@ All records here are **Accepted**. Where a choice replaced an earlier one, the r
 
 | Record | Summary |
 |---|---|
-| [0023: S3-compatible object storage](0023-s3-compatible-object-storage.md) | Files live in a bucket reached through the S3 API: Cloudflare R2 in production, RustFS locally and in tests. |
+| [0023: S3-compatible object storage](0023-s3-compatible-object-storage.md) | Files live in a bucket reached through the S3 API: designed for Cloudflare R2, with RustFS locally and in tests. |
 | [0024: Uploads go straight to storage and are checked when the message is sent](0024-direct-uploads-checked-at-send.md) | A ticket gives a presigned PUT; the send inspects what was really stored and copies it only if it is unchanged. |
 | [0025: Pictures at immutable addresses served by the API](0025-immutable-picture-addresses.md) | A picture is served from the private bucket without a token at an address that never serves two pictures, cached for a year. |
 

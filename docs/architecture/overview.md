@@ -36,7 +36,7 @@ The browser follows the same split: TanStack Query owns REST data, and hub event
 | MediatR | Routes each endpoint or hub call to one handler. A validation behaviour runs first, and a tracing behaviour wraps both. |
 | PostgreSQL 16 | All durable data. EF Core 10 with the Npgsql provider; a few hand-written SQL queries where LINQ cannot express an efficient plan. |
 | Redis 7 | The SignalR backplane, who is online, the rate-limit counters, and a channel that evicts connections. Nothing in Redis is the only copy of anything that matters. |
-| Object storage | Attachments and pictures. Cloudflare R2 in production, RustFS locally and in tests. The browser uploads straight to it with presigned links. |
+| Object storage | Attachments and pictures. Designed for Cloudflare R2 (the S3 API is the contract); RustFS locally and in tests. The browser uploads straight to it with presigned links. |
 | Outbox and relay | A push that follows a change is recorded in the same transaction as the change, so it is delivered even if the request fails after the commit. See [real-time design](real-time.md). |
 | Web Push | Alerts for people with no live connection, encrypted to the browser (RFC 8291) and signed with VAPID (RFC 8292). Optional: off unless the server is given keys. |
 
