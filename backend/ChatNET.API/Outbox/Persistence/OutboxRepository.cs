@@ -18,7 +18,7 @@ public class OutboxRepository : IOutboxRepository
     // and the UPDATE moves their NextAttemptAt out, which is what keeps them from every later pass until the retry
     // is due. Nothing stays locked while the pushes are made: the row is held by that time, not by a transaction.
     // In the UPDATE a column on the right still has its old value, so the first attempt waits retryDelay, the second
-    // twice that, and so on. Raw SQL because EF cannot express UPDATE ... RETURNING (D-76).
+    // twice that, and so on. Raw SQL because EF cannot express UPDATE ... RETURNING.
     private const string ClaimSql = """
         UPDATE "OutboxMessages" AS o
         SET "Attempts" = o."Attempts" + 1,

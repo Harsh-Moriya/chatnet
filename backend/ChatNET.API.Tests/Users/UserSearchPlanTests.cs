@@ -8,7 +8,7 @@ namespace ChatNET.API.Tests.Users;
 
 // The people search in the new conversation dialog matches the start of a handle or a display name with ILIKE. Without a
 // trigram index every search read every user. The test fills the table with tens of thousands of people, runs the real endpoint,
-// and asks Postgres how many rows of AspNetUsers that exact query read (the technique of notes 08 and 12).
+// and asks Postgres how many rows of AspNetUsers that exact query read (the technique the history, conversation list and message search tests use).
 [Collection(IntegrationTestCollection.Name)]
 public class UserSearchPlanTests : IAsyncLifetime
 {

@@ -4,7 +4,7 @@ using Microsoft.Extensions.Configuration;
 
 namespace ChatNET.API.Tests.RateLimiting;
 
-// The numbers a deployment starts with, as agreed with the developer on 2026-11-02 (D-279). The test host overrides them so that
+// The numbers a deployment starts with. The test host overrides them so that
 // no ordinary test is limited, which is why they are read from the file itself.
 public class RateLimitDefaultsTests
 {

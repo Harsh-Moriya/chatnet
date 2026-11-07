@@ -228,9 +228,8 @@ public class ConversationRepository : IConversationRepository
     // so the cost depends on the caller's conversations, not on the size of the system (about 1 ms).
     // EF cannot express a lateral join in LINQ. Only constants are concatenated below; every value
     // reaches the database as a parameter. A test checks how many Messages rows the query reads.
-    // The reasoning and measurements are in note 08.
     //
-    // Both the preview and the count only look at the window the viewer may read, the same one history uses (D-90):
+    // Both the preview and the count only look at the window the viewer may read, the same one history uses:
     // nothing from before they joined shows up in the sidebar, and for a group they left, nothing from after. Such a
     // conversation stays in the list, read-only: nothing in it is unread, its preview is the last message from before
     // they left, and it is ordered by when they left (or by its own last activity, if that was earlier). The upper

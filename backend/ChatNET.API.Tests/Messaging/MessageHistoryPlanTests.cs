@@ -12,7 +12,7 @@ namespace ChatNET.API.Tests.Messaging;
 //
 // The test fills one conversation with thousands of messages, loads its history through the real
 // endpoint, then asks Postgres (EXPLAIN ANALYZE) how many Messages rows that exact query read.
-// The same technique guards the conversation list; see note 08.
+// The same technique guards the conversation list.
 [Collection(IntegrationTestCollection.Name)]
 public class MessageHistoryPlanTests
 {

@@ -94,7 +94,7 @@ public static class AvatarEndpoints
         // ever served under one address changes.
         //
         // Every request reads the object store, also one for an address that holds nothing, and anyone may make it. So the whole
-        // group is limited per client address, and a route added to it later is limited too (D-289).
+        // group is limited per client address, and a route added to it later is limited too.
         var pictures = app.MapGroup("/api/avatars")
             .WithTags("Avatars")
             .RequireRateLimiting(RateLimitPolicies.Avatars);

@@ -63,7 +63,7 @@ public class SearchRepository : ISearchRepository
     }
 
     // ##### The query #####
-    // Written as SQL by hand, as the conversation list is (note 08), for the same reason: the obvious form reads far too much.
+    // Written as SQL by hand, as the conversation list is, for the same reason: the obvious form reads far too much.
     // Each conversation the person is in is searched on its own, in a lateral subquery, over the window they may read, and
     // the matches of all of them are merged and cut to "take". Within a conversation there are two phases, because Postgres
     // cannot be trusted to choose between its two ways of searching (it guesses how many messages match, and guesses badly for

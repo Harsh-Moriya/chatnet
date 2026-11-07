@@ -12,7 +12,7 @@ using Microsoft.Extensions.Logging;
 namespace ChatNET.API.Tests.RateLimiting;
 
 // The route that serves pictures needs no token, because an <img> cannot send one, and it reads the object store for every request,
-// also for an address that holds nothing. So it is limited per client address (D-289), and a miss is an answer and not an event
+// also for an address that holds nothing. So it is limited per client address, and a miss is an answer and not an event
 // worth a warning in the log.
 [Collection(IntegrationTestCollection.Name)]
 public class PictureRouteLimitTests
