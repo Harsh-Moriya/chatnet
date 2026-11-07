@@ -15,6 +15,7 @@ using ChatNET.API.Common.OpenApi;
 using ChatNET.API.Common.Persistence;
 using ChatNET.API.Conversations;
 using ChatNET.API.Conversations.Persistence;
+using ChatNET.API.Email;
 using ChatNET.API.Media;
 using ChatNET.API.Messaging;
 using ChatNET.API.Messaging.Hubs;
@@ -317,6 +318,15 @@ try
             AllowAutoRedirect = false,
             PooledConnectionLifetime = TimeSpan.FromMinutes(2),
         });
+
+    // ##### Email #####
+    // Mail goes out through an SMTP relay (Mailpit locally, a provider in production). With no host set the feature is off and
+    // nothing that needs it sends. Settings are validated when the host starts.
+    builder.Services.AddOptions<EmailOptions>()
+        .BindConfiguration(EmailOptions.SectionName)
+        .ValidateOnStart();
+    builder.Services.AddSingleton<IValidateOptions<EmailOptions>, EmailOptionsValidator>();
+    builder.Services.AddSingleton<IEmailSender, SmtpEmailSender>();
 
     // ##### Storage #####
     // Attachments live in an S3-compatible bucket (Cloudflare R2 in production, RustFS locally). The browser
