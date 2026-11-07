@@ -26,7 +26,7 @@ docker-compose up -d
 | RustFS | 9000 (S3 API), 9001 (console) | S3-compatible object storage for attachments and pictures |
 | `storage-init` | none | a one-off job that creates the bucket and applies its CORS and lifecycle rules |
 | Jaeger | 16686 (UI), 4317 and 4318 (OTLP) | trace viewer |
-| Adminer | 8080 | a database browser |
+| Adminer | 8081 | a database browser |
 
 ## 2. Configure and run the backend
 
