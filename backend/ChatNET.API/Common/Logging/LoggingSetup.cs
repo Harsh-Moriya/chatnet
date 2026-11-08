@@ -7,6 +7,9 @@ namespace ChatNET.API.Common.Logging;
 
 public static class LoggingSetup
 {
+    // The HttpContext.Items key under which the exception handler marks an answer it chose to give (see GlobalExceptionHandler).
+    public const string ExpectedFailureKey = "ChatNET.ExpectedFailure";
+
     private const string DevelopmentTemplate =
         "[{Timestamp:HH:mm:ss} {Level:u3}] {SourceContext}: {Message:lj}{NewLine}{Exception}";
 
@@ -57,11 +60,11 @@ public static class LoggingSetup
 
             options.MessageTemplate = "HTTP {RequestMethod:l} {RequestPath:l} responded {StatusCode} in {Elapsed:0.0000} ms";
 
-            // An Error means "unhandled". The only 503 the API sends on purpose is a feature this deployment is not set up for (no mail
-            // relay), which the exception handler already reports as a warning, so it is not an error at every request.
+            // An Error means "unhandled". A 5xx the exception handler marked as a chosen answer (a feature this deployment is not set up
+            // for, such as the mail relay) is already reported by it as a warning, so it is not an error at every request.
             options.GetLevel = (http, _, exception) =>
                 http.Request.Path.StartsWithSegments("/health") ? LogEventLevel.Verbose
-                : exception is not null || http.Response.StatusCode is >= 500 and not StatusCodes.Status503ServiceUnavailable ? LogEventLevel.Error
+                : exception is not null || (http.Response.StatusCode >= 500 && !http.Items.ContainsKey(ExpectedFailureKey)) ? LogEventLevel.Error
                 : LogEventLevel.Information;
 
             options.EnrichDiagnosticContext = (diagnostics, http) =>
