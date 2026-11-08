@@ -50,6 +50,17 @@ public class OpenApiDocumentTests
         ("get", "/api/push/key", "200", "PushKeyDto", "401,404"),
         ("put", "/api/push/subscriptions", "204", "", "400,401,404,429"),
         ("delete", "/api/push/subscriptions", "204", "", "400,401,429"),
+        ("get", "/api/keys/me", "200", "KeyStatusDto", "401,429"),
+        ("post", "/api/keys/me", "201", "KeyStatusDto", "400,401,409,429"),
+        ("get", "/api/keys/me/backup", "200", "KeyBackupDto", "401,404,429"),
+        ("put", "/api/keys/me/backup", "200", "BackupInfoDto", "400,401,404,409,429"),
+        ("post", "/api/devices", "201", "DeviceDto", "400,401,409,429"),
+        ("get", "/api/devices", "200", "DeviceDto[]", "401,429"),
+        ("delete", "/api/devices/{deviceId}", "204", "", "401,404,429"),
+        ("post", "/api/devices/link-requests", "201", "LinkRequestCreatedDto", "400,401,409,429"),
+        ("get", "/api/devices/link-requests", "200", "LinkRequestDto", "400,401,404,429"),
+        ("get", "/api/devices/link-requests/{requestId}", "200", "LinkRequestStatusDto", "401,404,429"),
+        ("post", "/api/devices/link-requests/{requestId}/approve", "204", "", "400,401,404,409,429"),
     ];
 
     // Operations that can also succeed with another status, which is documented too. Sending a message answers 200
@@ -150,6 +161,18 @@ public class OpenApiDocumentTests
                 Assert.True(operation.Value.GetProperty("responses").TryGetProperty("401", out _),
                     $"{operation.Name} {path} requires a token but does not document 401.");
         }
+    }
+
+    // The device of a session is named by a header, and the property of the command that carries it is kept out of the body, so the
+    // document does not promise a field that is ignored.
+    [Fact]
+    public async Task The_sign_in_body_does_not_advertise_the_device_that_only_a_header_names()
+    {
+        var document = await DocumentAsync();
+
+        var properties = document.GetProperty("components").GetProperty("schemas").GetProperty("LoginCommand").GetProperty("properties");
+
+        Assert.Equivalent(new[] { "email", "password" }, properties.EnumerateObject().Select(p => p.Name));
     }
 
     [Fact]

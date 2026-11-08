@@ -40,7 +40,7 @@ public static class AuthEndpoints
 
         credentials.MapPost("/login", async (LoginCommand command, HttpContext http, IMediator mediator) =>
         {
-            var result = await mediator.Send(command);
+            var result = await mediator.Send(command with { DeviceId = DeviceHeader.Read(http.Request) });
             RefreshCookie.Write(http.Response, result.RefreshToken);
             return Results.Ok(result.Response);
         })
@@ -55,7 +55,7 @@ public static class AuthEndpoints
 
             // A refusal throws SessionRejectedException. When the cookie is no use any more the exception
             // handler also removes it, so the browser stops sending it.
-            var result = await mediator.Send(new RefreshCommand(RefreshCookie.Read(http.Request)));
+            var result = await mediator.Send(new RefreshCommand(RefreshCookie.Read(http.Request), DeviceHeader.Read(http.Request)));
             RefreshCookie.Write(http.Response, result.RefreshToken);
             return Results.Ok(result.Response);
         })

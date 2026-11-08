@@ -1,6 +1,7 @@
 using ChatNET.API.Auth.Models;
 using ChatNET.API.Auth.Services;
 using ChatNET.API.Common.Exceptions;
+using ChatNET.API.Devices.Persistence;
 using MediatR;
 using Microsoft.AspNetCore.Identity;
 
@@ -11,17 +12,23 @@ public class LoginHandler : IRequestHandler<LoginCommand, AuthResult>
     private readonly UserManager<AppUser> _userManager;
     private readonly JwtTokenService _jwtTokenService;
     private readonly RefreshTokenIssuer _refreshTokens;
+    private readonly IDeviceRepository _devices;
+    private readonly TimeProvider _time;
     private readonly ILogger<LoginHandler> _logger;
 
     public LoginHandler(
         UserManager<AppUser> userManager,
         JwtTokenService jwtTokenService,
         RefreshTokenIssuer refreshTokens,
+        IDeviceRepository devices,
+        TimeProvider time,
         ILogger<LoginHandler> logger)
     {
         _userManager = userManager;
         _jwtTokenService = jwtTokenService;
         _refreshTokens = refreshTokens;
+        _devices = devices;
+        _time = time;
         _logger = logger;
     }
 
@@ -63,8 +70,15 @@ public class LoginHandler : IRequestHandler<LoginCommand, AuthResult>
         if (user.IsDeactivated)
             throw new ForbiddenException("This account has been deactivated.");
 
+        // A browser that holds the keys says which device it is, and the session is tied to it. A device that is not this person's is
+        // ignored, so the header cannot tie a session to someone else's device.
+        var deviceId = await _devices.FindActiveIdAsync(user.Id, request.DeviceId, cancellationToken);
+
         var accessToken = _jwtTokenService.GenerateToken(user);
-        var refreshToken = await _refreshTokens.StartSessionAsync(user, cancellationToken);
+        var refreshToken = await _refreshTokens.StartSessionAsync(user, cancellationToken, deviceId);
+
+        if (deviceId is not null)
+            await _devices.TouchAsync(deviceId.Value, _time.GetUtcNow().UtcDateTime, cancellationToken);
 
         return new AuthResult(AuthResponse.For(user, accessToken), refreshToken);
     }

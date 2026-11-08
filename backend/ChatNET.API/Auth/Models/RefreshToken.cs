@@ -34,5 +34,9 @@ public class RefreshToken
     // successor through this value.
     public Guid? ReplacedById { get; set; }
 
+    // The device this session is signed in on, once it says so (see DeviceHeader). Every token of the family carries it, so removing
+    // the device can find and revoke the whole family. Null for a session that is not tied to a device.
+    public Guid? DeviceId { get; set; }
+
     public AppUser? User { get; set; }
 }

@@ -2,6 +2,7 @@ using ChatNET.API.Auth.Models;
 using ChatNET.API.Auth.Persistence;
 using ChatNET.API.Auth.Services;
 using ChatNET.API.Common.Exceptions;
+using ChatNET.API.Devices.Persistence;
 using MediatR;
 using Microsoft.Extensions.Options;
 
@@ -15,6 +16,7 @@ public class RefreshHandler : IRequestHandler<RefreshCommand, AuthResult>
 
     private readonly IRefreshTokenRepository _tokens;
     private readonly RefreshTokenIssuer _issuer;
+    private readonly IDeviceRepository _devices;
     private readonly JwtTokenService _jwt;
     private readonly JwtOptions _options;
     private readonly TimeProvider _time;
@@ -23,6 +25,7 @@ public class RefreshHandler : IRequestHandler<RefreshCommand, AuthResult>
     public RefreshHandler(
         IRefreshTokenRepository tokens,
         RefreshTokenIssuer issuer,
+        IDeviceRepository devices,
         JwtTokenService jwt,
         IOptions<JwtOptions> options,
         TimeProvider time,
@@ -30,6 +33,7 @@ public class RefreshHandler : IRequestHandler<RefreshCommand, AuthResult>
     {
         _tokens = tokens;
         _issuer = issuer;
+        _devices = devices;
         _jwt = jwt;
         _options = options.Value;
         _time = time;
@@ -86,12 +90,35 @@ public class RefreshHandler : IRequestHandler<RefreshCommand, AuthResult>
             throw new SessionRejectedException(clearCookie: true);
         }
 
-        var (successor, issued) = _issuer.CreateSuccessor(current, now);
+        // A session is tied to a device the first time a renewal names one that is the person's; from then on every token of the
+        // family carries it. A device that is not theirs, or was removed, is ignored when a session is being tied.
+        var deviceId = current.DeviceId;
+        if (deviceId is null)
+        {
+            deviceId = await _devices.FindActiveIdAsync(current.UserId, request.DeviceId, cancellationToken);
+        }
+        else if (await _devices.FindActiveIdAsync(current.UserId, deviceId, cancellationToken) is null)
+        {
+            // Removing the device revoked the tokens it could see. A renewal that was under way at that moment inserted a token the
+            // removal did not see, so a session tied to a removed device ends here and does not come back.
+            await _tokens.RevokeFamilyAsync(current.FamilyId, now, cancellationToken);
+
+            _logger.LogInformation(
+                "Refresh refused for a session of user {UserId} tied to removed device {DeviceId}; family {FamilyId} revoked",
+                current.UserId, deviceId, current.FamilyId);
+
+            throw new SessionRejectedException(clearCookie: true);
+        }
+
+        var (successor, issued) = _issuer.CreateSuccessor(current, now, deviceId);
 
         // False means another request replaced this token between the lookup and now: the same two-tabs
         // case as above, one moment earlier.
         if (!await _tokens.TryRotateAsync(current, successor, now, cancellationToken))
             throw new ConflictException(JustRenewed);
+
+        if (deviceId is not null)
+            await _devices.TouchAsync(deviceId.Value, now, cancellationToken);
 
         return new AuthResult(AuthResponse.For(current.User, _jwt.GenerateToken(current.User)), issued);
     }
