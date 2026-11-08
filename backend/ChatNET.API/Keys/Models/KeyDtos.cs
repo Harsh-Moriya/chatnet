@@ -10,3 +10,8 @@ public record BackupInfoDto(int Version, DateTime UpdatedAt);
 public record KeyStatusDto(List<BundleDto> Bundles, BackupInfoDto? Backup);
 
 public record KeyBackupDto(string Blob, int Version, DateTime UpdatedAt);
+
+// The current public keys of one person, for whoever seals a conversation key to them.
+public record UserBundleDto(Guid UserId, int Generation, string Bundle);
+
+public record LookedUpKeysDto(List<UserBundleDto> Bundles);

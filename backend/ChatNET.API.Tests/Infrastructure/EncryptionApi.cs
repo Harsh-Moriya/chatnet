@@ -65,6 +65,9 @@ public static class EncryptionApi
     public static Task<HttpResponseMessage> ReplaceBackupAsync(this HttpClient client, byte[] blob, int? expectedVersion) =>
         client.PutAsJsonAsync("/api/keys/me/backup", new { blob = B64(blob), expectedVersion });
 
+    public static Task<HttpResponseMessage> LookupKeysAsync(this HttpClient client, IReadOnlyCollection<Guid> userIds) =>
+        client.PostAsJsonAsync("/api/keys/lookup", new { userIds });
+
     public static Task<HttpResponseMessage> RegisterDeviceAsync(this HttpClient client, string kind = "Web", string name = "Test browser") =>
         client.PostAsJsonAsync("/api/devices", new { kind, name });
 

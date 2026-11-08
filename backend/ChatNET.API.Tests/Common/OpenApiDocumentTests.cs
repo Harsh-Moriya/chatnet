@@ -54,6 +54,7 @@ public class OpenApiDocumentTests
         ("post", "/api/keys/me", "201", "KeyStatusDto", "400,401,409,429"),
         ("get", "/api/keys/me/backup", "200", "KeyBackupDto", "401,404,429"),
         ("put", "/api/keys/me/backup", "200", "BackupInfoDto", "400,401,404,409,429"),
+        ("post", "/api/keys/lookup", "200", "LookedUpKeysDto", "400,401,429"),
         ("post", "/api/devices", "201", "DeviceDto", "400,401,409,429"),
         ("get", "/api/devices", "200", "DeviceDto[]", "401,429"),
         ("delete", "/api/devices/{deviceId}", "204", "", "401,404,429"),

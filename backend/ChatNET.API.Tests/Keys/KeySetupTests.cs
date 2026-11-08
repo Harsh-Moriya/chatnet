@@ -218,6 +218,7 @@ public class KeySetupTests
     [InlineData("POST", "/api/keys/me")]
     [InlineData("GET", "/api/keys/me/backup")]
     [InlineData("PUT", "/api/keys/me/backup")]
+    [InlineData("POST", "/api/keys/lookup")]
     public async Task Every_endpoint_needs_a_signed_in_person(string method, string path)
     {
         using var client = _factory.CreateClient();

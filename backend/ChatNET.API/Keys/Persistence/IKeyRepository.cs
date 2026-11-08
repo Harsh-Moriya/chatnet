@@ -7,6 +7,9 @@ public interface IKeyRepository
     // The public keys of every generation of a person, oldest first.
     Task<List<AccountKeyBundle>> GetBundlesAsync(Guid userId, CancellationToken cancellationToken);
 
+    // The newest generation of each of these people who has keys. People without keys are not in the answer.
+    Task<List<AccountKeyBundle>> GetCurrentBundlesAsync(IReadOnlyCollection<Guid> userIds, CancellationToken cancellationToken);
+
     Task<bool> HasKeysAsync(Guid userId, CancellationToken cancellationToken);
 
     // Without the blob, for the state of a person: whether a backup exists and which version.

@@ -2,6 +2,7 @@ using ChatNET.API.Common.Auth;
 using ChatNET.API.Common.OpenApi;
 using ChatNET.API.Keys.GetKeyBackup;
 using ChatNET.API.Keys.GetKeyStatus;
+using ChatNET.API.Keys.LookupKeys;
 using ChatNET.API.Keys.Models;
 using ChatNET.API.Keys.ReplaceKeyBackup;
 using ChatNET.API.Keys.SetUpKeys;
@@ -13,6 +14,8 @@ namespace ChatNET.API.Keys;
 public record SetUpKeysRequest(string? Bundle, string? Backup);
 
 public record ReplaceKeyBackupRequest(string? Blob, int? ExpectedVersion);
+
+public record LookupKeysRequest(List<Guid>? UserIds);
 
 public static class KeysEndpoints
 {
@@ -53,6 +56,18 @@ public static class KeysEndpoints
         .Returns<BackupInfoDto>(
             StatusCodes.Status200OK, StatusCodes.Status400BadRequest, StatusCodes.Status401Unauthorized, StatusCodes.Status404NotFound,
             StatusCodes.Status409Conflict, StatusCodes.Status429TooManyRequests);
+
+        // The public keys of other people, which a browser seals a conversation key to. Only keys that are made to be shared.
+        var lookup = app.MapGroup("/api/keys")
+            .WithTags("Keys")
+            .RequireAuthorization()
+            .RequireRateLimiting(RateLimitPolicies.Keys);
+
+        // The current bundle of each person named who has set up encryption; people who have not are left out.
+        lookup.MapPost("/lookup", async (LookupKeysRequest body, IMediator mediator) =>
+            Results.Ok(await mediator.Send(new LookupKeysQuery(body.UserIds ?? []))))
+        .Returns<LookedUpKeysDto>(
+            StatusCodes.Status200OK, StatusCodes.Status400BadRequest, StatusCodes.Status401Unauthorized, StatusCodes.Status429TooManyRequests);
 
         return app;
     }
