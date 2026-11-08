@@ -1,6 +1,6 @@
 # Endpoints
 
-The HTTP API. In Development the running API also serves its OpenAPI document at `/openapi/v1.json` and an interactive reference at `/scalar/v1`; every operation there declares its success body and each error it can return. The tables below list every route (44 operations) with its authentication, its rate-limit policy and what it does. Request and response bodies in the examples were copied from a running API.
+The HTTP API. In Development the running API also serves its OpenAPI document at `/openapi/v1.json` and an interactive reference at `/scalar/v1`; every operation there declares its success body and each error it can return. The tables below list every route (55 operations) with its authentication, its rate-limit policy and what it does. Request and response bodies in the examples were copied from a running API.
 
 ## Conventions
 
@@ -33,8 +33,8 @@ Authentication column: **Bearer** needs an access token; **Refresh cookie** need
 | Method and route | Auth | Limit | Statuses | Description |
 |---|---|---|---|---|
 | `POST /api/auth/register` | None | auth | 200, 400, 409, 429 | Creates an account and signs it in. Sets the refresh cookie. |
-| `POST /api/auth/login` | None | auth | 200, 400, 401, 403, 429 | Signs in. 401 for a wrong email or password (same text), 403 for a deactivated account, 429 for the rate limit or a locked account. |
-| `POST /api/auth/refresh` | Refresh cookie | refresh | 200, 401, 403, 409, 429 | Exchanges the refresh cookie for a new access token and a new cookie; the old refresh token stops working. Needs `X-Requested-With: ChatNET`. 409 means another request replaced the token a moment ago: retry. |
+| `POST /api/auth/login` | None | auth | 200, 400, 401, 403, 429 | Signs in. 401 for a wrong email or password (same text), 403 for a deactivated account, 429 for the rate limit or a locked account. An optional `X-Device-Id` header ties the session to a device that holds the encryption keys; see [encryption keys](../features/encryption-keys.md). |
+| `POST /api/auth/refresh` | Refresh cookie | refresh | 200, 401, 403, 409, 429 | Exchanges the refresh cookie for a new access token and a new cookie; the old refresh token stops working. Needs `X-Requested-With: ChatNET`. 409 means another request replaced the token a moment ago: retry. An optional `X-Device-Id` header ties the session to a device that holds the encryption keys; see [encryption keys](../features/encryption-keys.md). |
 | `POST /api/auth/logout` | Refresh cookie | refresh | 204, 403, 429 | Revokes the session and removes the cookie. A missing cookie is also a 204. Needs `X-Requested-With: ChatNET`. |
 | `POST /api/auth/forgot-password` | None | forgot-password | 202, 400, 429, 503 | Asks for an email with a link to choose a new password (`email`). Answers 202 with no body for every address, so it never says whether one has an account. At most 3 emails an hour go to one address. 503 when the server has no mail relay. |
 | `POST /api/auth/reset-password` | None | reset-password | 204, 400, 429 | Sets a new password from the link in that email (`token`, `newPassword`) and ends every session of the account. 204 with no body and no cookie. One 400 for an unknown, used, expired or voided link; a password that breaks a rule is a 400 on `NewPassword` and leaves the link usable. |
@@ -121,6 +121,27 @@ Authentication column: **Bearer** needs an access token; **Refresh cookie** need
 | `PUT /api/push/subscriptions` | Bearer | push | 204, 400, 401, 404, 429 | Registers or renews a browser (`endpoint`, `keys.p256dh`, `keys.auth`). 404 when push is off. |
 | `DELETE /api/push/subscriptions` | Bearer | push | 204, 400, 401, 429 | Removes a browser (`endpoint`). Works when push is off. |
 
+## Encryption keys
+
+| Method and route | Auth | Limit | Statuses | Description |
+|---|---|---|---|---|
+| `GET /api/keys/me` | Bearer | keys | 200, 401, 429 | Whether the caller has set up encryption: the signed public bundle of every generation (`bundles`) and the version of the encrypted backup (`backup`, null before set-up). |
+| `POST /api/keys/me` | Bearer | keys | 201, 400, 401, 409, 429 | First set-up: the bundle of generation 1 and the first backup (`bundle`, `backup`), stored together. 201 with the state. 409 when the caller already has keys. |
+| `GET /api/keys/me/backup` | Bearer | keys | 200, 401, 404, 429 | The caller's encrypted backup (`blob`, `version`). Never another person's: the route takes no id. 404 before set-up. |
+| `PUT /api/keys/me/backup` | Bearer | keys | 200, 400, 401, 404, 409, 429 | Replaces the backup (`blob`, `expectedVersion`), for a new passphrase. 409 when the backup was changed since that version, 404 before set-up. |
+
+## Devices
+
+| Method and route | Auth | Limit | Statuses | Description |
+|---|---|---|---|---|
+| `POST /api/devices` | Bearer | keys | 201, 400, 401, 409, 429 | Adds the calling browser or phone as a device that holds the keys (`kind`: `Web`, `Ios` or `Android`; `name`, 1 to 100 characters). 409 before set-up and at the limit of devices. |
+| `GET /api/devices` | Bearer | keys | 200, 401, 429 | The caller's devices that are not removed, oldest first. |
+| `DELETE /api/devices/{deviceId}` | Bearer | keys | 204, 401, 404, 429 | Removes one of the caller's devices and ends the sessions that were signed in on it. One 404 for a device that is not theirs, does not exist or was removed. |
+| `POST /api/devices/link-requests` | Bearer | keys | 201, 400, 401, 409, 429 | A new device asks for the keys (`temporaryPublicKey`, `code`, `kind`, `name`). 409 before set-up and when too many requests are open. |
+| `GET /api/devices/link-requests` | Bearer | keys | 200, 400, 401, 404, 429 | Finds the caller's open request with this `code` (in the query). One 404 for an unknown, expired or approved request. |
+| `GET /api/devices/link-requests/{requestId}` | Bearer | keys | 200, 401, 404, 429 | How the request is doing. After approval the first answer carries the sealed secrets in `payload` and clears them; the next says `Collected`. |
+| `POST /api/devices/link-requests/{requestId}/approve` | Bearer | keys | 204, 400, 401, 404, 409, 429 | Sends the secrets sealed to the key of the request (`payload`). 409 when it was approved already or expired. |
+
 ## Shapes
 
 Examples are real responses. Where a list is shown, it is cut to its first entry.
@@ -132,10 +153,10 @@ Examples are real responses. Where a list is shown, it is cut to its first entry
 ```json
 {
   "token": "<access token>",
-  "userId": "01a1b535-a9eb-74c3-ad63-7d4ce3e5a23c",
-  "userName": "ana_hlqpp",
+  "userId": "01a1ba93-d895-7db5-9ca8-59569a0b63b7",
+  "userName": "ana_fgvdc",
   "displayName": "Ana Example",
-  "accessTokenExpiresAt": "2026-11-07T09:07:35Z"
+  "accessTokenExpiresAt": "2026-11-08T10:08:33Z"
 }
 ```
 
@@ -147,8 +168,8 @@ The refresh token is in the `Set-Cookie` header, not the body: `chatnet_refresh=
 
 ```json
 {
-  "id": "01a1b535-a9eb-74c3-ad63-7d4ce3e5a23c",
-  "userName": "ana_hlqpp",
+  "id": "01a1ba93-d895-7db5-9ca8-59569a0b63b7",
+  "userName": "ana_fgvdc",
   "displayName": "Ana Example",
   "avatarUrl": null
 }
@@ -160,14 +181,14 @@ The refresh token is in the `Set-Cookie` header, not the body: `chatnet_refresh=
 
 ```json
 {
-  "id": "01a1b535-b18e-7865-8b72-13617328f38c",
+  "id": "01a1ba93-dd11-7338-bef5-793667730f02",
   "type": "Direct",
   "name": "Ben Example",
   "avatarUrl": null,
-  "updatedAt": "2026-11-07T08:52:37.38997Z",
+  "updatedAt": "2026-11-08T09:53:34.99311Z",
   "lastMessage": null,
   "unreadCount": 0,
-  "otherUserId": "01a1b535-abad-77a7-a8ad-aad0ec6c1972",
+  "otherUserId": "01a1ba93-d8f5-7d26-9b60-8314d89a1c5d",
   "isMuted": false,
   "leftAt": null
 }
@@ -177,9 +198,9 @@ For a direct chat `name` is the other person's display name and `otherUserId` is
 
 ```json
 {
-  "senderId": "01a1b535-abad-77a7-a8ad-aad0ec6c1972",
+  "senderId": "01a1ba93-d8f5-7d26-9b60-8314d89a1c5d",
   "content": "Sounds good 3",
-  "createdAt": "2026-11-07T08:52:38.95065Z",
+  "createdAt": "2026-11-08T09:53:36.142447Z",
   "attachmentCount": 0
 }
 ```
@@ -188,13 +209,13 @@ For a direct chat `name` is the other person's display name and `otherUserId` is
 
 ```json
 {
-  "id": "01a1b535-b662-73ed-b3bb-082e84acb467",
-  "conversationId": "01a1b535-b41e-761a-91ea-5cb6239f7221",
-  "senderId": "01a1b535-a9eb-74c3-ad63-7d4ce3e5a23c",
+  "id": "01a1ba93-e0af-7e03-a39a-697fd0f2a5c4",
+  "conversationId": "01a1ba93-deb9-7a50-ac60-f3f94ff76779",
+  "senderId": "01a1ba93-d895-7db5-9ca8-59569a0b63b7",
   "senderDisplayName": "Ana Example",
   "content": "Hi everyone, shall we meet on Saturday?",
-  "createdAt": "2026-11-07T08:52:38.625789Z",
-  "clientMessageId": "4fb3a9f7-a04b-46bf-9b70-b91819c71af9",
+  "createdAt": "2026-11-08T09:53:35.919264Z",
+  "clientMessageId": "2ad938ec-75e7-4ea3-a509-156441670f82",
   "attachments": [],
   "editedAt": null,
   "editCount": 0,
@@ -206,12 +227,12 @@ A message with a file carries its attachments:
 
 ```json
 {
-  "id": "01a1b535-bd0c-7499-948d-1e64c60e58c8",
+  "id": "01a1ba93-e4f6-7243-ad69-5d77678d76e3",
   "type": "Image",
   "fileName": "map.png",
   "contentType": "image/png",
   "sizeBytes": 70,
-  "url": "http://localhost:9000/chatnet/attachments/01a1b535-b41e-761a-91ea-5cb6239f7221/01a1b535-bd0c-7499-948d-1e64c60e58c8?<signature parameters>"
+  "url": "http://localhost:9000/chatnet/attachments/01a1ba93-deb9-7a50-ac60-f3f94ff76779/01a1ba93-e4f6-7243-ad69-5d77678d76e3?<signature parameters>"
 }
 ```
 
@@ -224,12 +245,12 @@ A deleted message has `content: null`, `isDeleted: true` and no attachments.
 ```json
 [
   {
-    "userId": "01a1b535-a9eb-74c3-ad63-7d4ce3e5a23c",
-    "userName": "ana_hlqpp",
+    "userId": "01a1ba93-d895-7db5-9ca8-59569a0b63b7",
+    "userName": "ana_fgvdc",
     "displayName": "Ana Example",
     "avatarUrl": null,
     "role": "Owner",
-    "lastReadAt": "2026-11-07T08:52:38.808191Z"
+    "lastReadAt": "2026-11-08T09:53:36.044394Z"
   }
 ]
 ```
@@ -240,7 +261,7 @@ A deleted message has `content: null`, `isDeleted: true` and no attachments.
 
 ```json
 {
-  "id": "01a1b535-b41e-761a-91ea-5cb6239f7221",
+  "id": "01a1ba93-deb9-7a50-ac60-f3f94ff76779",
   "name": "Weekend plans (Sunday)",
   "avatarUrl": null
 }
@@ -250,7 +271,7 @@ A deleted message has `content: null`, `isDeleted: true` and no attachments.
 
 ```json
 {
-  "leftAt": "2026-11-07T08:52:41.574666Z"
+  "leftAt": "2026-11-08T09:53:38.027205Z"
 }
 ```
 
@@ -260,9 +281,9 @@ A deleted message has `content: null`, `isDeleted: true` and no attachments.
 
 ```json
 {
-  "uploadKey": "pending/01a1b535-b41e-761a-91ea-5cb6239f7221/01a1b535-a9eb-74c3-ad63-7d4ce3e5a23c/466f5d5b-edc8-40bb-a32a-ea6132ed489a",
-  "url": "http://localhost:9000/chatnet/pending/01a1b535-b41e-761a-91ea-5cb6239f7221/01a1b535-a9eb-74c3-ad63-7d4ce3e5a23c/466f5d5b-edc8-40bb-a32a-ea6132ed489a?<signature parameters>",
-  "expiresAt": "2026-11-07T09:02:39Z"
+  "uploadKey": "pending/01a1ba93-deb9-7a50-ac60-f3f94ff76779/01a1ba93-d895-7db5-9ca8-59569a0b63b7/75b5b7dd-1cc0-4bb0-a9a3-0795242dd7ed",
+  "url": "http://localhost:9000/chatnet/pending/01a1ba93-deb9-7a50-ac60-f3f94ff76779/01a1ba93-d895-7db5-9ca8-59569a0b63b7/75b5b7dd-1cc0-4bb0-a9a3-0795242dd7ed?<signature parameters>",
+  "expiresAt": "2026-11-08T10:03:36Z"
 }
 ```
 
@@ -274,8 +295,8 @@ A deleted message has `content: null`, `isDeleted: true` and no attachments.
 
 ```json
 {
-  "url": "http://localhost:9000/chatnet/attachments/01a1b535-b41e-761a-91ea-5cb6239f7221/01a1b535-bd0c-7499-948d-1e64c60e58c8?<signature parameters>",
-  "expiresAt": "2026-11-07T09:52:40Z"
+  "url": "http://localhost:9000/chatnet/attachments/01a1ba93-deb9-7a50-ac60-f3f94ff76779/01a1ba93-e4f6-7243-ad69-5d77678d76e3?<signature parameters>",
+  "expiresAt": "2026-11-08T10:53:37Z"
 }
 ```
 
@@ -287,15 +308,15 @@ A deleted message has `content: null`, `isDeleted: true` and no attachments.
 {
   "items": [
     {
-      "id": "01a1b535-b746-7d09-8a48-5ba47a7e75a0",
+      "id": "01a1ba93-e13e-75a2-8fb8-ff6bdf90858a",
       "type": "Mention",
-      "conversationId": "01a1b535-b41e-761a-91ea-5cb6239f7221",
-      "actorId": "01a1b535-a9eb-74c3-ad63-7d4ce3e5a23c",
+      "conversationId": "01a1ba93-deb9-7a50-ac60-f3f94ff76779",
+      "actorId": "01a1ba93-d895-7db5-9ca8-59569a0b63b7",
       "actorDisplayName": "Ana Example",
-      "messageId": "01a1b535-b718-7856-b9d7-e488b9274463",
-      "messagePreview": "@ben_hlqpp can you book a table?",
+      "messageId": "01a1ba93-e12c-7ee9-b9a4-8ac965d11952",
+      "messagePreview": "@ben_fgvdc can you book a table?",
       "isRead": false,
-      "createdAt": "2026-11-07T08:52:38.808191Z"
+      "createdAt": "2026-11-08T09:53:36.044394Z"
     }
   ],
   "unreadCount": 2
@@ -309,10 +330,10 @@ A deleted message has `content: null`, `isDeleted: true` and no attachments.
 ```json
 [
   {
-    "userId": "01a1b535-abad-77a7-a8ad-aad0ec6c1972",
+    "userId": "01a1ba93-d8f5-7d26-9b60-8314d89a1c5d",
     "isOnline": true,
     "lastSeenAt": null,
-    "at": "2026-11-07T08:52:39.541Z"
+    "at": "2026-11-08T09:53:36.533Z"
   }
 ]
 ```
@@ -324,13 +345,13 @@ A hit found by its text:
 ```json
 [
   {
-    "messageId": "01a1b535-bd63-7c02-a405-e9a37141e284",
-    "conversationId": "01a1b535-b41e-761a-91ea-5cb6239f7221",
+    "messageId": "01a1ba93-e522-7427-a9c2-36d136cc72a8",
+    "conversationId": "01a1ba93-deb9-7a50-ac60-f3f94ff76779",
     "conversationName": "Weekend plans (Sunday)",
     "conversationType": "Group",
-    "senderId": "01a1b535-a9eb-74c3-ad63-7d4ce3e5a23c",
+    "senderId": "01a1ba93-d895-7db5-9ca8-59569a0b63b7",
     "senderDisplayName": "Ana Example-Jones",
-    "createdAt": "2026-11-07T08:52:40.092618Z",
+    "createdAt": "2026-11-08T09:53:36.895834Z",
     "snippet": [
       {
         "text": "Meeting",
@@ -362,13 +383,144 @@ A hit found by the name of a file has `"snippet": []` and `"fileName": "map.png"
 
 ```json
 {
-  "endpoint": "https://fcm.googleapis.com/fcm/send/example-hlqpp",
+  "endpoint": "https://fcm.googleapis.com/fcm/send/example-fgvdc",
   "keys": {
-    "p256dh": "BJ8Vt4V5wG_-kks91CspLt_PAt08tPDlpgmh4kfMcoB1ciNFXHcIX-epmzq8ZuWq5e56qvQJ8XXMCdyWpeHAByk",
-    "auth": "I3gmnvKWizrTB8lPDtS_sQ"
+    "p256dh": "BGuCQMIIIS79aO2_qob46p_E-ncq_JVcy-YD2mp488-ujcUljmnh06KYicC0EtBjkF7HdeTYgYBSxmsykJkObgk",
+    "auth": "7442OM2nkDq9DbjRhqTxxQ"
   }
 }
 ```
+
+### Encryption keys
+
+Bytes are base64url without padding. Long values are shortened here. `GET /api/keys/me` before set-up:
+
+```json
+{
+  "bundles": [],
+  "backup": null
+}
+```
+
+`POST /api/keys/me` takes the bundle and the backup, and answers 201 with the state:
+
+```json
+{
+  "bundle": "AQEAAAABaUBlLcQF5H8UWIAG...",
+  "backup": "AQEBYVfw9rdeXP98nxRe66KM..."
+}
+```
+
+```json
+{
+  "bundles": [
+    {
+      "generation": 1,
+      "bundle": "AQEAAAABaUBlLcQF5H8UWIAG..."
+    }
+  ],
+  "backup": {
+    "version": 1,
+    "updatedAt": "2026-11-08T09:52:43.958118Z"
+  }
+}
+```
+
+`GET /api/keys/me/backup`:
+
+```json
+{
+  "blob": "AQEBYVfw9rdeXP98nxRe66KM...",
+  "version": 1,
+  "updatedAt": "2026-11-08T09:52:43.958118Z"
+}
+```
+
+`PUT /api/keys/me/backup` takes `{ "blob": ..., "expectedVersion": 1 }` and answers:
+
+```json
+{
+  "version": 2,
+  "updatedAt": "2026-11-08T09:52:44.043163Z"
+}
+```
+
+### Device
+
+`POST /api/devices` takes `{ "kind": "Web", "name": "Chrome on Windows" }` and answers 201 with the device; `GET /api/devices` answers a list of these:
+
+```json
+{
+  "id": "01a1ba93-1665-7c52-9f20-392c3a44e4ad",
+  "kind": "Web",
+  "name": "Chrome on Windows",
+  "createdAt": "2026-11-08T09:52:44.133765Z",
+  "lastActiveAt": "2026-11-08T09:52:44.133765Z"
+}
+```
+
+### Link request
+
+`POST /api/devices/link-requests` takes the one-time public key, the code the new device shows and what it is called:
+
+```json
+{
+  "temporaryPublicKey": "GJwEZa-wgX24cNhTOJhC_-msl16964_Qdq2Xjlh_Ip8",
+  "code": "GJ6P3JDJF0",
+  "kind": "Web",
+  "name": "Safari on macOS"
+}
+```
+
+It answers 201:
+
+```json
+{
+  "id": "01a1ba93-16db-7e14-8a35-1c14c2ba5a9f",
+  "expiresAt": "2026-11-08T10:02:44Z"
+}
+```
+
+`GET /api/devices/link-requests?code=...` answers what the signed-in device is shown to approve:
+
+```json
+{
+  "id": "01a1ba93-16db-7e14-8a35-1c14c2ba5a9f",
+  "temporaryPublicKey": "GJwEZa-wgX24cNhTOJhC_-msl16964_Qdq2Xjlh_Ip8",
+  "kind": "Web",
+  "name": "Safari on macOS",
+  "createdAt": "2026-11-08T09:52:44.251658Z",
+  "expiresAt": "2026-11-08T10:02:44Z"
+}
+```
+
+`GET /api/devices/link-requests/{id}` answers the state: `Pending` (waiting for approval), `Approved` with the sealed secrets, once, `Collected` (they were handed over) or `Expired`.
+
+```json
+{
+  "state": "Pending",
+  "payload": null,
+  "expiresAt": "2026-11-08T10:02:44Z"
+}
+```
+
+```json
+{
+  "state": "Approved",
+  "payload": "AQG9lwUNCG8UxglA2cNxdeXl...",
+  "expiresAt": "2026-11-08T10:02:44Z"
+}
+```
+
+```json
+{
+  "state": "Collected",
+  "payload": null,
+  "expiresAt": "2026-11-08T10:02:44Z"
+}
+```
+
+`POST /api/devices/link-requests/{id}/approve` takes `{ "payload": ... }` (the secrets sealed to the key of the request) and answers 204.
 
 ### Health
 

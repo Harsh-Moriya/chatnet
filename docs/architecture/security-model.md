@@ -40,6 +40,10 @@ Races are settled by the database, not by check-then-write.
 - Every change to a group's members runs in a transaction behind a per-conversation advisory lock, with the rules applied to the rows read after the lock was taken, so there is exactly one owner at every moment.
 - Refresh rotation is one conditional `UPDATE`: of simultaneous refreshes exactly one wins and the others get a 409 and retry.
 - Using a password reset link is one conditional `UPDATE` that marks it used and returns the person, so of simultaneous requests with one link exactly one succeeds.
+- Setting up keys stores the bundle and the backup in one transaction, and the primary key of the bundle decides two set-ups made together.
+- Replacing a backup is one conditional `UPDATE` on the version, so of devices changing the passphrase together exactly one wins.
+- Adding a device and opening a link request count and insert behind a per-person advisory lock, so requests made together never exceed the limit.
+- Handing over the sealed secrets of a link request is one statement that reads and clears them, so of simultaneous polls exactly one gets them.
 - A password reset locks the person's row, and renewing a refresh token and starting a session take a share lock on it, so a session being made at the moment of a reset is either revoked by it or refused.
 
 ## Files
@@ -51,6 +55,20 @@ Races are settled by the database, not by check-then-write.
 - Links are signed for the reader and expire (upload links after 10 minutes, download links after 60). Renewal re-checks membership, the join window and deletion, and gives one 404 for every refusal.
 - A link that leaks works until it expires. Someone who saved a link can use it for up to an hour after losing access.
 - There is no virus scan, and files are served from the storage host rather than a separate origin.
+
+## Keys and devices
+
+The server stores what the browsers encrypt and relays what they seal for each other; it opens none of it. The formats are in [encryption formats](encryption-format.md) and the behaviour in [encryption keys and devices](../features/encryption-keys.md).
+
+| Concern | How it is handled | Limit |
+|---|---|---|
+| Private keys | Made in the browser. The server holds the public bundles and a backup of the private keys encrypted under a key stretched from a passphrase (PBKDF2-HMAC-SHA256, 600,000 rounds). The passphrase is never sent | Whoever obtains a backup can try passphrases offline, so it is returned only to its owner (no route takes an id), and the passphrase is the protection. The keys on a device are kept in IndexedDB in a form that can be exported, so a script injected into the page can read them while it is open |
+| Public keys | Each bundle is signed by the identity key of its owner and bound to their user id. The server checks the size, version and generation | The server cannot verify the signature; a client that opens a bundle does, against the identity key it remembers |
+| Backup and link payloads | Accepted only in the right shape and size (the backup up to 64 KiB, a sealed payload up to 64 KiB). Replacing a backup names the version it was made from, in one conditional `UPDATE` | The server cannot tell a wrong backup from a right one |
+| Setting up and devices | Setting up stores the bundle and the backup in one transaction and a second set-up is a `409`. Adding a device counts and inserts under a per-person lock, so devices added together never exceed the limit | |
+| Linking a device | The one-time public key and a 50-bit code derived from it are stored. The signed-in device checks the key the server returned against the code the person typed. The sealed secrets are handed over once by a statement that also clears them, expire with the request (10 minutes) and are returned only to the same person | A request is not bound to a physical device: whoever the person approves gets the keys |
+| Sessions and devices | A session is tied to a device by the `X-Device-Id` header on sign-in and renewal, only if the device is the person's and not removed. Removing a device revokes the refresh tokens tied to it, and renewing a session tied to a removed device ends it, so a renewal that overlapped the removal does not keep the session alive | Removing a device does not change the keys it held |
+| Logs | Ids and sizes only: never a key, a bundle, a backup, a sealed payload, a code or a device name | |
 
 ## Rate limiting
 
@@ -66,6 +84,7 @@ Counts live in Redis, so every API instance applies one limit. A refused request
 | `edit` | person | 20 per 60 s |
 | `search` | person | 30 per 10 s |
 | `push` | person | 20 per 60 s |
+| `keys` (keys, backup, devices, link requests) | person | 60 per 60 s |
 | `forgot-password` (asking for a reset link) | client address | 5 per 900 s |
 | `reset-password` (using a link) | client address | 10 per 900 s |
 | `password-reset-email` (the emails sent for a link) | email address | 3 per 3,600 s |
