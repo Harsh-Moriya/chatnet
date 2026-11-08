@@ -97,11 +97,11 @@ Password reset links are sent through an SMTP relay. Email is **off** unless `Em
 
 | Key | Default | Validation |
 |---|---|---|
-| `Email:Smtp:Host` | none | Empty means email is off. |
+| `Email:Smtp:Host` | none | Empty, or only spaces, means email is off. |
 | `Email:Smtp:Port` | 587 | 1 to 65535. |
 | `Email:Smtp:Security` | `StartTls` | `StartTls` (required, not merely tried), `SslOnConnect` (TLS from the first byte) or `None`. `None` is refused together with a login. |
 | `Email:Smtp:UserName`, `Email:Smtp:Password` | none | Both or neither. A secret: set it with user-secrets or the environment. |
-| `Email:Smtp:Timeout` | 10 s | Above zero. How long connecting and each exchange may take; the whole send is cut off after three times this. |
+| `Email:Smtp:Timeout` | 10 s | Above zero and at most 10 minutes. How long connecting and each exchange may take; the whole send is cut off after three times this. |
 | `Email:From:Address` | none | A valid email address, on a domain the relay allows. Required when the host is set. |
 | `Email:From:Name` | `ChatNET` | The sender name. |
 | `PasswordReset:TokenLifetime` | 30 minutes | At least one minute. How long a reset link works. |

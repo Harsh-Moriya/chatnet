@@ -125,6 +125,7 @@ public class AuthTokenCleanupTests
             throw new InvalidOperationException("The database is down.");
 
         public Task AddAsync(PasswordResetToken token, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<Guid?> FindUserIdAsync(string tokenHash, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<Guid?> TryConsumeAsync(string tokenHash, DateTime now, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task VoidUnusedAsync(Guid userId, DateTime now, CancellationToken cancellationToken) => throw new NotSupportedException();
     }

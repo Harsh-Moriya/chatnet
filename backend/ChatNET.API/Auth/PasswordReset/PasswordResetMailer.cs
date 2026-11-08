@@ -84,7 +84,7 @@ public class PasswordResetMailer
         if (recipient is not { Email: { Length: > 0 } address, IsDeactivated: false })
             return;
 
-        var token = WebEncoders.Base64UrlEncode(RandomNumberGenerator.GetBytes(32));
+        var token = TokenHash.NewToken();
         await _tokens.AddAsync(
             new PasswordResetToken
             {

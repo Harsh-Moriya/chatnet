@@ -1,6 +1,7 @@
 using ChatNET.API.Auth;
 using ChatNET.API.Auth.Refresh;
 using ChatNET.API.Common.Exceptions;
+using ChatNET.API.Common.Logging;
 using FluentValidation;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
@@ -57,6 +58,11 @@ public class GlobalExceptionHandler : IExceptionHandler
                 exception.GetType().Name, exception.Message);
 
         httpContext.Response.StatusCode = status;
+
+        // A domain exception is an answer the application chose to give, even when it is a 5xx (a feature that is switched off), so the
+        // request line is not an error. The logger reads this mark; anything else that ends in a 5xx still is one.
+        if (exception is ChatNETException)
+            httpContext.Items[LoggingSetup.ExpectedFailureKey] = true;
 
         if (exception is TooManyAttemptsException tooMany)
             httpContext.Response.Headers.RetryAfter = ((int)Math.Ceiling(tooMany.RetryAfter.TotalSeconds)).ToString();

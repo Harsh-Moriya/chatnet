@@ -349,6 +349,28 @@ public class ResetPasswordTests
         Assert.Equal(0, await UsableSessionsAsync(user.Id));
     }
 
+    // A person who asked for two emails and uses both links at the same moment: each request uses up its own link, and the one that
+    // finishes first voids the other's. They must take turns on the person, not wait for each other's link.
+    [Fact]
+    public async Task Two_different_links_of_one_person_used_at_the_same_moment_give_one_reset_and_one_refusal_and_no_failure()
+    {
+        using var client = _factory.CreateClient();
+
+        for (var round = 0; round < 20; round++)
+        {
+            var user = await _factory.RegisterUserAsync("resettwo");
+            var first = await _factory.AddResetTokenAsync(user.Id);
+            var second = await _factory.AddResetTokenAsync(user.Id);
+
+            var answers = await Task.WhenAll(
+                Task.Run(() => ResetAsync(client, first, "First1NewPassword")),
+                Task.Run(() => ResetAsync(client, second, "Second1NewPassword")));
+
+            var statuses = answers.Select(a => a.StatusCode).Order().ToList();
+            Assert.Equal([HttpStatusCode.NoContent, HttpStatusCode.BadRequest], statuses);
+        }
+    }
+
     // A renewal and a reset at the same moment: whichever order they run in, no session of the person is usable afterwards. The
     // locking that guarantees it is pinned deterministically in SessionGuardTests; this runs the real requests many times.
     [Fact]

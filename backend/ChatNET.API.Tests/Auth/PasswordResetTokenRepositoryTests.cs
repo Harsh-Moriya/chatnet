@@ -55,6 +55,26 @@ public class PasswordResetTokenRepositoryTests
     }
 
     [Fact]
+    public async Task The_owner_of_a_link_is_found_whether_or_not_it_can_still_be_used_and_nobody_owns_an_unknown_one()
+    {
+        var user = await _factory.RegisterUserAsync("owner");
+        var waiting = await _factory.AddResetTokenAsync(user.Id);
+        var used = await _factory.AddResetTokenAsync(user.Id, usedAt: DateTime.UtcNow.AddMinutes(-1));
+        var expired = await _factory.AddResetTokenAsync(user.Id, expiresAt: DateTime.UtcNow.AddMinutes(-1));
+
+        Assert.Equal(user.Id, await FindOwnerAsync(waiting));
+        Assert.Equal(user.Id, await FindOwnerAsync(used));
+        Assert.Equal(user.Id, await FindOwnerAsync(expired));
+        Assert.Null(await FindOwnerAsync("not-a-token-that-was-ever-issued"));
+
+        // Looking does not use the link up.
+        Assert.Null((await _factory.ResetTokenAsync(waiting))!.UsedAt);
+    }
+
+    private Task<Guid?> FindOwnerAsync(string token) =>
+        WithRepositoryAsync(repository => repository.FindUserIdAsync(TokenHash.Of(token), CancellationToken.None));
+
+    [Fact]
     public async Task A_link_cannot_be_used_twice()
     {
         var user = await _factory.RegisterUserAsync("twice");

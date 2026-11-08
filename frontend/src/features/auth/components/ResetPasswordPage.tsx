@@ -53,11 +53,16 @@ function ResetForm({ token }: { token: string | null }) {
     onSuccess: async () => {
       setPhase('finishing')
 
-      await endSessionAfterReset({
-        status: () => useAuthStore.getState().status,
-        refresh: () => session.refresh(),
-        signOut: () => session.signOut(),
-      })
+      try {
+        await endSessionAfterReset({
+          status: () => useAuthStore.getState().status,
+          refresh: () => session.refresh(),
+          signOut: () => session.signOut(),
+        })
+      } catch {
+        // The password is changed whatever went wrong with this browser's own session, so the page goes on to the sign-in page, which
+        // is where the person needs to be, instead of staying on a spinner.
+      }
 
       // Someone else may still be signed in here (the reset was for another account), and the sign-in page would send them on to
       // the chat. Then this page says it is done.
