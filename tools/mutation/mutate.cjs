@@ -59,6 +59,8 @@ function mirror(from, to) {
 function syncWorker(dir) {
   mirror(path.join(REPO, 'backend'), path.join(dir, 'backend'))
   mirror(path.join(REPO, 'frontend'), path.join(dir, 'frontend'))
+  // Frontend tests read the published test vectors from here.
+  mirror(path.join(REPO, 'docs', 'architecture'), path.join(dir, 'docs', 'architecture'))
 
   const modules = path.join(dir, 'frontend', 'node_modules')
   if (!fs.existsSync(modules)) fs.symlinkSync(path.join(REPO, 'frontend', 'node_modules'), modules, 'junction')

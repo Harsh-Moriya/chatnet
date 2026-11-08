@@ -9,6 +9,7 @@ ChatNET is a real-time chat application with direct and group conversations. Thi
 | Understand the system | [Architecture overview](architecture/overview.md), then [request flow](architecture/request-flow.md) and [real-time design](architecture/real-time.md) |
 | See what is stored | [Data model](architecture/data-model.md) |
 | Know how it is protected | [Security model](architecture/security-model.md) |
+| Implement or review the encryption formats | [Encryption formats](architecture/encryption-format.md) |
 | See what the app does | [Features](features/README.md) |
 | Build a client against the API | [Endpoints](api/endpoints.md), [errors](api/errors.md), [real-time events](api/realtime-events.md) |
 | Run or deploy it | [Running locally](operations/running-locally.md), [configuration](operations/configuration.md), [deployment](operations/deployment.md) |
