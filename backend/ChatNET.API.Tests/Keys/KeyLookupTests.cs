@@ -19,7 +19,7 @@ public class KeyLookupTests
 
     private async Task<(TestUser User, HttpClient Client)> NewUserAsync()
     {
-        var user = await _factory.RegisterUserAsync("lookup");
+        var user = await _factory.RegisterUserWithoutKeysAsync("lookup");
         return (user, _factory.CreateClientFor(user));
     }
 
@@ -171,7 +171,7 @@ public class KeyLookupTests
                 ["RateLimiting:Keys:PermitLimit"] = "2",
                 ["RateLimiting:Keys:WindowSeconds"] = "60",
             })));
-        using var client = host.ClientFor(await _factory.RegisterUserAsync("limited"));
+        using var client = host.ClientFor(await _factory.RegisterUserWithoutKeysAsync("limited"));
 
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/keys/me")).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await client.LookupKeysAsync([Guid.NewGuid()])).StatusCode);

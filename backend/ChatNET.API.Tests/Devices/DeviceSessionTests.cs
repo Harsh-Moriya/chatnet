@@ -225,7 +225,7 @@ public class DeviceSessionTests
     {
         var clock = new ManualTimeProvider();
         using var host = _factory.WithClock(clock);
-        var user = await _factory.RegisterUserAsync("active");
+        var user = await _factory.RegisterUserWithoutKeysAsync("active");
         using var bearer = host.ClientFor(user);
         await bearer.SetUpKeysAsync();
         var device = await bearer.AddDeviceAsync();
@@ -249,7 +249,7 @@ public class DeviceSessionTests
     {
         var clock = new ManualTimeProvider();
         using var host = _factory.WithClock(clock);
-        var user = await _factory.RegisterUserAsync("quiet");
+        var user = await _factory.RegisterUserWithoutKeysAsync("quiet");
         using var bearer = host.ClientFor(user);
         await bearer.SetUpKeysAsync();
         var device = await bearer.AddDeviceAsync();

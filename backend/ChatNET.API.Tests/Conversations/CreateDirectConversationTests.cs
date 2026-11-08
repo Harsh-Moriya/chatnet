@@ -92,7 +92,7 @@ public class CreateDirectConversationTests
         using var carolClient = _factory.CreateClientFor(carol);
 
         var response = await aliceClient.PostAsJsonAsync("/api/conversations/direct",
-            new { otherUserId = bob.Id, userId = carol.Id, createdById = carol.Id });
+            new { id = Guid.NewGuid(), otherUserId = bob.Id, epoch = EpochBody.For(1, alice.Id, bob.Id), userId = carol.Id, createdById = carol.Id });
         response.EnsureSuccessStatusCode();
         var id = (await response.Content.ReadFromJsonAsync<JsonElement>()).IdOf();
 
@@ -188,7 +188,9 @@ public class CreateDirectConversationTests
         var created = await client.CreateDirectAsync(bob.Id);
 
         var fields = created.EnumerateObject().Select(p => p.Name).Order().ToArray();
-        Assert.Equal(new[] { "avatarUrl", "id", "isMuted", "lastMessage", "leftAt", "name", "otherUserId", "type", "unreadCount", "updatedAt" }, fields);
+        Assert.Equal(
+            new[] { "avatarUrl", "id", "isMuted", "keyEpoch", "keyRotationRequired", "lastMessage", "leftAt", "name", "otherUserId", "type", "unreadCount", "updatedAt" },
+            fields);
         Assert.Equal(JsonValueKind.Null, created.GetProperty("lastMessage").ValueKind);
         Assert.Equal(JsonValueKind.Null, created.GetProperty("leftAt").ValueKind);
         Assert.EndsWith("Z", created.GetProperty("updatedAt").GetString());

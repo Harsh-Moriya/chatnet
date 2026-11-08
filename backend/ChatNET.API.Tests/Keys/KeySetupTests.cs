@@ -18,7 +18,7 @@ public class KeySetupTests
 
     private async Task<(TestUser User, HttpClient Client)> NewUserAsync()
     {
-        var user = await _factory.RegisterUserAsync("setup");
+        var user = await _factory.RegisterUserWithoutKeysAsync("setup");
         return (user, _factory.CreateClientFor(user));
     }
 

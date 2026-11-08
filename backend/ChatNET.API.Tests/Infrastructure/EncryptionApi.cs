@@ -113,7 +113,7 @@ public static class EncryptionApi
     // A person with encryption set up, and a client signed in as them.
     public static async Task<(TestUser User, HttpClient Client)> UserWithKeysAsync(this ChatApiFactory factory)
     {
-        var user = await factory.RegisterUserAsync("keys");
+        var user = await factory.RegisterUserWithoutKeysAsync("keys");
         var client = factory.CreateClientFor(user);
         var response = await client.SetUpKeysAsync();
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);

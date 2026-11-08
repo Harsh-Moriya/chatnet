@@ -34,7 +34,7 @@ public class DeviceTests
     [Fact]
     public async Task A_device_cannot_be_added_before_encryption_is_set_up()
     {
-        var user = await _factory.RegisterUserAsync("early");
+        var user = await _factory.RegisterUserWithoutKeysAsync("early");
         var client = _factory.CreateClientFor(user);
 
         var response = await client.RegisterDeviceAsync();

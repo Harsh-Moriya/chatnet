@@ -32,6 +32,10 @@ public interface IMembershipChange : IAsyncDisposable
         Guid creatorId, EpochSubmission submission, KeyEpochReason reason,
         IReadOnlyDictionary<Guid, int> currentGenerations, DateTime now);
 
+    // Marks that the key period in force was made for people who are no longer all in the conversation, so it must be
+    // replaced before more is said under it. Saved with the change that made it true.
+    void RequireRotation();
+
     // Saves what was changed together with the notifications and outbox rows that belong to it, in one transaction, and
     // frees the lock.
     Task CommitAsync(

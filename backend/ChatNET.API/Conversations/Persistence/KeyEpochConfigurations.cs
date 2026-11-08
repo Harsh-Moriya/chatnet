@@ -25,7 +25,7 @@ public class ConversationKeyEpochConfiguration : IEntityTypeConfiguration<Conver
         builder.Property(e => e.Signature).IsRequired().HasColumnType("bytea");
 
         builder.HasOne<Conversation>()
-            .WithMany()
+            .WithMany(c => c.KeyEpochs)
             .HasForeignKey(e => e.ConversationId)
             .OnDelete(DeleteBehavior.Cascade);
 

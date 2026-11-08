@@ -28,7 +28,7 @@ public class JsonContractTests
         var bob = await _factory.RegisterUserAsync("bob");
         using var client = _factory.CreateClientFor(alice);
 
-        var created = await client.PostAsJsonAsync("/api/conversations/direct", new { otherUserId = bob.Id });
+        var created = await client.PostDirectAsync(bob.Id);
         created.EnsureSuccessStatusCode();
         var createdJson = await created.Content.ReadFromJsonAsync<JsonElement>();
 
@@ -45,8 +45,7 @@ public class JsonContractTests
         var bob = await _factory.RegisterUserAsync("bob");
         using var client = _factory.CreateClientFor(alice);
 
-        var created = await client.PostAsJsonAsync("/api/conversations/group",
-            new { name = "Team", memberIds = new[] { bob.Id } });
+        var created = await client.PostGroupAsync("Team", bob.Id);
         created.EnsureSuccessStatusCode();
         var json = await created.Content.ReadFromJsonAsync<JsonElement>();
 
@@ -58,7 +57,7 @@ public class JsonContractTests
     {
         var hubOptions = _factory.Services.GetRequiredService<IOptions<JsonHubProtocolOptions>>().Value;
         var dto = new ConversationDto(
-            Guid.NewGuid(), ConversationType.Group, "Team", null, DateTime.UtcNow, null, 0, null, false, null);
+            Guid.NewGuid(), ConversationType.Group, "Team", null, DateTime.UtcNow, null, 0, null, false, null, 0, false);
 
         var json = JsonSerializer.Serialize(dto, hubOptions.PayloadSerializerOptions);
 

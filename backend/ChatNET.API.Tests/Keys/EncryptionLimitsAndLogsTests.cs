@@ -29,7 +29,7 @@ public class EncryptionLimitsAndLogsTests
                 ["RateLimiting:Keys:PermitLimit"] = "4",
                 ["RateLimiting:Keys:WindowSeconds"] = "60",
             })));
-        var user = await _factory.RegisterUserAsync("limited");
+        var user = await _factory.RegisterUserWithoutKeysAsync("limited");
         using var client = host.ClientFor(user);
 
         // Four requests across the three groups of endpoints share one allowance.
@@ -54,8 +54,8 @@ public class EncryptionLimitsAndLogsTests
                 ["RateLimiting:Keys:PermitLimit"] = "1",
                 ["RateLimiting:Keys:WindowSeconds"] = "60",
             })));
-        using var alice = host.ClientFor(await _factory.RegisterUserAsync("a"));
-        using var bob = host.ClientFor(await _factory.RegisterUserAsync("b"));
+        using var alice = host.ClientFor(await _factory.RegisterUserWithoutKeysAsync("a"));
+        using var bob = host.ClientFor(await _factory.RegisterUserWithoutKeysAsync("b"));
 
         await alice.GetAsync("/api/keys/me");
 
@@ -72,7 +72,7 @@ public class EncryptionLimitsAndLogsTests
                 ["RateLimiting:Keys:PermitLimit"] = "1",
                 ["RateLimiting:Keys:WindowSeconds"] = "60",
             })));
-        var user = await _factory.RegisterUserAsync("refused");
+        var user = await _factory.RegisterUserWithoutKeysAsync("refused");
         using var client = host.ClientFor(user);
         await client.GetAsync("/api/keys/me");
 
@@ -92,7 +92,7 @@ public class EncryptionLimitsAndLogsTests
     {
         var log = new CapturingLoggerProvider();
         using var host = _factory.WithWebHostBuilder(builder => builder.ConfigureLogging(logging => logging.AddProvider(log)));
-        var user = await _factory.RegisterUserAsync("logged");
+        var user = await _factory.RegisterUserWithoutKeysAsync("logged");
         using var client = host.ClientFor(user);
 
         var bundle = EncryptionApi.Bundle();
@@ -133,7 +133,7 @@ public class EncryptionLimitsAndLogsTests
     {
         var log = new CapturingLoggerProvider();
         using var host = _factory.WithWebHostBuilder(builder => builder.ConfigureLogging(logging => logging.AddProvider(log)));
-        var user = await _factory.RegisterUserAsync("named");
+        var user = await _factory.RegisterUserWithoutKeysAsync("named");
         using var client = host.ClientFor(user);
         await client.SetUpKeysAsync();
 

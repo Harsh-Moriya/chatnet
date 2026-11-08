@@ -29,7 +29,7 @@ public class KeyEpochTests
 
     private async Task<TestUser> PersonWithKeysAsync(string prefix)
     {
-        var user = await _factory.RegisterUserAsync(prefix);
+        var user = await _factory.RegisterUserWithoutKeysAsync(prefix);
         using var client = As(user);
         Assert.Equal(HttpStatusCode.Created, (await client.SetUpKeysAsync()).StatusCode);
         return user;
@@ -218,7 +218,7 @@ public class KeyEpochTests
     public async Task A_member_who_has_not_set_up_encryption_blocks_the_epoch_and_is_named_as_the_reason()
     {
         var owner = await PersonWithKeysAsync("owner");
-        var keyless = await _factory.RegisterUserAsync("keyless");
+        var keyless = await _factory.RegisterUserWithoutKeysAsync("keyless");
         var id = await _factory.AddLegacyGroupAsync(owner.Id, "Team", keyless.Id);
         using var client = As(owner);
 
@@ -658,7 +658,7 @@ public class KeyEpochTests
                 ["RateLimiting:Keys:WindowSeconds"] = "60",
             })));
         var team = await TeamAsync();
-        using var person = host.ClientFor(await _factory.RegisterUserAsync("limited"));
+        using var person = host.ClientFor(await _factory.RegisterUserWithoutKeysAsync("limited"));
 
         await person.GetEpochsAsync(team.Id);
         await person.GetAsync("/api/keys/me");

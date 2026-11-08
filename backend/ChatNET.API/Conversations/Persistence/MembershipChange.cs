@@ -45,6 +45,8 @@ public sealed class MembershipChange : IMembershipChange
         Conversation.KeyRotationRequired = false;
     }
 
+    public void RequireRotation() => Conversation.KeyRotationRequired = true;
+
     public async Task CommitAsync(
         IReadOnlyList<Notification> notifications, IReadOnlyList<OutboxMessage> outbox, CancellationToken cancellationToken)
     {

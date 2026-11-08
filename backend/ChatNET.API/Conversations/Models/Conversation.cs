@@ -37,4 +37,7 @@ public class Conversation
 
     public AppUser CreatedBy { get; set; } = null!;
     public ICollection<ConversationMember> Members { get; set; } = [];
+
+    // Only filled when a conversation is made, so its first epoch is saved with it. Later epochs are added on their own.
+    public ICollection<ConversationKeyEpoch> KeyEpochs { get; set; } = [];
 }

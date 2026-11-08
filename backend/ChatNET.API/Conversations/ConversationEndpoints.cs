@@ -21,15 +21,15 @@ using MediatR;
 
 namespace ChatNET.API.Conversations;
 
-public record CreateDirectRequest(Guid OtherUserId);
+public record CreateDirectRequest(Guid? Id, Guid OtherUserId, EpochRequest? Epoch);
 
-public record CreateGroupRequest(string Name, List<Guid> MemberIds);
+public record CreateGroupRequest(Guid? Id, string Name, List<Guid> MemberIds, EpochRequest? Epoch);
 
 public record MarkReadRequest(Guid MessageId);
 
 public record SetMutedRequest(bool? IsMuted);
 
-public record AddMembersRequest(List<Guid>? UserIds);
+public record AddMembersRequest(List<Guid>? UserIds, EpochRequest? Epoch);
 
 public record ChangeMemberRoleRequest(MemberRole? Role);
 
@@ -59,16 +59,18 @@ public static class ConversationEndpoints
 
         conversations.MapPost("/direct", async (CreateDirectRequest body, HttpContext http, IMediator mediator) =>
         {
-            var result = await mediator.Send(new CreateDirectCommand(http.User.GetUserId(), body.OtherUserId));
+            var result = await mediator.Send(new CreateDirectCommand(
+                http.User.GetUserId(), body.Id ?? Guid.Empty, body.OtherUserId, body.Epoch!));
             return Results.Ok(result);
         })
         .Returns<ConversationDto>(
-            StatusCodes.Status200OK, StatusCodes.Status400BadRequest, StatusCodes.Status401Unauthorized, StatusCodes.Status404NotFound);
+            StatusCodes.Status200OK, StatusCodes.Status400BadRequest, StatusCodes.Status401Unauthorized, StatusCodes.Status404NotFound,
+            StatusCodes.Status409Conflict);
 
         conversations.MapPost("/group", async (CreateGroupRequest body, HttpContext http, IMediator mediator) =>
         {
             var result = await mediator.Send(
-                new CreateGroupCommand(http.User.GetUserId(), body.Name, body.MemberIds ?? []));
+                new CreateGroupCommand(http.User.GetUserId(), body.Id ?? Guid.Empty, body.Name, body.MemberIds ?? [], body.Epoch!));
             return Results.Created($"/api/conversations/{result.Id}", result);
         })
         .Returns<ConversationDto>(
@@ -141,7 +143,7 @@ public static class ConversationEndpoints
         conversations.MapPost("/{conversationId:guid}/members", async (
             Guid conversationId, AddMembersRequest body, HttpContext http, IMediator mediator) =>
         {
-            var result = await mediator.Send(new AddMembersCommand(conversationId, http.User.GetUserId(), body.UserIds ?? []));
+            var result = await mediator.Send(new AddMembersCommand(conversationId, http.User.GetUserId(), body.UserIds ?? [], body.Epoch!));
             return Results.Ok(result);
         })
         .Returns<List<MemberDto>>(

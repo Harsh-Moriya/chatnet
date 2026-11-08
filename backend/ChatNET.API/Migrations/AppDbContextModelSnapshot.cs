@@ -884,7 +884,7 @@ namespace ChatNET.API.Migrations
             modelBuilder.Entity("ChatNET.API.Conversations.Models.ConversationKeyEpoch", b =>
                 {
                     b.HasOne("ChatNET.API.Conversations.Models.Conversation", null)
-                        .WithMany()
+                        .WithMany("KeyEpochs")
                         .HasForeignKey("ConversationId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -1093,6 +1093,8 @@ namespace ChatNET.API.Migrations
 
             modelBuilder.Entity("ChatNET.API.Conversations.Models.Conversation", b =>
                 {
+                    b.Navigation("KeyEpochs");
+
                     b.Navigation("Members");
                 });
 
