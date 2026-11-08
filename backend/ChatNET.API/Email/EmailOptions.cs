@@ -14,7 +14,7 @@ public sealed class EmailOptions
 
     public SenderOptions From { get; set; } = new();
 
-    public bool Enabled => Smtp.Host.Length > 0;
+    public bool Enabled => !string.IsNullOrWhiteSpace(Smtp.Host);
 }
 
 public enum SmtpSecurity
@@ -57,6 +57,9 @@ public sealed class SenderOptions
 
 public sealed class EmailOptionsValidator : IValidateOptions<EmailOptions>
 {
+    // Far longer than any mail server needs, and short enough to be a count of milliseconds in an int.
+    private static readonly TimeSpan MaxTimeout = TimeSpan.FromMinutes(10);
+
     public ValidateOptionsResult Validate(string? name, EmailOptions options)
     {
         // Nothing to check while the feature is off. Settings left over from a half-configured deployment are not an error
@@ -73,8 +76,8 @@ public sealed class EmailOptionsValidator : IValidateOptions<EmailOptions>
         if (!Enum.IsDefined(smtp.Security))
             failures.Add("Email:Smtp:Security must be StartTls, SslOnConnect or None.");
 
-        if (smtp.Timeout <= TimeSpan.Zero)
-            failures.Add("Email:Smtp:Timeout must be greater than zero.");
+        if (smtp.Timeout <= TimeSpan.Zero || smtp.Timeout > MaxTimeout)
+            failures.Add("Email:Smtp:Timeout must be greater than zero and at most 10 minutes.");
 
         // A login is a user name and a password together. Half of one would only show as a refusal at the first send.
         if ((smtp.UserName.Length > 0) != (smtp.Password.Length > 0))

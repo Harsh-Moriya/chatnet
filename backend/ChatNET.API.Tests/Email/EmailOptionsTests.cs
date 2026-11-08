@@ -84,6 +84,31 @@ public class EmailOptionsTests
         Assert.Contains("Email:Smtp:Timeout", Check(options).FailureMessage);
     }
 
+    // A host of spaces is a value somebody typed by mistake. It must not switch email on and then fail at every send.
+    [Theory]
+    [InlineData(" ")]
+    [InlineData("   ")]
+    public void A_host_of_only_spaces_is_email_off(string host)
+    {
+        var options = Valid();
+        options.Smtp.Host = host;
+
+        Assert.False(options.Enabled);
+        Assert.True(Check(options).Succeeded);
+    }
+
+    [Fact]
+    public void A_timeout_longer_than_ten_minutes_is_refused_and_ten_minutes_is_accepted()
+    {
+        var tooLong = Valid();
+        tooLong.Smtp.Timeout = TimeSpan.FromMinutes(10) + TimeSpan.FromTicks(1);
+        var longest = Valid();
+        longest.Smtp.Timeout = TimeSpan.FromMinutes(10);
+
+        Assert.Contains("Email:Smtp:Timeout", Check(tooLong).FailureMessage);
+        Assert.True(Check(longest).Succeeded);
+    }
+
     [Theory]
     [InlineData("UserName")]
     [InlineData("Password")]
