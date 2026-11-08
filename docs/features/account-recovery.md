@@ -29,14 +29,14 @@ sequenceDiagram
     R->>S: email with the link and the token in the fragment
     B->>B: open the link, read the token, clear the address bar
     B->>A: POST /api/auth/reset-password (token, newPassword)
-    A->>D: one transaction: use the link, lock the person, set the password, revoke sessions, remove push registrations, void other links
+    A->>D: one transaction: lock the person, use the link, set the password, revoke sessions, remove push registrations, void other links
     A-->>B: 204
 ```
 
 - Only the SHA-256 hash of a token is stored. Using a link is one conditional `UPDATE` that marks it used and returns the person, so of simultaneous requests with the same link exactly one succeeds.
 - The email is made by the relay and not by the request. The request only writes a row, so it takes the same time for every address, and a mail server that is down is retried instead of failing the request.
 - The token is in the URL fragment, which a browser never sends to a server, so it is in no request line, proxy log or `Referer` header.
-- The transaction locks the person's row. A renewal or a sign-in that is being made at the same moment holds a share lock on that row, so the two take turns and no session survives the revocation.
+- The transaction locks the person's row before it touches any link. A renewal or a sign-in that is being made at the same moment holds a share lock on that row, so the two take turns and no session survives the revocation, and two links of one person used at once take turns instead of waiting for each other.
 
 ## What the server does not reveal
 
