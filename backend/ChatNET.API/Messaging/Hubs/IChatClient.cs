@@ -34,6 +34,11 @@ public interface IChatClient
     // A group was renamed, or its picture changed. Sent to the people who are in it.
     Task ConversationUpdated(ConversationUpdateDto update);
 
+    // The keys of a conversation changed: a new epoch was stored, or a member left and the current one must be replaced. Sent to the
+    // people who are in the conversation now, one by one, carrying the newest epoch and the flag as they are when it is sent, so it is
+    // safe to receive twice or late.
+    Task ConversationKeyChanged(ConversationKeyStateDto state);
+
     // Someone changed their name or picture. Sent to the people who share a conversation with them and to their own tabs,
     // carrying how they are now, so it is safe to receive twice or late.
     Task ProfileChanged(UserSummaryDto profile);

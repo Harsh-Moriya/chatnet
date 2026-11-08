@@ -5,5 +5,14 @@ namespace ChatNET.API.Common.Exceptions;
 /// </summary>
 public sealed class ConflictException : ChatNETException
 {
-    public ConflictException(string message) : base(message) { }
+    public ConflictException(string message, string? code = null) : base(message)
+    {
+        Code = code;
+    }
+
+    /// <summary>
+    /// A short, stable name for the kind of conflict, written to the ProblemDetails as "code" so a client can tell conflicts
+    /// apart without reading the message. Null for a conflict the client has no separate way to handle.
+    /// </summary>
+    public string? Code { get; }
 }

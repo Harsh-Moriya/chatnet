@@ -96,6 +96,9 @@ public class GlobalExceptionHandler : IExceptionHandler
             }
         };
 
+        if (exception is ConflictException { Code: { } code })
+            problem.Extensions["code"] = code;
+
         // Validation errors include per-field detail so the frontend can highlight fields.
         if (exception is ValidationException ve)
         {

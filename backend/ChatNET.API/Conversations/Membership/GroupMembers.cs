@@ -25,6 +25,9 @@ public sealed class GroupMembers
 
     public int ActiveCount => _rows.Count(m => m.LeftAt is null);
 
+    // Everyone in the group now, as the rows are now: after an add that includes the people just added.
+    public IReadOnlyList<Guid> ActiveIds => _rows.Where(m => m.LeftAt is null).Select(m => m.UserId).ToList();
+
     // ##### Who may do what #####
 
     // The row of an active member of the group. Anyone else, whether they never were in it or have left, gets the one

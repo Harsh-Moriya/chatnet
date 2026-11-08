@@ -21,6 +21,8 @@ public class AppDbContext : IdentityDbContext<AppUser, IdentityRole<Guid>, Guid>
 
     public DbSet<Conversation> Conversations => Set<Conversation>();
     public DbSet<ConversationMember> ConversationMembers => Set<ConversationMember>();
+    public DbSet<ConversationKeyEpoch> ConversationKeyEpochs => Set<ConversationKeyEpoch>();
+    public DbSet<ConversationKeyEnvelope> ConversationKeyEnvelopes => Set<ConversationKeyEnvelope>();
     public DbSet<Message> Messages => Set<Message>();
     public DbSet<MessageAttachment> MessageAttachments => Set<MessageAttachment>();
     public DbSet<Notification> Notifications => Set<Notification>();

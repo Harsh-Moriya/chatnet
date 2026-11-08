@@ -4,8 +4,11 @@ using ChatNET.API.Conversations.AddMembers;
 using ChatNET.API.Conversations.ChangeMemberRole;
 using ChatNET.API.Conversations.CreateDirect;
 using ChatNET.API.Conversations.CreateGroup;
+using ChatNET.API.Conversations.CreateKeyEpoch;
 using ChatNET.API.Conversations.GetConversation;
+using ChatNET.API.Conversations.GetKeyEpochs;
 using ChatNET.API.Conversations.GetMembers;
+using ChatNET.API.Conversations.KeyEpochs;
 using ChatNET.API.Conversations.GetMyConversations;
 using ChatNET.API.Conversations.LeaveConversation;
 using ChatNET.API.Conversations.MarkRead;
@@ -13,6 +16,7 @@ using ChatNET.API.Conversations.Models;
 using ChatNET.API.Conversations.RemoveMember;
 using ChatNET.API.Conversations.RenameConversation;
 using ChatNET.API.Conversations.SetMuted;
+using ChatNET.API.RateLimiting;
 using MediatR;
 
 namespace ChatNET.API.Conversations;
@@ -91,6 +95,36 @@ public static class ConversationEndpoints
         })
         .ReturnsNoContent(
             StatusCodes.Status400BadRequest, StatusCodes.Status401Unauthorized, StatusCodes.Status403Forbidden);
+
+        // ##### Keys #####
+        // The keys of a conversation are made in a member's browser and sealed for each member; the server stores and hands them out
+        // and checks that every member has one. They share the allowance of the other key endpoints.
+
+        // The epochs the caller has an envelope for, oldest first. A member who left can still ask: they keep the keys of the periods
+        // they were in.
+        conversations.MapGet("/{conversationId:guid}/key-epochs", async (
+            Guid conversationId, int? from, int? limit, HttpContext http, IMediator mediator) =>
+        {
+            var result = await mediator.Send(new GetKeyEpochsQuery(
+                conversationId, http.User.GetUserId(), from ?? 1, limit ?? GetKeyEpochsQueryValidator.DefaultLimit));
+            return Results.Ok(result);
+        })
+        .RequireRateLimiting(RateLimitPolicies.Keys)
+        .Returns<KeyEpochPageDto>(
+            StatusCodes.Status200OK, StatusCodes.Status400BadRequest, StatusCodes.Status401Unauthorized,
+            StatusCodes.Status403Forbidden, StatusCodes.Status429TooManyRequests);
+
+        // The next epoch, for everyone who is in the conversation now. 409 with a "code" when what it was made for is out of date.
+        conversations.MapPost("/{conversationId:guid}/key-epochs", async (
+            Guid conversationId, EpochRequest body, HttpContext http, IMediator mediator) =>
+        {
+            await mediator.Send(new CreateKeyEpochCommand(conversationId, http.User.GetUserId(), body));
+            return Results.NoContent();
+        })
+        .RequireRateLimiting(RateLimitPolicies.Keys)
+        .ReturnsNoContent(
+            StatusCodes.Status400BadRequest, StatusCodes.Status401Unauthorized, StatusCodes.Status403Forbidden,
+            StatusCodes.Status409Conflict, StatusCodes.Status429TooManyRequests);
 
         conversations.MapGet("/{conversationId:guid}/members", async (
             Guid conversationId, HttpContext http, IMediator mediator) =>

@@ -43,9 +43,17 @@ public class ConversationConfiguration : IEntityTypeConfiguration<Conversation>
         // Enforces at the DB level that every Direct conversation has a DirectKey.
         // The constraint in C# (DirectKey generation) is the first line of defence;
         // this is the guarantee that no code path can bypass it.
-        builder.ToTable(t => t.HasCheckConstraint(
-            "CK_Conversations_DirectType_DirectKey",
-            "\"Type\" != 'Direct' OR \"DirectKey\" IS NOT NULL"));
+        builder.ToTable(t =>
+        {
+            t.HasCheckConstraint(
+                "CK_Conversations_DirectType_DirectKey",
+                "\"Type\" != 'Direct' OR \"DirectKey\" IS NOT NULL");
+            t.HasCheckConstraint("CK_Conversations_KeyEpoch", "\"KeyEpoch\" >= 0");
+        });
+
+        // A conversation that existed before keys did starts at 0: it has no key period yet.
+        builder.Property(c => c.KeyEpoch).HasDefaultValue(0);
+        builder.Property(c => c.KeyRotationRequired).HasDefaultValue(false);
 
         builder.HasOne(c => c.CreatedBy)
             .WithMany()

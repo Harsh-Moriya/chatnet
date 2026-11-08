@@ -1,5 +1,6 @@
 using ChatNET.API.Common.Exceptions;
 using ChatNET.API.Common.Persistence;
+using ChatNET.API.Conversations.KeyEpochs;
 using ChatNET.API.Conversations.Membership;
 using ChatNET.API.Conversations.Models;
 using ChatNET.API.Notifications.Models;
@@ -31,6 +32,17 @@ public sealed class MembershipChange : IMembershipChange
 
         if (Conversation.Type != ConversationType.Group)
             throw new ConflictException("Only a group has members to manage.");
+    }
+
+    public void StageEpoch(
+        Guid creatorId, EpochSubmission submission, KeyEpochReason reason,
+        IReadOnlyDictionary<Guid, int> currentGenerations, DateTime now)
+    {
+        EpochRules.Check(Conversation.KeyEpoch, Members.ActiveIds, currentGenerations, submission);
+
+        _db.ConversationKeyEpochs.Add(submission.ToEntity(Conversation.Id, creatorId, reason, now));
+        Conversation.KeyEpoch = submission.Epoch;
+        Conversation.KeyRotationRequired = false;
     }
 
     public async Task CommitAsync(

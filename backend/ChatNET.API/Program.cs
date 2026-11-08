@@ -267,6 +267,7 @@ try
     builder.Services.TryAddSingleton(TimeProvider.System);
 
     builder.Services.AddScoped<IConversationRepository, ConversationRepository>();
+    builder.Services.AddScoped<IKeyEpochRepository, KeyEpochRepository>();
     builder.Services.AddScoped<ISearchRepository, SearchRepository>();
     builder.Services.AddScoped<IMessageRepository, MessageRepository>();
     builder.Services.AddOptions<MessagingOptions>()

@@ -10,6 +10,9 @@ public interface IKeyRepository
     // The newest generation of each of these people who has keys. People without keys are not in the answer.
     Task<List<AccountKeyBundle>> GetCurrentBundlesAsync(IReadOnlyCollection<Guid> userIds, CancellationToken cancellationToken);
 
+    // The newest generation number of each of these people who has keys; people without keys are not in the answer.
+    Task<Dictionary<Guid, int>> GetCurrentGenerationsAsync(IReadOnlyCollection<Guid> userIds, CancellationToken cancellationToken);
+
     Task<bool> HasKeysAsync(Guid userId, CancellationToken cancellationToken);
 
     // Without the blob, for the state of a person: whether a backup exists and which version.

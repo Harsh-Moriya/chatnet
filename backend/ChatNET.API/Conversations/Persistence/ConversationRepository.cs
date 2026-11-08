@@ -180,6 +180,13 @@ public class ConversationRepository : IConversationRepository
             .Select(m => m.LeftAt)
             .FirstOrDefaultAsync(cancellationToken);
 
+    public Task<ConversationKeyStateDto?> GetKeyStateAsync(Guid conversationId, CancellationToken cancellationToken)
+        => _db.Conversations
+            .AsNoTracking()
+            .Where(c => c.Id == conversationId)
+            .Select(c => new ConversationKeyStateDto(c.Id, c.KeyEpoch, c.KeyRotationRequired))
+            .FirstOrDefaultAsync(cancellationToken);
+
     public Task<ConversationUpdateDto?> GetUpdateAsync(Guid conversationId, CancellationToken cancellationToken)
         => _db.Conversations
             .AsNoTracking()

@@ -71,14 +71,30 @@ public sealed class ScratchDatabase : IAsyncDisposable
         });
     }
 
-    // The AvatarKeys migration renamed the picture columns (AvatarUrl to AvatarKey). The model writes AvatarKey, which a schema
-    // from before that migration does not have, so the columns are added for the time of the insert and dropped again: the
-    // rows are as they would have been, and the schema is the one the test asked for.
+    // Columns that migrations added to tables the model writes. A schema from before such a migration lacks them, and the model
+    // writes them on every insert, so they are added for the time of the insert and dropped again: the rows are as they would have
+    // been, and the schema is the one the test asked for. (AvatarKeys renamed the picture columns; AddConversationKeyEpochs added
+    // the key epoch of a conversation.)
+    private static readonly (string Table, string Column, string Definition)[] ModelColumns =
+    [
+        ("AspNetUsers", "AvatarKey", "text"),
+        ("Conversations", "AvatarKey", "text"),
+        ("Conversations", "KeyEpoch", "integer NOT NULL DEFAULT 0"),
+        ("Conversations", "KeyRotationRequired", "boolean NOT NULL DEFAULT false"),
+    ];
+
     private async Task WithModelColumnsAsync(Func<Task> insert)
     {
-        var missing = !await ColumnExistsAsync("AspNetUsers", "AvatarKey");
-        if (missing)
-            await ExecuteAsync("ALTER TABLE \"AspNetUsers\" ADD COLUMN \"AvatarKey\" text; ALTER TABLE \"Conversations\" ADD COLUMN \"AvatarKey\" text;");
+        var added = new List<(string Table, string Column)>();
+
+        foreach (var (table, column, definition) in ModelColumns)
+        {
+            if (await ColumnExistsAsync(table, column))
+                continue;
+
+            await ExecuteAsync($"ALTER TABLE \"{table}\" ADD COLUMN \"{column}\" {definition}");
+            added.Add((table, column));
+        }
 
         try
         {
@@ -86,8 +102,8 @@ public sealed class ScratchDatabase : IAsyncDisposable
         }
         finally
         {
-            if (missing)
-                await ExecuteAsync("ALTER TABLE \"AspNetUsers\" DROP COLUMN \"AvatarKey\"; ALTER TABLE \"Conversations\" DROP COLUMN \"AvatarKey\";");
+            foreach (var (table, column) in added)
+                await ExecuteAsync($"ALTER TABLE \"{table}\" DROP COLUMN \"{column}\"");
         }
     }
 

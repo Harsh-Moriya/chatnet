@@ -150,6 +150,10 @@ public class OutboxDispatcher
                 await _notifier.NotifyUpdatedAsync(renamed.ConversationId, cancellationToken);
                 return;
 
+            case ConversationKeyChanged keyChanged:
+                await _notifier.NotifyKeyChangedAsync(keyChanged.ConversationId, cancellationToken);
+                return;
+
             case ProfileChanged profile:
                 await _profileNotifier.NotifyChangedAsync(profile.UserId, cancellationToken);
                 return;

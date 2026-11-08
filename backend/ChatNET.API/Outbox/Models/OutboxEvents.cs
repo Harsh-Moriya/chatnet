@@ -112,6 +112,16 @@ public sealed record MemberLeft(Guid ConversationId, Guid UserId) : IOutboxEvent
     public string Kind => Name;
 }
 
+// The keys of a conversation changed (a new epoch was stored, or a member left and the current one must be replaced): the people in
+// it are told which epoch is newest and whether it must be replaced, as it is when the push is made.
+public sealed record ConversationKeyChanged(Guid ConversationId) : IOutboxEvent
+{
+    public const string Name = nameof(ConversationKeyChanged);
+
+    [JsonIgnore]
+    public string Kind => Name;
+}
+
 // A person changed their name or picture: the people who share a conversation with them, and their own tabs, are told how
 // they are now.
 public sealed record ProfileChanged(Guid UserId) : IOutboxEvent
@@ -185,6 +195,7 @@ public static class OutboxEvents
         MembersJoined.Name => Deserialize<MembersJoined>(payload),
         MemberLeft.Name => Deserialize<MemberLeft>(payload),
         ConversationRenamed.Name => Deserialize<ConversationRenamed>(payload),
+        ConversationKeyChanged.Name => Deserialize<ConversationKeyChanged>(payload),
         ProfileChanged.Name => Deserialize<ProfileChanged>(payload),
         AvatarFileRemoved.Name => Deserialize<AvatarFileRemoved>(payload),
         PasswordResetRequested.Name => Deserialize<PasswordResetRequested>(payload),

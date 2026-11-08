@@ -51,6 +51,9 @@ public static class EncryptionApi
         return bytes;
     }
 
+    // A conversation key sealed for one member: version, suite, then random bytes (94 bytes).
+    public static byte[] Envelope(int length = 94, byte version = 1, byte suite = 1) => SealedBox(length, version, suite);
+
     public static string NewCode()
     {
         var chars = RandomNumberGenerator.GetItems<char>(CodeAlphabet, 10);

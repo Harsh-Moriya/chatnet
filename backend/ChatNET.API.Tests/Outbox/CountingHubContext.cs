@@ -96,6 +96,8 @@ public sealed class CountingHubContext : IHubContext<ChatHub, IChatClient>
 
         public Task ConversationUpdated(ConversationUpdateDto update) => throw new NotSupportedException();
 
+        public Task ConversationKeyChanged(ConversationKeyStateDto state) => throw new NotSupportedException();
+
         public Task ProfileChanged(UserSummaryDto profile) => throw new NotSupportedException();
 
         public Task RemovedFromConversation(Guid conversationId, DateTime leftAt) => throw new NotSupportedException();

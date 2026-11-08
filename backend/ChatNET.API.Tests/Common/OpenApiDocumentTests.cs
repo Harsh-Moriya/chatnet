@@ -38,6 +38,8 @@ public class OpenApiDocumentTests
         ("post", "/api/conversations/{conversationId}/read", "204", "", "400,401,403"),
         ("put", "/api/conversations/{conversationId}/mute", "204", "", "400,401,403"),
         ("get", "/api/conversations/{conversationId}/members", "200", "MemberDto[]", "401,403"),
+        ("get", "/api/conversations/{conversationId}/key-epochs", "200", "KeyEpochPageDto", "400,401,403,429"),
+        ("post", "/api/conversations/{conversationId}/key-epochs", "204", "", "400,401,403,409,429"),
         ("post", "/api/conversations/{conversationId}/uploads", "200", "UploadTicketDto", "400,401,403,429"),
         ("post", "/api/users/me/avatar/uploads", "200", "UploadTicketDto", "400,401,403,429"),
         ("post", "/api/conversations/{conversationId}/avatar/uploads", "200", "UploadTicketDto", "400,401,403,429"),

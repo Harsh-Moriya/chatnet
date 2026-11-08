@@ -1,3 +1,4 @@
+using ChatNET.API.Conversations.KeyEpochs;
 using ChatNET.API.Conversations.Membership;
 using ChatNET.API.Conversations.Models;
 using ChatNET.API.Notifications.Models;
@@ -23,6 +24,13 @@ public interface IMembershipChange : IAsyncDisposable
     // gives, which says nothing about whether the conversation exists), and it is a group. A direct chat has no members
     // to manage.
     void RequireGroupMember(Guid userId);
+
+    // Adds a new key period to what this change saves. It is checked against the members as they are now (after any change
+    // already made to Members), so it is saved only if it was made for exactly the people who will be in the conversation, and
+    // together with the change in membership it belongs to. `currentGenerations` is the newest key generation of each member.
+    void StageEpoch(
+        Guid creatorId, EpochSubmission submission, KeyEpochReason reason,
+        IReadOnlyDictionary<Guid, int> currentGenerations, DateTime now);
 
     // Saves what was changed together with the notifications and outbox rows that belong to it, in one transaction, and
     // frees the lock.

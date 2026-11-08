@@ -62,6 +62,9 @@ public interface IConversationRepository
     // this, so it says nothing about a person who has been added back since.
     Task<DateTime?> GetLeftAtAsync(Guid conversationId, Guid userId, CancellationToken cancellationToken);
 
+    // The newest key epoch of a conversation and whether it must be replaced, as they are now; null when there is no such conversation.
+    Task<ConversationKeyStateDto?> GetKeyStateAsync(Guid conversationId, CancellationToken cancellationToken);
+
     // The name and picture of a group as they are now; null for a conversation that is not a group or does not exist.
     Task<ConversationUpdateDto?> GetUpdateAsync(Guid conversationId, CancellationToken cancellationToken);
 

@@ -8,6 +8,10 @@ public sealed record Problem(int Status, string? Title, string? Detail, JsonElem
 {
     public JsonElement? Errors =>
         Root.TryGetProperty("errors", out var errors) ? errors : null;
+
+    // The short name of a conflict, when the server gave one.
+    public string? Code =>
+        Root.TryGetProperty("code", out var code) ? code.GetString() : null;
 }
 
 public static class ProblemDetailsReader
