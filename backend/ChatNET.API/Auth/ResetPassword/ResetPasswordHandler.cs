@@ -50,17 +50,23 @@ public class ResetPasswordHandler : IRequestHandler<ResetPasswordCommand, Unit>
 
         await using var transaction = await _db.Database.BeginTransactionAsync(cancellationToken);
 
-        // The link is used up first, in one conditional statement, so of any number of requests with the same link exactly one
-        // gets any further. An unknown, used and expired link are the same answer: nothing tells a guesser which it was.
-        var userId = await _resetTokens.TryConsumeAsync(TokenHash.Of(request.Token), now, cancellationToken)
-                     ?? throw InvalidLinkFailure();
+        // Whose link it is, read without changing anything, so the person's row can be locked before any link row is. The order matters:
+        // two links of one person used at the same moment would otherwise each use up their own link, and the one that finishes first
+        // voids the other's, which the other holds, while it waits for the person's row that the first holds: a deadlock. An unknown
+        // link is the same answer as a used or expired one: nothing tells a guesser which it was.
+        var tokenHash = TokenHash.Of(request.Token);
+        var owner = await _resetTokens.FindUserIdAsync(tokenHash, cancellationToken) ?? throw InvalidLinkFailure();
 
         // The person's row is locked for the rest of the transaction. A renewal or a sign-in that is being made right now holds a
         // share lock on it, so this waits for it to finish and then revokes what it made; one that starts later waits for this to
         // commit and finds its token revoked, or the password changed. Without the lock a session could slip in after the
         // revocation and outlive the reset.
         await _db.Database.ExecuteSqlInterpolatedAsync(
-            $"SELECT 1 FROM \"AspNetUsers\" WHERE \"Id\" = {userId} FOR UPDATE", cancellationToken);
+            $"SELECT 1 FROM \"AspNetUsers\" WHERE \"Id\" = {owner} FOR UPDATE", cancellationToken);
+
+        // The link is then used up in one conditional statement, so of any number of requests with the same link exactly one gets
+        // any further; the others, waiting on the row lock above, find it used or voided.
+        var userId = await _resetTokens.TryConsumeAsync(tokenHash, now, cancellationToken) ?? throw InvalidLinkFailure();
 
         var user = await _userManager.FindByIdAsync(userId.ToString());
         if (user is null || user.IsDeactivated)

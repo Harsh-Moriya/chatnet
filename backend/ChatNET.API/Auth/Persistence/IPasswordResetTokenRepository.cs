@@ -8,6 +8,9 @@ public interface IPasswordResetTokenRepository
     // outbox relay handles a whole pass with one context.
     Task AddAsync(PasswordResetToken token, CancellationToken cancellationToken);
 
+    // Whose link this hash is, whether or not it can still be used, read without locking anything. Null for a hash nobody was issued.
+    Task<Guid?> FindUserIdAsync(string tokenHash, CancellationToken cancellationToken);
+
     // Marks the link as used and returns the person it belongs to, or null when no link with this hash can be used (unknown,
     // already used, or expired: the three are not told apart). One conditional statement, so of any number of requests with
     // the same link exactly one gets the person. A link is usable while now is before its expiry. It runs in the caller's

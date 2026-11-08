@@ -28,6 +28,13 @@ public class PasswordResetTokenRepository : IPasswordResetTokenRepository
         }
     }
 
+    public async Task<Guid?> FindUserIdAsync(string tokenHash, CancellationToken cancellationToken)
+        => await _db.PasswordResetTokens
+            .AsNoTracking()
+            .Where(t => t.TokenHash == tokenHash)
+            .Select(t => (Guid?)t.UserId)
+            .SingleOrDefaultAsync(cancellationToken);
+
     // One statement does the check and the change, as the rotation of a refresh token does. Raw SQL because EF cannot express
     // UPDATE ... RETURNING, and the time is a parameter, not the database's clock, so a test can move it.
     public async Task<Guid?> TryConsumeAsync(string tokenHash, DateTime now, CancellationToken cancellationToken)
