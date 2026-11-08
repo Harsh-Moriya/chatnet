@@ -1,4 +1,5 @@
 using ChatNET.API.Auth.Models;
+using ChatNET.API.Devices.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -26,8 +27,18 @@ public class RefreshTokenConfiguration : IEntityTypeConfiguration<RefreshToken>
         builder.HasIndex(t => t.FamilyId);
         builder.HasIndex(t => t.UserId);
 
+        // Removing a device finds the sessions that were signed in on it.
+        builder.HasIndex(t => t.DeviceId);
+
         // The clean-up of old rows is by expiry date.
         builder.HasIndex(t => t.ExpiresAt);
+
+        // A device row is kept when it is removed, so this never fires in practice; if the row is ever deleted the session stays and is
+        // simply no longer tied to anything.
+        builder.HasOne<Device>()
+            .WithMany()
+            .HasForeignKey(t => t.DeviceId)
+            .OnDelete(DeleteBehavior.SetNull);
 
         builder.HasOne(t => t.User)
             .WithMany()

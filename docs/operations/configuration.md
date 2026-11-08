@@ -79,6 +79,7 @@ Time values are `hh:mm:ss` (or `d.hh:mm:ss`) strings, for example `Messaging__Ed
 | `Search` | 30 per 10 s |
 | `Avatars` | 600 per 60 s |
 | `Push` | 20 per 60 s |
+| `Keys` | 60 per 60 s |
 | `ForgotPassword` | 5 per 900 s |
 | `ResetPassword` | 10 per 900 s |
 | `PasswordResetEmail` | 3 per 3600 s (counted per email address by the handler that asks for a link, not by the pipeline) |
@@ -90,6 +91,17 @@ Time values are `hh:mm:ss` (or `d.hh:mm:ss`) strings, for example `Messaging__Ed
 | `RateLimiting:Store:PauseSeconds` | 5 | 1 to 600. How long the limits are skipped after a failure. |
 
 See [rate limits](../features/rate-limits.md).
+
+## Encryption keys and devices
+
+| Key | Default | Validation |
+|---|---|---|
+| `Encryption:LinkLifetime` | `00:10:00` | 1 minute to 1 hour. How long a request to link a new device stays open |
+| `Encryption:MaxDevicesPerUser` | 10 | 1 to 50. Devices that hold the keys of one person |
+| `Encryption:MaxPendingLinkRequests` | 5 | 1 to 20. Link requests waiting for approval at once, per person |
+| `Encryption:MaxBackupBytes` | 65536 | 1024 to 1,048,576. The largest encrypted backup accepted |
+
+See [encryption keys and devices](../features/encryption-keys.md).
 
 ## Email
 

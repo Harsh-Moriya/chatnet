@@ -18,7 +18,7 @@ const sessionApi = axios.create({ baseURL: BASE_URL, withCredentials: true, head
 
 async function requestRefresh(): Promise<RefreshOutcome> {
   try {
-    const response = await sessionApi.post<AuthResponse>('/auth/refresh')
+    const response = await sessionApi.post<AuthResponse>('/auth/refresh', undefined, { headers: await deviceHeaders() })
     return { kind: 'renewed', response: response.data }
   } catch (error) {
     if (!axios.isAxiosError(error) || !error.response) return { kind: 'unavailable' }
@@ -47,6 +47,25 @@ function runExclusively<T>(work: () => Promise<T>): Promise<T> {
 }
 
 const SIGNED_OUT = 'signed-out'
+
+// Which device of the person this browser is, when it holds their encryption keys. Sent on sign-in and on every renewal, so the
+// server ties the session to the device and removing the device ends the session. The encryption feature supplies it, so the
+// session does not need to know about encryption (and the feature imports the API client, which imports this file).
+let deviceIdProvider: () => Promise<string | null> = () => Promise.resolve(null)
+
+export function setDeviceIdProvider(provider: () => Promise<string | null>): void {
+  deviceIdProvider = provider
+}
+
+// The header that names the device, or none when there is none or it cannot be read.
+export async function deviceHeaders(): Promise<Record<string, string>> {
+  try {
+    const id = await deviceIdProvider()
+    return id === null ? {} : { 'X-Device-Id': id }
+  } catch {
+    return {}
+  }
+}
 
 // Work that has to happen before the session ends, while the access token still works: the alert registration of this browser
 // has to be taken off the server by someone who is still signed in. Features add theirs here and take it off when they go; the

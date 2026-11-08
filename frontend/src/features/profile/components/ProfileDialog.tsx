@@ -6,6 +6,7 @@ import { Dialog } from '../../../components/ui/Dialog'
 import { Input } from '../../../components/ui/Input'
 import { getApiError } from '../../../lib/errors'
 import { useAuth } from '../../auth/hooks/useAuth'
+import { EncryptionSection } from '../../encryption/components/EncryptionSection'
 import { PushSwitch } from '../../push/components/PushSwitch'
 import { removePicture, setPicture, updateDisplayName } from '../api/profileApi'
 import { prepareAvatar } from '../avatarImage'
@@ -91,6 +92,8 @@ function Profile() {
       </form>
 
       <PushSwitch />
+
+      <EncryptionSection />
     </div>
   )
 }

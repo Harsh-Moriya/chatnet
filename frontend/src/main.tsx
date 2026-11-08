@@ -4,12 +4,14 @@ import { QueryClientProvider } from '@tanstack/react-query'
 import { BrowserRouter } from 'react-router-dom'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { queryClient } from './lib/queryClient'
-import { startSession } from './features/auth/session'
+import { setDeviceIdProvider, startSession } from './features/auth/session'
+import { indexedDbDeviceStore } from './features/encryption/deviceStore'
 import App from './App'
 import './index.css'
 
 // Asks the server whether this browser still has a working session. The access token is only kept in memory,
 // so every page load starts without one. Routes show a loading state until this is answered.
+setDeviceIdProvider(() => indexedDbDeviceStore.lastDeviceId())
 void startSession()
 
 // QueryClientProvider makes the shared cache available to every hook in the tree.

@@ -1,5 +1,7 @@
 using ChatNET.API.Auth.Models;
 using ChatNET.API.Conversations.Models;
+using ChatNET.API.Devices.Models;
+using ChatNET.API.Keys.Models;
 using ChatNET.API.Messaging.Models;
 using ChatNET.API.Notifications.Models;
 using ChatNET.API.Outbox.Models;
@@ -26,6 +28,10 @@ public class AppDbContext : IdentityDbContext<AppUser, IdentityRole<Guid>, Guid>
     public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
     public DbSet<PushSubscription> PushSubscriptions => Set<PushSubscription>();
+    public DbSet<AccountKeyBundle> AccountKeyBundles => Set<AccountKeyBundle>();
+    public DbSet<KeyBackup> KeyBackups => Set<KeyBackup>();
+    public DbSet<Device> Devices => Set<Device>();
+    public DbSet<DeviceLinkRequest> DeviceLinkRequests => Set<DeviceLinkRequest>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

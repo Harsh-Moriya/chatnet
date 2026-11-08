@@ -1,5 +1,6 @@
 import { type ReactNode, useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
+import { useEncryptionSync } from '../../encryption/hooks/useEncryptionSync'
 import { useNotificationStore } from '../../notifications/store/notificationStore'
 import { usePresenceStore } from '../../presence/store/presenceStore'
 import { useProfileSync } from '../../profile/hooks/useProfileSync'
@@ -16,6 +17,7 @@ export function ChatConnectionProvider({ children }: { children: ReactNode }) {
   const connection = useSignalR()
   useProfileSync()
   usePushSync()
+  useEncryptionSync()
   useServiceWorkerNavigation()
 
   // Leaving the chat, by signing out or because the session expired, must not leave one person's

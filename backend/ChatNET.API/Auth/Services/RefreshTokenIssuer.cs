@@ -24,9 +24,9 @@ public class RefreshTokenIssuer
     // Starts a new family, for a sign-in or a registration, and stores its first token. The person was found and their password
     // checked a moment ago, with the security stamp they have now; if a password reset has changed the stamp since, the password
     // that was checked is no longer the password, and no session is started.
-    public async Task<IssuedRefreshToken> StartSessionAsync(AppUser user, CancellationToken cancellationToken)
+    public async Task<IssuedRefreshToken> StartSessionAsync(AppUser user, CancellationToken cancellationToken, Guid? deviceId = null)
     {
-        var (entity, issued) = Create(user.Id, Guid.NewGuid(), _time.GetUtcNow().UtcDateTime);
+        var (entity, issued) = Create(user.Id, Guid.NewGuid(), _time.GetUtcNow().UtcDateTime, deviceId);
 
         if (!await _tokens.AddIfSecurityStampUnchangedAsync(entity, user.SecurityStamp, cancellationToken))
             throw new UnauthorizedException("Invalid email or password.");
@@ -36,10 +36,10 @@ public class RefreshTokenIssuer
 
     // The token that replaces another in the same family. Not stored: the caller stores it together with
     // retiring the one it replaces.
-    public (RefreshToken Entity, IssuedRefreshToken Issued) CreateSuccessor(RefreshToken current, DateTime now)
-        => Create(current.UserId, current.FamilyId, now);
+    public (RefreshToken Entity, IssuedRefreshToken Issued) CreateSuccessor(RefreshToken current, DateTime now, Guid? deviceId)
+        => Create(current.UserId, current.FamilyId, now, deviceId);
 
-    private (RefreshToken Entity, IssuedRefreshToken Issued) Create(Guid userId, Guid familyId, DateTime now)
+    private (RefreshToken Entity, IssuedRefreshToken Issued) Create(Guid userId, Guid familyId, DateTime now, Guid? deviceId)
     {
         var value = TokenHash.NewToken();
         var expiresAt = now.AddDays(_options.RefreshTokenDays);
@@ -50,6 +50,7 @@ public class RefreshTokenIssuer
             Id = Guid.NewGuid(),
             UserId = userId,
             FamilyId = familyId,
+            DeviceId = deviceId,
             TokenHash = hash,
             CreatedAt = now,
             ExpiresAt = expiresAt,

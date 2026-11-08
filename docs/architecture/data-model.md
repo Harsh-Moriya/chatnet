@@ -13,6 +13,11 @@ erDiagram
     AspNetUsers ||--o{ PasswordResetTokens : "can reset with"
     AspNetUsers ||--o{ Notifications : "receives"
     AspNetUsers ||--o{ PushSubscriptions : "registers"
+    AspNetUsers ||--o{ AccountKeyBundles : "publishes"
+    AspNetUsers ||--o| KeyBackups : "keeps"
+    AspNetUsers ||--o{ Devices : "holds keys on"
+    AspNetUsers ||--o{ DeviceLinkRequests : "asks to link"
+    Devices |o--o{ RefreshTokens : "signed in on"
     Messages |o--o{ Notifications : "mentioned in"
     Conversations |o--o{ Notifications : "about"
 ```
@@ -121,8 +126,9 @@ The table stores keys, never links. A link is signed for the reader each time it
 | `CreatedAt`, `ExpiresAt` | timestamptz | |
 | `RevokedAt` | timestamptz, null | set when the token is replaced or its family is revoked |
 | `ReplacedById` | uuid, null | the token that replaced this one |
+| `DeviceId` | uuid, null | foreign key to `Devices`, set null on delete. The device the session is signed in on, once a sign-in or renewal names one; every token of the family carries it |
 
-Indexes on `TokenHash` (unique), `FamilyId`, `UserId` and `ExpiresAt`.
+Indexes on `TokenHash` (unique), `FamilyId`, `UserId`, `ExpiresAt` and `DeviceId`.
 
 ## PasswordResetTokens
 
@@ -135,6 +141,54 @@ Indexes on `TokenHash` (unique), `FamilyId`, `UserId` and `ExpiresAt`.
 | `UsedAt` | timestamptz, null | set when the link is used, or voided by a reset made with another link |
 
 Indexes on `TokenHash` (unique), `UserId` and `ExpiresAt`. Using a link is one conditional `UPDATE ... WHERE "UsedAt" IS NULL AND "ExpiresAt" > now RETURNING "UserId"`. A daily job removes rows that expired more than a week ago.
+
+## AccountKeyBundles
+
+| Column | Type | Notes |
+|---|---|---|
+| `UserId` | uuid | foreign key, cascade; part of the primary key |
+| `Generation` | integer | part of the primary key. 1 for the first keys; a later generation is made when a device is removed |
+| `Bundle` | bytea | the 134 byte signed public bundle, as the browser made it (see [encryption formats](encryption-format.md)) |
+| `CreatedAt` | timestamptz | |
+
+The primary key `(UserId, Generation)` is what makes a second set-up a conflict: the first insert waits for one that is running and does nothing if it committed.
+
+## KeyBackups
+
+| Column | Type | Notes |
+|---|---|---|
+| `UserId` | uuid | primary key, foreign key, cascade |
+| `Blob` | bytea | the private keys encrypted under a key stretched from the passphrase of the person. The server cannot open it |
+| `Version` | integer | 1 at set-up, +1 for each replacement. A replacement names the version it was made from, in one conditional `UPDATE` |
+| `UpdatedAt` | timestamptz | |
+
+## Devices
+
+| Column | Type | Notes |
+|---|---|---|
+| `Id` | uuid | primary key, made by the application |
+| `UserId` | uuid | foreign key, cascade |
+| `Kind` | varchar(16) | `Web`, `Ios` or `Android` |
+| `Name` | varchar(100) | what the person sees in their list ("Chrome on Windows"); chosen by the device |
+| `CreatedAt`, `LastActiveAt` | timestamptz | `LastActiveAt` moves when a session tied to the device signs in or is renewed |
+| `RemovedAt` | timestamptz, null | set when the device is removed. The row stays, so a removed device can find out |
+
+Index on `UserId`. Adding a device counts the person's devices that are not removed and inserts, in one transaction behind a lock on the person.
+
+## DeviceLinkRequests
+
+| Column | Type | Notes |
+|---|---|---|
+| `Id` | uuid | primary key, made by the application |
+| `UserId` | uuid | foreign key, cascade |
+| `Code` | varchar(10) | the code the new device shows; unique per person |
+| `TemporaryPublicKey` | bytea | the 32 byte one-time key the secrets are sealed to |
+| `Kind`, `Name` | varchar | what the new device calls itself, shown on the device that approves |
+| `Payload` | bytea, null | the sealed secrets, set on approval and cleared when collected |
+| `CreatedAt`, `ExpiresAt` | timestamptz | `ExpiresAt` is 10 minutes after `CreatedAt` by default, in whole seconds |
+| `ApprovedAt`, `CollectedAt` | timestamptz, null | |
+
+Indexes on `(UserId, Code)` (unique) and `ExpiresAt`. Approving is one conditional `UPDATE` (still waiting, not expired). Collecting is one `UPDATE ... RETURNING` that clears the payload. Requests that expired more than an hour ago are removed when their person opens a new one.
 
 ## Notifications
 

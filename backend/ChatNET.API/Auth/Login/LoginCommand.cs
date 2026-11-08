@@ -5,5 +5,7 @@ namespace ChatNET.API.Auth.Login;
 
 public record LoginCommand(
     string Email,
-    string Password
+    string Password,
+    // From the X-Device-Id header: the endpoint sets it, whatever the body says.
+    Guid? DeviceId = null
 ) : IRequest<AuthResult>;

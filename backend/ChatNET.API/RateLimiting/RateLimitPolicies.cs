@@ -19,6 +19,7 @@ public static class RateLimitPolicies
     public const string Edit = "edit";
     public const string Search = "search";
     public const string Push = "push";
+    public const string Keys = "keys";
 
     // Counted per email address, by the handler that sends the reset email, and not by the pipeline: the address is in the body,
     // which has not been read when the pipeline decides. It is not a policy an endpoint names, so the setup does not define it.
@@ -34,6 +35,7 @@ public static class RateLimitPolicies
         (Search, "RateLimiting:Search"),
         (Avatars, "RateLimiting:Avatars"),
         (Push, "RateLimiting:Push"),
+        (Keys, "RateLimiting:Keys"),
         (ForgotPassword, "RateLimiting:ForgotPassword"),
         (ResetPassword, "RateLimiting:ResetPassword"),
         (PasswordResetEmail, "RateLimiting:PasswordResetEmail"),

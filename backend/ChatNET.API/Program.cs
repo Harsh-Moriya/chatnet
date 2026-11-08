@@ -27,6 +27,10 @@ using ChatNET.API.Outbox;
 using ChatNET.API.Outbox.Persistence;
 using ChatNET.API.Presence;
 using ChatNET.API.Presence.Persistence;
+using ChatNET.API.Devices;
+using ChatNET.API.Devices.Persistence;
+using ChatNET.API.Keys;
+using ChatNET.API.Keys.Persistence;
 using ChatNET.API.Push;
 using ChatNET.API.Push.Persistence;
 using ChatNET.API.Search;
@@ -310,6 +314,17 @@ try
     builder.Services.AddHostedService(provider => provider.GetRequiredService<PresenceRefreshService>());
     builder.Services.AddScoped<IPresenceRepository, PresenceRepository>();
 
+    // ##### Encryption keys and devices #####
+    // The server stores what the browsers encrypt and relays what they seal for each other: public key bundles, the backup that
+    // only a passphrase opens, the devices that hold the keys and the requests that link a new one. It opens none of it.
+    builder.Services.AddOptions<EncryptionOptions>()
+        .BindConfiguration(EncryptionOptions.SectionName)
+        .ValidateOnStart();
+    builder.Services.AddSingleton<IValidateOptions<EncryptionOptions>, EncryptionOptionsValidator>();
+    builder.Services.AddScoped<IKeyRepository, KeyRepository>();
+    builder.Services.AddScoped<IDeviceRepository, DeviceRepository>();
+    builder.Services.AddScoped<ILinkRequestRepository, LinkRequestRepository>();
+
     // ##### Push #####
     // A browser that allowed alerts registers an address of its vendor's push service; the server posts an encrypted alert
     // there for a person who has no live connection. The keys that identify the server come from configuration, and with none
@@ -504,6 +519,8 @@ try
     app.MapNotificationEndpoints();
     app.MapPresenceEndpoints();
     app.MapPushEndpoints();
+    app.MapKeysEndpoints();
+    app.MapDevicesEndpoints();
 
     // A token is checked once, when the connection is made. Without this an open connection would keep
     // receiving messages long after its token expired; with it the server closes the connection at the
