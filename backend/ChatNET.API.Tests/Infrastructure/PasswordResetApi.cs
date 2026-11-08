@@ -21,7 +21,7 @@ public static class PasswordResetApi
     public static async Task<string> AddResetTokenAsync(
         this ChatApiFactory factory, Guid userId, DateTime? expiresAt = null, DateTime? usedAt = null, DateTime? createdAt = null)
     {
-        var token = WebEncoders.Base64UrlEncode(RandomNumberGenerator.GetBytes(32));
+        var token = TokenHash.NewToken();
         var row = new PasswordResetToken
         {
             Id = Guid.NewGuid(),

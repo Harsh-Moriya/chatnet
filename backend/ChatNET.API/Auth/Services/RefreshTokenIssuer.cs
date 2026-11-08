@@ -41,7 +41,7 @@ public class RefreshTokenIssuer
 
     private (RefreshToken Entity, IssuedRefreshToken Issued) Create(Guid userId, Guid familyId, DateTime now)
     {
-        var value = WebEncoders.Base64UrlEncode(RandomNumberGenerator.GetBytes(32));
+        var value = TokenHash.NewToken();
         var expiresAt = now.AddDays(_options.RefreshTokenDays);
         var hash = TokenHash.Of(value);
 
