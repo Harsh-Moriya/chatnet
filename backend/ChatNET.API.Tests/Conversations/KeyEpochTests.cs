@@ -5,9 +5,11 @@ using ChatNET.API.Conversations.Models;
 using ChatNET.API.Conversations.Persistence;
 using ChatNET.API.Conversations.KeyEpochs;
 using ChatNET.API.Tests.Infrastructure;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace ChatNET.API.Tests.Conversations;
 
@@ -660,6 +662,42 @@ public class KeyEpochTests
         await owner.PostEpochAsync(team.Id, EpochBody.For(1, team.Owner.Id));
 
         Assert.DoesNotContain(await _factory.OutboxRowsAboutAsync("conversationId", team.Id), r => r.Kind == "ConversationKeyChanged");
+    }
+
+    // ##### What the log holds #####
+
+    // Commitments, signatures and envelopes are ids' opposite: nothing an operator needs, and the one thing a log must never hold. They
+    // do not reach it whether the epoch was stored, refused for what it said or refused for its shape, with a conversation or on its own.
+    [Fact]
+    public async Task Nothing_of_an_epoch_reaches_the_log_whether_it_was_stored_or_refused()
+    {
+        var log = new CapturingLoggerProvider();
+        using var host = _factory.WithWebHostBuilder(builder => builder.ConfigureLogging(logging => logging.AddProvider(log)));
+        var team = await TeamAsync();
+        using var owner = host.ClientFor(team.Owner);
+        var stored = EpochBody.For(1, Everyone(team));
+        var incomplete = EpochBody.For(2, team.Owner.Id);
+        var malformed = EpochBody.For(2, Everyone(team));
+        malformed.Commitment = EncryptionApi.B64(new byte[31]);
+        var created = EpochBody.For(1, team.Owner.Id, team.Member.Id);
+        var groupId = Guid.NewGuid();
+
+        await owner.StoreEpochAsync(team.Id, stored);
+        await owner.GetEpochsAsync(team.Id);
+        await owner.PostEpochAsync(team.Id, incomplete);
+        await owner.PostEpochAsync(team.Id, malformed);
+        await owner.PostAsJsonAsync("/api/conversations/group", new
+        {
+            id = groupId, name = "Logged", memberIds = new[] { team.Member.Id }, epoch = created,
+        });
+
+        var everything = string.Join('\n', log.Entries);
+        Assert.NotEmpty(log.Entries);
+        Assert.Contains(team.Id.ToString(), everything);
+        var secrets = new[] { stored, incomplete, malformed, created }
+            .SelectMany(b => new[] { b.Commitment!, b.Signature! }.Concat(b.Envelopes!.Select(e => e.Envelope!)));
+        foreach (var secret in secrets)
+            Assert.DoesNotContain(secret, everything);
     }
 
     // ##### Access #####

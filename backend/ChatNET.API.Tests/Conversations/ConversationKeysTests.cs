@@ -646,8 +646,7 @@ public class ConversationKeysTests
 
         await leaver.LeaveResponseAsync(team.Id);
 
-        var row = Assert.Single(
-            (await _factory.OutboxRowsAboutAsync("conversationId", team.Id)).Where(r => r.Kind == "ConversationKeyChanged"));
+        var row = Assert.Single(await _factory.OutboxRowsAboutAsync("conversationId", team.Id), r => r.Kind == "ConversationKeyChanged");
         Assert.NotNull(row.DispatchedAt);
         Assert.Equal(0, row.Attempts);
     }
