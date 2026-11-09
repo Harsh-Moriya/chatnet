@@ -8,6 +8,11 @@ import { ProtectedRoute } from './components/ProtectedRoute'
 import { SessionLoading } from './components/SessionLoading'
 
 // Opened rarely, from a link, so they load when first visited and the main bundle stays under Vite's size warning.
+// The gate carries the cryptography that checks and restores a person's keys, which every signed-in page needs but the sign-in page does
+// not, so it loads once someone is signed in.
+const EncryptionGate = lazy(() =>
+  import('./features/encryption/components/EncryptionGate').then((module) => ({ default: module.EncryptionGate })),
+)
 const ForgotPasswordPage = lazy(() =>
   import('./features/auth/components/ForgotPasswordPage').then((module) => ({ default: module.ForgotPasswordPage })),
 )
@@ -43,7 +48,11 @@ export default function App() {
         path="/chat"
         element={
           <ProtectedRoute>
-            <ChatPage />
+            <Suspense fallback={<SessionLoading />}>
+              <EncryptionGate>
+                <ChatPage />
+              </EncryptionGate>
+            </Suspense>
           </ProtectedRoute>
         }
       >

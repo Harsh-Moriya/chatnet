@@ -118,7 +118,7 @@ function message(id: string, overrides: Partial<Message> = {}): Message {
 }
 
 function conversation(id: string): Conversation {
-  return { id, type: 'Direct', name: 'Bob', avatarUrl: null, updatedAt: '2026-10-11T09:00:00Z', lastMessage: null, unreadCount: 0, otherUserId: null, isMuted: false, leftAt: null }
+  return { id, type: 'Direct', name: 'Bob', avatarUrl: null, updatedAt: '2026-10-11T09:00:00Z', lastMessage: null, unreadCount: 0, otherUserId: null, isMuted: false, leftAt: null, keyEpoch: 0, keyRotationRequired: false }
 }
 
 const RETRY_DELAYS = [100, 200, 400]
@@ -206,6 +206,7 @@ describe('event handlers', () => {
       'NotificationDismissed',
       'MembersChanged',
       'ConversationUpdated',
+      'ConversationKeyChanged',
       'ProfileChanged',
       'RemovedFromConversation',
     ]) {
@@ -233,6 +234,7 @@ describe('event handlers', () => {
     expect(hub.emit('NotificationDismissed', 'n1')).toBeUndefined()
     expect(hub.emit('MembersChanged', { conversationId: 'c1', members: [], removedUserIds: [] })).toBeUndefined()
     expect(hub.emit('ConversationUpdated', { id: 'c1', name: 'New', avatarUrl: null })).toBeUndefined()
+    expect(hub.emit('ConversationKeyChanged', { conversationId: 'c1', keyEpoch: 2, keyRotationRequired: false })).toBeUndefined()
     expect(hub.emit('RemovedFromConversation', 'c1', '2026-10-11T10:00:00Z')).toBeUndefined()
   })
 
@@ -876,6 +878,27 @@ function mention(id: string): NotificationItem {
     createdAt: '2026-10-11T10:00:00Z',
   }
 }
+
+describe('the keys of a conversation changing', () => {
+  it('moves the epoch and the need to replace it into the conversation', async () => {
+    const { hub } = await connected()
+    store().seedConversations([conversation('c1'), conversation('c2')])
+
+    hub.emit('ConversationKeyChanged', { conversationId: 'c1', keyEpoch: 3, keyRotationRequired: true })
+
+    expect(store().conversations.c1).toMatchObject({ keyEpoch: 3, keyRotationRequired: true })
+    expect(store().conversations.c2).toMatchObject({ keyEpoch: 0, keyRotationRequired: false })
+  })
+
+  it('is ignored for a conversation this tab does not hold', async () => {
+    const { hub } = await connected()
+    const before = store().conversations
+
+    hub.emit('ConversationKeyChanged', { conversationId: 'nope', keyEpoch: 1, keyRotationRequired: false })
+
+    expect(store().conversations).toBe(before)
+  })
+})
 
 describe('a conversation muted in another tab', () => {
   it('is muted here too', async () => {

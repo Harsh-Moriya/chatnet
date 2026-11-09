@@ -6,14 +6,12 @@ import { useEncryptionStore } from '../store'
 import { ApproveDevicePanel } from './ApproveDevicePanel'
 import { ChangePassphrasePanel } from './ChangePassphrasePanel'
 import { DevicesPanel } from './DevicesPanel'
-import { LockedPanel } from './LockedPanel'
-import { SetUpPanel } from './SetUpPanel'
 
-// The encryption keys of the signed-in person, in the profile: set them up, restore them on a new browser, hand them to another
-// device, change the passphrase that protects the backup. What it shows follows from what this browser and the server hold.
+// The encryption keys of the signed-in person, in the profile: hand them to another device, see and remove devices, change the
+// passphrase that protects the backup. This browser holds the keys by the time the profile can be opened (the gate before the chat
+// sees to that), so what it shows follows from checking them again.
 export function EncryptionSection() {
   const status = useEncryptionStore((state) => state.status)
-  const removedElsewhere = useEncryptionStore((state) => state.removedElsewhere)
 
   useEffect(() => {
     void loadEncryption()
@@ -25,22 +23,7 @@ export function EncryptionSection() {
         Encryption keys
       </h3>
 
-      {removedElsewhere && (
-        <div role="status" className="flex items-start justify-between gap-2 rounded-lg border border-line bg-slate-50 px-3 py-2 text-xs text-slate-700">
-          <span>This browser was removed from your devices, so its keys were deleted.</span>
-          <Button variant="ghost" size="sm" onClick={() => useEncryptionStore.getState().acknowledgeRemoval()}>
-            Dismiss
-          </Button>
-        </div>
-      )}
-
       {(status === 'idle' || status === 'loading') && <p className="text-xs text-slate-500">Checking your keys...</p>}
-
-      {status === 'unavailable' && (
-        <p className="text-xs text-slate-500">
-          This browser cannot keep encryption keys. It may be a private window, or it does not support the algorithms the app uses.
-        </p>
-      )}
 
       {status === 'error' && (
         <div className="space-y-2">
@@ -53,10 +36,6 @@ export function EncryptionSection() {
           </Button>
         </div>
       )}
-
-      {status === 'notSetUp' && <SetUpPanel />}
-
-      {status === 'locked' && <LockedPanel />}
 
       {status === 'ready' && (
         <div className="space-y-4">

@@ -33,6 +33,8 @@ function conversation(overrides: Partial<Conversation> = {}): Conversation {
     otherUserId: 'bob',
     isMuted: false,
     leftAt: null,
+    keyEpoch: 0,
+    keyRotationRequired: false,
     ...overrides,
   }
 }

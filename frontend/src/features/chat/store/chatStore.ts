@@ -4,6 +4,7 @@ import { afterDeletion, isNewer, isPreviewOf, latest, withChangedPreview } from 
 import type {
   ConnectionStatus,
   Conversation,
+  ConversationKeyChange,
   ConversationUpdate,
   Member,
   MembersChange,
@@ -89,6 +90,9 @@ interface ChatState {
   applyRead: (conversationId: string, userId: string, readAt: string, selfId?: string) => void
   // The signed-in user muted or unmuted a conversation, in this tab or another.
   setMuted: (conversationId: string, isMuted: boolean) => void
+  // The keys of a conversation changed: a new epoch was stored, or someone left and the current one must be replaced. The epoch only
+  // goes up, and within one epoch the need to replace it only turns on, so a late or repeated push cannot undo a later one.
+  applyKeyChange: (change: ConversationKeyChange) => void
   addPending: (message: PendingMessage) => void
   failPending: (conversationId: string, clientMessageId: string, error: string) => void
   retryPending: (conversationId: string, clientMessageId: string) => void
@@ -582,6 +586,28 @@ export const useChatStore = create<ChatState>()((set) => ({
       if (!conversation || conversation.isMuted === isMuted) return state
 
       return { conversations: { ...state.conversations, [conversationId]: { ...conversation, isMuted } } }
+    }),
+
+  // A conversation the sidebar does not know is left alone: its copy will carry the state when it is loaded. A push that is older
+  // than what is held changes nothing. At the same epoch the flag is only ever turned on by a push, because it is turned off by a
+  // new epoch, which is a higher one.
+  applyKeyChange: (change) =>
+    set((state) => {
+      const conversation = state.conversations[change.conversationId]
+      if (!conversation || change.keyEpoch < conversation.keyEpoch) return state
+
+      const keyRotationRequired =
+        change.keyEpoch === conversation.keyEpoch
+          ? conversation.keyRotationRequired || change.keyRotationRequired
+          : change.keyRotationRequired
+      if (change.keyEpoch === conversation.keyEpoch && keyRotationRequired === conversation.keyRotationRequired) return state
+
+      return {
+        conversations: {
+          ...state.conversations,
+          [change.conversationId]: { ...conversation, keyEpoch: change.keyEpoch, keyRotationRequired },
+        },
+      }
     }),
 
   addPending: (message) =>

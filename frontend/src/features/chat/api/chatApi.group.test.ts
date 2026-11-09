@@ -3,7 +3,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { api } from '../../../lib/api'
 import { useChatStore } from '../store/chatStore'
 import type { Conversation, Member } from '../types'
+import { addition, deps, keysDouble, resetKeysDouble } from './keysDouble'
 import { addMembers, changeMemberRole, leaveConversation, removeMember, renameConversation } from './chatApi'
+
+
+// The keys of a conversation need a signed-in person and this browser's stores; see keysDouble.ts for what stands in for them.
+vi.mock('../../encryption/conversationKeys', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../encryption/conversationKeys')>()),
+  ...(await import('./keysDouble')).keysDouble,
+}))
 
 const store = () => useChatStore.getState()
 
@@ -25,6 +33,8 @@ function group(overrides: Partial<Conversation> = {}): Conversation {
     otherUserId: null,
     isMuted: false,
     leftAt: null,
+    keyEpoch: 0,
+    keyRotationRequired: false,
     ...overrides,
   }
 }
@@ -47,15 +57,52 @@ afterEach(() => {
 })
 
 describe('adding people to a group', () => {
+  beforeEach(resetKeysDouble)
+
   it('posts the ids and puts the answer, the people as they are now, in the store', async () => {
     const answer = [member('me', { role: 'Owner' }), member('bob'), member('carol')]
     const post = vi.spyOn(api, 'post').mockResolvedValue(respond(answer))
 
     const result = await addMembers('c1', ['carol'])
 
-    expect(post).toHaveBeenCalledWith('/conversations/c1/members', { userIds: ['carol'] })
+    expect(keysDouble.prepareAddingMembers).toHaveBeenCalledWith(deps, 'c1', ['carol'])
+    expect(post).toHaveBeenCalledWith('/conversations/c1/members', { userIds: ['carol'], epoch: addition.body })
     expect(result).toEqual(answer)
     expect(store().members.c1.map((m) => m.userId)).toEqual(['me', 'bob', 'carol'])
+  })
+
+  it('keeps the key of the new epoch once the server has accepted it, and not before', async () => {
+    let accept!: (response: AxiosResponse<Member[]>) => void
+    const answer = new Promise<AxiosResponse<Member[]>>((resolve) => {
+      accept = resolve
+    })
+    vi.spyOn(api, 'post').mockReturnValue(answer)
+
+    const adding = addMembers('c1', ['carol'])
+    await vi.waitFor(() => expect(keysDouble.prepareAddingMembers).toHaveBeenCalled())
+    expect(keysDouble.saveKey).not.toHaveBeenCalled()
+
+    accept(respond([member('me', { role: 'Owner' }), member('bob'), member('carol')]))
+    await adding
+
+    expect(keysDouble.saveKey).toHaveBeenCalledWith(deps, 'c1', addition.body.epoch, addition.key)
+  })
+
+  it('makes the epoch again for the people there now when the group changed under it', async () => {
+    const stale = new AxiosError('Request failed', 'ERR_BAD_REQUEST', undefined, undefined, {
+      status: 409,
+      data: { status: 409, detail: 'The people in this conversation changed.', code: 'epoch-members-changed' },
+    } as AxiosResponse)
+    const post = vi
+      .spyOn(api, 'post')
+      .mockRejectedValueOnce(stale)
+      .mockResolvedValueOnce(respond([member('me', { role: 'Owner' }), member('bob'), member('carol')]))
+
+    await addMembers('c1', ['carol'])
+
+    expect(post).toHaveBeenCalledTimes(2)
+    expect(keysDouble.prepareAddingMembers).toHaveBeenCalledTimes(2)
+    expect(keysDouble.saveKey).toHaveBeenCalledTimes(1)
   })
 
   it('changes nothing and rejects with the reason when it is refused', async () => {
@@ -65,6 +112,7 @@ describe('adding people to a group', () => {
     await expect(addMembers('c1', ['carol'])).rejects.toBeInstanceOf(AxiosError)
 
     expect(store().members).toBe(before)
+    expect(keysDouble.saveKey).not.toHaveBeenCalled()
   })
 })
 

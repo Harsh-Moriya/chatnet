@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { api } from '../../../lib/api'
 import { useChatStore } from '../store/chatStore'
 import type { Conversation, Member, Message, PendingAttachment, UserSummary } from '../types'
+import { deps, keysDouble, prepared, resetKeysDouble } from './keysDouble'
 import {
   createDirect,
   createGroup,
@@ -18,6 +19,13 @@ import {
   sendMessage,
   setMuted,
 } from './chatApi'
+
+
+// The keys of a conversation need a signed-in person and this browser's stores; see keysDouble.ts for what stands in for them.
+vi.mock('../../encryption/conversationKeys', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../encryption/conversationKeys')>()),
+  ...(await import('./keysDouble')).keysDouble,
+}))
 
 const store = () => useChatStore.getState()
 
@@ -59,7 +67,7 @@ function message(overrides: Partial<Message> & { id: string }): Message {
 }
 
 function conversation(id: string): Conversation {
-  return { id, type: 'Direct', name: 'Bob', avatarUrl: null, updatedAt: '2026-10-11T09:00:00Z', lastMessage: null, unreadCount: 0, otherUserId: null, isMuted: false, leftAt: null }
+  return { id, type: 'Direct', name: 'Bob', avatarUrl: null, updatedAt: '2026-10-11T09:00:00Z', lastMessage: null, unreadCount: 0, otherUserId: null, isMuted: false, leftAt: null, keyEpoch: 0, keyRotationRequired: false }
 }
 
 const flush = () => new Promise<void>((resolve) => setTimeout(resolve, 0))
@@ -281,14 +289,35 @@ describe('searching for people', () => {
 // ##### Starting conversations #####
 
 describe('starting a conversation', () => {
-  it('adds a direct conversation to the sidebar straight away', async () => {
-    const post = vi.spyOn(api, 'post').mockResolvedValue(respond(conversation('new')))
+  beforeEach(resetKeysDouble)
+
+  it('adds a direct conversation to the sidebar straight away, made with the id and the first epoch prepared for it', async () => {
+    const post = vi.spyOn(api, 'post').mockResolvedValue(respond(conversation(prepared.conversationId)))
 
     const created = await createDirect('u1')
 
-    expect(created.id).toBe('new')
-    expect(post).toHaveBeenCalledWith('/conversations/direct', { otherUserId: 'u1' })
-    expect(store().conversations.new).toBeDefined()
+    expect(created.id).toBe(prepared.conversationId)
+    expect(keysDouble.prepareNewConversation).toHaveBeenCalledWith(deps, ['u1'])
+    expect(post).toHaveBeenCalledWith('/conversations/direct', { id: prepared.conversationId, otherUserId: 'u1', epoch: prepared.body })
+    expect(store().conversations[prepared.conversationId]).toBeDefined()
+  })
+
+  it('keeps the key it made for the conversation the server answered with', async () => {
+    vi.spyOn(api, 'post').mockResolvedValue(respond(conversation(prepared.conversationId)))
+
+    await createDirect('u1')
+
+    expect(keysDouble.keepNewConversationKey).toHaveBeenCalledWith(deps, prepared, prepared.conversationId)
+  })
+
+  it('hands the answer to the key it made even when the server found a conversation that already existed', async () => {
+    vi.spyOn(api, 'post').mockResolvedValue(respond(conversation('existing')))
+
+    const created = await createDirect('u1')
+
+    expect(created.id).toBe('existing')
+    expect(keysDouble.keepNewConversationKey).toHaveBeenCalledWith(deps, prepared, 'existing')
+    expect(store().conversations.existing).toBeDefined()
   })
 
   it('adds a group to the sidebar straight away', async () => {
@@ -297,8 +326,42 @@ describe('starting a conversation', () => {
     const created = await createGroup('Team', ['u1', 'u2'])
 
     expect(created.name).toBe('Team')
-    expect(post).toHaveBeenCalledWith('/conversations/group', { name: 'Team', memberIds: ['u1', 'u2'] })
+    expect(keysDouble.prepareNewConversation).toHaveBeenCalledWith(deps, ['u1', 'u2'])
+    expect(post).toHaveBeenCalledWith('/conversations/group', {
+      id: prepared.conversationId,
+      name: 'Team',
+      memberIds: ['u1', 'u2'],
+      epoch: prepared.body,
+    })
     expect(store().conversations.team.type).toBe('Group')
+  })
+
+  it('makes the epoch again when the server says the conversation changed, and sends the new one', async () => {
+    const stale = new AxiosError('Request failed', 'ERR_BAD_REQUEST', undefined, undefined, {
+      status: 409,
+      data: { status: 409, detail: 'Another epoch was stored first.', code: 'epoch-stale' },
+    } as AxiosResponse)
+    const post = vi
+      .spyOn(api, 'post')
+      .mockRejectedValueOnce(stale)
+      .mockResolvedValueOnce(respond({ ...conversation('team'), type: 'Group', name: 'Team' }))
+
+    await createGroup('Team', ['u1'])
+
+    expect(post).toHaveBeenCalledTimes(2)
+    expect(keysDouble.prepareNewConversation).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not make it again for a conflict that is not about keys, and passes the server\'s reason on', async () => {
+    const taken = new AxiosError('Request failed', 'ERR_BAD_REQUEST', undefined, undefined, {
+      status: 409,
+      data: { status: 409, detail: 'Everyone you named is already in the group.' },
+    } as AxiosResponse)
+    const post = vi.spyOn(api, 'post').mockRejectedValue(taken)
+
+    await expect(createGroup('Team', ['u1'])).rejects.toBe(taken)
+
+    expect(post).toHaveBeenCalledTimes(1)
   })
 
   it('adds nothing when the server refuses', async () => {
