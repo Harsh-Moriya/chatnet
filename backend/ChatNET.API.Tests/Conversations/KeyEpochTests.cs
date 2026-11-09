@@ -622,6 +622,22 @@ public class KeyEpochTests
         Assert.False(await outsiderTab.ReceivedKeyChangedAsync(team.Id));
     }
 
+    // A connection joins the group of every conversation its person is in when it connects. One that connected before the conversation
+    // existed is not in it yet, and the push is sent to the person, so it arrives there all the same.
+    [Fact]
+    public async Task The_push_reaches_a_tab_that_has_not_joined_the_conversation()
+    {
+        var team = await TeamAsync();
+        await using var memberTab = await HubClient.ConnectAsync(_factory, team.Member);
+        var later = await _factory.AddLegacyGroupAsync(team.Owner.Id, "Later", team.Member.Id);
+        using var owner = As(team.Owner);
+
+        await owner.StoreEpochAsync(later, EpochBody.For(1, team.Owner.Id, team.Member.Id));
+
+        var state = await memberTab.WaitForKeyChangedAsync(later);
+        Assert.Equal(1, state.GetProperty("keyEpoch").GetInt32());
+    }
+
     [Fact]
     public async Task The_push_is_made_by_the_request_and_marked_done_at_once()
     {

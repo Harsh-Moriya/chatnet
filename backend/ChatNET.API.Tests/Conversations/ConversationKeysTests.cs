@@ -623,6 +623,36 @@ public class ConversationKeysTests
     }
 
     [Fact]
+    public async Task A_leave_tells_the_people_who_remain_but_not_the_person_who_left()
+    {
+        var team = await GroupAsync();
+        await using var ownerTab = await HubClient.ConnectAsync(_factory, team.Owner);
+        await using var leaverTab = await HubClient.ConnectAsync(_factory, team.Other);
+        using var leaver = As(team.Other);
+        var epoch = (await ConversationAsync(team.Id)).KeyEpoch;
+
+        await leaver.LeaveResponseAsync(team.Id);
+
+        var state = await ownerTab.WaitForKeyChangedAsync(team.Id, s => s.GetProperty("keyRotationRequired").GetBoolean());
+        Assert.Equal(epoch, state.GetProperty("keyEpoch").GetInt32());
+        Assert.False(await leaverTab.ReceivedKeyChangedAsync(team.Id));
+    }
+
+    [Fact]
+    public async Task Every_push_about_a_leave_is_made_by_the_request_and_marked_done_at_once()
+    {
+        var team = await GroupAsync();
+        using var leaver = As(team.Other);
+
+        await leaver.LeaveResponseAsync(team.Id);
+
+        var row = Assert.Single(
+            (await _factory.OutboxRowsAboutAsync("conversationId", team.Id)).Where(r => r.Kind == "ConversationKeyChanged"));
+        Assert.NotNull(row.DispatchedAt);
+        Assert.Equal(0, row.Attempts);
+    }
+
+    [Fact]
     public async Task Every_push_about_a_removal_is_made_by_the_request_and_marked_done_at_once()
     {
         var team = await GroupAsync();
