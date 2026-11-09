@@ -6,7 +6,9 @@ import {
   currentAccountKey,
   epochCommitment,
   fromBase64Url,
+  newEd25519,
   newEpochKey,
+  rotateAccountKey,
   sealEnvelope,
   signBundle,
   signEpoch,
@@ -479,6 +481,22 @@ describe('making sure a conversation has a key', () => {
     expect(server.calls.filter((call) => call === 'getKeyState')).toHaveLength(1)
   })
 
+  it('does not retry a refusal that making the epoch again cannot fix', async () => {
+    const server = new FakeEpochServer()
+    const [ana, ben] = [await newPerson(server), await newPerson(server)]
+    server.createConversation(LEGACY, [ana.id, ben.id])
+    // Ben's keys vanish from the server after Ana looked them up and before she posts.
+    server.beforePost = () => {
+      server.bundles.delete(ben.id)
+    }
+
+    const failure = await ensureEpoch(ana.deps, LEGACY).catch((error: unknown) => error)
+
+    expect(failure).toBeInstanceOf(EpochRefused)
+    expect((failure as EpochRefused).code).toBe('member-has-no-keys')
+    expect(server.calls.filter((call) => call === 'postEpoch')).toHaveLength(1)
+  })
+
   it('names the people who have not set up encryption and makes nothing', async () => {
     const server = new FakeEpochServer()
     const [ana, ben] = [await newPerson(server), await newPerson(server, { register: false })]
@@ -558,6 +576,18 @@ describe('making a conversation ready as it is opened', () => {
     expect(await keyOf(ben, LEGACY, 2)).not.toBeNull()
   })
 
+  it('makes the replacement that is due even though this browser holds the key in force', async () => {
+    const server = new FakeEpochServer()
+    const [ana, ben] = [await newPerson(server), await newPerson(server)]
+    const conversationId = await start(server, ana, [ben])
+    server.requireRotation(conversationId)
+
+    await readyConversationWith(ana.deps, conversationId, { keyEpoch: 1, keyRotationRequired: true })
+
+    expect(server.conversations.get(conversationId)!.keyEpoch).toBe(2)
+    expect(await keyOf(ana, conversationId, 2)).not.toBeNull()
+  })
+
   it('does not trust what it was told when the key it holds is for an older epoch', async () => {
     const server = new FakeEpochServer()
     const [ana, ben] = [await newPerson(server), await newPerson(server)]
@@ -568,6 +598,23 @@ describe('making a conversation ready as it is opened', () => {
     await readyConversationWith(ana.deps, conversationId, { keyEpoch: 2, keyRotationRequired: false })
 
     expect(await keyOf(ana, conversationId, 2)).toEqual(await keyOf(ben, conversationId, 2))
+  })
+})
+
+describe('a person whose account key changed', () => {
+  it('is sent a key sealed to the generation they have now, which they can open', async () => {
+    const server = new FakeEpochServer()
+    const [ana, ben] = [await newPerson(server), await newPerson(server)]
+    const rotated = await rotateAccountKey(ben.secrets)
+    server.registerBundle(ben.id, 2, toBase64Url(await signBundle(ben.id, rotated.identity, currentAccountKey(rotated))))
+    const benNow = personFrom(server.as(ben.id), ben.id, rotated)
+    const conversationId = await start(server, ana, [benNow])
+
+    const loaded = await loadEpochKeys(benNow.deps, conversationId)
+
+    expect(server.conversations.get(conversationId)!.epochs[0].envelopes.get(ben.id)!.generation).toBe(2)
+    expect(loaded).toEqual({ held: [1], rejected: [] })
+    expect(await keyOf(benNow, conversationId, 1)).toEqual(await keyOf(ana, conversationId, 1))
   })
 })
 
@@ -650,6 +697,16 @@ describe('the keys of other people', () => {
     const ana = await newPerson(server)
     const impostor = await createAccountSecrets()
     server.registerBundle(ana.id, 1, await bundleOf(ana.id, impostor))
+
+    await expect(resolvePeers(ana.deps, [ana.id])).rejects.toBeInstanceOf(KeysMismatchError)
+  })
+
+  it('are refused when the server\'s bundle for the person asking has an identity key that is not theirs', async () => {
+    const server = new FakeEpochServer()
+    const ana = await newPerson(server)
+    const stranger = await newEd25519()
+    // The account key is Ana's, so only the identity key gives it away.
+    server.registerBundle(ana.id, 1, toBase64Url(await signBundle(ana.id, stranger, currentAccountKey(ana.secrets))))
 
     await expect(resolvePeers(ana.deps, [ana.id])).rejects.toBeInstanceOf(KeysMismatchError)
   })
