@@ -2,19 +2,20 @@
 
 A person has encryption keys that are made in their browser, backed up under a passphrase only they know, and handed from one of their devices to another. The server stores the public half of the keys, the encrypted backup and the list of devices, and can open none of the private material. The [encryption formats](../architecture/encryption-format.md) specify the bytes.
 
-This page covers the keys and the devices that hold them. Message text and files are still sent and stored as before; protecting them with these keys is a separate step.
+This page covers the keys and the devices that hold them. The keys of conversations, sealed to these, are on the [conversation keys](conversation-keys.md) page. Message text and files are still sent and stored as before; protecting them with these keys is a separate step.
 
 ## Behaviour
 
-- **Setting up.** The profile has an Encryption keys section. A person who has no keys chooses a recovery passphrase of at least 12 characters, typed twice. The browser makes an identity key (signs) and an account key (receives), signs the public half, encrypts the private halves under a key stretched from the passphrase, and sends both in one request: `POST /api/keys/me` answers `201` with the bundle and the backup version. It then adds itself as a device with `POST /api/devices`. A second set-up is a `409`.
-- **On a new browser.** After signing in, the profile says the keys are not on this browser. There are two ways to get them.
+- **Before the chat.** After signing in, a browser that does not hold the person's keys shows a screen in place of the chat until it does, because every conversation is sealed to them. The screen is the set-up, the restore or the link below, with a way to sign out. Once the browser holds the keys the chat stays, however the keys are checked again later.
+- **Setting up.** A person who has no keys chooses a recovery passphrase of at least 12 characters, typed twice. The browser makes an identity key (signs) and an account key (receives), signs the public half, encrypts the private halves under a key stretched from the passphrase, and sends both in one request: `POST /api/keys/me` answers `201` with the bundle and the backup version. It then adds itself as a device with `POST /api/devices`. A second set-up is a `409`.
+- **On a new browser.** After signing in, the screen says the keys are not on this browser. There are two ways to get them.
   - **The passphrase.** `GET /api/keys/me/backup` returns the encrypted backup, which the browser opens with the passphrase. The browser checks the keys it opened against the signed bundles the server holds, for every generation, and only then saves them and adds itself as a device. A wrong passphrase and a damaged backup look the same: the backup does not open.
   - **Another device.** The new browser shows a link code of 10 characters (`XXXXX-XXXXX`) and a QR code. On a device that is signed in, the person types the code under Link code. That device finds the request, checks the code against the key the server returned, shows which device is asking, and on approval sends the secrets of the person sealed to the one-time key of the new browser. The new browser asks every 3 seconds and gets the sealed secrets once.
 - **Changing the passphrase.** A new backup of the same keys under a new passphrase replaces the old one. It is made from the version the device last read, so two devices changing it together cannot both win (`409` for the later one).
-- **Devices.** The profile lists the devices that hold the keys, with when each was added and last used, and marks the one in use. A device is added when a browser has the keys and removed when the person removes it or signs out on it.
+- **Devices.** The Encryption keys section of the profile lists the devices that hold the keys, with when each was added and last used, and marks the one in use. A device is added when a browser has the keys and removed when the person removes it or signs out on it.
 - **Signing out.** Signing out of a browser that holds the keys asks first, because it deletes them from that browser, and says when this is the only device. The browser then removes itself from the server (`DELETE /api/devices/{id}`) and deletes its copy. A session that merely expires keeps the keys, so signing in again finds them.
 - **Sessions and devices.** A browser that holds the keys sends the id of its device in the `X-Device-Id` header when it signs in and when it renews its session. The server ties the session to the device if it is one of the person's that has not been removed, and ignores the header otherwise. Removing a device ends every session tied to it and no other, and a session tied to a removed device cannot be renewed.
-- **Removed elsewhere.** A browser whose device was removed from another device finds out the next time the profile is opened, deletes its keys and says so.
+- **Removed elsewhere.** A browser whose device was removed from another device finds out the next time the profile is opened, deletes its keys and shows the unlock screen, saying so.
 
 ## How a device is linked
 
@@ -45,7 +46,7 @@ sequenceDiagram
 
 | Stored | What it is | What the server can do with it |
 |---|---|---|
-| Public bundles | The public keys of each generation of a person's account key, signed by their identity key | Hand them to the person's own devices. It checks the size and version, and that the first generation is generation 1 |
+| Public bundles | The public keys of each generation of a person's account key, signed by their identity key | Hand them to the person's own devices, and the newest to anyone who is about to seal a conversation key to the person. It checks the size and version, and that the first generation is generation 1 |
 | Key backup | The private keys encrypted under the passphrase, with a version | Return it to its owner. It cannot open it |
 | Devices | A name, a kind (Web, Ios or Android), when added and last used, and whether removed | List them and tie sessions to them |
 | Link requests | A one-time public key, a code, the name of the asking device and, for a moment, the sealed secrets | Relay the sealed secrets once. It cannot open them |
@@ -60,13 +61,14 @@ The tables are in the [data model](../architecture/data-model.md).
 | `POST /api/keys/me` | First set-up: the bundle of generation 1 and the first backup |
 | `GET /api/keys/me/backup` | The encrypted backup |
 | `PUT /api/keys/me/backup` | Replace the backup from a known version |
+| `POST /api/keys/lookup` | The current public bundles of other people, for sealing a conversation key to them. Open to any signed-in person, like a user search |
 | `POST /api/devices`, `GET /api/devices`, `DELETE /api/devices/{id}` | Add, list and remove devices |
 | `POST /api/devices/link-requests` | A new device asks to be linked |
 | `GET /api/devices/link-requests?code=` | A signed-in device finds a request by its code |
 | `GET /api/devices/link-requests/{id}` | The new device asks how its request is doing |
 | `POST /api/devices/link-requests/{id}/approve` | Send the sealed secrets |
 
-Every route is the caller's own: the id comes from the token and an id of someone else's gives `404`. See [endpoints](../api/endpoints.md) for payloads and errors.
+Every route except the lookup is the caller's own: the id comes from the token and an id of someone else's gives `404`. See [endpoints](../api/endpoints.md) for payloads and errors.
 
 ## Limits
 

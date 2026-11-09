@@ -1,6 +1,6 @@
 # Endpoints
 
-The HTTP API. In Development the running API also serves its OpenAPI document at `/openapi/v1.json` and an interactive reference at `/scalar/v1`; every operation there declares its success body and each error it can return. The tables below list every route (55 operations) with its authentication, its rate-limit policy and what it does. Request and response bodies in the examples were copied from a running API.
+The HTTP API. In Development the running API also serves its OpenAPI document at `/openapi/v1.json` and an interactive reference at `/scalar/v1`; every operation there declares its success body and each error it can return. The tables below list every route (58 operations) with its authentication, its rate-limit policy and what it does. Request and response bodies in the examples were copied from a running API.
 
 ## Conventions
 
@@ -58,8 +58,8 @@ Authentication column: **Bearer** needs an access token; **Refresh cookie** need
 |---|---|---|---|---|
 | `GET /api/conversations` | Bearer |  | 200, 401 | The caller's conversations, newest activity first, not paginated. Includes groups the caller left (`leftAt` set). |
 | `GET /api/conversations/{conversationId}` | Bearer |  | 200, 401, 403 | One conversation as the caller sees it. 403 for a stranger and for an unknown id alike. |
-| `POST /api/conversations/direct` | Bearer |  | 200, 400, 401, 404 | Finds or creates the direct chat with `otherUserId`. Safe to repeat. |
-| `POST /api/conversations/group` | Bearer |  | 201, 400, 401, 404, 409 | Creates a group (`name`, `memberIds`). The caller is the owner. 201 with a `Location` header. |
+| `POST /api/conversations/direct` | Bearer |  | 200, 400, 401, 404, 409 | Finds or creates the direct chat with `otherUserId`. A new chat is made with its first key epoch: `id` is the id the caller chose for it and `epoch` is the first epoch, made for the two people (see [conversation keys](../features/conversation-keys.md)). Safe to repeat: a chat that exists is returned and both are ignored. 409 with a `code` when the epoch is not for exactly the two people or the other person has no keys. |
+| `POST /api/conversations/group` | Bearer |  | 201, 400, 401, 404, 409 | Creates a group (`id`, `name`, `memberIds`, `epoch`). The caller is the owner. `id` is the id the caller chose and `epoch` the first key epoch, made for the caller and every member (see [conversation keys](../features/conversation-keys.md)). 201 with a `Location` header. 409 with a `code` when the epoch is not for exactly those people, someone has no keys, or the id is in use. |
 | `PATCH /api/conversations/{conversationId}` | Bearer |  | 200, 400, 401, 403, 409 | Renames a group (`name`). Owner or admin. |
 | `PUT /api/conversations/{conversationId}/mute` | Bearer |  | 204, 400, 401, 403 | The caller's own mute choice (`isMuted`, required). |
 | `POST /api/conversations/{conversationId}/read` | Bearer |  | 204, 400, 401, 403 | Marks the conversation read up to `messageId`. Only moves forward. |
@@ -72,10 +72,17 @@ Authentication column: **Bearer** needs an access token; **Refresh cookie** need
 | Method and route | Auth | Limit | Statuses | Description |
 |---|---|---|---|---|
 | `GET /api/conversations/{conversationId}/members` | Bearer |  | 200, 401, 403 | The active members, earliest joiner first, with role and read position. |
-| `POST /api/conversations/{conversationId}/members` | Bearer |  | 200, 400, 401, 403, 404, 409 | Adds people (`userIds`, 1 to 100). Owner or admin. Answers the members after the change. |
-| `DELETE /api/conversations/{conversationId}/members/{userId}` | Bearer |  | 200, 401, 403, 404, 409 | Removes a member. The owner removes anyone; an admin removes plain members. |
+| `POST /api/conversations/{conversationId}/members` | Bearer |  | 200, 400, 401, 403, 404, 409 | Adds people (`userIds`, 1 to 100) together with the new key epoch (`epoch`) made for everyone who will be in the group, so those who join cannot read what came before (see [conversation keys](../features/conversation-keys.md)). Owner or admin. Answers the members after the change. 409 with a `code` when the epoch is not the next one or not for exactly those people. |
+| `DELETE /api/conversations/{conversationId}/members/{userId}` | Bearer |  | 200, 401, 403, 404, 409 | Removes a member. The owner removes anyone; an admin removes plain members. The conversation then reports `keyRotationRequired` until a member stores the next epoch. |
 | `PUT /api/conversations/{conversationId}/members/{userId}/role` | Bearer |  | 200, 400, 401, 403, 404, 409 | Sets a role (`Owner`, `Admin` or `Member`). Owner only; `Owner` hands the group over. |
-| `POST /api/conversations/{conversationId}/leave` | Bearer |  | 200, 401, 403, 409 | Leaves a group. Answers `leftAt`. An owner who leaves hands the group to the longest-standing admin, else member. |
+| `POST /api/conversations/{conversationId}/leave` | Bearer |  | 200, 401, 403, 409 | Leaves a group. Answers `leftAt`. An owner who leaves hands the group to the longest-standing admin, else member. The conversation then reports `keyRotationRequired` until a member stores the next epoch. |
+
+## Conversation keys
+
+| Method and route | Auth | Limit | Statuses | Description |
+|---|---|---|---|---|
+| `GET /api/conversations/{conversationId}/key-epochs` | Bearer | keys | 200, 400, 401, 403, 429 | The epochs of the conversation the caller has an envelope for, oldest first (`from`, default 1; `limit`, default 20, at most 50), with `hasMore`. A member, or someone who was one. Each carries the caller's own envelope and never anyone else's. |
+| `POST /api/conversations/{conversationId}/key-epochs` | Bearer | keys | 204, 400, 401, 403, 409, 429 | Stores the next epoch (`epoch`, `commitment`, `signature`, `envelopes`). Any member. 204. 409 with a `code`: `epoch-stale` (not the next number), `epoch-members-changed` (not for exactly the people in the conversation, or sealed to an old key generation) or `member-has-no-keys`. |
 
 ## Messages
 
@@ -128,6 +135,7 @@ Authentication column: **Bearer** needs an access token; **Refresh cookie** need
 | `GET /api/keys/me` | Bearer | keys | 200, 401, 429 | Whether the caller has set up encryption: the signed public bundle of every generation (`bundles`) and the version of the encrypted backup (`backup`, null before set-up). |
 | `POST /api/keys/me` | Bearer | keys | 201, 400, 401, 409, 429 | First set-up: the bundle of generation 1 and the first backup (`bundle`, `backup`), stored together. 201 with the state. 409 when the caller already has keys. |
 | `GET /api/keys/me/backup` | Bearer | keys | 200, 401, 404, 429 | The caller's encrypted backup (`blob`, `version`). Never another person's: the route takes no id. 404 before set-up. |
+| `POST /api/keys/lookup` | Bearer | keys | 200, 400, 401, 429 | The current public bundle of each person named (`userIds`, 1 to 101) who has set up encryption. People without keys are left out of the answer. |
 | `PUT /api/keys/me/backup` | Bearer | keys | 200, 400, 401, 404, 409, 429 | Replaces the backup (`blob`, `expectedVersion`), for a new passphrase. 409 when the backup was changed since that version, 404 before set-up. |
 
 ## Devices
@@ -181,18 +189,22 @@ The refresh token is in the `Set-Cookie` header, not the body: `chatnet_refresh=
 
 ```json
 {
-  "id": "01a1ba93-dd11-7338-bef5-793667730f02",
+  "id": "468f5388-4e70-47fd-b26a-36413ff08a62",
   "type": "Direct",
   "name": "Ben Example",
   "avatarUrl": null,
-  "updatedAt": "2026-11-08T09:53:34.99311Z",
+  "updatedAt": "2026-11-08T16:18:00.377311Z",
   "lastMessage": null,
   "unreadCount": 0,
-  "otherUserId": "01a1ba93-d8f5-7d26-9b60-8314d89a1c5d",
+  "otherUserId": "01a1bbf3-c874-7b04-a41c-d4600e4f3f50",
   "isMuted": false,
-  "leftAt": null
+  "leftAt": null,
+  "keyEpoch": 1,
+  "keyRotationRequired": false
 }
 ```
+
+`keyEpoch` is the newest key epoch of the conversation, 0 while it has none, and `keyRotationRequired` says someone left since it was made. See [conversation keys](../features/conversation-keys.md).
 
 For a direct chat `name` is the other person's display name and `otherUserId` is their id. For a group, `otherUserId` is null. `lastMessage` is null for an empty conversation, otherwise:
 
@@ -442,6 +454,109 @@ Bytes are base64url without padding. Long values are shortened here. `GET /api/k
 {
   "version": 2,
   "updatedAt": "2026-11-08T09:52:44.043163Z"
+}
+```
+
+### Conversation keys
+
+`POST /api/keys/lookup` takes `{ "userIds": [...] }` and answers the current bundle of each person who has keys:
+
+```json
+{
+  "userIds": [
+    "01a1bbf3-c874-7b04-a41c-d4600e4f3f50",
+    "01a1bbf3-c910-756e-9efe-ba3ad39e09aa"
+  ]
+}
+```
+
+```json
+{
+  "bundles": [
+    {
+      "userId": "01a1bbf3-c874-7b04-a41c-d4600e4f3f50",
+      "generation": 1,
+      "bundle": "AQEAAAABtI4yfSSfHxshzXaE..."
+    },
+    {
+      "userId": "01a1bbf3-c910-756e-9efe-ba3ad39e09aa",
+      "generation": 1,
+      "bundle": "AQEAAAABPRZoFGCRfSmsCVMo..."
+    }
+  ]
+}
+```
+
+A new conversation, and a group that people are added to, carry the epoch. `POST /api/conversations/direct` takes the id the caller chose, the other person and the first epoch:
+
+```json
+{
+  "id": "468f5388-4e70-47fd-b26a-36413ff08a62",
+  "otherUserId": "01a1bbf3-c874-7b04-a41c-d4600e4f3f50",
+  "epoch": {
+    "epoch": 1,
+    "commitment": "TFsh7mLDRIvoBeoTc_olqRzf3G_LJY42ZwXqTQmDm6g",
+    "signature": "8vsQ8_OCjmRfZVafYB9c2pbv...",
+    "envelopes": [
+      {
+        "userId": "01a1bbf3-c533-7794-919e-5ad1374bbee2",
+        "generation": 1,
+        "envelope": "AQFymvtrYgXBtAmvxmmVD2dY..."
+      },
+      {
+        "userId": "01a1bbf3-c874-7b04-a41c-d4600e4f3f50",
+        "generation": 1,
+        "envelope": "AQFq76fifvjCtjqHQCuCTrt-..."
+      }
+    ]
+  }
+}
+```
+
+`POST /api/conversations/{id}/key-epochs` takes the epoch itself (the same object) and answers 204. `GET` answers a page of the epochs the caller has an envelope for:
+
+```json
+{
+  "epochs": [
+    {
+      "epoch": 1,
+      "creatorId": "01a1bbf3-c533-7794-919e-5ad1374bbee2",
+      "reason": "Created",
+      "createdAt": "2026-11-08T16:18:01.079767Z",
+      "commitment": "xhYxtF52vCim98Wj6book6Ady8_fsTm-osJcQ2IAKrs",
+      "signature": "Ho7qLaaj66XxhOBf66bDN2sb...",
+      "members": [
+        {
+          "userId": "01a1bbf3-c533-7794-919e-5ad1374bbee2",
+          "generation": 1
+        },
+        {
+          "userId": "01a1bbf3-c874-7b04-a41c-d4600e4f3f50",
+          "generation": 1
+        },
+        {
+          "userId": "01a1bbf3-c910-756e-9efe-ba3ad39e09aa",
+          "generation": 1
+        }
+      ],
+      "generation": 1,
+      "envelope": "AQEIo9BZjaMrpeL2QxVsc_e6..."
+    }
+  ],
+  "hasMore": false
+}
+```
+
+`members` is every person the epoch was made for, with the generation of the account key each envelope is sealed to; `generation` and `envelope` are the caller's own. A refused epoch is a 409 whose problem details carry a `code`:
+
+```json
+{
+  "type": "https://tools.ietf.org/html/rfc9110#section-15.5.10",
+  "title": "Conflict",
+  "status": 409,
+  "detail": "Another epoch was stored first. Look at the conversation again.",
+  "code": "epoch-stale",
+  "traceId": "00-147ec60d8c0999aae38174f2a1bbcfa9-8cc550fc71f558b2-01"
 }
 ```
 

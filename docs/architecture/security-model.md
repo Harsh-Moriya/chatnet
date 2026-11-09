@@ -70,6 +70,21 @@ The server stores what the browsers encrypt and relays what they seal for each o
 | Sessions and devices | A session is tied to a device by the `X-Device-Id` header on sign-in and renewal, only if the device is the person's and not removed. Removing a device revokes the refresh tokens tied to it, and renewing a session tied to a removed device ends it, so a renewal that overlapped the removal does not keep the session alive | Removing a device does not change the keys it held |
 | Logs | Ids and sizes only: never a key, a bundle, a backup, a sealed payload, a code or a device name | |
 
+### Keys of conversations
+
+The key of each period of a conversation is made in a member's browser and sealed once for each member. The behaviour is on the [conversation keys](../features/conversation-keys.md) page.
+
+| Concern | How it is handled | Limit |
+|---|---|---|
+| Who can open a key | Only the member an envelope is sealed for, with the private key of the generation named in it. The server stores envelopes and returns each member only their own | The server can withhold an envelope or serve an old epoch |
+| Who is included | Every epoch must cover exactly the people in the conversation, each at their newest key generation. This is checked under the conversation's advisory lock, together with the change that needs it, so joining and the epoch for the joiners are saved together or not at all | The server cannot tell a real envelope from random bytes of the right size; the members check |
+| Forged or substituted epochs | A member checks the creator's signature over the record, that the creator and the member are in it, that the identity key is the one first seen for the creator, that the key matches the signed commitment and, for the newest epoch, that the people are the ones in the conversation | The first sight of a person's identity key is trusted. A changed key is refused until accepted |
+| Someone who left | They keep the envelopes of the epochs they were in and receive none after. The epoch in force is marked due for replacement in the same transaction as their leaving | Until a member makes the next epoch, the one in force is still the one the person who left holds |
+| Joining | A person who joins is given an envelope for the epoch made at their joining and none for earlier ones | |
+| Who can make a key | Any current member. Others, and people who left, are refused with the same `403` as any conversation they are not in | A member can replace the key at any time, as can one who is unhappy with it |
+| Stale and concurrent epochs | The next number is required, and the primary key of the table decides any tie. The later request gets a `409` with a code the client acts on | |
+| Logs | Ids and sizes only: never an envelope, a commitment or a signature | |
+
 ## Rate limiting
 
 Counts live in Redis, so every API instance applies one limit. A refused request is not carried out or counted.
@@ -84,7 +99,7 @@ Counts live in Redis, so every API instance applies one limit. A refused request
 | `edit` | person | 20 per 60 s |
 | `search` | person | 30 per 10 s |
 | `push` | person | 20 per 60 s |
-| `keys` (keys, backup, devices, link requests) | person | 60 per 60 s |
+| `keys` (keys, backup, devices, link requests, key lookup, conversation key epochs) | person | 60 per 60 s |
 | `forgot-password` (asking for a reset link) | client address | 5 per 900 s |
 | `reset-password` (using a link) | client address | 10 per 900 s |
 | `password-reset-email` (the emails sent for a link) | email address | 3 per 3,600 s |

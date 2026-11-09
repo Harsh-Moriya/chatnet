@@ -32,6 +32,7 @@ Arguments are positional. The examples are real payloads as the JavaScript clien
 | `AddedToConversation` | one `Conversation`, as this recipient sees it | the people added (and the creator's other tabs) | a conversation was created that includes you, or you were added to a group. Call `JoinConversation` for it. |
 | `MembersChanged` | one `{ conversationId, members, removedUserIds }` | each person who is in the group now | the people of a group changed |
 | `ConversationUpdated` | one `{ id, name, avatarUrl }` | each person in the group | a group was renamed or its picture changed |
+| `ConversationKeyChanged` | one `{ conversationId, keyEpoch, keyRotationRequired }` | each person in the conversation now | an epoch was stored, or a member left and the one in force must be replaced. Carries the state when it is sent, so it is safe to receive twice; apply it only if its epoch is not lower than the one held. |
 | `RemovedFromConversation` | `conversationId`, `leftAt` | every tab of the person | they left or were removed. The conversation stays, read-only. |
 | `ProfileChanged` | one `UserSummary` | everyone who shares a conversation with the person, and their own tabs | someone changed their name or picture |
 | `PresenceChanged` | one `Presence` | contacts | someone came online or went offline |
@@ -47,13 +48,13 @@ Arguments are positional. The examples are real payloads as the JavaScript clien
 ```json
 [
   {
-    "id": "01a1b535-b662-73ed-b3bb-082e84acb467",
-    "conversationId": "01a1b535-b41e-761a-91ea-5cb6239f7221",
-    "senderId": "01a1b535-a9eb-74c3-ad63-7d4ce3e5a23c",
+    "id": "01a1ba93-e0af-7e03-a39a-697fd0f2a5c4",
+    "conversationId": "01a1ba93-deb9-7a50-ac60-f3f94ff76779",
+    "senderId": "01a1ba93-d895-7db5-9ca8-59569a0b63b7",
     "senderDisplayName": "Ana Example",
     "content": "Hi everyone, shall we meet on Saturday?",
-    "createdAt": "2026-11-07T08:52:38.625789Z",
-    "clientMessageId": "4fb3a9f7-a04b-46bf-9b70-b91819c71af9",
+    "createdAt": "2026-11-08T09:53:35.919264Z",
+    "clientMessageId": "2ad938ec-75e7-4ea3-a509-156441670f82",
     "attachments": [],
     "editedAt": null,
     "editCount": 0,
@@ -66,8 +67,8 @@ Arguments are positional. The examples are real payloads as the JavaScript clien
 
 ```json
 [
-  "01a1b535-b41e-761a-91ea-5cb6239f7221",
-  "01a1b535-a9eb-74c3-ad63-7d4ce3e5a23c",
+  "01a1ba93-deb9-7a50-ac60-f3f94ff76779",
+  "01a1ba93-d895-7db5-9ca8-59569a0b63b7",
   "Ana Example",
   true
 ]
@@ -77,9 +78,9 @@ Arguments are positional. The examples are real payloads as the JavaScript clien
 
 ```json
 [
-  "01a1b535-e6c4-7af9-af41-50487eee2244",
-  "01a1b535-e6af-7aac-9f3a-0f1989a94f5b",
-  "2026-11-07T08:53:00.033616Z"
+  "01a1ba93-f389-7870-8ae5-2a18247d3a9d",
+  "01a1ba93-f375-7cf7-87f8-7f41a3077bc3",
+  "2026-11-08T09:53:49.726228Z"
 ]
 ```
 
@@ -88,14 +89,14 @@ Arguments are positional. The examples are real payloads as the JavaScript clien
 ```json
 [
   {
-    "id": "01a1b535-b18e-7865-8b72-13617328f38c",
+    "id": "01a1ba93-dd11-7338-bef5-793667730f02",
     "type": "Direct",
     "name": "Ben Example",
     "avatarUrl": null,
-    "updatedAt": "2026-11-07T08:52:37.38997Z",
+    "updatedAt": "2026-11-08T09:53:34.99311Z",
     "lastMessage": null,
     "unreadCount": 0,
-    "otherUserId": "01a1b535-abad-77a7-a8ad-aad0ec6c1972",
+    "otherUserId": "01a1ba93-d8f5-7d26-9b60-8314d89a1c5d",
     "isMuted": false,
     "leftAt": null
   }
@@ -107,11 +108,11 @@ Arguments are positional. The examples are real payloads as the JavaScript clien
 ```json
 [
   {
-    "conversationId": "01a1b535-b41e-761a-91ea-5cb6239f7221",
+    "conversationId": "01a1ba93-deb9-7a50-ac60-f3f94ff76779",
     "members": [
       {
-        "userId": "01a1b535-ac1f-7a1e-8547-7ebc88bed2c3",
-        "userName": "cleo_hlqpp",
+        "userId": "01a1ba93-d949-7973-9f59-93fa4c2113e1",
+        "userName": "cleo_fgvdc",
         "displayName": "Cleo Example",
         "avatarUrl": null,
         "role": "Member",
@@ -128,9 +129,31 @@ Arguments are positional. The examples are real payloads as the JavaScript clien
 ```json
 [
   {
-    "id": "01a1b535-b41e-761a-91ea-5cb6239f7221",
+    "id": "01a1ba93-deb9-7a50-ac60-f3f94ff76779",
     "name": "Weekend plans (Sunday)",
     "avatarUrl": null
+  }
+]
+```
+
+**ConversationKeyChanged**, first when a new epoch was stored, then when a member was removed:
+
+```json
+[
+  {
+    "conversationId": "f508d744-76f4-41cf-8538-89c9f5498bde",
+    "keyEpoch": 2,
+    "keyRotationRequired": false
+  }
+]
+```
+
+```json
+[
+  {
+    "conversationId": "f508d744-76f4-41cf-8538-89c9f5498bde",
+    "keyEpoch": 3,
+    "keyRotationRequired": true
   }
 ]
 ```
@@ -139,8 +162,8 @@ Arguments are positional. The examples are real payloads as the JavaScript clien
 
 ```json
 [
-  "01a1b535-b41e-761a-91ea-5cb6239f7221",
-  "2026-11-07T08:52:41.525972Z"
+  "01a1ba93-deb9-7a50-ac60-f3f94ff76779",
+  "2026-11-08T09:53:37.983933Z"
 ]
 ```
 
@@ -149,10 +172,10 @@ Arguments are positional. The examples are real payloads as the JavaScript clien
 ```json
 [
   {
-    "id": "01a1b535-a9eb-74c3-ad63-7d4ce3e5a23c",
-    "userName": "ana_hlqpp",
+    "id": "01a1ba93-d895-7db5-9ca8-59569a0b63b7",
+    "userName": "ana_fgvdc",
     "displayName": "Ana Example",
-    "avatarUrl": "/api/avatars/users/01a1b535-a9eb-74c3-ad63-7d4ce3e5a23c/01a1b535-be5b-7895-8473-2c9d9a2939f6"
+    "avatarUrl": "/api/avatars/users/01a1ba93-d895-7db5-9ca8-59569a0b63b7/01a1ba93-e5f8-77b8-87a4-abc4ce8888a9"
   }
 ]
 ```
@@ -162,22 +185,22 @@ Arguments are positional. The examples are real payloads as the JavaScript clien
 ```json
 [
   {
-    "userId": "01a1b535-e6af-7aac-9f3a-0f1989a94f5b",
+    "userId": "01a1ba93-f375-7cf7-87f8-7f41a3077bc3",
     "isOnline": true,
     "lastSeenAt": null,
-    "at": "2026-11-07T08:52:51.18Z"
+    "at": "2026-11-08T09:53:40.879Z"
   },
   {
-    "userId": "01a1b535-e6af-7aac-9f3a-0f1989a94f5b",
+    "userId": "01a1ba93-f375-7cf7-87f8-7f41a3077bc3",
     "isOnline": false,
-    "lastSeenAt": "2026-11-07T08:52:56.7Z",
-    "at": "2026-11-07T08:52:56.7Z"
+    "lastSeenAt": "2026-11-08T09:53:46.396Z",
+    "at": "2026-11-08T09:53:46.396Z"
   },
   {
-    "userId": "01a1b535-e6af-7aac-9f3a-0f1989a94f5b",
+    "userId": "01a1ba93-f375-7cf7-87f8-7f41a3077bc3",
     "isOnline": true,
     "lastSeenAt": null,
-    "at": "2026-11-07T08:52:59.213Z"
+    "at": "2026-11-08T09:53:48.913Z"
   }
 ]
 ```
@@ -187,15 +210,15 @@ Arguments are positional. The examples are real payloads as the JavaScript clien
 ```json
 [
   {
-    "id": "01a1b535-b41f-7a21-9fb7-01fb06765de5",
+    "id": "01a1ba93-deba-74e1-ab75-7faeae017a71",
     "type": "MemberAdded",
-    "conversationId": "01a1b535-b41e-761a-91ea-5cb6239f7221",
-    "actorId": "01a1b535-a9eb-74c3-ad63-7d4ce3e5a23c",
+    "conversationId": "01a1ba93-deb9-7a50-ac60-f3f94ff76779",
+    "actorId": "01a1ba93-d895-7db5-9ca8-59569a0b63b7",
     "actorDisplayName": "Ana Example",
     "messageId": null,
     "messagePreview": null,
     "isRead": false,
-    "createdAt": "2026-11-07T08:52:38.046376Z"
+    "createdAt": "2026-11-08T09:53:35.4172525Z"
   }
 ]
 ```
@@ -206,14 +229,14 @@ Arguments are positional. The examples are real payloads as the JavaScript clien
 [
   [
     [
-      "01a1b535-b746-7d09-8a48-5ba47a7e75a0"
+      "01a1ba93-e13e-75a2-8fb8-ff6bdf90858a"
     ]
   ],
   [
-    "01a1b535-b746-7d09-8a48-5ba47a7e75a0"
+    "01a1ba93-e13e-75a2-8fb8-ff6bdf90858a"
   ],
   [
-    "01a1b535-b41e-761a-91ea-5cb6239f7221",
+    "01a1ba93-deb9-7a50-ac60-f3f94ff76779",
     true
   ]
 ]

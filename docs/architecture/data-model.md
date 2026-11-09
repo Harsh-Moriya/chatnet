@@ -7,6 +7,9 @@ erDiagram
     AspNetUsers ||--o{ ConversationMembers : "is member"
     Conversations ||--o{ ConversationMembers : "has"
     Conversations ||--o{ Messages : "contains"
+    Conversations ||--o{ ConversationKeyEpochs : "has"
+    ConversationKeyEpochs ||--o{ ConversationKeyEnvelopes : "holds"
+    AspNetUsers ||--o{ ConversationKeyEnvelopes : "can open"
     AspNetUsers ||--o{ Messages : "sends"
     Messages ||--o{ MessageAttachments : "carries"
     AspNetUsers ||--o{ RefreshTokens : "holds"
@@ -64,8 +67,10 @@ One table for both kinds.
 | `DirectKey` | text, null | for a direct chat, the two user ids sorted and joined (`idA:idB`), so both participants produce the same key |
 | `CreatedAt`, `UpdatedAt` | timestamptz | `UpdatedAt` moves when a message is sent, which orders the list |
 | `CreatedById` | uuid | foreign key to the creator |
+| `KeyEpoch` | integer | the newest key epoch, 0 for a conversation that has none. Starts at 1 for every conversation made now |
+| `KeyRotationRequired` | boolean | someone left since the epoch in force was made, so it is due for replacement. Set with the removal, cleared when the next epoch is stored |
 
-Indexes and constraints: a **unique partial index** on `DirectKey` where it is not null (at most one direct chat per pair of users, whatever the interleaving of requests); a check that a direct conversation has a `DirectKey`; `IX_Conversations_UpdatedAt` descending.
+Indexes and constraints: a **unique partial index** on `DirectKey` where it is not null (at most one direct chat per pair of users, whatever the interleaving of requests); a check that a direct conversation has a `DirectKey`; a check that `KeyEpoch` is not negative; `IX_Conversations_UpdatedAt` descending. The id of a conversation is chosen by the browser that creates it, so that the first epoch can be made for it.
 
 ## ConversationMembers
 
@@ -189,6 +194,33 @@ Index on `UserId`. Adding a device counts the person's devices that are not remo
 | `ApprovedAt`, `CollectedAt` | timestamptz, null | |
 
 Indexes on `(UserId, Code)` (unique) and `ExpiresAt`. Approving is one conditional `UPDATE` (still waiting, not expired). Collecting is one `UPDATE ... RETURNING` that clears the payload. Requests that expired more than an hour ago are removed when their person opens a new one.
+
+## ConversationKeyEpochs
+
+One row per key period of a conversation. The key is never here: it reaches each member in an envelope.
+
+| Column | Type | Notes |
+|---|---|---|
+| `ConversationId` | uuid | foreign key, cascade; part of the primary key |
+| `Epoch` | integer | part of the primary key, at least 1. The primary key is also what stops two requests from both storing "the next epoch" |
+| `CreatedById` | uuid | foreign key to the member who made it |
+| `Reason` | text | `Created` (the first key of a conversation), `MemberAdded` (people joined) or `Rotated` (any other replacement) |
+| `CreatedAt` | timestamptz | |
+| `KeyCommitment` | bytea | 32 bytes: a hash of the key bound to the conversation and the epoch. It reveals nothing about the key |
+| `Signature` | bytea | 64 bytes: the creator's signature over the record of the epoch (see [encryption formats](encryption-format.md)) |
+
+Storing an epoch is one transaction, behind the conversation's advisory lock: the epoch, its envelopes, the new `KeyEpoch` and `KeyRotationRequired = false` on the conversation. A conversation and a membership change save their epoch in the same transaction as themselves.
+
+## ConversationKeyEnvelopes
+
+| Column | Type | Notes |
+|---|---|---|
+| `ConversationId`, `Epoch` | uuid, integer | foreign key to `ConversationKeyEpochs`, cascade; with `UserId` the primary key |
+| `UserId` | uuid | the member the key is sealed for. Foreign key, restrict |
+| `AccountKeyGeneration` | integer | the generation of the member's account key the envelope is sealed to, at least 1 |
+| `Envelope` | bytea | 94 bytes: the epoch key sealed to that key |
+
+The members of an epoch are the users it has an envelope for, so there is no separate member list. Index on `(ConversationId, UserId, Epoch)` for "my envelopes in this conversation". A member is only ever given the row with their own `UserId`.
 
 ## Notifications
 

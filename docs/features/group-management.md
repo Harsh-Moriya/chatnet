@@ -16,10 +16,10 @@ A direct chat has no admins and none of these changes apply to it (409).
 
 | Action | Endpoint | Rule |
 |---|---|---|
-| Add people | `POST /api/conversations/{id}/members` `{ userIds }` | 1 to 100 ids. Owner or admin. They join as plain members. People already in are skipped; someone who left comes back with a new join time. A group holds its owner and 100 others at most. Added people get a `MemberAdded` notification. |
-| Remove someone | `DELETE /api/conversations/{id}/members/{userId}` | The owner removes anyone; an admin removes plain members only. Removing oneself is a 409 (leave instead). |
+| Add people | `POST /api/conversations/{id}/members` `{ userIds, epoch }` | 1 to 100 ids, and the new key epoch made for everyone who will be in the group (see [conversation keys](conversation-keys.md)). Owner or admin. They join as plain members. People already in are skipped; someone who left comes back with a new join time. A group holds its owner and 100 others at most. Added people get a `MemberAdded` notification. |
+| Remove someone | `DELETE /api/conversations/{id}/members/{userId}` | The owner removes anyone; an admin removes plain members only. Removing oneself is a 409 (leave instead). The epoch in force is marked due for replacement. |
 | Change role | `PUT /api/conversations/{id}/members/{userId}/role` `{ role }` | Owner only. `Owner` hands the group over and makes the old owner an admin. One's own role cannot be changed. |
-| Leave | `POST /api/conversations/{id}/leave` | Answers `{ leftAt }`. When the owner leaves, the group goes to the admin (otherwise the member) who has been in the longest, in the same transaction. Leaving twice is a 403. |
+| Leave | `POST /api/conversations/{id}/leave` | Answers `{ leftAt }`. When the owner leaves, the group goes to the admin (otherwise the member) who has been in the longest, in the same transaction. The epoch in force is marked due for replacement. Leaving twice is a 403. |
 | Rename | `PATCH /api/conversations/{id}` `{ name }` | Owner or admin. 1 to 100 characters. The conversation does not move in anyone's list. |
 | Group picture | see [profiles and pictures](profiles-and-pictures.md) | Owner or admin. |
 
@@ -41,7 +41,7 @@ Every change runs in a transaction behind a **per-conversation advisory lock**, 
 
 ## Pushes
 
-`MembersChanged { conversationId, members, removedUserIds }` goes to each person who is in the group now, one by one, not to the group of connections, so someone just removed never hears who is left. It carries the entries as they are when it is sent, so applying it twice or late ends in the same list. `ConversationUpdated { id, name, avatarUrl }` follows a rename or a picture change. `AddedToConversation` goes to people added, and `RemovedFromConversation` to the person removed.
+`MembersChanged { conversationId, members, removedUserIds }` goes to each person who is in the group now, one by one, not to the group of connections, so someone just removed never hears who is left. It carries the entries as they are when it is sent, so applying it twice or late ends in the same list. `ConversationUpdated { id, name, avatarUrl }` follows a rename or a picture change. `AddedToConversation` goes to people added, and `RemovedFromConversation` to the person removed. `ConversationKeyChanged` goes to the people who are in the group now after an add (the new epoch), a removal and a leave (the epoch is due for replacement).
 
 ## In the browser
 
