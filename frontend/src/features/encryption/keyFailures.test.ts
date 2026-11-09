@@ -34,6 +34,13 @@ describe('telling a person why a conversation could not be started', () => {
     expect(describeKeyFailure(new EpochContestedError(), nameOf)).toContain('Please try again.')
   })
 
+  it('says the keys were replaced recently when a replacement came too soon, and not to try again', () => {
+    const sentence = describeKeyFailure(new EpochRefused('epoch-too-soon'), nameOf)
+
+    expect(sentence).toContain('replaced recently')
+    expect(sentence).not.toContain('try again')
+  })
+
   it('explains keys that do not match, and keys that are not here', () => {
     expect(describeKeyFailure(new KeysMismatchError(), nameOf)).toContain('not the ones on the server')
     const notReady = Object.assign(new Error('x'), { name: 'EncryptionNotReadyError' })

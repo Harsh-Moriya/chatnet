@@ -30,7 +30,7 @@ import {
   resolvePeers,
   saveKey,
 } from './epochs'
-import { FakeEpochServer, MemoryEpochKeyStore, MemoryPinStore } from './fakeEpochServer'
+import { FakeEpochServer, MemoryEpochKeyStore, MemoryPinStore, REPLACEMENT_INTERVAL_MS } from './fakeEpochServer'
 import { ServerRefused } from './fakeKeysServer'
 import { KeysMismatchError } from './flows'
 import { IdentityChangedError, trustNewIdentity } from './pins'
@@ -509,16 +509,62 @@ describe('making sure a conversation has a key', () => {
     expect(server.calls).not.toContain('postEpoch')
   })
 
-  it('replaces an epoch that does not check out, as any member may', async () => {
+  it('replaces an epoch that does not check out, as any member may, once it is a day old', async () => {
     const server = new FakeEpochServer()
     const [ana, ben] = [await newPerson(server), await newPerson(server)]
     const conversationId = await start(server, ana, [ben])
+    server.age(conversationId)
     // The server says the epoch is current but the people it lists are not the people it was signed for.
     const lying = serving(server, ben, (page) => {
       page.epochs[0].members = [page.epochs[0].members[0]]
     })
 
     const result = await ensureEpoch(lying.deps, conversationId)
+
+    expect(result).toEqual({ epoch: 2, created: true })
+  })
+
+  it('does not replace an epoch that does not check out while it is younger than a day, and does not try again at once', async () => {
+    const server = new FakeEpochServer()
+    const [ana, ben] = [await newPerson(server), await newPerson(server)]
+    const conversationId = await start(server, ana, [ben])
+    const lying = serving(server, ben, (page) => {
+      page.epochs[0].members = [page.epochs[0].members[0]]
+    })
+
+    const failure = await ensureEpoch(lying.deps, conversationId).catch((error: unknown) => error)
+
+    expect(failure).toBeInstanceOf(EpochRefused)
+    expect((failure as EpochRefused).code).toBe('epoch-too-soon')
+    expect(server.calls.filter((call) => call === 'postEpoch')).toHaveLength(1)
+    expect(server.conversations.get(conversationId)!.keyEpoch).toBe(1)
+    expect(await ben.deps.keys.load(ben.id, conversationId, 2)).toBeNull()
+  })
+
+  it('replaces the epoch a day after it was made, to the millisecond', async () => {
+    const server = new FakeEpochServer()
+    const [ana, ben] = [await newPerson(server), await newPerson(server)]
+    const conversationId = await start(server, ana, [ben])
+    const lying = serving(server, ben, (page) => {
+      page.epochs[0].members = [page.epochs[0].members[0]]
+    })
+
+    server.advance(REPLACEMENT_INTERVAL_MS - 1)
+    const early = await ensureEpoch(lying.deps, conversationId).catch((error: unknown) => error)
+    server.advance(1)
+    const onTime = await ensureEpoch(lying.deps, conversationId)
+
+    expect((early as EpochRefused).code).toBe('epoch-too-soon')
+    expect(onTime).toEqual({ epoch: 2, created: true })
+  })
+
+  it('replaces an epoch at once when a removal marked it as due, however young it is', async () => {
+    const server = new FakeEpochServer()
+    const [ana, ben, cy] = [await newPerson(server), await newPerson(server), await newPerson(server)]
+    const conversationId = await start(server, ana, [ben, cy])
+    server.removeMember(conversationId, cy.id)
+
+    const result = await ensureEpoch(ana.deps, conversationId)
 
     expect(result).toEqual({ epoch: 2, created: true })
   })
