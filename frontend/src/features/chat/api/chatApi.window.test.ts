@@ -34,7 +34,7 @@ const range = (from: number, to: number) => Array.from({ length: to - from + 1 }
 function conversation(): Conversation {
   return {
     id: 'c1', type: 'Direct', name: 'Bob', avatarUrl: null, updatedAt: '2026-10-11T10:30:00Z', lastMessage: null,
-    unreadCount: 0, otherUserId: 'bob', isMuted: false, leftAt: null,
+    unreadCount: 0, otherUserId: 'bob', isMuted: false, leftAt: null, keyEpoch: 0, keyRotationRequired: false,
   }
 }
 

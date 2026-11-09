@@ -1,7 +1,9 @@
 using ChatNET.API.Auth.Models;
 using ChatNET.API.Common.Exceptions;
+using ChatNET.API.Conversations.KeyEpochs;
 using ChatNET.API.Conversations.Models;
 using ChatNET.API.Conversations.Persistence;
+using ChatNET.API.Keys.Persistence;
 using ChatNET.API.Outbox;
 using ChatNET.API.Outbox.Models;
 using MediatR;
@@ -14,6 +16,7 @@ namespace ChatNET.API.Conversations.CreateDirect;
 public class CreateDirectHandler : IRequestHandler<CreateDirectCommand, ConversationDto>
 {
     private readonly IConversationRepository _conversations;
+    private readonly IKeyRepository _keys;
     private readonly UserManager<AppUser> _userManager;
     private readonly ILogger<CreateDirectHandler> _logger;
     private readonly ConversationNotifier _notifier;
@@ -21,12 +24,14 @@ public class CreateDirectHandler : IRequestHandler<CreateDirectCommand, Conversa
 
     public CreateDirectHandler(
         IConversationRepository conversations,
+        IKeyRepository keys,
         UserManager<AppUser> userManager,
         ILogger<CreateDirectHandler> logger,
         ConversationNotifier notifier,
         OutboxPublisher outbox)
     {
         _conversations = conversations;
+        _keys = keys;
         _userManager = userManager;
         _logger = logger;
         _notifier = notifier;
@@ -46,15 +51,22 @@ public class CreateDirectHandler : IRequestHandler<CreateDirectCommand, Conversa
 
         if (conversation is null)
         {
+            // The first key period is checked before anything is made: both people must have keys, and it must be for both of them.
+            var memberIds = new[] { request.UserId, request.OtherUserId };
+            var submission = EpochSubmission.From(request.Epoch);
+            EpochRules.Check(0, memberIds, await _keys.GetCurrentGenerationsAsync(memberIds, cancellationToken), submission);
+
             var now = DateTime.UtcNow;
             var created = new Conversation
             {
-                Id = Guid.CreateVersion7(),
+                Id = request.Id,
                 Type = ConversationType.Direct,
                 DirectKey = directKey,
                 CreatedAt = now,
                 UpdatedAt = now,
                 CreatedById = request.UserId,
+                KeyEpoch = submission.Epoch,
+                KeyEpochs = [submission.ToEntity(request.Id, request.UserId, KeyEpochReason.Created, now)],
                 Members =
                 [
                     new ConversationMember { UserId = request.UserId, Role = MemberRole.Member, JoinedAt = now },
@@ -76,7 +88,8 @@ public class CreateDirectHandler : IRequestHandler<CreateDirectCommand, Conversa
             else
             {
                 // Lost a race with a concurrent create for the same pair: the unique index
-                // rejected our insert, so the winner's row is the one to return.
+                // rejected our insert, so the winner's row is the one to return. The epoch made here went with the
+                // insert and is gone with it. If there is no winner, the id was already in use.
                 conversation = await _conversations.GetDirectByKeyAsync(directKey, cancellationToken)
                                ?? throw new ConflictException("Could not create the conversation. Please try again.");
             }

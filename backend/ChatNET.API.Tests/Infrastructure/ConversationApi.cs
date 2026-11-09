@@ -1,3 +1,5 @@
+using System.IdentityModel.Tokens.Jwt;
+using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using ChatNET.API.Messaging.Models;
@@ -10,8 +12,23 @@ namespace ChatNET.API.Tests.Infrastructure;
 // because the tests assert on the public contract, not on server-side types.
 public static class ConversationApi
 {
-    public static Task<HttpResponseMessage> PostDirectAsync(this HttpClient client, Guid otherUserId) =>
-        client.PostAsJsonAsync("/api/conversations/direct", new { otherUserId });
+    // The id of the person a client is signed in as, read from its token. A client that is not signed in is refused before its request
+    // is read, so who it is does not matter and it is nobody.
+    public static Guid CallerId(this HttpClient client)
+    {
+        var token = client.DefaultRequestHeaders.Authorization?.Parameter;
+        return token is null ? Guid.Empty : Guid.Parse(new JwtSecurityTokenHandler().ReadJwtToken(token).Subject);
+    }
+
+    // Starting a conversation needs the first key period, made for the people in it. The tests act as a browser would, with bytes of
+    // the right shape, and give the conversation an id of their own as a browser does.
+    public static Task<HttpResponseMessage> PostDirectAsync(this HttpClient client, Guid otherUserId, Guid? id = null) =>
+        client.PostAsJsonAsync("/api/conversations/direct", new
+        {
+            id = id ?? Guid.NewGuid(),
+            otherUserId,
+            epoch = EpochBody.For(1, client.CallerId(), otherUserId),
+        });
 
     public static async Task<JsonElement> CreateDirectAsync(this HttpClient client, Guid otherUserId)
     {
@@ -21,7 +38,13 @@ public static class ConversationApi
     }
 
     public static Task<HttpResponseMessage> PostGroupAsync(this HttpClient client, string name, params Guid[] memberIds) =>
-        client.PostAsJsonAsync("/api/conversations/group", new { name, memberIds });
+        client.PostAsJsonAsync("/api/conversations/group", new
+        {
+            id = Guid.NewGuid(),
+            name,
+            memberIds,
+            epoch = EpochBody.For(1, [client.CallerId(), .. memberIds.Where(id => id != client.CallerId()).Distinct()]),
+        });
 
     public static async Task<JsonElement> CreateGroupAsync(this HttpClient client, string name, params Guid[] memberIds)
     {
@@ -71,9 +94,29 @@ public static class ConversationApi
 
     // ##### Managing a group #####
 
-    public static Task<HttpResponseMessage> AddMembersResponseAsync(
-        this HttpClient client, Guid conversationId, params Guid[] userIds) =>
-        client.PostAsJsonAsync($"/api/conversations/{conversationId}/members", new { userIds });
+    // Adding people makes a new key period for everyone who will be in the group: the people there now and the ones named. Someone
+    // who may not look at the group cannot say who is in it; the request then carries only who was named, and is refused for the
+    // reason it would be refused anyway.
+    public static async Task<HttpResponseMessage> AddMembersResponseAsync(
+        this HttpClient client, Guid conversationId, params Guid[] userIds)
+    {
+        var epoch = await client.NextEpochForAddingAsync(conversationId, userIds);
+        return await client.PostAsJsonAsync($"/api/conversations/{conversationId}/members", new { userIds, epoch });
+    }
+
+    private static async Task<EpochBody> NextEpochForAddingAsync(this HttpClient client, Guid conversationId, Guid[] added)
+    {
+        var current = await client.GetAsync($"/api/conversations/{conversationId}");
+        var members = await client.GetMembersResponseAsync(conversationId);
+        if (current.StatusCode != HttpStatusCode.OK || members.StatusCode != HttpStatusCode.OK)
+            return EpochBody.For(1, [.. new[] { client.CallerId() }.Concat(added).Distinct()]);
+
+        var keyEpoch = (await current.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("keyEpoch").GetInt32();
+        var present = (await members.Content.ReadFromJsonAsync<JsonElement>()).EnumerateArray()
+            .Select(m => m.GetProperty("userId").GetGuid());
+
+        return EpochBody.For(keyEpoch + 1, present.Concat(added).Distinct().ToArray());
+    }
 
     // Adds people and returns the people of the group as the server answers.
     public static async Task<List<JsonElement>> AddMembersAsync(

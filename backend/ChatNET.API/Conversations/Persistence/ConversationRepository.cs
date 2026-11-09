@@ -180,6 +180,13 @@ public class ConversationRepository : IConversationRepository
             .Select(m => m.LeftAt)
             .FirstOrDefaultAsync(cancellationToken);
 
+    public Task<ConversationKeyStateDto?> GetKeyStateAsync(Guid conversationId, CancellationToken cancellationToken)
+        => _db.Conversations
+            .AsNoTracking()
+            .Where(c => c.Id == conversationId)
+            .Select(c => new ConversationKeyStateDto(c.Id, c.KeyEpoch, c.KeyRotationRequired))
+            .FirstOrDefaultAsync(cancellationToken);
+
     public Task<ConversationUpdateDto?> GetUpdateAsync(Guid conversationId, CancellationToken cancellationToken)
         => _db.Conversations
             .AsNoTracking()
@@ -264,7 +271,9 @@ public class ConversationRepository : IConversationRepository
                                   AND NOT um."IsDeleted"
                                 LIMIT @unreadCap) AS counted) END AS "UnreadCount",
                mine."IsMuted" AS "IsMuted",
-               mine."LeftAt" AS "LeftAt"
+               mine."LeftAt" AS "LeftAt",
+               c."KeyEpoch" AS "KeyEpoch",
+               c."KeyRotationRequired" AS "KeyRotationRequired"
         FROM "Conversations" c
         JOIN "ConversationMembers" mine
           ON mine."ConversationId" = c."Id" AND mine."UserId" = @viewerId
@@ -306,7 +315,7 @@ public class ConversationRepository : IConversationRepository
 
         return new ConversationDto(
             row.Id, Enum.Parse<ConversationType>(row.Type), row.Name ?? "Unknown", AvatarKeys.PublicUrl(row.AvatarKey), row.UpdatedAt, last,
-            row.UnreadCount, row.OtherUserId, row.IsMuted, row.LeftAt);
+            row.UnreadCount, row.OtherUserId, row.IsMuted, row.LeftAt, row.KeyEpoch, row.KeyRotationRequired);
     }
 
     // One row of the queries above. Property names match the column aliases in the SQL, which is how
@@ -326,5 +335,7 @@ public class ConversationRepository : IConversationRepository
         public Guid? OtherUserId { get; set; }
         public bool IsMuted { get; set; }
         public DateTime? LeftAt { get; set; }
+        public int KeyEpoch { get; set; }
+        public bool KeyRotationRequired { get; set; }
     }
 }

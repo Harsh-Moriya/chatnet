@@ -1,3 +1,4 @@
+using ChatNET.API.Conversations.KeyEpochs;
 using ChatNET.API.Conversations.Membership;
 using FluentValidation;
 
@@ -14,5 +15,7 @@ public class AddMembersCommandValidator : AbstractValidator<AddMembersCommand>
 
         RuleForEach(x => x.UserIds)
             .NotEmpty();
+
+        RuleFor(x => x.Epoch).NotNull().WithMessage("The new epoch is required.").SetValidator(new EpochRequestValidator());
     }
 }

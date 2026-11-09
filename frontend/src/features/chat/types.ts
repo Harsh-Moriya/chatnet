@@ -22,6 +22,17 @@ export interface Conversation {
   // When the signed-in user left the group, or was removed from it; null while they are in it. A conversation they
   // left stays in the list, read-only, showing what was said up to this moment.
   leftAt: string | null
+  // The newest key period of the conversation, 0 while it has none, and whether someone left since it was made, so the next one
+  // must be made before anything more is said.
+  keyEpoch: number
+  keyRotationRequired: boolean
+}
+
+// What the server pushes when the keys of a conversation change.
+export interface ConversationKeyChange {
+  conversationId: string
+  keyEpoch: number
+  keyRotationRequired: boolean
 }
 
 export interface LastMessage {

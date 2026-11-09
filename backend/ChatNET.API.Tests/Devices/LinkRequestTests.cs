@@ -32,7 +32,7 @@ public class LinkRequestTests
     [Fact]
     public async Task A_person_with_no_keys_cannot_open_a_request()
     {
-        var user = await _factory.RegisterUserAsync("nolink");
+        var user = await _factory.RegisterUserWithoutKeysAsync("nolink");
         var client = _factory.CreateClientFor(user);
 
         var response = await client.OpenLinkAsync();
@@ -45,7 +45,7 @@ public class LinkRequestTests
     {
         var clock = new ManualTimeProvider();
         using var host = _factory.WithClock(clock);
-        var user = await _factory.RegisterUserAsync("open");
+        var user = await _factory.RegisterUserWithoutKeysAsync("open");
         using var client = host.ClientFor(user);
         await client.SetUpKeysAsync();
         var key = RandomNumberGenerator.GetBytes(32);
@@ -74,7 +74,7 @@ public class LinkRequestTests
     {
         using var host = _factory.WithWebHostBuilder(b => b.ConfigureAppConfiguration((_, c) =>
             c.AddInMemoryCollection(new Dictionary<string, string?> { ["Encryption:LinkLifetime"] = "00:02:00" })));
-        var user = await _factory.RegisterUserAsync("short");
+        var user = await _factory.RegisterUserWithoutKeysAsync("short");
         using var client = host.ClientFor(user);
         await client.SetUpKeysAsync();
 
@@ -174,7 +174,7 @@ public class LinkRequestTests
     {
         var clock = new ManualTimeProvider();
         using var host = _factory.WithClock(clock);
-        var user = await _factory.RegisterUserAsync("stale");
+        var user = await _factory.RegisterUserWithoutKeysAsync("stale");
         using var client = host.ClientFor(user);
         await client.SetUpKeysAsync();
         var old = await client.OpenedLinkIdAsync();
@@ -218,7 +218,7 @@ public class LinkRequestTests
     {
         var clock = new ManualTimeProvider();
         using var host = _factory.WithClock(clock);
-        var user = await _factory.RegisterUserAsync("find");
+        var user = await _factory.RegisterUserWithoutKeysAsync("find");
         using var client = host.ClientFor(user);
         await client.SetUpKeysAsync();
         var approved = EncryptionApi.NewCode();
@@ -354,7 +354,7 @@ public class LinkRequestTests
     {
         var clock = new ManualTimeProvider();
         using var host = _factory.WithClock(clock);
-        var user = await _factory.RegisterUserAsync("late");
+        var user = await _factory.RegisterUserWithoutKeysAsync("late");
         using var client = host.ClientFor(user);
         await client.SetUpKeysAsync();
         var id = await client.OpenedLinkIdAsync();
@@ -370,7 +370,7 @@ public class LinkRequestTests
     {
         var clock = new ManualTimeProvider();
         using var host = _factory.WithClock(clock);
-        var user = await _factory.RegisterUserAsync("slow");
+        var user = await _factory.RegisterUserWithoutKeysAsync("slow");
         using var client = host.ClientFor(user);
         await client.SetUpKeysAsync();
         var id = await client.OpenedLinkIdAsync();
@@ -388,7 +388,7 @@ public class LinkRequestTests
     {
         var clock = new ManualTimeProvider();
         using var host = _factory.WithClock(clock);
-        var user = await _factory.RegisterUserAsync("nobody");
+        var user = await _factory.RegisterUserWithoutKeysAsync("nobody");
         using var client = host.ClientFor(user);
         await client.SetUpKeysAsync();
         var id = await client.OpenedLinkIdAsync();

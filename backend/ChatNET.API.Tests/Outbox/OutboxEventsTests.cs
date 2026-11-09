@@ -22,6 +22,7 @@ public class OutboxEventsTests
         var joined = new MembersJoined(Guid.NewGuid(), [Guid.NewGuid()]);
         var left = new MemberLeft(Guid.NewGuid(), Guid.NewGuid());
         var renamed = new ConversationRenamed(Guid.NewGuid());
+        var keyChanged = new ConversationKeyChanged(Guid.NewGuid());
         var messageAlert = new MessageAlertRequested(Guid.NewGuid(), Guid.NewGuid(), [Guid.NewGuid(), Guid.NewGuid()]);
         var notificationAlert = new NotificationAlertRequested(Guid.NewGuid(), Guid.NewGuid());
         var passwordReset = new PasswordResetRequested(Guid.NewGuid());
@@ -34,6 +35,7 @@ public class OutboxEventsTests
         Assert.Equal(read, OutboxEvents.Read(read.Kind, OutboxEvents.Serialize(read)));
         Assert.Equal(left, OutboxEvents.Read(left.Kind, OutboxEvents.Serialize(left)));
         Assert.Equal(renamed, OutboxEvents.Read(renamed.Kind, OutboxEvents.Serialize(renamed)));
+        Assert.Equal(keyChanged, OutboxEvents.Read(keyChanged.Kind, OutboxEvents.Serialize(keyChanged)));
         var alertBack = Assert.IsType<MessageAlertRequested>(OutboxEvents.Read(messageAlert.Kind, OutboxEvents.Serialize(messageAlert)));
         Assert.Equal(messageAlert.MessageId, alertBack.MessageId);
         Assert.Equal(messageAlert.ConversationId, alertBack.ConversationId);
@@ -81,6 +83,7 @@ public class OutboxEventsTests
         Assert.Equal("MembersJoined", new MembersJoined(Guid.Empty, []).Kind);
         Assert.Equal("MemberLeft", new MemberLeft(Guid.Empty, Guid.Empty).Kind);
         Assert.Equal("ConversationRenamed", new ConversationRenamed(Guid.Empty).Kind);
+        Assert.Equal("ConversationKeyChanged", new ConversationKeyChanged(Guid.Empty).Kind);
         Assert.Equal("MessageAlertRequested", new MessageAlertRequested(Guid.Empty, Guid.Empty, []).Kind);
         Assert.Equal("NotificationAlertRequested", new NotificationAlertRequested(Guid.Empty, Guid.Empty).Kind);
     }

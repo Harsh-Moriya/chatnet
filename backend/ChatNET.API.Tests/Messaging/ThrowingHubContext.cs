@@ -84,6 +84,8 @@ public sealed class ThrowingHubContext : IHubContext<ChatHub, IChatClient>
 
         public Task ConversationUpdated(ConversationUpdateDto update) => throw Failure();
 
+        public Task ConversationKeyChanged(ConversationKeyStateDto state) => throw Failure();
+
         public Task ProfileChanged(UserSummaryDto profile) => throw Failure();
 
         public Task RemovedFromConversation(Guid conversationId, DateTime leftAt) => throw Failure();

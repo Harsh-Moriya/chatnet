@@ -31,6 +31,8 @@ function conversation(overrides: Partial<Conversation> & { id: string }): Conver
     otherUserId: null,
     isMuted: false,
     leftAt: null,
+    keyEpoch: 0,
+    keyRotationRequired: false,
     ...overrides,
   }
 }

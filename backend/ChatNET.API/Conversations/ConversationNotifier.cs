@@ -99,6 +99,21 @@ public class ConversationNotifier
         await _hub.Clients.User(userId.ToString()).RemovedFromConversation(conversationId, leftAt.Value);
     }
 
+    // The newest epoch and whether it must be replaced, as they are now, to the people who are in the conversation now. Not to its
+    // group of connections, for the reason given above: someone just removed must not learn what happens to it next.
+    public async Task NotifyKeyChangedAsync(Guid conversationId, CancellationToken cancellationToken)
+    {
+        var state = await _conversations.GetKeyStateAsync(conversationId, cancellationToken);
+        if (state is null)
+            return;
+
+        var memberIds = await _conversations.GetActiveMemberIdsAsync(conversationId, cancellationToken);
+        if (memberIds.Count == 0)
+            return;
+
+        await _hub.Clients.Users(memberIds.Select(id => id.ToString()).ToList()).ConversationKeyChanged(state);
+    }
+
     public async Task NotifyUpdatedAsync(Guid conversationId, CancellationToken cancellationToken)
     {
         var update = await _conversations.GetUpdateAsync(conversationId, cancellationToken);

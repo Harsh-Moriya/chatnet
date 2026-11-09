@@ -20,6 +20,21 @@ public class KeyRepository : IKeyRepository
             .OrderBy(b => b.Generation)
             .ToListAsync(cancellationToken);
 
+    public Task<List<AccountKeyBundle>> GetCurrentBundlesAsync(IReadOnlyCollection<Guid> userIds, CancellationToken cancellationToken) =>
+        _db.AccountKeyBundles
+            .AsNoTracking()
+            .Where(b => userIds.Contains(b.UserId))
+            .Where(b => b.Generation == _db.AccountKeyBundles.Where(o => o.UserId == b.UserId).Max(o => o.Generation))
+            .ToListAsync(cancellationToken);
+
+    public Task<Dictionary<Guid, int>> GetCurrentGenerationsAsync(IReadOnlyCollection<Guid> userIds, CancellationToken cancellationToken) =>
+        _db.AccountKeyBundles
+            .AsNoTracking()
+            .Where(b => userIds.Contains(b.UserId))
+            .GroupBy(b => b.UserId)
+            .Select(g => new { UserId = g.Key, Generation = g.Max(b => b.Generation) })
+            .ToDictionaryAsync(x => x.UserId, x => x.Generation, cancellationToken);
+
     public Task<bool> HasKeysAsync(Guid userId, CancellationToken cancellationToken) =>
         _db.AccountKeyBundles.AnyAsync(b => b.UserId == userId, cancellationToken);
 

@@ -1,3 +1,4 @@
+using ChatNET.API.Conversations.KeyEpochs;
 using ChatNET.API.Conversations.Membership;
 using FluentValidation;
 
@@ -20,5 +21,9 @@ public class CreateGroupCommandValidator : AbstractValidator<CreateGroupCommand>
 
         RuleForEach(x => x.MemberIds)
             .NotEmpty();
+
+        RuleFor(x => x.Id).NotEmpty().WithMessage("The group needs an id.");
+
+        RuleFor(x => x.Epoch).NotNull().WithMessage("The first epoch is required.").SetValidator(new EpochRequestValidator());
     }
 }

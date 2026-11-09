@@ -80,3 +80,9 @@ All records here are **Accepted**. Where a choice replaced an earlier one, the r
 | [0033: Integration tests run against real services](0033-integration-tests-against-real-services.md) | The real API runs in-process against real Postgres, Redis and object storage in throwaway containers. |
 | [0034: Logging and tracing record ids, never content](0034-logging-and-tracing-without-content.md) | Structured logs and OpenTelemetry traces carry ids and metadata; message text, search text, tokens and addresses stay out. |
 
+## Encryption
+
+| Record | Summary |
+|---|---|
+| [0037: Conversation keys are made by members and checked by the server only for completeness](0037-conversation-keys-made-by-members.md) | A member's browser makes and seals the key of each epoch; the server stores it and refuses an epoch that does not cover exactly the people in the conversation. |
+

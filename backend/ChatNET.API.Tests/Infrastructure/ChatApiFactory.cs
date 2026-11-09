@@ -163,15 +163,27 @@ public sealed class ChatApiFactory : WebApplicationFactory<Program>, IAsyncLifet
 
     // Registers a brand new user through the public API and returns their identity and token.
     // Every call uses unique credentials, so tests never collide and need no cleanup.
-    public Task<TestUser> RegisterUserAsync(string prefix = "user")
+    //
+    // The person has keys, as everyone who can start or join a conversation must: a bundle of the right shape is stored for them
+    // directly. A test of the keys themselves registers with RegisterUserWithoutKeysAsync.
+    public Task<TestUser> RegisterUserAsync(string prefix = "user") => RegisterUserAsync(prefix, withKeys: true);
+
+    public Task<TestUser> RegisterUserWithoutKeysAsync(string prefix = "user") => RegisterUserAsync(prefix, withKeys: false);
+
+    private Task<TestUser> RegisterUserAsync(string prefix, bool withKeys)
     {
         var suffix = Guid.NewGuid().ToString("N")[..10];
-        return RegisterUserAsync($"{prefix}_{suffix}", $"{prefix} {suffix}");
+        return RegisterUserAsync($"{prefix}_{suffix}", $"{prefix} {suffix}", withKeys);
     }
 
     // For tests that need to control the names, for example to search for them. The caller is
     // responsible for keeping the user name unique.
-    public async Task<TestUser> RegisterUserAsync(string userName, string displayName)
+    public Task<TestUser> RegisterUserAsync(string userName, string displayName) => RegisterUserAsync(userName, displayName, withKeys: true);
+
+    public Task<TestUser> RegisterUserWithoutKeysAsync(string userName, string displayName) =>
+        RegisterUserAsync(userName, displayName, withKeys: false);
+
+    private async Task<TestUser> RegisterUserAsync(string userName, string displayName, bool withKeys)
     {
         var email = $"{userName}@example.test";
 
@@ -186,7 +198,17 @@ public sealed class ChatApiFactory : WebApplicationFactory<Program>, IAsyncLifet
         var auth = await response.Content.ReadFromJsonAsync<AuthResponse>()
                    ?? throw new InvalidOperationException("Register returned an empty body.");
 
-        return new TestUser(Guid.Parse(auth.UserId), userName, displayName, email, password, auth.Token);
+        var user = new TestUser(Guid.Parse(auth.UserId), userName, displayName, email, password, auth.Token);
+
+        if (withKeys)
+        {
+            var bundle = EncryptionApi.Bundle();
+            await ExecuteDbAsync(db => db.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO "AccountKeyBundles" ("UserId", "Generation", "Bundle", "CreatedAt") VALUES ({user.Id}, 1, {bundle}, now())
+                """));
+        }
+
+        return user;
     }
 
     // An HttpClient that sends the user's token on every request.

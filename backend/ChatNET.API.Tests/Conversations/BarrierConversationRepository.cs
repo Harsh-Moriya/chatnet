@@ -97,6 +97,9 @@ public sealed class BarrierConversationRepository : IConversationRepository
     public Task<DateTime?> GetLeftAtAsync(Guid conversationId, Guid userId, CancellationToken cancellationToken) =>
         _inner.GetLeftAtAsync(conversationId, userId, cancellationToken);
 
+    public Task<ConversationKeyStateDto?> GetKeyStateAsync(Guid conversationId, CancellationToken cancellationToken) =>
+        _inner.GetKeyStateAsync(conversationId, cancellationToken);
+
     public Task<ConversationUpdateDto?> GetUpdateAsync(Guid conversationId, CancellationToken cancellationToken) =>
         _inner.GetUpdateAsync(conversationId, cancellationToken);
 

@@ -51,6 +51,9 @@ public static class EncryptionApi
         return bytes;
     }
 
+    // A conversation key sealed for one member: version, suite, then random bytes (94 bytes).
+    public static byte[] Envelope(int length = 94, byte version = 1, byte suite = 1) => SealedBox(length, version, suite);
+
     public static string NewCode()
     {
         var chars = RandomNumberGenerator.GetItems<char>(CodeAlphabet, 10);
@@ -64,6 +67,9 @@ public static class EncryptionApi
 
     public static Task<HttpResponseMessage> ReplaceBackupAsync(this HttpClient client, byte[] blob, int? expectedVersion) =>
         client.PutAsJsonAsync("/api/keys/me/backup", new { blob = B64(blob), expectedVersion });
+
+    public static Task<HttpResponseMessage> LookupKeysAsync(this HttpClient client, IReadOnlyCollection<Guid> userIds) =>
+        client.PostAsJsonAsync("/api/keys/lookup", new { userIds });
 
     public static Task<HttpResponseMessage> RegisterDeviceAsync(this HttpClient client, string kind = "Web", string name = "Test browser") =>
         client.PostAsJsonAsync("/api/devices", new { kind, name });
@@ -107,7 +113,7 @@ public static class EncryptionApi
     // A person with encryption set up, and a client signed in as them.
     public static async Task<(TestUser User, HttpClient Client)> UserWithKeysAsync(this ChatApiFactory factory)
     {
-        var user = await factory.RegisterUserAsync("keys");
+        var user = await factory.RegisterUserWithoutKeysAsync("keys");
         var client = factory.CreateClientFor(user);
         var response = await client.SetUpKeysAsync();
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);

@@ -129,14 +129,56 @@ export async function searchUsers(query: string, signal?: AbortSignal): Promise<
 // Adding it here as well means the sidebar does not depend on that push arriving first; adding the
 // same conversation twice is harmless.
 
+// A conversation is made together with its first key period, made here for the people who will be in it and sealed to each of them: the
+// server stores what is sent and checks that it is complete. The cryptography is loaded when the first conversation is started.
+const loadKeys = () => import('../../encryption/conversationKeys')
+
 export async function createDirect(otherUserId: string): Promise<Conversation> {
-  const { data } = await api.post<Conversation>('/conversations/direct', { otherUserId })
+  const keys = await loadKeys()
+  const deps = keys.epochDeps()
+
+  const data = await keys.withEpochRetries(async () => {
+    const prepared = await keys.prepareNewConversation(deps, [otherUserId])
+
+    try {
+      const { data } = await api.post<Conversation>('/conversations/direct', {
+        id: prepared.conversationId,
+        otherUserId,
+        epoch: prepared.body,
+      })
+      // Asking for a conversation that exists answers with that one, whose key is not the one made here.
+      await keys.keepNewConversationKey(deps, prepared, data.id)
+      return data
+    } catch (failure) {
+      throw keys.refusalOf(failure)
+    }
+  })
+
   chat().addConversation(data)
   return data
 }
 
 export async function createGroup(name: string, memberIds: string[]): Promise<Conversation> {
-  const { data } = await api.post<Conversation>('/conversations/group', { name, memberIds })
+  const keys = await loadKeys()
+  const deps = keys.epochDeps()
+
+  const data = await keys.withEpochRetries(async () => {
+    const prepared = await keys.prepareNewConversation(deps, memberIds)
+
+    try {
+      const { data } = await api.post<Conversation>('/conversations/group', {
+        id: prepared.conversationId,
+        name,
+        memberIds,
+        epoch: prepared.body,
+      })
+      await keys.keepNewConversationKey(deps, prepared, data.id)
+      return data
+    } catch (failure) {
+      throw keys.refusalOf(failure)
+    }
+  })
+
   chat().addConversation(data)
   return data
 }
@@ -190,9 +232,24 @@ export async function setMuted(conversationId: string, isMuted: boolean): Promis
 // Each answers with what the server stored, and the store takes it from there, so the screen never shows a change the server
 // refused; the same change is pushed to everyone else in the group. A refusal is the caller's to show.
 
-// Adds people to a group. The answer is the group's people as they are now.
+// Adds people to a group. The answer is the group's people as they are now. The group gets a new key period made for the people in it
+// now and the ones added, so those who join cannot read what came before them; it is saved together with their joining.
 export async function addMembers(conversationId: string, userIds: string[]): Promise<Member[]> {
-  const { data } = await api.post<Member[]>(`/conversations/${conversationId}/members`, { userIds })
+  const keys = await loadKeys()
+  const deps = keys.epochDeps()
+
+  const data = await keys.withEpochRetries(async () => {
+    const prepared = await keys.prepareAddingMembers(deps, conversationId, userIds)
+
+    try {
+      const { data } = await api.post<Member[]>(`/conversations/${conversationId}/members`, { userIds, epoch: prepared.body })
+      await keys.saveKey(deps, conversationId, prepared.body.epoch, prepared.key)
+      return data
+    } catch (failure) {
+      throw keys.refusalOf(failure)
+    }
+  })
+
   chat().seedMembers(conversationId, data)
   return data
 }

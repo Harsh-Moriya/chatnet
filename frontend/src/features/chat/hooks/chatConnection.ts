@@ -2,7 +2,7 @@ import { isUnauthorized, reconnectDelay } from '../../../lib/signalr'
 import { useChatStore } from '../store/chatStore'
 import type { NotificationItem } from '../../notifications/types'
 import type { Presence } from '../../presence/types'
-import type { Conversation, ConversationUpdate, MembersChange, Message, UserSummary } from '../types'
+import type { Conversation, ConversationKeyChange, ConversationUpdate, MembersChange, Message, UserSummary } from '../types'
 
 // Everything that connects the SignalR hub to the chat store, as plain functions with no React so it
 // can be tested with a fake hub. This is the only place that registers hub event handlers. The
@@ -144,6 +144,11 @@ export function connectChat(hub: ChatHub, deps: ChatConnectionDeps): ChatConnect
   // A group was renamed, or its picture changed.
   hub.on('ConversationUpdated', (update: ConversationUpdate) => {
     chat().applyConversationUpdate(update)
+  })
+
+  // The keys of a conversation changed. Sent only to the people who are in it.
+  hub.on('ConversationKeyChanged', (change: ConversationKeyChange) => {
+    chat().applyKeyChange(change)
   })
 
   // Someone who shares a conversation with this user (or this user, in another tab) changed their name or picture.

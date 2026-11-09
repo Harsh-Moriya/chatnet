@@ -19,7 +19,7 @@ public class KeyBackupTests
     [Fact]
     public async Task Without_a_backup_there_is_nothing_to_fetch_or_replace()
     {
-        var user = await _factory.RegisterUserAsync("nobackup");
+        var user = await _factory.RegisterUserWithoutKeysAsync("nobackup");
         var client = _factory.CreateClientFor(user);
 
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/keys/me/backup")).StatusCode);

@@ -135,6 +135,19 @@ label("chatnet/v1/epoch-signature",
 
 Each member is listed once. A reader checks the signature against the identity key of the creator, that the creator is a member, that the member list is the one they expect, and that their own envelope opens and matches the commitment.
 
+### Checking an epoch
+
+A reader that is given an epoch (the number, the creator, the commitment, the signature, the list of members with their key generations, and the reader's own envelope with the generation it is sealed to) accepts it only if every step holds:
+
+1. The creator is in the member list, and so is the reader, with the same generation as their envelope.
+2. For the newest epoch of a conversation, the member list is the set of people in the conversation now.
+3. The creator's public bundle is valid (its signature verifies against the identity key it carries, for the creator's user id) and that identity key is the one the reader first saw for the creator.
+4. The signature verifies over the record above with the creator's identity key.
+5. The reader holds the account key of the generation named in their envelope, and the envelope opens with it.
+6. The commitment computed from the key in the envelope equals the commitment in the record.
+
+A reader that fails any step does not keep the key and does not use the epoch. A creator that sealed a key for someone applies the same checks to that person's bundle first: valid signature, the generation the server stated, and the identity key first seen.
+
 ## Message
 
 A message is one opaque blob.

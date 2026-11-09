@@ -38,6 +38,7 @@ public class LeaveConversationHandler : IRequestHandler<LeaveConversationCommand
         MembershipOutcome outcome;
         OutboxMessage membersChanged;
         OutboxMessage memberLeft;
+        OutboxMessage keyChanged;
 
         await using (var change = await _conversations.BeginMembershipChangeAsync(request.ConversationId, cancellationToken)
                                   ?? throw new ForbiddenException(ConversationErrors.NotAMember))
@@ -47,10 +48,15 @@ public class LeaveConversationHandler : IRequestHandler<LeaveConversationCommand
             // When the owner leaves, the group is handed on in the same step, so the people left are told of both at once.
             outcome = change.Members.Leave(request.UserId, now);
 
+            // The person who left holds the key of the current period, so it must be replaced before anything more is said under
+            // it. That is for the next member to do; here it is only recorded, in the same step as leaving.
+            change.RequireRotation();
+
             membersChanged = _outbox.Create(new MembersChanged(request.ConversationId, outcome.Affected));
             memberLeft = _outbox.Create(new MemberLeft(request.ConversationId, request.UserId));
+            keyChanged = _outbox.Create(new ConversationKeyChanged(request.ConversationId));
 
-            await change.CommitAsync([], [membersChanged, memberLeft], cancellationToken);
+            await change.CommitAsync([], [membersChanged, memberLeft, keyChanged], cancellationToken);
         }
 
         _logger.LogInformation(
@@ -65,6 +71,11 @@ public class LeaveConversationHandler : IRequestHandler<LeaveConversationCommand
         await _outbox.DeliverAsync(
             membersChanged,
             () => _notifier.NotifyMembersChangedAsync(request.ConversationId, outcome.Affected.ToList(), cancellationToken),
+            cancellationToken);
+
+        await _outbox.DeliverAsync(
+            keyChanged,
+            () => _notifier.NotifyKeyChangedAsync(request.ConversationId, cancellationToken),
             cancellationToken);
 
         return new LeaveResultDto(now);

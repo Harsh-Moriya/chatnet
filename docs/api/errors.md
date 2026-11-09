@@ -12,6 +12,7 @@ Every error response is `application/problem+json` (RFC 9457, formerly RFC 7807)
 | `type` | A URI for the status class. Absent on a 429. |
 | `traceId` | Matches the `traceId` in the server's logs and traces. Send it with a bug report. |
 | `errors` | Only on a validation failure: a map from property name (PascalCase) to the messages for that field. |
+| `code` | Only on some 409 responses: a short, stable name for the kind of conflict, so a client can tell them apart without reading `detail`. See [conflict codes](#conflict-codes). |
 
 ## Examples
 
@@ -39,7 +40,7 @@ Every body below is a real response.
       "The length of 'Password' must be at least 8 characters. You entered 5 characters."
     ]
   },
-  "traceId": "00-0e5ec0a07ee9b793fa60b8d2ea81699a-4a59c5ef5a4de5a6-01"
+  "traceId": "00-93ec8890402f4ebd65ea36f3f8158328-4e4454185b36cf8a-01"
 }
 ```
 
@@ -55,7 +56,7 @@ Bad JSON, a value that is not a GUID, or a missing parameter. The detail is deli
   "title": "Bad Request",
   "status": 400,
   "detail": "The request could not be read. Check the URL, query string and JSON body.",
-  "traceId": "00-2b8498f0b75c87e08c57820cb8fffff5-710c8841e26b7b76-01"
+  "traceId": "00-834e22c461c40e7138c0107ecdfc86b0-846cdf635ec6db88-01"
 }
 ```
 
@@ -66,7 +67,7 @@ Bad JSON, a value that is not a GUID, or a missing parameter. The detail is deli
   "type": "https://tools.ietf.org/html/rfc9110#section-15.5.2",
   "title": "Unauthorized",
   "status": 401,
-  "traceId": "00-5b43c4b247567d134aa7fc57a98aa1ca-87c787875e4de480-01"
+  "traceId": "00-67416ad0d49b033f671a9fe932aba4a6-76b6257c334467c7-01"
 }
 ```
 
@@ -78,7 +79,7 @@ A wrong email or password is also a 401, with the same text for an unknown email
   "title": "Unauthorized",
   "status": 401,
   "detail": "Invalid email or password.",
-  "traceId": "00-f7fb12741b03cdec18b5f7dfafc421e0-19b6e6241181cf30-01"
+  "traceId": "00-104bfa321f8f285e7e73d4faf587f701-2f7d4df5a09f1702-01"
 }
 ```
 
@@ -90,7 +91,7 @@ A wrong email or password is also a 401, with the same text for an unknown email
   "title": "Forbidden",
   "status": 403,
   "detail": "You are not a member of this conversation.",
-  "traceId": "00-9de342c950b68be295697128e74b680e-7e844709cd0b8842-01"
+  "traceId": "00-f06a0db5981f5e89c4ef99e2653f8bac-413cb180cf53c098-01"
 }
 ```
 
@@ -102,7 +103,7 @@ A conversation that does not exist and one the caller is not in give this same a
   "title": "Forbidden",
   "status": 403,
   "detail": "The X-Requested-With header is required.",
-  "traceId": "00-2adc32b7aa97bb92a3204746dcbe67af-45c8219c38009248-01"
+  "traceId": "00-39022ac9a3ccbb246a29754fd81ef651-1e1cacf5a1659505-01"
 }
 ```
 
@@ -113,8 +114,8 @@ A conversation that does not exist and one the caller is not in give this same a
   "type": "https://tools.ietf.org/html/rfc9110#section-15.5.5",
   "title": "Not Found",
   "status": 404,
-  "detail": "User with ID '94bce19b-da24-4db7-991c-5d8cb52c8b82' was not found.",
-  "traceId": "00-dd1221499dba629cd1d14ad9a84bc7f2-1f4de14eca024dfd-01"
+  "detail": "User with ID '6ee42f32-657f-4285-b05b-f65549abd766' was not found.",
+  "traceId": "00-a4ee4138c3920b34fc589056071632e9-01401bb4ab33ffdd-01"
 }
 ```
 
@@ -125,7 +126,7 @@ A conversation that does not exist and one the caller is not in give this same a
   "type": "https://tools.ietf.org/html/rfc9110#section-15.5.6",
   "title": "Method Not Allowed",
   "status": 405,
-  "traceId": "00-b03d4c7749a464eb725b2582314d55eb-09459540a0587aab-01"
+  "traceId": "00-eee972138a7f01fa388633baef7e1127-999471634e76598a-01"
 }
 ```
 
@@ -137,7 +138,28 @@ A conversation that does not exist and one the caller is not in give this same a
   "title": "Conflict",
   "status": 409,
   "detail": "This message was deleted.",
-  "traceId": "00-5927d81247d3835afdecda3abe0b8a27-75a64dd01ffe6d7a-01"
+  "traceId": "00-cdf8242a2f977ee221b867e8c4961ac5-1887e2d3f6130a6e-01"
+}
+```
+
+### Conflict codes
+
+A conflict about the keys of a conversation carries a `code`. Each means the client should look at the conversation again and make the epoch anew.
+
+| `code` | Meaning |
+|---|---|
+| `epoch-stale` | Another epoch was stored first, so the one offered is not the next number. |
+| `epoch-members-changed` | The people in the conversation, or the key generation of one of them, are not what the epoch was made for. |
+| `member-has-no-keys` | Someone in the conversation has not set up encryption, so no key can be sealed for them. |
+
+```json
+{
+  "type": "https://tools.ietf.org/html/rfc9110#section-15.5.10",
+  "title": "Conflict",
+  "status": 409,
+  "detail": "The people in this conversation, or their keys, are not the ones this epoch was made for.",
+  "code": "epoch-members-changed",
+  "traceId": "00-42f8a9c5671ffc0dad456d19684bf6a9-44c671cb88728d1a-01"
 }
 ```
 
@@ -148,20 +170,20 @@ A conversation that does not exist and one the caller is not in give this same a
   "type": "https://tools.ietf.org/html/rfc9110#section-15.5.16",
   "title": "Unsupported Media Type",
   "status": 415,
-  "traceId": "00-9179aba10ad5891c3207dc2b2f52b222-8f8200d8f154af8b-01"
+  "traceId": "00-7dd3e4f4af4f483551c39fbebe5eb75f-4fea0cc63cad1f48-01"
 }
 ```
 
 ### 429 rate limit
 
-Status 429, header `Retry-After: 60`:
+Status 429, header `Retry-After: 59`:
 
 ```json
 {
   "title": "Too Many Requests",
   "status": 429,
-  "detail": "Too many requests. Try again in 60 seconds.",
-  "traceId": "00-8fb4c471eebda8e924f7802814f41313-bbba6f89928124d1-01"
+  "detail": "Too many requests. Try again in 59 seconds.",
+  "traceId": "00-408456452030b08c5f4f8cb951c82134-df3d1a0b6a340c82-01"
 }
 ```
 
@@ -174,7 +196,7 @@ After five wrong passwords the account is locked for 15 minutes. Status 429, hea
   "title": "Too Many Requests",
   "status": 429,
   "detail": "Too many failed sign-in attempts. Try again in 15 minutes.",
-  "traceId": "00-36263891c05db23954bb1a654332e8ff-b9fcf2d67d4fc488-01"
+  "traceId": "00-ffc7af98d434ddc730b01be8ae797827-0e3a80a1980a764a-01"
 }
 ```
 

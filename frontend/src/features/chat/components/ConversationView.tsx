@@ -5,6 +5,7 @@ import { AlertCircle, LoaderCircle } from 'lucide-react'
 import { getApiError } from '../../../lib/errors'
 import { formatClock, formatDayLabel } from '../../../lib/format'
 import { focusedMessageId } from '../../notifications/navigation'
+import { useConversationKeys } from '../../encryption/hooks/useConversationKeys'
 import { openMessage } from '../api/chatApi'
 import { useConversations } from '../api/useConversations'
 import { useMembers } from '../api/useMembers'
@@ -59,6 +60,9 @@ export function ConversationView() {
 function ConversationPane({ conversation }: { conversation: Conversation }) {
   const queryClient = useQueryClient()
   const location = useLocation()
+
+  // A conversation from before keys, or one whose key must be replaced after someone left, has its keys made as it is opened.
+  useConversationKeys(conversation.id)
 
   // Set while the messages are read from a window of the history (a search result, or a mention far back) and not from the
   // latest page. The latest page is not loaded then: it would join the window with a hole between them.

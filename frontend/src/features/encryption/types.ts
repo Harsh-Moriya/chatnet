@@ -80,3 +80,86 @@ export interface DeviceStore {
   // The device of the person who last had keys saved here, so a sign-in can say which device it is before it knows who signs in.
   lastDeviceId(): Promise<string | null>
 }
+
+// ##### Conversation keys #####
+
+// The key of each period of each conversation the person has opened here, so it is not opened from its envelope again. Kept per
+// person, so two people who use one browser each have their own.
+export interface EpochKeyStore {
+  load(userId: string, conversationId: string, epoch: number): Promise<Uint8Array | null>
+  save(userId: string, conversationId: string, epoch: number, key: Uint8Array): Promise<void>
+  // The newest epoch of the conversation held here, or 0 when there is none.
+  highest(userId: string, conversationId: string): Promise<number>
+  // Everything of one person, at sign-out.
+  removeAll(userId: string): Promise<void>
+}
+
+// The identity key a person had the first time they were seen. A later key that differs is a change the person must accept.
+export interface Pin {
+  ownerId: string
+  contactId: string
+  identityPublic: Uint8Array
+  firstSeenAt: string
+}
+
+export interface PinStore {
+  load(ownerId: string, contactId: string): Promise<Pin | null>
+  save(pin: Pin): Promise<void>
+  removeAll(ownerId: string): Promise<void>
+}
+
+// The current public keys of one person, as the server holds them.
+export interface UserBundleWire {
+  userId: string
+  generation: number
+  bundle: string
+}
+
+export interface EnvelopeWire {
+  userId: string
+  generation: number
+  envelope: string
+}
+
+// A new epoch as it is sent: base64url bytes, an envelope for each member.
+export interface EpochBody {
+  epoch: number
+  commitment: string
+  signature: string
+  envelopes: EnvelopeWire[]
+}
+
+export type EpochReason = 'Created' | 'MemberAdded' | 'Rotated'
+
+// One epoch as the server gives it to one member: the proof, the people it was made for, and this member's own envelope.
+export interface EpochRecordWire {
+  epoch: number
+  creatorId: string
+  reason: EpochReason
+  createdAt: string
+  commitment: string
+  signature: string
+  members: { userId: string; generation: number }[]
+  generation: number
+  envelope: string
+}
+
+export interface EpochPageWire {
+  epochs: EpochRecordWire[]
+  hasMore: boolean
+}
+
+export interface ConversationKeyState {
+  keyEpoch: number
+  keyRotationRequired: boolean
+}
+
+// Everything the conversation keys ask of the server. The real one is epochApi.ts; the tests use a fake server behind the same interface.
+export interface EpochApi {
+  lookupKeys(userIds: string[]): Promise<UserBundleWire[]>
+  getKeyState(conversationId: string): Promise<ConversationKeyState>
+  // The people who are in the conversation now.
+  getMemberIds(conversationId: string): Promise<string[]>
+  getEpochs(conversationId: string, from: number, limit?: number): Promise<EpochPageWire>
+  postEpoch(conversationId: string, body: EpochBody): Promise<void>
+}

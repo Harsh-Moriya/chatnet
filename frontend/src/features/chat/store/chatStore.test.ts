@@ -31,6 +31,8 @@ function conversation(overrides: Partial<Conversation> & { id: string }): Conver
     otherUserId: null,
     isMuted: false,
     leftAt: null,
+    keyEpoch: 0,
+    keyRotationRequired: false,
     ...overrides,
   }
 }
@@ -899,5 +901,75 @@ describe('muting a conversation', () => {
 
     expect(store().conversations.c1.isMuted).toBe(true)
     expect(store().conversations.c1.unreadCount).toBe(1)
+  })
+})
+
+describe('the keys of a conversation', () => {
+  it('take the epoch and the need to replace it that the server pushed', () => {
+    store().seedConversations([conversation({ id: 'c1' }), conversation({ id: 'c2' })])
+
+    store().applyKeyChange({ conversationId: 'c1', keyEpoch: 1, keyRotationRequired: false })
+    store().applyKeyChange({ conversationId: 'c1', keyEpoch: 1, keyRotationRequired: true })
+
+    expect(store().conversations.c1).toMatchObject({ keyEpoch: 1, keyRotationRequired: true })
+    expect(store().conversations.c2).toMatchObject({ keyEpoch: 0, keyRotationRequired: false })
+  })
+
+  it('are not lowered by a push that is older than what is held', () => {
+    store().seedConversations([conversation({ id: 'c1', keyEpoch: 4 })])
+
+    store().applyKeyChange({ conversationId: 'c1', keyEpoch: 3, keyRotationRequired: true })
+
+    expect(store().conversations.c1).toMatchObject({ keyEpoch: 4, keyRotationRequired: false })
+  })
+
+  it('keep the need to replace the epoch when a late push for the same epoch says it was not needed', () => {
+    store().seedConversations([conversation({ id: 'c1', keyEpoch: 2, keyRotationRequired: true })])
+
+    store().applyKeyChange({ conversationId: 'c1', keyEpoch: 2, keyRotationRequired: false })
+
+    expect(store().conversations.c1.keyRotationRequired).toBe(true)
+  })
+
+  it('turn the need off when a newer epoch arrives', () => {
+    store().seedConversations([conversation({ id: 'c1', keyEpoch: 2, keyRotationRequired: true })])
+
+    store().applyKeyChange({ conversationId: 'c1', keyEpoch: 3, keyRotationRequired: false })
+
+    expect(store().conversations.c1).toMatchObject({ keyEpoch: 3, keyRotationRequired: false })
+  })
+
+  it('take a newer epoch that already needs replacing', () => {
+    store().seedConversations([conversation({ id: 'c1', keyEpoch: 2 })])
+
+    store().applyKeyChange({ conversationId: 'c1', keyEpoch: 3, keyRotationRequired: true })
+
+    expect(store().conversations.c1).toMatchObject({ keyEpoch: 3, keyRotationRequired: true })
+  })
+
+  it('say nothing changed when the push repeats what is held', () => {
+    store().seedConversations([conversation({ id: 'c1', keyEpoch: 2, keyRotationRequired: true })])
+    const before = store().conversations
+
+    store().applyKeyChange({ conversationId: 'c1', keyEpoch: 2, keyRotationRequired: true })
+
+    expect(store().conversations).toBe(before)
+  })
+
+  it('ignore a conversation the sidebar does not know', () => {
+    const before = store().conversations
+
+    store().applyKeyChange({ conversationId: 'nope', keyEpoch: 1, keyRotationRequired: false })
+
+    expect(store().conversations).toBe(before)
+  })
+
+  it('leave the unread count and the preview alone', () => {
+    store().seedConversations([conversation({ id: 'c1', unreadCount: 4 })])
+    const before = store().conversations.c1
+
+    store().applyKeyChange({ conversationId: 'c1', keyEpoch: 2, keyRotationRequired: true })
+
+    expect(store().conversations.c1).toEqual({ ...before, keyEpoch: 2, keyRotationRequired: true })
   })
 })

@@ -40,6 +40,7 @@ public sealed class HubClient : IAsyncDisposable
     private readonly ConcurrentQueue<JsonElement> _conversationUpdates = new();
     private readonly ConcurrentQueue<JsonElement> _profileChanges = new();
     private readonly ConcurrentQueue<RemovedEvent> _removals = new();
+    private readonly ConcurrentQueue<JsonElement> _keyChanges = new();
 
     private HubClient(HubConnection connection)
     {
@@ -62,6 +63,7 @@ public sealed class HubClient : IAsyncDisposable
         _connection.On<JsonElement>("MembersChanged", change => _membersChanges.Enqueue(change));
         _connection.On<JsonElement>("ConversationUpdated", update => _conversationUpdates.Enqueue(update));
         _connection.On<JsonElement>("ProfileChanged", profile => _profileChanges.Enqueue(profile));
+        _connection.On<JsonElement>("ConversationKeyChanged", state => _keyChanges.Enqueue(state));
         _connection.On<Guid, DateTime>("RemovedFromConversation", (conversationId, leftAt) =>
             _removals.Enqueue(new RemovedEvent(conversationId, leftAt)));
     }
@@ -242,6 +244,18 @@ public sealed class HubClient : IAsyncDisposable
     {
         await Task.Delay(QuietPeriod);
         return _membersChanges.Any(c => c.GetProperty("conversationId").GetGuid() == conversationId);
+    }
+
+    public IReadOnlyList<JsonElement> KeyChanges => _keyChanges.ToArray();
+
+    // The next push about the keys of this conversation that the match accepts.
+    public Task<JsonElement> WaitForKeyChangedAsync(Guid conversationId, Func<JsonElement, bool>? match = null, TimeSpan? timeout = null) =>
+        WaitAsync(_keyChanges, s => s.GetProperty("conversationId").GetGuid() == conversationId && (match?.Invoke(s) ?? true), timeout);
+
+    public async Task<bool> ReceivedKeyChangedAsync(Guid conversationId)
+    {
+        await Task.Delay(QuietPeriod);
+        return _keyChanges.Any(s => s.GetProperty("conversationId").GetGuid() == conversationId);
     }
 
     public Task<JsonElement> WaitForProfileChangedAsync(Guid userId, TimeSpan? timeout = null) =>

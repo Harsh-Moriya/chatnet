@@ -36,6 +36,7 @@ public class RemoveMemberHandler : IRequestHandler<RemoveMemberCommand, List<Mem
 
         OutboxMessage membersChanged;
         OutboxMessage memberLeft;
+        OutboxMessage keyChanged;
 
         await using (var change = await _conversations.BeginMembershipChangeAsync(request.ConversationId, cancellationToken)
                                   ?? throw new ForbiddenException(ConversationErrors.NotAMember))
@@ -43,10 +44,15 @@ public class RemoveMemberHandler : IRequestHandler<RemoveMemberCommand, List<Mem
             change.RequireGroupMember(request.ActorId);
             change.Members.Remove(request.ActorId, request.TargetId, now);
 
+            // The person removed still holds the key of the current period, so it must be replaced before anything more is
+            // said under it. That is for the next member to do; here it is only recorded, in the same step as the removal.
+            change.RequireRotation();
+
             membersChanged = _outbox.Create(new MembersChanged(request.ConversationId, [request.TargetId]));
             memberLeft = _outbox.Create(new MemberLeft(request.ConversationId, request.TargetId));
+            keyChanged = _outbox.Create(new ConversationKeyChanged(request.ConversationId));
 
-            await change.CommitAsync([], [membersChanged, memberLeft], cancellationToken);
+            await change.CommitAsync([], [membersChanged, memberLeft, keyChanged], cancellationToken);
         }
 
         _logger.LogInformation(
@@ -61,6 +67,11 @@ public class RemoveMemberHandler : IRequestHandler<RemoveMemberCommand, List<Mem
         await _outbox.DeliverAsync(
             membersChanged,
             () => _notifier.NotifyMembersChangedAsync(request.ConversationId, [request.TargetId], cancellationToken),
+            cancellationToken);
+
+        await _outbox.DeliverAsync(
+            keyChanged,
+            () => _notifier.NotifyKeyChangedAsync(request.ConversationId, cancellationToken),
             cancellationToken);
 
         return await _conversations.GetActiveMembersAsync(request.ConversationId, cancellationToken);

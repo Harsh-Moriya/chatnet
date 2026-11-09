@@ -1,7 +1,9 @@
 using ChatNET.API.Auth.Models;
 using ChatNET.API.Common.Exceptions;
+using ChatNET.API.Conversations.KeyEpochs;
 using ChatNET.API.Conversations.Models;
 using ChatNET.API.Conversations.Persistence;
+using ChatNET.API.Keys.Persistence;
 using ChatNET.API.Messaging;
 using ChatNET.API.Messaging.Hubs;
 using ChatNET.API.Notifications;
@@ -13,12 +15,14 @@ using MediatR;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace ChatNET.API.Conversations.CreateGroup;
 
 public class CreateGroupHandler : IRequestHandler<CreateGroupCommand, ConversationDto>
 {
     private readonly IConversationRepository _conversations;
+    private readonly IKeyRepository _keys;
     private readonly UserManager<AppUser> _userManager;
     private readonly ILogger<CreateGroupHandler> _logger;
     private readonly ConversationNotifier _notifier;
@@ -28,6 +32,7 @@ public class CreateGroupHandler : IRequestHandler<CreateGroupCommand, Conversati
 
     public CreateGroupHandler(
         IConversationRepository conversations,
+        IKeyRepository keys,
         UserManager<AppUser> userManager,
         ILogger<CreateGroupHandler> logger,
         ConversationNotifier notifier,
@@ -36,6 +41,7 @@ public class CreateGroupHandler : IRequestHandler<CreateGroupCommand, Conversati
         IHubContext<ChatHub, IChatClient> hub)
     {
         _conversations = conversations;
+        _keys = keys;
         _userManager = userManager;
         _logger = logger;
         _notifier = notifier;
@@ -65,16 +71,25 @@ public class CreateGroupHandler : IRequestHandler<CreateGroupCommand, Conversati
         if (missing.Count > 0)
             throw new NotFoundException("User", string.Join(", ", missing));
 
+        // The first key period must be for the creator and everyone invited, each at the key they have now.
+        var allMemberIds = new List<Guid> { request.UserId };
+        allMemberIds.AddRange(memberIds);
+        var submission = EpochSubmission.From(request.Epoch);
+        EpochRules.Check(0, allMemberIds, await _keys.GetCurrentGenerationsAsync(allMemberIds, cancellationToken), submission);
+
         var now = DateTime.UtcNow;
-        // The ids are made here, not by the database, because the outbox rows saved with the group name them.
+        // The id is the one the browser chose, because the first key period was made for it, and the outbox rows saved with the
+        // group name it.
         var conversation = new Conversation
         {
-            Id = Guid.CreateVersion7(),
+            Id = request.Id,
             Type = ConversationType.Group,
             Name = request.Name.Trim(),
             CreatedAt = now,
             UpdatedAt = now,
             CreatedById = request.UserId,
+            KeyEpoch = submission.Epoch,
+            KeyEpochs = [submission.ToEntity(request.Id, request.UserId, KeyEpochReason.Created, now)],
             Members =
             [
                 new ConversationMember { UserId = request.UserId, Role = MemberRole.Owner, JoinedAt = now },
@@ -101,14 +116,20 @@ public class CreateGroupHandler : IRequestHandler<CreateGroupCommand, Conversati
 
         // The announcement of the group and each invitation are saved with it, so the pushes cannot be lost to a failure
         // after the commit: the relay makes any that this request does not.
-        var allMemberIds = new List<Guid> { request.UserId };
-        allMemberIds.AddRange(memberIds);
         var announcementRow = _outbox.Create(new ConversationCreated(conversation.Id, request.UserId, allMemberIds));
         var invitationRows = invitations
             .Select(invitation => _outbox.Create(new NotificationCreated(invitation.Id, invitation.UserId)))
             .ToList();
 
-        await _conversations.AddAsync(conversation, invitations, [announcementRow, .. invitationRows, .. _alerts.ForNotifications(invitations)], cancellationToken);
+        try
+        {
+            await _conversations.AddAsync(conversation, invitations, [announcementRow, .. invitationRows, .. _alerts.ForNotifications(invitations)], cancellationToken);
+        }
+        catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
+        {
+            // Only an id that is already a conversation's can be refused here: the people are distinct and checked already.
+            throw new ConflictException("Could not create the conversation. Please try again.");
+        }
 
         _logger.LogInformation(
             "Group conversation {ConversationId} created by {UserId} with {MemberCount} members",

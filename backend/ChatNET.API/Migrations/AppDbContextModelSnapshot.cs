@@ -204,6 +204,16 @@ namespace ChatNET.API.Migrations
                     b.Property<string>("DirectKey")
                         .HasColumnType("text");
 
+                    b.Property<int>("KeyEpoch")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
+                    b.Property<bool>("KeyRotationRequired")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
                     b.Property<string>("Name")
                         .HasColumnType("text");
 
@@ -228,6 +238,80 @@ namespace ChatNET.API.Migrations
                     b.ToTable("Conversations", t =>
                         {
                             t.HasCheckConstraint("CK_Conversations_DirectType_DirectKey", "\"Type\" != 'Direct' OR \"DirectKey\" IS NOT NULL");
+
+                            t.HasCheckConstraint("CK_Conversations_KeyEpoch", "\"KeyEpoch\" >= 0");
+                        });
+                });
+
+            modelBuilder.Entity("ChatNET.API.Conversations.Models.ConversationKeyEnvelope", b =>
+                {
+                    b.Property<Guid>("ConversationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Epoch")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("AccountKeyGeneration")
+                        .HasColumnType("integer");
+
+                    b.Property<byte[]>("Envelope")
+                        .IsRequired()
+                        .HasColumnType("bytea");
+
+                    b.HasKey("ConversationId", "Epoch", "UserId");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("ConversationId", "UserId", "Epoch");
+
+                    b.ToTable("ConversationKeyEnvelopes", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ConversationKeyEnvelopes_AccountKeyGeneration", "\"AccountKeyGeneration\" >= 1");
+
+                            t.HasCheckConstraint("CK_ConversationKeyEnvelopes_Envelope", "length(\"Envelope\") = 94");
+                        });
+                });
+
+            modelBuilder.Entity("ChatNET.API.Conversations.Models.ConversationKeyEpoch", b =>
+                {
+                    b.Property<Guid>("ConversationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Epoch")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CreatedById")
+                        .HasColumnType("uuid");
+
+                    b.Property<byte[]>("KeyCommitment")
+                        .IsRequired()
+                        .HasColumnType("bytea");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<byte[]>("Signature")
+                        .IsRequired()
+                        .HasColumnType("bytea");
+
+                    b.HasKey("ConversationId", "Epoch");
+
+                    b.HasIndex("CreatedById");
+
+                    b.ToTable("ConversationKeyEpochs", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ConversationKeyEpochs_Epoch", "\"Epoch\" >= 1");
+
+                            t.HasCheckConstraint("CK_ConversationKeyEpochs_KeyCommitment", "length(\"KeyCommitment\") = 32");
+
+                            t.HasCheckConstraint("CK_ConversationKeyEpochs_Signature", "length(\"Signature\") = 64");
                         });
                 });
 
@@ -782,6 +866,36 @@ namespace ChatNET.API.Migrations
                     b.Navigation("CreatedBy");
                 });
 
+            modelBuilder.Entity("ChatNET.API.Conversations.Models.ConversationKeyEnvelope", b =>
+                {
+                    b.HasOne("ChatNET.API.Auth.Models.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ChatNET.API.Conversations.Models.ConversationKeyEpoch", null)
+                        .WithMany("Envelopes")
+                        .HasForeignKey("ConversationId", "Epoch")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ChatNET.API.Conversations.Models.ConversationKeyEpoch", b =>
+                {
+                    b.HasOne("ChatNET.API.Conversations.Models.Conversation", null)
+                        .WithMany("KeyEpochs")
+                        .HasForeignKey("ConversationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ChatNET.API.Auth.Models.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("ChatNET.API.Conversations.Models.ConversationMember", b =>
                 {
                     b.HasOne("ChatNET.API.Conversations.Models.Conversation", "Conversation")
@@ -979,7 +1093,14 @@ namespace ChatNET.API.Migrations
 
             modelBuilder.Entity("ChatNET.API.Conversations.Models.Conversation", b =>
                 {
+                    b.Navigation("KeyEpochs");
+
                     b.Navigation("Members");
+                });
+
+            modelBuilder.Entity("ChatNET.API.Conversations.Models.ConversationKeyEpoch", b =>
+                {
+                    b.Navigation("Envelopes");
                 });
 
             modelBuilder.Entity("ChatNET.API.Messaging.Models.Message", b =>

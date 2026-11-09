@@ -27,6 +27,17 @@ public class Conversation
 
     public Guid CreatedById { get; set; }
 
+    // The newest key period of the conversation (see ConversationKeyEpoch), or 0 while it has none. Every conversation made
+    // from now on starts at 1; the ones that existed before keys did are at 0 until a member makes their first.
+    public int KeyEpoch { get; set; }
+
+    // Someone left or was removed since the current key was made, so it must be replaced before anything more is said under it.
+    // Cleared when the next epoch is stored. Set in the same transaction as the change in membership.
+    public bool KeyRotationRequired { get; set; }
+
     public AppUser CreatedBy { get; set; } = null!;
     public ICollection<ConversationMember> Members { get; set; } = [];
+
+    // Only filled when a conversation is made, so its first epoch is saved with it. Later epochs are added on their own.
+    public ICollection<ConversationKeyEpoch> KeyEpochs { get; set; } = [];
 }

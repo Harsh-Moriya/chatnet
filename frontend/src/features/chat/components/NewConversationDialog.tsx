@@ -5,6 +5,7 @@ import { Button } from '../../../components/ui/Button'
 import { Dialog } from '../../../components/ui/Dialog'
 import { Input } from '../../../components/ui/Input'
 import { getApiError } from '../../../lib/errors'
+import { describeKeyFailure } from '../../encryption/keyFailures'
 import { useCreateDirect } from '../api/useCreateDirect'
 import { useCreateGroup } from '../api/useCreateGroup'
 import type { Conversation, UserSummary } from '../types'
@@ -31,6 +32,8 @@ function NewConversationForm({ onDone }: { onDone: () => void }) {
   const [mode, setMode] = useState<Mode>('direct')
   const [groupName, setGroupName] = useState('')
   const [members, setMembers] = useState<UserSummary[]>([])
+  // The person a direct conversation was just asked for, so a refusal can name them.
+  const [asked, setAsked] = useState<UserSummary | null>(null)
 
   const createDirect = useCreateDirect()
   const createGroup = useCreateGroup()
@@ -51,6 +54,7 @@ function NewConversationForm({ onDone }: { onDone: () => void }) {
 
   function pick(person: UserSummary) {
     if (mode === 'direct') {
+      setAsked(person)
       createDirect.mutate(person.id, { onSuccess: openConversation })
       return
     }
@@ -68,6 +72,7 @@ function NewConversationForm({ onDone }: { onDone: () => void }) {
   }
 
   const selectedIds = new Set(members.map((m) => m.id))
+  const nameOf = (userId: string) => [...members, ...(asked ? [asked] : [])].find((p) => p.id === userId)?.displayName ?? 'Someone'
 
   return (
     <div className="flex min-h-0 flex-col gap-4 p-5">
@@ -93,7 +98,7 @@ function NewConversationForm({ onDone }: { onDone: () => void }) {
       {failure && (
         <div role="alert" className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-          <span>{getApiError(failure)}</span>
+          <span>{describeKeyFailure(failure, nameOf) ?? getApiError(failure)}</span>
         </div>
       )}
 

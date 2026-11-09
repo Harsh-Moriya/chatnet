@@ -12,9 +12,16 @@ public static class KeyFormats
     public const byte Pbkdf2Sha256 = 1;
 
     public const int KeyBytes = 32;
+    public const int SignatureBytes = 64;
 
     // version, suite, generation (4), identity public key (32), account public key (32), signature (64).
-    public const int BundleBytes = 2 + 4 + 2 * KeyBytes + 64;
+    public const int BundleBytes = 2 + 4 + 2 * KeyBytes + SignatureBytes;
+
+    // The hash a conversation key is committed to.
+    public const int CommitmentBytes = 32;
+
+    // A conversation key sealed for one member: version, suite, ephemeral public key (32), nonce (12), the key (32) and its tag (16).
+    public const int EnvelopeBytes = 2 + KeyBytes + 12 + KeyBytes + 16;
     private const int BundleGenerationAt = 2;
 
     // version, suite, kdf, iterations (4), salt (16), nonce (12), then at least a tag.
@@ -43,6 +50,10 @@ public static class KeyFormats
         generation = (int)System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(bundle.AsSpan(BundleGenerationAt));
         return true;
     }
+
+    // An envelope of the right size and version. What is inside can only be known to the member it is sealed for.
+    public static bool IsEnvelope(byte[] envelope) =>
+        envelope.Length == EnvelopeBytes && envelope[0] == Version && envelope[1] == Suite;
 
     // A backup of a known version with a key derivation this server recognises and some ciphertext.
     public static bool IsBackup(byte[] blob, int maxBytes) =>

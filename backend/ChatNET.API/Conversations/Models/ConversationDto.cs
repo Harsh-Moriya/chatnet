@@ -7,7 +7,8 @@ namespace ChatNET.API.Conversations.Models;
 // null for a Group. IsMuted is the viewer's own choice: it only quiets alerts for new messages, and what a
 // conversation shows to its other members does not change. LeftAt is when the viewer stopped being a member of a group
 // (they left, or were removed), or null while they are one: a conversation they left stays in their list, read-only,
-// showing what was said up to that moment.
+// showing what was said up to that moment. KeyEpoch is the newest key period of the conversation (0 while it has none) and
+// KeyRotationRequired says someone left since it was made, so the next one must be made before anything more is said.
 public record ConversationDto(
     Guid Id,
     ConversationType Type,
@@ -18,7 +19,9 @@ public record ConversationDto(
     int UnreadCount,
     Guid? OtherUserId,
     bool IsMuted,
-    DateTime? LeftAt
+    DateTime? LeftAt,
+    int KeyEpoch,
+    bool KeyRotationRequired
 );
 
 // Content is null when the last message was deleted. It is truncated to a preview length, and empty when the

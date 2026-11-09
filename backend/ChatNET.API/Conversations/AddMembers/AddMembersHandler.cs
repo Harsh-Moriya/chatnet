@@ -1,9 +1,11 @@
 using ChatNET.API.Auth.Models;
 using ChatNET.API.Common.Exceptions;
 using ChatNET.API.Common.Time;
+using ChatNET.API.Conversations.KeyEpochs;
 using ChatNET.API.Conversations.Membership;
 using ChatNET.API.Conversations.Models;
 using ChatNET.API.Conversations.Persistence;
+using ChatNET.API.Keys.Persistence;
 using ChatNET.API.Messaging.Hubs;
 using ChatNET.API.Notifications.Models;
 using ChatNET.API.Outbox;
@@ -19,6 +21,7 @@ namespace ChatNET.API.Conversations.AddMembers;
 public class AddMembersHandler : IRequestHandler<AddMembersCommand, List<MemberDto>>
 {
     private readonly IConversationRepository _conversations;
+    private readonly IKeyRepository _keys;
     private readonly UserManager<AppUser> _userManager;
     private readonly ConversationNotifier _notifier;
     private readonly OutboxPublisher _outbox;
@@ -29,6 +32,7 @@ public class AddMembersHandler : IRequestHandler<AddMembersCommand, List<MemberD
 
     public AddMembersHandler(
         IConversationRepository conversations,
+        IKeyRepository keys,
         UserManager<AppUser> userManager,
         ConversationNotifier notifier,
         OutboxPublisher outbox,
@@ -38,6 +42,7 @@ public class AddMembersHandler : IRequestHandler<AddMembersCommand, List<MemberD
         ILogger<AddMembersHandler> logger)
     {
         _conversations = conversations;
+        _keys = keys;
         _userManager = userManager;
         _notifier = notifier;
         _outbox = outbox;
@@ -54,6 +59,7 @@ public class AddMembersHandler : IRequestHandler<AddMembersCommand, List<MemberD
         MembershipOutcome outcome;
         List<Notification> invitations;
         List<OutboxMessage> rows;
+        OutboxMessage keyChanged;
 
         await using (var change = await _conversations.BeginMembershipChangeAsync(request.ConversationId, cancellationToken)
                                   ?? throw new ForbiddenException(ConversationErrors.NotAMember))
@@ -76,6 +82,13 @@ public class AddMembersHandler : IRequestHandler<AddMembersCommand, List<MemberD
 
             outcome = change.Members.Add(request.ActorId, requested, now);
 
+            // People who join must not be able to read what was said before, so the group gets a new key period, made for
+            // everyone who will be in it, saved with their joining. An epoch for anyone else is refused, and so is a person who
+            // was added and has no keys, and nothing is saved.
+            var generations = await _keys.GetCurrentGenerationsAsync(change.Members.ActiveIds, cancellationToken);
+            change.StageEpoch(request.ActorId, EpochSubmission.From(request.Epoch), KeyEpochReason.MemberAdded, generations, now);
+            keyChanged = _outbox.Create(new ConversationKeyChanged(request.ConversationId));
+
             // Each person who was added is told so in the bell, saved with the change, as when a group is made.
             invitations = outcome.Joined.Select(userId => new Notification
             {
@@ -93,6 +106,7 @@ public class AddMembersHandler : IRequestHandler<AddMembersCommand, List<MemberD
                 _outbox.Create(new MembersJoined(request.ConversationId, outcome.Joined)),
                 .. invitations.Select(n => _outbox.Create(new NotificationCreated(n.Id, n.UserId))),
                 .. _alerts.ForNotifications(invitations),
+                keyChanged,
             ];
 
             await change.CommitAsync(invitations, rows, cancellationToken);
@@ -110,6 +124,11 @@ public class AddMembersHandler : IRequestHandler<AddMembersCommand, List<MemberD
         await _outbox.DeliverAsync(
             rows[1],
             () => _notifier.NotifyJoinedAsync(request.ConversationId, outcome.Joined.ToList(), cancellationToken),
+            cancellationToken);
+
+        await _outbox.DeliverAsync(
+            keyChanged,
+            () => _notifier.NotifyKeyChangedAsync(request.ConversationId, cancellationToken),
             cancellationToken);
 
         var actor = await _userManager.FindByIdAsync(request.ActorId.ToString());

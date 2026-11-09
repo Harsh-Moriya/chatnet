@@ -80,8 +80,7 @@ public class StatusCodeProblemDetailsTests
         var user = await _factory.RegisterUserAsync();
         using var client = _factory.CreateClientFor(user);
 
-        var response = await client.PostAsJsonAsync("/api/conversations/direct",
-            new { otherUserId = Guid.NewGuid() });
+        var response = await client.PostDirectAsync(Guid.NewGuid());
 
         await AssertProblemAsync(response, HttpStatusCode.NotFound, "Not Found");
         var problem = await response.ReadProblemAsync();

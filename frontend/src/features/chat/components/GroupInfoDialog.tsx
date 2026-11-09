@@ -7,6 +7,7 @@ import { Dialog } from '../../../components/ui/Dialog'
 import { Input } from '../../../components/ui/Input'
 import { Menu, type MenuItem } from '../../../components/ui/Menu'
 import { getApiError } from '../../../lib/errors'
+import { describeKeyFailure } from '../../encryption/keyFailures'
 import { useAuth } from '../../auth/hooks/useAuth'
 import { removePicture, setPicture } from '../../profile/api/profileApi'
 import { prepareAvatar } from '../../profile/avatarImage'
@@ -48,6 +49,9 @@ function GroupInfo({ conversation, onDone }: { conversation: Conversation; onDon
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // The name of a person the dialog has been asked to add, for a refusal that names them.
+  const nameOf = (userId: string) => chosen.find((person) => person.id === userId)?.displayName ?? 'Someone'
+
   // What every change needs: the dialog is busy while it runs, a refusal is shown, and nothing on the screen changes until
   // the server has accepted it (the store takes the server's answer).
   async function run(action: () => Promise<unknown>): Promise<boolean> {
@@ -57,7 +61,7 @@ function GroupInfo({ conversation, onDone }: { conversation: Conversation; onDon
       setError(null)
       return true
     } catch (failure) {
-      setError(getApiError(failure))
+      setError(describeKeyFailure(failure, nameOf) ?? getApiError(failure))
       return false
     } finally {
       setBusy(false)
