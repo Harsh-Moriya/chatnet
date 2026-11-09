@@ -1,8 +1,10 @@
 import { useAuthStore } from '../auth/store/authStore'
 import { indexedDbDeviceStore } from './deviceStore'
+import { indexedDbEpochKeyStore } from './epochKeyStore'
 import { keysApi } from './keysApi'
+import { indexedDbPinStore } from './pinStore'
 import { useEncryptionStore } from './store'
-import type { DeviceStore, KeysApi } from './types'
+import type { DeviceStore, EpochKeyStore, KeysApi, PinStore } from './types'
 
 // Signing out: this browser stops being a device. Apart from the rest of the feature, and importing no cryptography, because the page
 // registers it for every signed-in person and must not carry the encryption code to do so.
@@ -10,20 +12,27 @@ import type { DeviceStore, KeysApi } from './types'
 interface ReleaseDeps {
   api: Pick<KeysApi, 'removeDevice'>
   store: DeviceStore
+  epochKeys: Pick<EpochKeyStore, 'removeAll'>
+  pins: Pick<PinStore, 'removeAll'>
 }
 
-// Taken off the server (the sessions of the device end with it) and the keys deleted here. The keys are deleted even when the server
-// cannot be reached, because the person asked for this browser to forget them.
+// Taken off the server (the sessions of the device end with it) and everything kept for the person deleted here: their keys, the keys of
+// their conversations and who they have seen. It is deleted even when the server cannot be reached, because the person asked for this
+// browser to forget them.
 export async function release(deps: ReleaseDeps, userId: string): Promise<void> {
-  const stored = await deps.store.load(userId)
-  if (!stored) return
-
   try {
-    await deps.api.removeDevice(stored.deviceId)
-  } catch {
-    // The device stays in the list until the person removes it there.
+    const stored = await deps.store.load(userId)
+    if (!stored) return
+
+    try {
+      await deps.api.removeDevice(stored.deviceId)
+    } catch {
+      // The device stays in the list until the person removes it there.
+    } finally {
+      await deps.store.remove(userId)
+    }
   } finally {
-    await deps.store.remove(userId)
+    await Promise.all([deps.epochKeys.removeAll(userId), deps.pins.removeAll(userId)])
   }
 }
 
@@ -31,7 +40,9 @@ export async function release(deps: ReleaseDeps, userId: string): Promise<void> 
 export async function releaseDevice(): Promise<void> {
   const userId = useAuthStore.getState().user?.userId
   try {
-    if (userId !== undefined) await release({ api: keysApi, store: indexedDbDeviceStore }, userId)
+    if (userId !== undefined) {
+      await release({ api: keysApi, store: indexedDbDeviceStore, epochKeys: indexedDbEpochKeyStore, pins: indexedDbPinStore }, userId)
+    }
   } finally {
     useEncryptionStore.getState().reset()
   }
