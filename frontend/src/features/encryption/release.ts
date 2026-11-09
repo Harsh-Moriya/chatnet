@@ -16,6 +16,15 @@ interface ReleaseDeps {
   pins: Pick<PinStore, 'removeAll'>
 }
 
+// What this browser keeps for a person apart from the keys of their device: the keys of their conversations and who they have seen.
+// Deleted with the keys of the device, because it is opened with them and readable by a script on the page just the same.
+export async function forgetKept(
+  stores: { epochKeys: Pick<EpochKeyStore, 'removeAll'>; pins: Pick<PinStore, 'removeAll'> },
+  userId: string,
+): Promise<void> {
+  await Promise.all([stores.epochKeys.removeAll(userId), stores.pins.removeAll(userId)])
+}
+
 // Taken off the server (the sessions of the device end with it) and everything kept for the person deleted here: their keys, the keys of
 // their conversations and who they have seen. It is deleted even when the server cannot be reached, because the person asked for this
 // browser to forget them.
@@ -32,7 +41,7 @@ export async function release(deps: ReleaseDeps, userId: string): Promise<void> 
       await deps.store.remove(userId)
     }
   } finally {
-    await Promise.all([deps.epochKeys.removeAll(userId), deps.pins.removeAll(userId)])
+    await forgetKept(deps, userId)
   }
 }
 

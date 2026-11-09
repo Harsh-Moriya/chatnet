@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { MemoryEpochKeyStore, MemoryPinStore } from './fakeEpochServer'
 import { FakeKeysServer, MemoryDeviceStore } from './fakeKeysServer'
 import { type FlowDeps, loadState, setUp, unlock } from './flows'
-import { release } from './release'
+import { forgetKept, release } from './release'
 
 const USER = '3f2a9c1e-7b4d-4e8a-9c55-0a1b2c3d4e5f'
 const PASSPHRASE = 'correct horse battery staple'
@@ -16,6 +16,7 @@ function browser(server: FakeKeysServer) {
     store,
     device: { kind: 'Web', name: 'Chrome on Windows' },
     wait: async () => undefined,
+    forgetConversationKeys: (userId) => forgetKept({ epochKeys, pins }, userId),
   }
   return { deps, store, epochKeys, pins, leaving: { api: server, store, epochKeys, pins } }
 }

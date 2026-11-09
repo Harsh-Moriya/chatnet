@@ -63,6 +63,7 @@ sequenceDiagram
 | `MembersChanged` | pushes `MembersChanged` to the people in the group |
 | `MemberLeft` | pushes `RemovedFromConversation` to the person's tabs and evicts their connections |
 | `ConversationRenamed` | pushes `ConversationUpdated` |
+| `ConversationKeyChanged` | pushes `ConversationKeyChanged` (the newest epoch and whether it is due for replacement) to the people in the conversation now |
 | `ProfileChanged` | pushes `ProfileChanged` to everyone who shares a conversation with the person |
 | `AvatarFileRemoved` | removes a replaced picture from the bucket |
 | `PasswordResetRequested` | makes a reset token and sends the email with the link (not a push); does nothing when the row names nobody |

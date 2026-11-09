@@ -12,7 +12,9 @@ import {
   toBase64Url,
   toHex,
 } from '../../lib/crypto'
+import { MemoryEpochKeyStore, MemoryPinStore } from './fakeEpochServer'
 import { FakeKeysServer, MemoryDeviceStore, ServerRefused } from './fakeKeysServer'
+import { forgetKept } from './release'
 import {
   type FlowDeps,
   InvalidLinkCodeError,
@@ -38,6 +40,8 @@ const PASSPHRASE = 'correct horse battery staple'
 // With a gate, a poll waits until the test opens it, so a test can act between two polls of the new device without racing it.
 function browser(server: FakeKeysServer, name = 'Chrome on Windows', gate?: Promise<void>) {
   const store = new MemoryDeviceStore()
+  const epochKeys = new MemoryEpochKeyStore()
+  const pins = new MemoryPinStore()
   const waits: number[] = []
   const deps: FlowDeps = {
     api: server,
@@ -49,8 +53,9 @@ function browser(server: FakeKeysServer, name = 'Chrome on Windows', gate?: Prom
       signal?.throwIfAborted()
       await (gate ?? new Promise((resolve) => setTimeout(resolve, 0)))
     },
+    forgetConversationKeys: (userId) => forgetKept({ epochKeys, pins }, userId),
   }
-  return { deps, store, waits }
+  return { deps, store, epochKeys, pins, waits }
 }
 
 async function rejection(promise: Promise<unknown>): Promise<unknown> {
@@ -185,17 +190,51 @@ describe('what this browser has', () => {
     expect(await a.store.load(USER)).toBeNull()
   })
 
+  it('forgets the keys of the conversations and who was seen too, for that person only', async () => {
+    const OTHER = '9d8c7b6a-5e4f-4a3b-8c2d-1e0f9a8b7c6d'
+    const server = new FakeKeysServer()
+    const a = browser(server)
+    const ready = await setUp(a.deps, USER, PASSPHRASE)
+    await a.epochKeys.save(USER, 'room', 1, Uint8Array.of(1))
+    await a.epochKeys.save(OTHER, 'room', 1, Uint8Array.of(2))
+    await a.pins.save({ ownerId: USER, contactId: OTHER, identityPublic: Uint8Array.of(3), firstSeenAt: 'then' })
+    await a.pins.save({ ownerId: OTHER, contactId: USER, identityPublic: Uint8Array.of(4), firstSeenAt: 'then' })
+    server.devices = server.devices.filter((device) => device.id !== ready.deviceId)
+
+    await loadState(a.deps, USER)
+
+    expect(await a.epochKeys.load(USER, 'room', 1)).toBeNull()
+    expect(await a.pins.load(USER, OTHER)).toBeNull()
+    expect(await a.epochKeys.load(OTHER, 'room', 1)).not.toBeNull()
+    expect(await a.pins.load(OTHER, USER)).not.toBeNull()
+  })
+
+  it('keeps the keys of the conversations while the device is still listed', async () => {
+    const server = new FakeKeysServer()
+    const a = browser(server)
+    await setUp(a.deps, USER, PASSPHRASE)
+    await a.epochKeys.save(USER, 'room', 1, Uint8Array.of(1))
+    await a.pins.save({ ownerId: USER, contactId: 'cy', identityPublic: Uint8Array.of(3), firstSeenAt: 'then' })
+
+    await loadState(a.deps, USER)
+
+    expect(await a.epochKeys.load(USER, 'room', 1)).not.toBeNull()
+    expect(await a.pins.load(USER, 'cy')).not.toBeNull()
+  })
+
   // Not being able to ask is not an answer: the keys are not deleted on a hunch.
   it('keeps the keys when the server cannot be asked', async () => {
     const server = new FakeKeysServer()
     const a = browser(server)
     await setUp(a.deps, USER, PASSPHRASE)
+    await a.epochKeys.save(USER, 'room', 1, Uint8Array.of(1))
     server.failNext.set('listDevices', new Error('offline'))
 
     const failure = await rejection(loadState(a.deps, USER))
 
     expect((failure as Error).message).toBe('offline')
     expect(await a.store.load(USER)).not.toBeNull()
+    expect(await a.epochKeys.load(USER, 'room', 1)).not.toBeNull()
   })
 
   it('keeps one person from seeing the keys of another on the same browser', async () => {
