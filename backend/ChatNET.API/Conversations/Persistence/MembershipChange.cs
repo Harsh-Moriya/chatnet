@@ -39,7 +39,19 @@ public sealed class MembershipChange : IMembershipChange
         IReadOnlyDictionary<Guid, int> currentGenerations, DateTime now)
     {
         EpochRules.Check(Conversation.KeyEpoch, Members.ActiveIds, currentGenerations, submission);
+        Stage(creatorId, submission, reason, now);
+    }
 
+    public void StageReplacement(
+        Guid creatorId, EpochSubmission submission, IReadOnlyDictionary<Guid, int> currentGenerations, DateTime? newestEpochAt, DateTime now)
+    {
+        EpochRules.Check(Conversation.KeyEpoch, Members.ActiveIds, currentGenerations, submission);
+        EpochRules.CheckReplacement(Conversation.KeyEpoch, Conversation.KeyRotationRequired, newestEpochAt, now);
+        Stage(creatorId, submission, submission.Epoch == 1 ? KeyEpochReason.Created : KeyEpochReason.Rotated, now);
+    }
+
+    private void Stage(Guid creatorId, EpochSubmission submission, KeyEpochReason reason, DateTime now)
+    {
         _db.ConversationKeyEpochs.Add(submission.ToEntity(Conversation.Id, creatorId, reason, now));
         Conversation.KeyEpoch = submission.Epoch;
         Conversation.KeyRotationRequired = false;

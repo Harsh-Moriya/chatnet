@@ -8,4 +8,7 @@ public interface IKeyEpochRepository
     // was made for. Asks for one more than `limit` so the caller can tell whether there are more. Nobody else's envelope is read.
     Task<List<KeyEpochDto>> GetForMemberAsync(
         Guid conversationId, Guid userId, int fromEpoch, int take, CancellationToken cancellationToken);
+
+    // When the epoch was made, or null when the conversation has no such epoch.
+    Task<DateTime?> GetCreatedAtAsync(Guid conversationId, int epoch, CancellationToken cancellationToken);
 }

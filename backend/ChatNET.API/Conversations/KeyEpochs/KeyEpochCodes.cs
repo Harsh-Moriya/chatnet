@@ -1,7 +1,7 @@
 namespace ChatNET.API.Conversations.KeyEpochs;
 
-// The "code" a refused epoch carries in its problem details. Each means the browser should look again and build the epoch anew,
-// and each says what changed.
+// The "code" a refused epoch carries in its problem details. Each says why the epoch was refused; the first two mean the browser
+// should look again and build the epoch anew.
 public static class KeyEpochCodes
 {
     // Someone else stored an epoch first, so the one offered is not the next one.
@@ -12,4 +12,8 @@ public static class KeyEpochCodes
 
     // A member has not set up encryption, so no key can be sealed for them.
     public const string MemberHasNoKeys = "member-has-no-keys";
+
+    // The keys of the conversation were replaced recently and nothing asks for them to be replaced again. Looking again does not help:
+    // a change of members, or time, is what makes the next replacement allowed.
+    public const string TooSoon = "epoch-too-soon";
 }

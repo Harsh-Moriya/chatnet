@@ -1,7 +1,6 @@
 using ChatNET.API.Common.Exceptions;
 using ChatNET.API.Common.Time;
 using ChatNET.API.Conversations.KeyEpochs;
-using ChatNET.API.Conversations.Models;
 using ChatNET.API.Conversations.Persistence;
 using ChatNET.API.Keys.Persistence;
 using ChatNET.API.Outbox;
@@ -13,6 +12,7 @@ namespace ChatNET.API.Conversations.CreateKeyEpoch;
 public class CreateKeyEpochHandler : IRequestHandler<CreateKeyEpochCommand, Unit>
 {
     private readonly IConversationRepository _conversations;
+    private readonly IKeyEpochRepository _epochs;
     private readonly IKeyRepository _keys;
     private readonly ConversationNotifier _notifier;
     private readonly OutboxPublisher _outbox;
@@ -21,6 +21,7 @@ public class CreateKeyEpochHandler : IRequestHandler<CreateKeyEpochCommand, Unit
 
     public CreateKeyEpochHandler(
         IConversationRepository conversations,
+        IKeyEpochRepository epochs,
         IKeyRepository keys,
         ConversationNotifier notifier,
         OutboxPublisher outbox,
@@ -28,6 +29,7 @@ public class CreateKeyEpochHandler : IRequestHandler<CreateKeyEpochCommand, Unit
         ILogger<CreateKeyEpochHandler> logger)
     {
         _conversations = conversations;
+        _epochs = epochs;
         _keys = keys;
         _notifier = notifier;
         _outbox = outbox;
@@ -38,7 +40,8 @@ public class CreateKeyEpochHandler : IRequestHandler<CreateKeyEpochCommand, Unit
     // Any member may store the next epoch, whatever their role: a key must be replaceable by whoever is there when it needs to
     // be (the owner may be away), and a member who finds the current one unusable can supersede it. What keeps it safe is not who
     // asks but that the epoch must be made for exactly the people in the conversation, checked while holding the same lock as every
-    // change of membership.
+    // change of membership. How often is limited too: a conversation's keys are not replaced again within a day unless a removal or a
+    // leave has marked them as due.
     public async Task<Unit> Handle(CreateKeyEpochCommand request, CancellationToken cancellationToken)
     {
         var now = _time.GetUtcNow().UtcDateTime.TruncateToMicroseconds();
@@ -51,8 +54,8 @@ public class CreateKeyEpochHandler : IRequestHandler<CreateKeyEpochCommand, Unit
             change.Members.RequireMember(request.UserId);
 
             var generations = await _keys.GetCurrentGenerationsAsync(change.Members.ActiveIds, cancellationToken);
-            var reason = submission.Epoch == 1 ? KeyEpochReason.Created : KeyEpochReason.Rotated;
-            change.StageEpoch(request.UserId, submission, reason, generations, now);
+            var newestEpochAt = await _epochs.GetCreatedAtAsync(request.ConversationId, change.Conversation.KeyEpoch, cancellationToken);
+            change.StageReplacement(request.UserId, submission, generations, newestEpochAt, now);
 
             row = _outbox.Create(new ConversationKeyChanged(request.ConversationId));
             await change.CommitAsync([], [row], cancellationToken);
