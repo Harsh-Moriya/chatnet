@@ -82,7 +82,7 @@ Authentication column: **Bearer** needs an access token; **Refresh cookie** need
 | Method and route | Auth | Limit | Statuses | Description |
 |---|---|---|---|---|
 | `GET /api/conversations/{conversationId}/key-epochs` | Bearer | keys | 200, 400, 401, 403, 429 | The epochs of the conversation the caller has an envelope for, oldest first (`from`, default 1; `limit`, default 20, at most 50), with `hasMore`. A member, or someone who was one. Each carries the caller's own envelope and never anyone else's. |
-| `POST /api/conversations/{conversationId}/key-epochs` | Bearer | keys | 204, 400, 401, 403, 409, 429 | Stores the next epoch (`epoch`, `commitment`, `signature`, `envelopes`). Any member. 204. 409 with a `code`: `epoch-stale` (not the next number), `epoch-members-changed` (not for exactly the people in the conversation, or sealed to an old key generation) or `member-has-no-keys`. |
+| `POST /api/conversations/{conversationId}/key-epochs` | Bearer | keys | 204, 400, 401, 403, 409, 429 | Stores the next epoch (`epoch`, `commitment`, `signature`, `envelopes`). Any member. 204. 409 with a `code`: `epoch-stale` (not the next number), `epoch-members-changed` (not for exactly the people in the conversation, or sealed to an old key generation), `member-has-no-keys`, or `epoch-too-soon` (the newest epoch is less than a day old and nothing asks for a replacement). |
 
 ## Messages
 
@@ -189,14 +189,14 @@ The refresh token is in the `Set-Cookie` header, not the body: `chatnet_refresh=
 
 ```json
 {
-  "id": "468f5388-4e70-47fd-b26a-36413ff08a62",
+  "id": "a617e4e5-46ff-45a4-bf4d-1cece7222efa",
   "type": "Direct",
   "name": "Ben Example",
   "avatarUrl": null,
-  "updatedAt": "2026-11-08T16:18:00.377311Z",
+  "updatedAt": "2026-11-09T15:57:47.050386Z",
   "lastMessage": null,
   "unreadCount": 0,
-  "otherUserId": "01a1bbf3-c874-7b04-a41c-d4600e4f3f50",
+  "otherUserId": "01a1c107-a1d9-7ad5-ac3b-3a65513bb1ca",
   "isMuted": false,
   "leftAt": null,
   "keyEpoch": 1,
@@ -464,8 +464,8 @@ Bytes are base64url without padding. Long values are shortened here. `GET /api/k
 ```json
 {
   "userIds": [
-    "01a1bbf3-c874-7b04-a41c-d4600e4f3f50",
-    "01a1bbf3-c910-756e-9efe-ba3ad39e09aa"
+    "01a1c107-a1d9-7ad5-ac3b-3a65513bb1ca",
+    "01a1c107-a266-710f-ad06-eee304924eed"
   ]
 }
 ```
@@ -474,14 +474,14 @@ Bytes are base64url without padding. Long values are shortened here. `GET /api/k
 {
   "bundles": [
     {
-      "userId": "01a1bbf3-c874-7b04-a41c-d4600e4f3f50",
+      "userId": "01a1c107-a1d9-7ad5-ac3b-3a65513bb1ca",
       "generation": 1,
-      "bundle": "AQEAAAABtI4yfSSfHxshzXaE..."
+      "bundle": "AQEAAAAB0dnpCFHALx9ljnMV..."
     },
     {
-      "userId": "01a1bbf3-c910-756e-9efe-ba3ad39e09aa",
+      "userId": "01a1c107-a266-710f-ad06-eee304924eed",
       "generation": 1,
-      "bundle": "AQEAAAABPRZoFGCRfSmsCVMo..."
+      "bundle": "AQEAAAABkQhX6QPC8z0mkHFf..."
     }
   ]
 }
@@ -491,56 +491,56 @@ A new conversation, and a group that people are added to, carry the epoch. `POST
 
 ```json
 {
-  "id": "468f5388-4e70-47fd-b26a-36413ff08a62",
-  "otherUserId": "01a1bbf3-c874-7b04-a41c-d4600e4f3f50",
+  "id": "a617e4e5-46ff-45a4-bf4d-1cece7222efa",
+  "otherUserId": "01a1c107-a1d9-7ad5-ac3b-3a65513bb1ca",
   "epoch": {
     "epoch": 1,
-    "commitment": "TFsh7mLDRIvoBeoTc_olqRzf3G_LJY42ZwXqTQmDm6g",
-    "signature": "8vsQ8_OCjmRfZVafYB9c2pbv...",
+    "commitment": "IFnsiYy6ZOjI6AmZVURI214ATzLDPp_qz17FQIjtaV8",
+    "signature": "KMLehAYgiuWWdVsaKvwvux2_...",
     "envelopes": [
       {
-        "userId": "01a1bbf3-c533-7794-919e-5ad1374bbee2",
+        "userId": "01a1c107-9ec9-7670-bb96-63f6608eccf7",
         "generation": 1,
-        "envelope": "AQFymvtrYgXBtAmvxmmVD2dY..."
+        "envelope": "AQGjVbuSE3g4Mk_0hx4dVyRr..."
       },
       {
-        "userId": "01a1bbf3-c874-7b04-a41c-d4600e4f3f50",
+        "userId": "01a1c107-a1d9-7ad5-ac3b-3a65513bb1ca",
         "generation": 1,
-        "envelope": "AQFq76fifvjCtjqHQCuCTrt-..."
+        "envelope": "AQEwEWDGjJqLO3NZDp0Bv8lk..."
       }
     ]
   }
 }
 ```
 
-`POST /api/conversations/{id}/key-epochs` takes the epoch itself (the same object) and answers 204. `GET` answers a page of the epochs the caller has an envelope for:
+`POST /api/conversations/{id}/key-epochs` takes the epoch itself (the same object) and answers 204, unless the conversation already has an epoch that is less than a day old and `keyRotationRequired` is false: then it is a 409 with the code `epoch-too-soon`. An epoch that comes with a new conversation or with added people is not held back. `GET` answers a page of the epochs the caller has an envelope for:
 
 ```json
 {
   "epochs": [
     {
       "epoch": 1,
-      "creatorId": "01a1bbf3-c533-7794-919e-5ad1374bbee2",
+      "creatorId": "01a1c107-9ec9-7670-bb96-63f6608eccf7",
       "reason": "Created",
-      "createdAt": "2026-11-08T16:18:01.079767Z",
-      "commitment": "xhYxtF52vCim98Wj6book6Ady8_fsTm-osJcQ2IAKrs",
-      "signature": "Ho7qLaaj66XxhOBf66bDN2sb...",
+      "createdAt": "2026-11-09T15:57:47.527425Z",
+      "commitment": "qGf-KAUO6PR1ueSDCqI08f9w66YobaO4BESkn6ikuGU",
+      "signature": "laUQNlBUOmHxfccWr_-aN4FY...",
       "members": [
         {
-          "userId": "01a1bbf3-c533-7794-919e-5ad1374bbee2",
+          "userId": "01a1c107-9ec9-7670-bb96-63f6608eccf7",
           "generation": 1
         },
         {
-          "userId": "01a1bbf3-c874-7b04-a41c-d4600e4f3f50",
+          "userId": "01a1c107-a1d9-7ad5-ac3b-3a65513bb1ca",
           "generation": 1
         },
         {
-          "userId": "01a1bbf3-c910-756e-9efe-ba3ad39e09aa",
+          "userId": "01a1c107-a266-710f-ad06-eee304924eed",
           "generation": 1
         }
       ],
       "generation": 1,
-      "envelope": "AQEIo9BZjaMrpeL2QxVsc_e6..."
+      "envelope": "AQF_PCaYIheiDtM8LNJ6Fh1n..."
     }
   ],
   "hasMore": false
@@ -556,7 +556,7 @@ A new conversation, and a group that people are added to, carry the epoch. `POST
   "status": 409,
   "detail": "Another epoch was stored first. Look at the conversation again.",
   "code": "epoch-stale",
-  "traceId": "00-147ec60d8c0999aae38174f2a1bbcfa9-8cc550fc71f558b2-01"
+  "traceId": "00-a666037f626612332e625dc100196494-a16f18bff67b28b8-01"
 }
 ```
 

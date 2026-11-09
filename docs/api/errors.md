@@ -144,13 +144,14 @@ A conversation that does not exist and one the caller is not in give this same a
 
 ### Conflict codes
 
-A conflict about the keys of a conversation carries a `code`. Each means the client should look at the conversation again and make the epoch anew.
+A conflict about the keys of a conversation carries a `code`. For the first two the client should look at the conversation again and make the epoch anew.
 
 | `code` | Meaning |
 |---|---|
 | `epoch-stale` | Another epoch was stored first, so the one offered is not the next number. |
 | `epoch-members-changed` | The people in the conversation, or the key generation of one of them, are not what the epoch was made for. |
 | `member-has-no-keys` | Someone in the conversation has not set up encryption, so no key can be sealed for them. |
+| `epoch-too-soon` | The keys of the conversation were replaced less than a day ago and nothing asks for them to be replaced again (a removal or a leave does). Looking again does not help. |
 
 ```json
 {
@@ -159,7 +160,7 @@ A conflict about the keys of a conversation carries a `code`. Each means the cli
   "status": 409,
   "detail": "The people in this conversation, or their keys, are not the ones this epoch was made for.",
   "code": "epoch-members-changed",
-  "traceId": "00-42f8a9c5671ffc0dad456d19684bf6a9-44c671cb88728d1a-01"
+  "traceId": "00-d960ab7c98fbeb767b77dccbc7645486-88e8fa4caa01efa4-01"
 }
 ```
 

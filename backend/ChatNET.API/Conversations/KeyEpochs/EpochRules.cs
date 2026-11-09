@@ -8,6 +8,11 @@ namespace ChatNET.API.Conversations.KeyEpochs;
 // left from being given the key; the members check the rest themselves.
 public static class EpochRules
 {
+    // How long a key period stands before a member may replace it for no other reason. A change of members asks for a replacement by
+    // itself (an add carries the next epoch, a removal or a leave marks the one in force as due), so what this holds back is a member who
+    // stores epochs again and again: each one holds an envelope for every member, and every other browser must open it.
+    public static readonly TimeSpan MinReplacementInterval = TimeSpan.FromDays(1);
+
     // Throws a conflict that says which part is out of date, so the browser knows what to look at again.
     public static void Check(
         int currentEpoch,
@@ -33,5 +38,19 @@ public static class EpochRules
             throw new ConflictException(
                 "The people in this conversation, or their keys, are not the ones this epoch was made for.",
                 KeyEpochCodes.MembersChanged);
+    }
+
+    // An epoch stored on its own, with no change of members, is allowed when the conversation has none yet, when the one in force is
+    // marked as due for replacement, or when that one is at least MinReplacementInterval old. It runs after Check, so a member who lost
+    // a race hears that the epoch is out of date and not that it is too soon.
+    public static void CheckReplacement(int currentEpoch, bool replacementDue, DateTime? newestEpochAt, DateTime now)
+    {
+        if (currentEpoch == 0 || replacementDue)
+            return;
+
+        if (newestEpochAt is { } madeAt && now - madeAt < MinReplacementInterval)
+            throw new ConflictException(
+                "The keys of this conversation were replaced recently and nothing asks for them to be replaced again.",
+                KeyEpochCodes.TooSoon);
     }
 }

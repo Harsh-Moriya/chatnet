@@ -141,7 +141,7 @@ Arguments are positional. The examples are real payloads as the JavaScript clien
 ```json
 [
   {
-    "conversationId": "f508d744-76f4-41cf-8538-89c9f5498bde",
+    "conversationId": "72a746ba-805e-44bc-8700-2d48626bda5a",
     "keyEpoch": 2,
     "keyRotationRequired": false
   }
@@ -151,8 +151,8 @@ Arguments are positional. The examples are real payloads as the JavaScript clien
 ```json
 [
   {
-    "conversationId": "f508d744-76f4-41cf-8538-89c9f5498bde",
-    "keyEpoch": 3,
+    "conversationId": "72a746ba-805e-44bc-8700-2d48626bda5a",
+    "keyEpoch": 2,
     "keyRotationRequired": true
   }
 ]

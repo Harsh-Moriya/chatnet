@@ -57,6 +57,18 @@ public class KeyEpochTests
 
     private static Guid[] Everyone(Team team) => [team.Owner.Id, team.Member.Id, team.Other.Id];
 
+    // Dates the epochs a conversation has two days back, as if they had been made then. A member may not replace a key period that is
+    // younger than a day unless a removal or a leave marked it as due, so a test that stores one epoch after another needs it.
+    private Task AgeEpochsAsync(Guid id) =>
+        _factory.ExecuteDbAsync(db => db.ConversationKeyEpochs.Where(e => e.ConversationId == id)
+            .ExecuteUpdateAsync(s => s.SetProperty(e => e.CreatedAt, e => e.CreatedAt.AddDays(-2))));
+
+    private async Task StoreLaterAsync(HttpClient client, Guid id, EpochBody body)
+    {
+        await AgeEpochsAsync(id);
+        await client.StoreEpochAsync(id, body);
+    }
+
     // ##### Storing an epoch #####
 
     [Fact]
@@ -122,8 +134,8 @@ public class KeyEpochTests
         using var member = As(team.Member);
 
         await owner.StoreEpochAsync(team.Id, EpochBody.For(1, Everyone(team)));
-        await member.StoreEpochAsync(team.Id, EpochBody.For(2, Everyone(team)));
-        await owner.StoreEpochAsync(team.Id, EpochBody.For(3, Everyone(team)));
+        await StoreLaterAsync(member, team.Id, EpochBody.For(2, Everyone(team)));
+        await StoreLaterAsync(owner, team.Id, EpochBody.For(3, Everyone(team)));
 
         Assert.Equal(3, (await ConversationAsync(team.Id)).KeyEpoch);
         var epochs = await EpochsAsync(team.Id);
@@ -165,6 +177,106 @@ public class KeyEpochTests
         Assert.Equal(KeyEpochCodes.Stale, (await response.ReadProblemAsync()).Code);
         Assert.Equal(1, (await ConversationAsync(team.Id)).KeyEpoch);
         Assert.Single(await EpochsAsync(team.Id));
+    }
+
+    // ##### How often an epoch may be replaced #####
+
+    // A replacement nobody asked for is held back for a day, so that one member cannot fill the table with epochs that every other
+    // browser has to open. It is refused whole: nothing is stored and nothing is pushed.
+    [Fact]
+    public async Task An_epoch_stored_on_its_own_within_a_day_of_the_last_is_refused_and_stores_nothing()
+    {
+        var team = await TeamAsync();
+        using var owner = As(team.Owner);
+        using var member = As(team.Member);
+        await owner.StoreEpochAsync(team.Id, EpochBody.For(1, Everyone(team)));
+        var pushesBefore = (await _factory.OutboxRowsAboutAsync("conversationId", team.Id)).Count(r => r.Kind == "ConversationKeyChanged");
+
+        var response = await member.PostEpochAsync(team.Id, EpochBody.For(2, Everyone(team)));
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Equal(KeyEpochCodes.TooSoon, (await response.ReadProblemAsync()).Code);
+        Assert.Equal(1, (await ConversationAsync(team.Id)).KeyEpoch);
+        Assert.Single(await EpochsAsync(team.Id));
+        Assert.Equal(pushesBefore, (await _factory.OutboxRowsAboutAsync("conversationId", team.Id)).Count(r => r.Kind == "ConversationKeyChanged"));
+    }
+
+    [Fact]
+    public async Task An_epoch_stored_on_its_own_a_day_after_the_last_is_accepted()
+    {
+        var team = await TeamAsync();
+        using var owner = As(team.Owner);
+        using var member = As(team.Member);
+        await owner.StoreEpochAsync(team.Id, EpochBody.For(1, Everyone(team)));
+        await AgeEpochsAsync(team.Id);
+
+        var response = await member.PostEpochAsync(team.Id, EpochBody.For(2, Everyone(team)));
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.Equal(2, (await ConversationAsync(team.Id)).KeyEpoch);
+    }
+
+    // The day is counted from when the newest epoch was made, to the second: the request that is one second early is refused and the
+    // same request a second later is accepted.
+    [Fact]
+    public async Task The_day_is_counted_from_when_the_newest_epoch_was_made()
+    {
+        var clock = new ManualTimeProvider();
+        using var host = _factory.WithClock(clock);
+        var team = await TeamAsync();
+        using var owner = host.ClientFor(team.Owner);
+        await owner.StoreEpochAsync(team.Id, EpochBody.For(1, Everyone(team)));
+
+        clock.Advance(EpochRules.MinReplacementInterval - TimeSpan.FromSeconds(1));
+        var early = await owner.PostEpochAsync(team.Id, EpochBody.For(2, Everyone(team)));
+        clock.Advance(TimeSpan.FromSeconds(1));
+        var onTime = await owner.PostEpochAsync(team.Id, EpochBody.For(2, Everyone(team)));
+
+        Assert.Equal(KeyEpochCodes.TooSoon, (await early.ReadProblemAsync()).Code);
+        Assert.Equal(HttpStatusCode.NoContent, onTime.StatusCode);
+    }
+
+    // The day is counted from the newest epoch, not the first: an old first epoch does not make a young second one replaceable.
+    [Fact]
+    public async Task The_day_is_counted_from_the_newest_epoch_and_not_from_an_older_one()
+    {
+        var team = await TeamAsync();
+        using var owner = As(team.Owner);
+        await owner.StoreEpochAsync(team.Id, EpochBody.For(1, Everyone(team)));
+        await AgeEpochsAsync(team.Id);
+        await owner.StoreEpochAsync(team.Id, EpochBody.For(2, Everyone(team)));
+
+        var response = await owner.PostEpochAsync(team.Id, EpochBody.For(3, Everyone(team)));
+
+        Assert.Equal(KeyEpochCodes.TooSoon, (await response.ReadProblemAsync()).Code);
+        Assert.Equal(2, (await ConversationAsync(team.Id)).KeyEpoch);
+    }
+
+    // Completeness comes first: a member who lost a race hears that the epoch is out of date, so the browser looks again and takes the
+    // epoch that was stored, instead of being told to stop.
+    [Fact]
+    public async Task An_epoch_that_is_both_out_of_date_and_too_soon_is_reported_as_out_of_date()
+    {
+        var team = await TeamAsync();
+        using var owner = As(team.Owner);
+        await owner.StoreEpochAsync(team.Id, EpochBody.For(1, Everyone(team)));
+
+        var response = await owner.PostEpochAsync(team.Id, EpochBody.For(1, Everyone(team)));
+
+        Assert.Equal(KeyEpochCodes.Stale, (await response.ReadProblemAsync()).Code);
+    }
+
+    [Fact]
+    public async Task A_conversation_marked_as_due_is_replaced_at_once_after_a_young_epoch()
+    {
+        var team = await TeamAsync();
+        using var owner = As(team.Owner);
+        await owner.StoreEpochAsync(team.Id, EpochBody.For(1, Everyone(team)));
+        await owner.RemoveMemberResponseAsync(team.Id, team.Other.Id);
+
+        var response = await owner.PostEpochAsync(team.Id, EpochBody.For(2, team.Owner.Id, team.Member.Id));
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
     }
 
     // ##### Completeness #####
@@ -482,7 +594,7 @@ public class KeyEpochTests
         var team = await TeamAsync();
         using var owner = As(team.Owner);
         for (var epoch = 1; epoch <= 5; epoch++)
-            await owner.StoreEpochAsync(team.Id, EpochBody.For(epoch, Everyone(team)));
+            await StoreLaterAsync(owner, team.Id, EpochBody.For(epoch, Everyone(team)));
 
         static List<int> Numbers(JsonElement page) =>
             page.GetProperty("epochs").EnumerateArray().Select(e => e.GetProperty("epoch").GetInt32()).ToList();
@@ -511,7 +623,7 @@ public class KeyEpochTests
         var team = await TeamAsync();
         using var owner = As(team.Owner);
         for (var epoch = 1; epoch <= 2; epoch++)
-            await owner.StoreEpochAsync(team.Id, EpochBody.For(epoch, Everyone(team)));
+            await StoreLaterAsync(owner, team.Id, EpochBody.For(epoch, Everyone(team)));
 
         var page = await owner.ReadEpochsAsync(team.Id, limit: 2);
 
@@ -558,7 +670,7 @@ public class KeyEpochTests
             });
             await db.SaveChangesAsync();
         });
-        await owner.StoreEpochAsync(team.Id, EpochBody.For(2, [.. Everyone(team), team.Outsider.Id]));
+        await StoreLaterAsync(owner, team.Id, EpochBody.For(2, [.. Everyone(team), team.Outsider.Id]));
         using var newcomer = As(team.Outsider);
 
         var page = await newcomer.ReadEpochsAsync(team.Id);
@@ -574,11 +686,11 @@ public class KeyEpochTests
         var team = await TeamAsync();
         using var owner = As(team.Owner);
         await owner.StoreEpochAsync(team.Id, EpochBody.For(1, Everyone(team)));
-        await owner.StoreEpochAsync(team.Id, EpochBody.For(2, Everyone(team)));
+        await StoreLaterAsync(owner, team.Id, EpochBody.For(2, Everyone(team)));
         await _factory.ExecuteDbAsync(db => db.ConversationMembers
             .Where(m => m.ConversationId == team.Id && m.UserId == team.Other.Id)
             .ExecuteUpdateAsync(s => s.SetProperty(m => m.LeftAt, DateTime.UtcNow)));
-        await owner.StoreEpochAsync(team.Id, EpochBody.For(3, team.Owner.Id, team.Member.Id));
+        await StoreLaterAsync(owner, team.Id, EpochBody.For(3, team.Owner.Id, team.Member.Id));
         using var gone = As(team.Other);
         using var staying = As(team.Member);
 

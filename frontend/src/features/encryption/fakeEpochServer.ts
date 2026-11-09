@@ -14,8 +14,11 @@ import type {
 } from './types'
 
 // For the tests of the conversation keys: a server that applies the same rules as the real one (the next number, an envelope for
-// exactly the people in the conversation at the keys they have now, an envelope shown only to its owner) and opens nothing, as the
-// real one cannot. Not used by the app.
+// exactly the people in the conversation at the keys they have now, no replacement of a young epoch that nothing asks to replace, an
+// envelope shown only to its owner) and opens nothing, as the real one cannot. Not used by the app.
+
+// How long an epoch stands before a member may replace it for no other reason, as on the server.
+export const REPLACEMENT_INTERVAL_MS = 24 * 60 * 60 * 1000
 
 interface StoredEpoch {
   epoch: number
@@ -23,6 +26,7 @@ interface StoredEpoch {
   reason: EpochReason
   commitment: string
   signature: string
+  madeAt: number
   envelopes: Map<string, { generation: number; envelope: string }>
 }
 
@@ -39,6 +43,9 @@ export class FakeEpochServer {
   bundles = new Map<string, UserBundleWire>()
   conversations = new Map<string, FakeConversation>()
   calls: string[] = []
+
+  // The time the server goes by, in milliseconds. A test moves it, or ages the epochs of a conversation, instead of waiting.
+  now = Date.parse('2026-11-09T12:00:00Z')
 
   // Run just before a post is looked at: lets a test change the conversation after a browser has looked at it and before it posts.
   beforePost: ((conversationId: string) => void) | null = null
@@ -70,6 +77,15 @@ export class FakeEpochServer {
   // As after a removal, without the removal: the epoch in force must be replaced.
   requireRotation(id: string): void {
     this.conversation(id).keyRotationRequired = true
+  }
+
+  advance(ms: number): void {
+    this.now += ms
+  }
+
+  // Dates the epochs of a conversation two days back, as if they had been made then.
+  age(id: string): void {
+    for (const stored of this.conversation(id).epochs) stored.madeAt -= 2 * REPLACEMENT_INTERVAL_MS
   }
 
   // Changes an epoch as stored, to see whether the people reading it notice.
@@ -110,7 +126,8 @@ export class FakeEpochServer {
     return found
   }
 
-  private store(callerId: string, id: string, body: EpochBody, reason?: EpochReason): void {
+  // `alone` is an epoch stored on its own, with no change of members: the only kind that is held back when it comes too soon.
+  private store(callerId: string, id: string, body: EpochBody, reason?: EpochReason, alone = false): void {
     const conversation = this.conversation(id)
     if (!conversation.memberIds.has(callerId)) throw new ServerRefused(403)
 
@@ -125,12 +142,18 @@ export class FakeEpochServer {
       throw new EpochRefused('epoch-members-changed')
     }
 
+    const newest = conversation.epochs[conversation.epochs.length - 1]
+    if (alone && newest !== undefined && !conversation.keyRotationRequired && this.now - newest.madeAt < REPLACEMENT_INTERVAL_MS) {
+      throw new EpochRefused('epoch-too-soon')
+    }
+
     conversation.epochs.push({
       epoch: body.epoch,
       creatorId: callerId,
       reason: reason ?? (body.epoch === 1 ? 'Created' : 'Rotated'),
       commitment: body.commitment,
       signature: body.signature,
+      madeAt: this.now,
       envelopes: new Map(body.envelopes.map((envelope) => [envelope.userId, { generation: envelope.generation, envelope: envelope.envelope }])),
     })
     conversation.keyEpoch = body.epoch
@@ -173,7 +196,7 @@ export class FakeEpochServer {
           epoch: stored.epoch,
           creatorId: stored.creatorId,
           reason: stored.reason,
-          createdAt: new Date().toISOString(),
+          createdAt: new Date(stored.madeAt).toISOString(),
           commitment: stored.commitment,
           signature: stored.signature,
           members: [...stored.envelopes.entries()]
@@ -189,7 +212,7 @@ export class FakeEpochServer {
       postEpoch: async (id, body): Promise<void> => {
         this.calls.push('postEpoch')
         this.beforePost?.(id)
-        this.store(callerId, id, body)
+        this.store(callerId, id, body, undefined, true)
       },
     }
   }

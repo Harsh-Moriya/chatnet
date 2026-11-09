@@ -32,6 +32,12 @@ public interface IMembershipChange : IAsyncDisposable
         Guid creatorId, EpochSubmission submission, KeyEpochReason reason,
         IReadOnlyDictionary<Guid, int> currentGenerations, DateTime now);
 
+    // Adds the key period that a member stores on their own, with no change of members. It is checked as StageEpoch is, and is also
+    // refused when it would replace a key period that is still young and nothing asks for a replacement (see EpochRules.CheckReplacement).
+    // `newestEpochAt` is when the key period in force was made.
+    void StageReplacement(
+        Guid creatorId, EpochSubmission submission, IReadOnlyDictionary<Guid, int> currentGenerations, DateTime? newestEpochAt, DateTime now);
+
     // Marks that the key period in force was made for people who are no longer all in the conversation, so it must be
     // replaced before more is said under it. Saved with the change that made it true.
     void RequireRotation();

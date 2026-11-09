@@ -23,9 +23,9 @@ export function describeKeyFailure(error: unknown, nameOf: (userId: string) => s
 
     case 'EpochRefused': {
       const code = (error as { code?: string | null }).code
-      return code === 'member-has-no-keys'
-        ? 'Someone in this conversation has not set up encryption yet.'
-        : 'The conversation changed while its keys were being made. Please try again.'
+      if (code === 'member-has-no-keys') return 'Someone in this conversation has not set up encryption yet.'
+      if (code === 'epoch-too-soon') return 'The keys of this conversation were replaced recently, so they cannot be replaced again yet.'
+      return 'The conversation changed while its keys were being made. Please try again.'
     }
 
     case 'EpochContestedError':

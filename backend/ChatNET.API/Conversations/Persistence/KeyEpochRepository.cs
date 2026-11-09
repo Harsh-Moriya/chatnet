@@ -14,6 +14,13 @@ public class KeyEpochRepository : IKeyEpochRepository
         _db = db;
     }
 
+    public async Task<DateTime?> GetCreatedAtAsync(Guid conversationId, int epoch, CancellationToken cancellationToken) =>
+        await _db.ConversationKeyEpochs
+            .AsNoTracking()
+            .Where(e => e.ConversationId == conversationId && e.Epoch == epoch)
+            .Select(e => (DateTime?)e.CreatedAt)
+            .FirstOrDefaultAsync(cancellationToken);
+
     public async Task<List<KeyEpochDto>> GetForMemberAsync(
         Guid conversationId, Guid userId, int fromEpoch, int take, CancellationToken cancellationToken)
     {
