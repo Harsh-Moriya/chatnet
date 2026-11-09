@@ -16,6 +16,7 @@ import {
 } from './flows'
 import { keysApi } from './keysApi'
 import { indexedDbPinStore } from './pinStore'
+import { forgetKept } from './release'
 import { useEncryptionStore } from './store'
 import type { LinkRequestInfo } from './types'
 
@@ -50,9 +51,7 @@ function deps(): FlowDeps {
     store: indexedDbDeviceStore,
     device: { kind: 'Web', name: describeBrowser(navigator.userAgent) },
     wait,
-    forgetConversationKeys: async (userId) => {
-      await Promise.all([indexedDbEpochKeyStore.removeAll(userId), indexedDbPinStore.removeAll(userId)])
-    },
+    forgetConversationKeys: (userId) => forgetKept({ epochKeys: indexedDbEpochKeyStore, pins: indexedDbPinStore }, userId),
   }
 }
 

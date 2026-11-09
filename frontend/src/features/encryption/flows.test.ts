@@ -14,6 +14,7 @@ import {
 } from '../../lib/crypto'
 import { MemoryEpochKeyStore, MemoryPinStore } from './fakeEpochServer'
 import { FakeKeysServer, MemoryDeviceStore, ServerRefused } from './fakeKeysServer'
+import { forgetKept } from './release'
 import {
   type FlowDeps,
   InvalidLinkCodeError,
@@ -52,9 +53,7 @@ function browser(server: FakeKeysServer, name = 'Chrome on Windows', gate?: Prom
       signal?.throwIfAborted()
       await (gate ?? new Promise((resolve) => setTimeout(resolve, 0)))
     },
-    forgetConversationKeys: async (userId) => {
-      await Promise.all([epochKeys.removeAll(userId), pins.removeAll(userId)])
-    },
+    forgetConversationKeys: (userId) => forgetKept({ epochKeys, pins }, userId),
   }
   return { deps, store, epochKeys, pins, waits }
 }
