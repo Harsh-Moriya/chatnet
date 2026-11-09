@@ -170,9 +170,26 @@ function changeOf(state: Data, message: Message, selfId: string | undefined): Pa
   return patch
 }
 
-// Of two copies of the same conversation, the one with the later activity is the fresher.
+type KeyState = Pick<Conversation, 'keyEpoch' | 'keyRotationRequired'>
+
+// Of two accounts of the keys of a conversation, the later: the epoch only goes up, and within one epoch the need to replace it only
+// turns on, because a higher epoch is what turns it off.
+function laterKeyState(a: KeyState, b: KeyState): KeyState {
+  if (a.keyEpoch !== b.keyEpoch) return a.keyEpoch > b.keyEpoch ? a : b
+  return { keyEpoch: a.keyEpoch, keyRotationRequired: a.keyRotationRequired || b.keyRotationRequired }
+}
+
+// Of two copies of the same conversation, the one with the later activity is the fresher. Its keys are the later of the two copies' keys,
+// whichever copy that is, because making an epoch is not activity: a copy that is older by activity can know a newer epoch.
 function fresher(existing: Conversation | undefined, incoming: Conversation): Conversation {
-  return existing && compareTimestamps(existing.updatedAt, incoming.updatedAt) > 0 ? existing : incoming
+  if (!existing) return incoming
+
+  const fresh = compareTimestamps(existing.updatedAt, incoming.updatedAt) > 0 ? existing : incoming
+  const keys = laterKeyState(existing, incoming)
+
+  return keys.keyEpoch === fresh.keyEpoch && keys.keyRotationRequired === fresh.keyRotationRequired
+    ? fresh
+    : { ...fresh, keyEpoch: keys.keyEpoch, keyRotationRequired: keys.keyRotationRequired }
 }
 
 // A copy of the record without one key.
@@ -594,18 +611,15 @@ export const useChatStore = create<ChatState>()((set) => ({
   applyKeyChange: (change) =>
     set((state) => {
       const conversation = state.conversations[change.conversationId]
-      if (!conversation || change.keyEpoch < conversation.keyEpoch) return state
+      if (!conversation) return state
 
-      const keyRotationRequired =
-        change.keyEpoch === conversation.keyEpoch
-          ? conversation.keyRotationRequired || change.keyRotationRequired
-          : change.keyRotationRequired
-      if (change.keyEpoch === conversation.keyEpoch && keyRotationRequired === conversation.keyRotationRequired) return state
+      const later = laterKeyState(conversation, change)
+      if (later.keyEpoch === conversation.keyEpoch && later.keyRotationRequired === conversation.keyRotationRequired) return state
 
       return {
         conversations: {
           ...state.conversations,
-          [change.conversationId]: { ...conversation, keyEpoch: change.keyEpoch, keyRotationRequired },
+          [change.conversationId]: { ...conversation, keyEpoch: later.keyEpoch, keyRotationRequired: later.keyRotationRequired },
         },
       }
     }),

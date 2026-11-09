@@ -973,3 +973,57 @@ describe('the keys of a conversation', () => {
     expect(store().conversations.c1).toEqual({ ...before, keyEpoch: 2, keyRotationRequired: true })
   })
 })
+
+describe('the keys of a conversation when copies of it are merged', () => {
+  const OLD = '2026-10-11T09:00:00Z'
+  const NEW = '2026-10-11T10:00:00Z'
+
+  it('take a newer epoch from a list that is older by activity than the copy held', () => {
+    store().seedConversations([conversation({ id: 'c1', updatedAt: NEW, keyEpoch: 1, unreadCount: 4 })])
+
+    store().seedConversations([conversation({ id: 'c1', updatedAt: OLD, keyEpoch: 3, keyRotationRequired: true })])
+
+    expect(store().conversations.c1).toMatchObject({ updatedAt: NEW, unreadCount: 4, keyEpoch: 3, keyRotationRequired: true })
+  })
+
+  it('keep a newer epoch that the copy held already, when the list is fresher by activity', () => {
+    store().seedConversations([conversation({ id: 'c1', updatedAt: OLD, keyEpoch: 5 })])
+
+    store().seedConversations([conversation({ id: 'c1', updatedAt: NEW, keyEpoch: 4, unreadCount: 2 })])
+
+    expect(store().conversations.c1).toMatchObject({ updatedAt: NEW, unreadCount: 2, keyEpoch: 5 })
+  })
+
+  it('keep the need to replace the epoch that the copy held when the list does not know it yet', () => {
+    store().seedConversations([conversation({ id: 'c1', updatedAt: OLD, keyEpoch: 2, keyRotationRequired: true })])
+
+    store().seedConversations([conversation({ id: 'c1', updatedAt: NEW, keyEpoch: 2, keyRotationRequired: false })])
+
+    expect(store().conversations.c1.keyRotationRequired).toBe(true)
+  })
+
+  it('turn the need off when the list carries a newer epoch', () => {
+    store().seedConversations([conversation({ id: 'c1', updatedAt: NEW, keyEpoch: 2, keyRotationRequired: true })])
+
+    store().seedConversations([conversation({ id: 'c1', updatedAt: OLD, keyEpoch: 3, keyRotationRequired: false })])
+
+    expect(store().conversations.c1).toMatchObject({ keyEpoch: 3, keyRotationRequired: false })
+  })
+
+  it('are merged the same way when a conversation is added that is already held', () => {
+    store().seedConversations([conversation({ id: 'c1', updatedAt: NEW, keyEpoch: 1 })])
+
+    store().addConversation(conversation({ id: 'c1', updatedAt: OLD, keyEpoch: 2 }))
+
+    expect(store().conversations.c1).toMatchObject({ updatedAt: NEW, keyEpoch: 2 })
+  })
+
+  it('say nothing changed when both copies agree', () => {
+    store().seedConversations([conversation({ id: 'c1', updatedAt: NEW, keyEpoch: 2, keyRotationRequired: true })])
+    const before = store().conversations.c1
+
+    store().seedConversations([conversation({ id: 'c1', updatedAt: NEW, keyEpoch: 2, keyRotationRequired: true })])
+
+    expect(store().conversations.c1).toStrictEqual(before)
+  })
+})
