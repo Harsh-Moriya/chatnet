@@ -15,7 +15,7 @@ This page covers how the keys of a conversation are made, delivered and checked.
 - **Reading keys.** `GET /api/conversations/{id}/key-epochs` returns the epochs the caller has an envelope for, oldest first, in pages. Each carries the caller's own envelope, who the epoch was made for and the creator's signature. Someone who left can still ask: they keep the keys of the epochs they were in.
 - **Public keys.** A browser gets the current public bundle of each person it will seal a key for with `POST /api/keys/lookup`.
 - **Before the chat.** After signing in, a browser that does not hold the person's keys shows a screen in place of the chat, because every conversation is sealed to them. It sets the keys up, restores them from the backup or links this browser from another device. See [encryption keys and devices](encryption-keys.md).
-- **Signing out** deletes the keys of conversations and the remembered identities of other people from the browser, along with the keys of the device.
+- **Signing out** deletes the keys of conversations and the remembered identities of other people from the browser, along with the keys of the device. So does finding out that this device was removed from another device.
 
 ```mermaid
 sequenceDiagram
