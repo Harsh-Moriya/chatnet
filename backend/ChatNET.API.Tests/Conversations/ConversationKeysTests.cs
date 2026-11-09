@@ -518,6 +518,30 @@ public class ConversationKeysTests
         await AssertCurrentEpochIsForTheMembersAsync(team.Id);
     }
 
+    // An epoch stored on its own and an add that carries one both claim the next number, and the add also changes who is in the group.
+    // Whichever goes second finds the number taken and is refused whole, so the people and the epoch never disagree.
+    [Fact]
+    public async Task An_add_and_an_epoch_stored_on_its_own_race_to_one_winner_and_the_group_matches_its_epoch()
+    {
+        var team = await GroupAsync();
+        using var owner = As(team.Owner);
+        using var member = As(team.Member);
+        var current = (await ConversationAsync(team.Id)).KeyEpoch;
+        var present = new[] { team.Owner.Id, team.Member.Id, team.Other.Id };
+
+        var responses = await Task.WhenAll(
+            owner.PostAsJsonAsync($"/api/conversations/{team.Id}/members", new { userIds = new[] { team.Outsider.Id }, epoch = EpochBody.For(current + 1, [.. present, team.Outsider.Id]) }),
+            member.PostEpochAsync(team.Id, EpochBody.For(current + 1, present)));
+
+        var addWon = responses[0].IsSuccessStatusCode;
+        Assert.Equal(1, responses.Count(r => r.IsSuccessStatusCode));
+        Assert.Equal(1, responses.Count(r => r.StatusCode == HttpStatusCode.Conflict));
+        Assert.Equal(addWon ? 4 : 3, (await owner.GetMembersAsync(team.Id)).Count);
+        Assert.Equal(current + 1, (await ConversationAsync(team.Id)).KeyEpoch);
+        Assert.Single(await EpochsAsync(team.Id), e => e.Epoch > current);
+        await AssertCurrentEpochIsForTheMembersAsync(team.Id);
+    }
+
     [Fact]
     public async Task Adding_people_tells_the_members_which_epoch_is_newest()
     {
