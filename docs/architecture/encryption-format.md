@@ -240,7 +240,7 @@ A reader treats each of these as an error and does not try to repair the input:
 
 ## Limits of the formats
 
-- **No forward secrecy inside an epoch.** The key of an epoch opens every message of that epoch. Epochs bound the exposure when membership changes, and a new epoch can be started at any time.
+- **No forward secrecy inside an epoch.** The key of an epoch opens every message of that epoch. Epochs bound the exposure when membership changes, and a new epoch is started when membership changes, or by a member, at most once a day.
 - **Padding is coarse.** Messages are padded to a multiple of 256 bytes, so a long message still shows roughly how long it is, and the number and sizes of files are visible.
 - **Trust in an identity key is not in the format.** A client remembers the identity key of a person the first time it sees it, and a change is something to show the user. The safety number is how two people confirm the key out of band.
 - **Who a message is between, and when, is not hidden.** Only content is encrypted.

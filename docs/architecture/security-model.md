@@ -81,7 +81,7 @@ The key of each period of a conversation is made in a member's browser and seale
 | Forged or substituted epochs | A member checks the creator's signature over the record, that the creator and the member are in it, that the identity key is the one first seen for the creator, that the key matches the signed commitment and, for the newest epoch, that the people are the ones in the conversation | The first sight of a person's identity key is trusted. A changed key is refused until accepted |
 | Someone who left | They keep the envelopes of the epochs they were in and receive none after. The epoch in force is marked due for replacement in the same transaction as their leaving | Until a member makes the next epoch, the one in force is still the one the person who left holds |
 | Joining | A person who joins is given an envelope for the epoch made at their joining and none for earlier ones | |
-| Who can make a key | Any current member. Others, and people who left, are refused with the same `403` as any conversation they are not in | A member can replace the key at any time, as can one who is unhappy with it |
+| Who can make a key | Any current member. Others, and people who left, are refused with the same `403` as any conversation they are not in | A member can replace the key, as can one who is unhappy with it, but at most once a day unless a removal or a leave marked it as due |
 | Stale and concurrent epochs | The next number is required, and the primary key of the table decides any tie. The later request gets a `409` with a code the client acts on | |
 | Logs | Ids and sizes only: never an envelope, a commitment or a signature | |
 
