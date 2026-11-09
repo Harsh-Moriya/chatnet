@@ -33,6 +33,9 @@ export interface FlowDeps {
   device: { kind: DeviceKind; name: string }
   // Waits, or rejects when the signal is aborted.
   wait: (ms: number, signal?: AbortSignal) => Promise<void>
+  // Forgets the rest of what this browser keeps for a person (the keys of their conversations and who they have seen), for a browser
+  // that finds its device was removed: the keys of the device go and so must everything that is opened with them.
+  forgetConversationKeys: (userId: string) => Promise<void>
 }
 
 // This browser has keys and is a device of the person.
@@ -112,6 +115,7 @@ export async function loadState(deps: FlowDeps, userId: string): Promise<LoadedS
     }
 
     await deps.store.remove(userId)
+    await deps.forgetConversationKeys(userId)
     removedElsewhere = true
   }
 

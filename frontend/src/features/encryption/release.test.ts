@@ -16,6 +16,9 @@ function browser(server: FakeKeysServer) {
     store,
     device: { kind: 'Web', name: 'Chrome on Windows' },
     wait: async () => undefined,
+    forgetConversationKeys: async (userId) => {
+      await Promise.all([epochKeys.removeAll(userId), pins.removeAll(userId)])
+    },
   }
   return { deps, store, epochKeys, pins, leaving: { api: server, store, epochKeys, pins } }
 }

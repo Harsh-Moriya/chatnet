@@ -1,6 +1,7 @@
 import { useAuthStore } from '../auth/store/authStore'
 import { session } from '../auth/session'
 import { canHoldKeys, indexedDbDeviceStore } from './deviceStore'
+import { indexedDbEpochKeyStore } from './epochKeyStore'
 import { describeBrowser } from './deviceName'
 import {
   type FlowDeps,
@@ -14,6 +15,7 @@ import {
   unlock,
 } from './flows'
 import { keysApi } from './keysApi'
+import { indexedDbPinStore } from './pinStore'
 import { useEncryptionStore } from './store'
 import type { LinkRequestInfo } from './types'
 
@@ -48,6 +50,9 @@ function deps(): FlowDeps {
     store: indexedDbDeviceStore,
     device: { kind: 'Web', name: describeBrowser(navigator.userAgent) },
     wait,
+    forgetConversationKeys: async (userId) => {
+      await Promise.all([indexedDbEpochKeyStore.removeAll(userId), indexedDbPinStore.removeAll(userId)])
+    },
   }
 }
 
