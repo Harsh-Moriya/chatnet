@@ -110,6 +110,17 @@ public class EpochRulesTests
         Assert.Equal(KeyEpochCodes.Stale, code);
     }
 
+    // The words a client looks for in the problem details of a refused epoch: a change here is a change to the API.
+    [Theory]
+    [InlineData(KeyEpochCodes.Stale, "epoch-stale")]
+    [InlineData(KeyEpochCodes.MembersChanged, "epoch-members-changed")]
+    [InlineData(KeyEpochCodes.MemberHasNoKeys, "member-has-no-keys")]
+    [InlineData(KeyEpochCodes.TooSoon, "epoch-too-soon")]
+    public void Each_refusal_is_known_by_the_word_clients_look_for(string code, string word)
+    {
+        Assert.Equal(word, code);
+    }
+
     // ##### Replacing the epoch in force #####
 
     private static readonly DateTime Now = new(2026, 11, 9, 12, 0, 0, DateTimeKind.Utc);
