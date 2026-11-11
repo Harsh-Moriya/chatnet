@@ -1,6 +1,6 @@
 # Endpoints
 
-The HTTP API. In Development the running API also serves its OpenAPI document at `/openapi/v1.json` and an interactive reference at `/scalar/v1`; every operation there declares its success body and each error it can return. The tables below list every route (58 operations) with its authentication, its rate-limit policy and what it does. Request and response bodies in the examples were copied from a running API.
+The HTTP API. In Development the running API also serves its OpenAPI document at `/openapi/v1.json` and an interactive reference at `/scalar/v1`; every operation there declares its success body and each error it can return. The tables below list every route (57 operations) with its authentication, its rate-limit policy and what it does. Request and response bodies in the examples were copied from a running API.
 
 ## Conventions
 
@@ -99,12 +99,6 @@ Authentication column: **Bearer** needs an access token; **Refresh cookie** need
 |---|---|---|---|---|
 | `POST /api/conversations/{conversationId}/uploads` | Bearer | uploads | 200, 400, 401, 403, 429 | Ticket for uploading one attachment straight to the bucket (`fileName`, `contentType`, `sizeBytes`). |
 | `GET /api/attachments/{attachmentId}/url` | Bearer |  | 200, 401, 404 | A new signed link for a file the caller may read. One 404 for every refusal. |
-
-## Search
-
-| Method and route | Auth | Limit | Statuses | Description |
-|---|---|---|---|---|
-| `GET /api/search/messages` | Bearer | search | 200, 400, 401, 403, 429 | Searches the messages the caller may read (`q`, `conversationId`, `before`). 20 per page, newest first. |
 
 ## Notifications
 
@@ -349,37 +343,6 @@ A deleted message has `content: null`, `isDeleted: true` and no attachments.
   }
 ]
 ```
-
-### Search hit
-
-A hit found by its text:
-
-```json
-[
-  {
-    "messageId": "01a1ba93-e522-7427-a9c2-36d136cc72a8",
-    "conversationId": "01a1ba93-deb9-7a50-ac60-f3f94ff76779",
-    "conversationName": "Weekend plans (Sunday)",
-    "conversationType": "Group",
-    "senderId": "01a1ba93-d895-7db5-9ca8-59569a0b63b7",
-    "senderDisplayName": "Ana Example-Jones",
-    "createdAt": "2026-11-08T09:53:36.895834Z",
-    "snippet": [
-      {
-        "text": "Meeting",
-        "match": true
-      },
-      {
-        "text": " point",
-        "match": false
-      }
-    ],
-    "fileName": null
-  }
-]
-```
-
-A hit found by the name of a file has `"snippet": []` and `"fileName": "map.png"`.
 
 ### Push
 

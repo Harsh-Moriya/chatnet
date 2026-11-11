@@ -23,7 +23,7 @@ Every endpoint requires authentication unless it is marked anonymous (sign-in, r
 
 - **Identity comes from the token.** A request body never says who the caller is.
 - **Membership is checked in the handler or the hub**, never trusted from the client. A conversation that does not exist and one the caller is not in get the identical 403, so ids reveal nothing.
-- **History is bounded by the member's window.** Reading, searching, marking read, renewing a file link and editing all apply `JoinedAt` and `LeftAt` inside the query.
+- **History is bounded by the member's window.** Reading, marking read, renewing a file link and editing all apply `JoinedAt` and `LeftAt` inside the query.
 - **Roles.** A group has one owner, any number of admins and plain members. The owner can do everything; an admin can add people, remove plain members, rename and delete messages; a plain member can only send and leave. A direct chat has no admins.
 - **Notifications** are scoped by the caller's id in the same statement as the read or update. Someone else's id is a 404, is ignored, or gets the same 400 as an unknown id.
 - **Presence** is visible only to contacts, never to the user themselves, and the push is addressed to user ids so a non-contact receives nothing.
@@ -97,7 +97,6 @@ Counts live in Redis, so every API instance applies one limit. A refused request
 | `send` | person | 30 per 10 s |
 | `uploads` (upload tickets, including pictures) | person | 60 per hour |
 | `edit` | person | 20 per 60 s |
-| `search` | person | 30 per 10 s |
 | `push` | person | 20 per 60 s |
 | `keys` (keys, backup, devices, link requests, key lookup, conversation key epochs) | person | 60 per 60 s |
 | `forgot-password` (asking for a reset link) | client address | 5 per 900 s |

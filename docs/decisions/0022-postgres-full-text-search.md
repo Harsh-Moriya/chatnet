@@ -1,6 +1,6 @@
 # Full-text search inside Postgres, in two phases
 
-Status: Accepted
+Status: Superseded
 
 ## Context
 
@@ -20,8 +20,9 @@ One index, `IX_Messages_Search`, a GIN index on `(ConversationId, to_tsvector('s
 
 - File names are searched only among the newest 300 messages of each window.
 - The deep phase relies on the planner choosing the full-text index, which holds after `VACUUM`: keep autovacuum on.
-- The migration creates the `btree_gin` extension.
+- The migration created the `btree_gin` extension.
+- Superseded: the server no longer searches the text of messages, so the index, the extension and the endpoint were removed.
 
 ## Related
 
-- [Message search](../features/search.md)
+- [Conversation keys](../features/conversation-keys.md)

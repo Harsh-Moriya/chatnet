@@ -64,7 +64,7 @@ function ConversationPane({ conversation }: { conversation: Conversation }) {
   // A conversation from before keys, or one whose key must be replaced after someone left, has its keys made as it is opened.
   useConversationKeys(conversation.id)
 
-  // Set while the messages are read from a window of the history (a search result, or a mention far back) and not from the
+  // Set while the messages are read from a window of the history (a mention far back) and not from the
   // latest page. The latest page is not loaded then: it would join the window with a hole between them.
   const readingWindow = useChatStore((state) => state.windows[conversation.id])
   const paging = useWindowPaging(conversation.id)
@@ -79,7 +79,7 @@ function ConversationPane({ conversation }: { conversation: Conversation }) {
     wasReadingWindow.current = readingWindow !== undefined
   }, [readingWindow, queryClient, conversation.id])
 
-  // A navigation can name a message to show (a notification, a search result). If it is not among what is held, the window around
+  // A navigation can name a message to show (a notification). If it is not among what is held, the window around
   // it is opened once per navigation, after the latest page is in, because the message may be in it.
   const focusId = focusedMessageId(location.state)
   const holdsFocus = useChatStore((state) =>

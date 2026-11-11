@@ -15,7 +15,6 @@ One page per feature: what it does, the endpoints and hub events it uses, and it
 | [Notifications and mentions](notifications.md) | The bell, `@mentions`, mute, browser alerts |
 | [Group management](group-management.md) | Roles, add, remove, hand over, rename, leave |
 | [Profiles and pictures](profiles-and-pictures.md) | Display name, pictures for people and groups |
-| [Message search](search.md) | Full-text search over what the person may read |
 | [Rate limits](rate-limits.md) | Limits per address and per person, shared across instances |
 | [Web Push](web-push.md) | Alerts while the app is closed |
 | [Encryption keys and devices](encryption-keys.md) | Keys made in the browser, the passphrase backup, linking a new device, signing out |

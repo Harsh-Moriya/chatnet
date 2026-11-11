@@ -67,7 +67,7 @@ export async function requestMessages(
 }
 
 // ##### Reading a window of the history #####
-// A search result or a notification can name a message far back. The conversation then shows a window of its history
+// A notification can name a message far back. The conversation then shows a window of its history
 // around that message (chatStore.showWindow), read in both directions from there until it reaches the newest message and is
 // live again. These three requests are that: they put the window up, and extend it upwards and downwards.
 

@@ -33,8 +33,6 @@ using ChatNET.API.Keys;
 using ChatNET.API.Keys.Persistence;
 using ChatNET.API.Push;
 using ChatNET.API.Push.Persistence;
-using ChatNET.API.Search;
-using ChatNET.API.Search.Persistence;
 using ChatNET.API.Users;
 using ChatNET.API.Users.Persistence;
 using FluentValidation;
@@ -268,7 +266,6 @@ try
 
     builder.Services.AddScoped<IConversationRepository, ConversationRepository>();
     builder.Services.AddScoped<IKeyEpochRepository, KeyEpochRepository>();
-    builder.Services.AddScoped<ISearchRepository, SearchRepository>();
     builder.Services.AddScoped<IMessageRepository, MessageRepository>();
     builder.Services.AddOptions<MessagingOptions>()
         .BindConfiguration(MessagingOptions.SectionName)
@@ -516,7 +513,6 @@ try
     app.MapMessagingEndpoints();
     app.MapMediaEndpoints();
     app.MapAvatarEndpoints();
-    app.MapSearchEndpoints();
     app.MapNotificationEndpoints();
     app.MapPresenceEndpoints();
     app.MapPushEndpoints();

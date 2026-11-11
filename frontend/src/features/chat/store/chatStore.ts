@@ -25,7 +25,7 @@ import type {
 // Components read from here only. The store holds no server logic and never calls the network.
 
 // What is held of a conversation when it is not the latest messages: a window of its history opened at one message, such as a
-// search result. Such a conversation is read in both directions from the window; it is live again once the window reaches the
+// notification. Such a conversation is read in both directions from the window; it is live again once the window reaches the
 // newest message.
 export interface MessageWindow {
   // The messages pushed while the window does not reach the newest message, which cannot be added to it without leaving a

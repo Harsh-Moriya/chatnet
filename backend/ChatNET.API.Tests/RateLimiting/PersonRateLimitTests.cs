@@ -12,7 +12,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace ChatNET.API.Tests.RateLimiting;
 
-// Sending, upload tickets, edits and search are limited per signed-in person. The shared test host has limits that no
+// Sending, upload tickets and edits are limited per signed-in person. The shared test host has limits that no
 // test reaches; each test here builds a host with the limit it needs, and every host counts under keys of its own.
 [Collection(IntegrationTestCollection.Name)]
 public class PersonRateLimitTests
@@ -189,27 +189,12 @@ public class PersonRateLimitTests
         await AssertRefusedWithTheWaitAsync(await client.AvatarUploadResponseAsync(group, "image/png", 100), atMostSeconds: 3600);
     }
 
-    // ##### Search #####
-
-    [Fact]
-    public async Task Search_is_limited()
-    {
-        using var host = HostWith(Limit("Search", 3));
-        var (alice, _, _) = await _factory.DirectChatAsync();
-        using var client = ClientFor(host, alice);
-
-        for (var i = 0; i < 3; i++)
-            Assert.Equal(HttpStatusCode.OK, (await client.SearchResponseAsync("anything")).StatusCode);
-
-        await AssertRefusedWithTheWaitAsync(await client.SearchResponseAsync("anything"));
-    }
-
     // ##### What is not limited #####
 
     [Fact]
     public async Task Reading_and_deleting_are_not_limited()
     {
-        using var host = HostWith(new[] { "Send", "Edit", "Uploads", "Search" }
+        using var host = HostWith(new[] { "Send", "Edit", "Uploads" }
             .SelectMany(policy => Limit(policy, 1)).ToDictionary(p => p.Key, p => p.Value));
         var (alice, _, conversation) = await _factory.DirectChatAsync();
         using var client = ClientFor(host, alice);
@@ -231,18 +216,18 @@ public class PersonRateLimitTests
     [Fact]
     public async Task A_request_without_a_token_is_counted_by_address_and_leaves_a_persons_allowance_alone()
     {
-        using var host = HostWith(Limit("Search", 2));
+        using var host = HostWith(Limit("Keys", 2));
         var (alice, _, _) = await _factory.DirectChatAsync();
         using var signedIn = ClientFor(host, alice, address: "10.2.2.2");
         using var anonymous = host.CreateClient();
         anonymous.DefaultRequestHeaders.Add(RemoteIpStartupFilter.HeaderName, "10.2.2.2");
 
-        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.SearchResponseAsync("anything")).StatusCode);
-        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.SearchResponseAsync("anything")).StatusCode);
-        Assert.Equal(HttpStatusCode.TooManyRequests, (await anonymous.SearchResponseAsync("anything")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.LookupKeysAsync([alice.Id])).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.LookupKeysAsync([alice.Id])).StatusCode);
+        Assert.Equal(HttpStatusCode.TooManyRequests, (await anonymous.LookupKeysAsync([alice.Id])).StatusCode);
 
-        Assert.Equal(HttpStatusCode.OK, (await signedIn.SearchResponseAsync("anything")).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await signedIn.SearchResponseAsync("anything")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await signedIn.LookupKeysAsync([alice.Id])).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await signedIn.LookupKeysAsync([alice.Id])).StatusCode);
     }
 
     // ##### Every limited endpoint says so #####
@@ -254,7 +239,6 @@ public class PersonRateLimitTests
     [InlineData("POST", "/api/conversations/{conversationId:guid}/uploads", "uploads")]
     [InlineData("POST", "/api/users/me/avatar/uploads", "uploads")]
     [InlineData("POST", "/api/conversations/{conversationId:guid}/avatar/uploads", "uploads")]
-    [InlineData("GET", "/api/search/messages", "search")]
     [InlineData("PUT", "/api/push/subscriptions", "push")]
     [InlineData("DELETE", "/api/push/subscriptions", "push")]
     [InlineData("POST", "/api/auth/forgot-password", "forgot-password")]
@@ -278,8 +262,6 @@ public class PersonRateLimitTests
     [InlineData("RateLimiting:Uploads:WindowSeconds", "86401")]
     [InlineData("RateLimiting:Edit:PermitLimit", "-1")]
     [InlineData("RateLimiting:Edit:WindowSeconds", "0")]
-    [InlineData("RateLimiting:Search:PermitLimit", "0")]
-    [InlineData("RateLimiting:Search:WindowSeconds", "0")]
     [InlineData("RateLimiting:Avatars:PermitLimit", "0")]
     [InlineData("RateLimiting:Avatars:WindowSeconds", "0")]
     [InlineData("RateLimiting:Push:PermitLimit", "0")]

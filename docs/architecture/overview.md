@@ -24,7 +24,7 @@ flowchart LR
 
 ## The two channels
 
-- **REST** loads data (conversations, history, search) and performs every change that must be confirmed (sign in, send a message, edit, add a member).
+- **REST** loads data (conversations, history) and performs every change that must be confirmed (sign in, send a message, edit, add a member).
 - **SignalR** only pushes events to connected clients. Clients never send messages or fetch history through the hub. The hub accepts three calls (join a conversation, start and stop typing).
 
 The browser follows the same split: TanStack Query owns REST data, and hub events patch the Zustand store directly. A hub event never triggers a refetch.
@@ -56,7 +56,6 @@ backend/ChatNET.API/
   Keys/            public key bundles, encrypted backups, the lookup of other people's keys
   Devices/         the devices that hold a person's keys, and linking a new one
   Messaging/       sending, history, edit, delete, the SignalR hub
-  Search/          message search
   Media/           upload tickets, attachments, pictures, object storage
   Notifications/   mentions and invitations, the list behind the bell
   Presence/        who is online, connection registry and eviction
@@ -65,7 +64,7 @@ backend/ChatNET.API/
   RateLimiting/    the Redis sliding-window limiter and its policies
   Common/          behaviours, exceptions, health, hosting, logging, observability
 frontend/src/
-  features/        auth, chat, encryption, notifications, presence, profile, push, search (one folder each)
+  features/        auth, chat, encryption, notifications, presence, profile, push (one folder each)
   components/ui/   shared primitives (Button, Input, FormField, Menu)
   lib/             API client, query client, the encryption formats (lib/crypto)
 ```

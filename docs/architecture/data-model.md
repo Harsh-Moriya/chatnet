@@ -102,7 +102,6 @@ Indexes:
 
 - `IX_Messages_ConversationId_CreatedAt` on `(ConversationId, CreatedAt DESC)`: every history query walks this index from a cursor and stops after 50 rows.
 - `IX_Messages_ConversationId_SenderId_ClientMessageId`: **unique and partial** (where `ClientMessageId` is not null). Concurrent copies of one send are settled by this index.
-- `IX_Messages_Search`: a GIN index on `(ConversationId, to_tsvector('simple', coalesce(Content, '')))`, using `btree_gin`, for message search.
 - Indexes on `SenderId` and `DeletedById` for the foreign keys.
 
 ## MessageAttachments

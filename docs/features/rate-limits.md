@@ -12,7 +12,6 @@ Limits slow down password guessing, mass account creation and flooding. The coun
 | `send` | sending a message | person | 30 per 10 s |
 | `uploads` | upload tickets for files and pictures | person | 60 per 3,600 s |
 | `edit` | editing a message | person | 20 per 60 s |
-| `search` | message search | person | 30 per 10 s |
 | `push` | registering and removing a browser for alerts | person | 20 per 60 s |
 | `keys` | the encryption keys, backup, devices, link requests, the lookup of other people's keys and the epochs of conversations | person | 60 per 60 s |
 | `forgot-password` | `POST /api/auth/forgot-password` | client address | 5 per 900 s |

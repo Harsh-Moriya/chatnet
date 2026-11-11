@@ -113,9 +113,9 @@ public sealed class ChatApiFactory : WebApplicationFactory<Program>, IAsyncLifet
         Environment.SetEnvironmentVariable("Email__Smtp__Security", "None");
         Environment.SetEnvironmentVariable("Email__From__Address", MailFromAddress);
 
-        // Effectively disables the rate limits for ordinary tests, which register many users from one address and send, edit
-        // and search many times as one person. Rate limit tests build a host with a tight limit.
-        foreach (var policy in new[] { "Auth", "Send", "Uploads", "Edit", "Search", "Avatars", "Push", "Keys", "ForgotPassword", "ResetPassword", "PasswordResetEmail" })
+        // Effectively disables the rate limits for ordinary tests, which register many users from one address and send
+        // and edit many times as one person. Rate limit tests build a host with a tight limit.
+        foreach (var policy in new[] { "Auth", "Send", "Uploads", "Edit", "Avatars", "Push", "Keys", "ForgotPassword", "ResetPassword", "PasswordResetEmail" })
             Environment.SetEnvironmentVariable($"RateLimiting__{policy}__PermitLimit", "1000000");
 
         // Presence timers are set so they never fire by themselves while other tests run: the refresh loop
