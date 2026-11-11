@@ -34,6 +34,9 @@ export function describeKeyFailure(error: unknown, nameOf: (userId: string) => s
     case 'KeysMismatchError':
       return 'The keys on this browser are not the ones on the server, so nothing was sent.'
 
+    case 'EpochKeyMissingError':
+      return 'The key of this conversation is not available on this browser, so nothing was sent.'
+
     case 'EncryptionNotReadyError':
       return 'Your encryption keys are not available on this browser.'
 

@@ -67,7 +67,9 @@ export class EpochContestedError extends Error {
   }
 }
 
-const RETRIABLE = new Set(['epoch-stale', 'epoch-members-changed'])
+// Stale: another epoch was stored. Members changed: the people or their keys are not what the epoch was made for. Due: a removal marked
+// the epoch for replacement, which a message sent under it is refused for. Each means looking at the conversation again.
+const RETRIABLE = new Set(['epoch-stale', 'epoch-members-changed', 'epoch-due'])
 
 export function isRetriable(failure: unknown): boolean {
   return failure instanceof EpochRefused && failure.code !== null && RETRIABLE.has(failure.code)

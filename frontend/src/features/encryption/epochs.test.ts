@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  type AccountSecrets,
   CryptoError,
   createAccountSecrets,
   currentAccountKey,
@@ -16,7 +15,6 @@ import {
 } from '../../lib/crypto'
 import {
   EpochContestedError,
-  type EpochDeps,
   EpochRefused,
   MAX_ATTEMPTS,
   MissingKeysError,
@@ -30,7 +28,8 @@ import {
   resolvePeers,
   saveKey,
 } from './epochs'
-import { FakeEpochServer, MemoryEpochKeyStore, MemoryPinStore, REPLACEMENT_INTERVAL_MS } from './fakeEpochServer'
+import { type Person, bundleOf, newPerson, personFrom, serving, start } from './epochTestKit'
+import { FakeEpochServer, REPLACEMENT_INTERVAL_MS } from './fakeEpochServer'
 import { ServerRefused } from './fakeKeysServer'
 import { KeysMismatchError } from './flows'
 import { IdentityChangedError, trustNewIdentity } from './pins'
@@ -39,57 +38,10 @@ import type { EpochApi } from './types'
 // The conversation keys against a fake server that applies the real server's rules, with the real cryptography: a key made by one
 // person is opened by another, and every way a server or a member could hand out a key that is not what it claims is noticed.
 
-interface Person {
-  id: string
-  secrets: AccountSecrets
-  keys: MemoryEpochKeyStore
-  pins: MemoryPinStore
-  deps: EpochDeps
-}
-
-async function bundleOf(userId: string, secrets: AccountSecrets): Promise<string> {
-  return toBase64Url(await signBundle(userId, secrets.identity, currentAccountKey(secrets)))
-}
-
-async function newPerson(server: FakeEpochServer, options: { register?: boolean } = {}): Promise<Person> {
-  const id = crypto.randomUUID()
-  const secrets = await createAccountSecrets()
-  if (options.register !== false) server.registerBundle(id, 1, await bundleOf(id, secrets))
-  return personFrom(server.as(id), id, secrets)
-}
-
-function personFrom(api: EpochApi, id: string, secrets: AccountSecrets): Person {
-  const keys = new MemoryEpochKeyStore()
-  const pins = new MemoryPinStore()
-  return { id, secrets, keys, pins, deps: { api, keys, pins, self: { userId: id, secrets } } }
-}
-
-// A conversation started by `creator` for these people, as a browser starts one.
-async function start(server: FakeEpochServer, creator: Person, others: Person[]): Promise<string> {
-  const prepared = await prepareNewConversation(creator.deps, others.map((person) => person.id))
-  server.start(creator.id, prepared.conversationId, [creator.id, ...others.map((person) => person.id)], prepared.body)
-  await keepNewConversationKey(creator.deps, prepared, prepared.conversationId)
-  return prepared.conversationId
-}
-
 // A conversation that existed before it had keys.
 const LEGACY = 'e1e1e1e1-0000-4000-8000-000000000001'
 
 const keyOf = (person: Person, conversationId: string, epoch: number) => person.keys.load(person.id, conversationId, epoch)
-
-// The page the server gives a person, changed on its way.
-function serving(server: FakeEpochServer, person: Person, change: (page: Awaited<ReturnType<EpochApi['getEpochs']>>) => void): Person {
-  const api = server.as(person.id)
-  const altered: EpochApi = {
-    ...api,
-    getEpochs: async (...args) => {
-      const page = await api.getEpochs(...args)
-      change(page)
-      return page
-    },
-  }
-  return { ...person, deps: { ...person.deps, api: altered } }
-}
 
 describe('a key made by one person and opened by another', () => {
   it('reaches the other person as the same key, and is checked on the way', async () => {
