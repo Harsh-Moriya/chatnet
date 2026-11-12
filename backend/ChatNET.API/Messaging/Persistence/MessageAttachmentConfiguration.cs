@@ -15,18 +15,6 @@ public class MessageAttachmentConfiguration : IEntityTypeConfiguration<MessageAt
             .IsRequired()
             .HasColumnType("text");
 
-        builder.Property(a => a.ContentType)
-            .IsRequired()
-            .HasColumnType("text");
-
-        builder.Property(a => a.Type)
-            .HasConversion<string>()
-            .IsRequired();
-
-        builder.Property(a => a.FileName)
-            .IsRequired()
-            .HasColumnType("text");
-
         builder.Property(a => a.FileSizeBytes).IsRequired();
 
         builder.Property(a => a.CreatedAt)

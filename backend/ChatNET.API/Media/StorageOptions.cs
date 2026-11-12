@@ -18,18 +18,11 @@ public sealed class StorageOptions
     public string AccessKey { get; set; } = string.Empty;
     public string SecretKey { get; set; } = string.Empty;
 
-    // The limits are checked when an upload is announced and again when the stored object is looked at, because
-    // a presigned PUT cannot cap the size of what is sent.
+    // The largest file, as a person sees it: before it is encrypted. What is stored for it is a little larger (see SealedFile). The
+    // limit is checked when an upload is announced and again when the stored object is looked at, because a presigned PUT cannot
+    // cap the size of what is sent. The server cannot see what a file is, so size and count are all it limits.
     public long MaxFileBytes { get; set; }
     public int MaxFilesPerMessage { get; set; }
-
-    // Has no default in code on purpose: the configuration binder adds the configured values to an array that
-    // already has items instead of replacing them, so a default here could never be narrowed by configuration.
-    public string[] AllowedContentTypes { get; set; } = [];
-
-    // Whether a file of this type may be attached. Compared as the normalised type, so case and parameters do not matter.
-    public bool Allows(string contentType)
-        => AllowedContentTypes.Any(allowed => AttachmentKinds.Normalize(allowed) == AttachmentKinds.Normalize(contentType));
 
     // How long a browser has to start an upload after asking for permission to make it.
     public int UploadUrlMinutes { get; set; }

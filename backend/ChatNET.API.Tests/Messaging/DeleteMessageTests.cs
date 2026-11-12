@@ -313,8 +313,8 @@ public class DeleteMessageTests
     {
         var (alice, bob, conversation) = await _factory.DirectChatAsync();
         using var client = _factory.CreateClientFor(alice);
-        var key = await client.UploadFileAsync(conversation, "hello"u8.ToArray(), "text/plain", "note.txt");
-        var sent = await client.SendMessageWithFilesAsync(conversation, "see file", (key, "note.txt"));
+        var key = await client.UploadFileAsync(conversation, new byte[64]);
+        var sent = await client.SendMessageWithFilesAsync(conversation, "see file", key);
         var file = await _factory.QueryDbAsync(db => db.MessageAttachments.SingleAsync(a => a.MessageId == sent.MessageIdOf()));
         Assert.True(await _factory.ObjectExistsAsync(file.StorageKey));
 
@@ -338,8 +338,8 @@ public class DeleteMessageTests
         var capture = new CapturingLoggerProvider();
         var (alice, _, conversation) = await _factory.DirectChatAsync();
         using var client = _factory.CreateClientFor(alice);
-        var key = await client.UploadFileAsync(conversation, "hello"u8.ToArray(), "text/plain", "note.txt");
-        var sent = await client.SendMessageWithFilesAsync(conversation, "see file", (key, "note.txt"));
+        var key = await client.UploadFileAsync(conversation, new byte[64]);
+        var sent = await client.SendMessageWithFilesAsync(conversation, "see file", key);
         var file = await _factory.QueryDbAsync(db => db.MessageAttachments.SingleAsync(a => a.MessageId == sent.MessageIdOf()));
         using var host = _factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
         {
@@ -376,9 +376,9 @@ public class DeleteMessageTests
     {
         var (alice, _, conversation) = await _factory.DirectChatAsync();
         using var client = _factory.CreateClientFor(alice);
-        var first = await client.UploadFileAsync(conversation, "one"u8.ToArray(), "text/plain", "one.txt");
-        var second = await client.UploadFileAsync(conversation, "two"u8.ToArray(), "text/plain", "two.txt");
-        var sent = await client.SendMessageWithFilesAsync(conversation, "two files", (first, "one.txt"), (second, "two.txt"));
+        var first = await client.UploadFileAsync(conversation, new byte[64]);
+        var second = await client.UploadFileAsync(conversation, new byte[64]);
+        var sent = await client.SendMessageWithFilesAsync(conversation, "two files", first, second);
         var files = await _factory.QueryDbAsync(db => db.MessageAttachments
             .Where(a => a.MessageId == sent.MessageIdOf()).OrderBy(a => a.CreatedAt).ToListAsync());
         var stubborn = files[0].StorageKey;
@@ -410,9 +410,9 @@ public class DeleteMessageTests
     {
         var (alice, _, conversation) = await _factory.DirectChatAsync();
         using var client = _factory.CreateClientFor(alice);
-        var first = await client.UploadFileAsync(conversation, "one"u8.ToArray(), "text/plain", "one.txt");
-        var second = await client.UploadFileAsync(conversation, "two"u8.ToArray(), "text/plain", "two.txt");
-        var sent = await client.SendMessageWithFilesAsync(conversation, "two files", (first, "one.txt"), (second, "two.txt"));
+        var first = await client.UploadFileAsync(conversation, new byte[64]);
+        var second = await client.UploadFileAsync(conversation, new byte[64]);
+        var sent = await client.SendMessageWithFilesAsync(conversation, "two files", first, second);
         var files = await _factory.QueryDbAsync(db => db.MessageAttachments
             .Where(a => a.MessageId == sent.MessageIdOf()).OrderBy(a => a.CreatedAt).ToListAsync());
         var slow = files[0].StorageKey;
@@ -453,8 +453,8 @@ public class DeleteMessageTests
     {
         var (alice, _, conversation) = await _factory.DirectChatAsync();
         using var client = _factory.CreateClientFor(alice);
-        var key = await client.UploadFileAsync(conversation, "hello"u8.ToArray(), "text/plain", "note.txt");
-        var sent = await client.SendMessageWithFilesAsync(conversation, "see file", (key, "note.txt"));
+        var key = await client.UploadFileAsync(conversation, new byte[64]);
+        var sent = await client.SendMessageWithFilesAsync(conversation, "see file", key);
         var file = await _factory.QueryDbAsync(db => db.MessageAttachments.SingleAsync(a => a.MessageId == sent.MessageIdOf()));
         using var scope = _factory.Services.CreateScope();
         var publisher = scope.ServiceProvider.GetRequiredService<OutboxPublisher>();

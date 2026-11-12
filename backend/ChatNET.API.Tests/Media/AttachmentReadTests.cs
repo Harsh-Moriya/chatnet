@@ -110,8 +110,8 @@ public class AttachmentReadTests
         var history = await client.GetHistoryAsync(conversation);
 
         Assert.Equal(
-            ["file 0.png", "file 1.png", "file 2.png", "file 3.png"],
-            Assert.Single(history).AttachmentsOf().Select(f => f.GetProperty("fileName").GetString()));
+            [100L, 101L, 102L, 103L],
+            Assert.Single(history).AttachmentsOf().Select(f => f.GetProperty("sizeBytes").GetInt64()));
     }
 
     // ##### The conversation list #####

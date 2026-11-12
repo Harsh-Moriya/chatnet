@@ -176,53 +176,25 @@ public class BlobStorageTests
     {
         var key = NewKey("attachments");
         var content = Bytes(777);
-        await _factory.PutObjectAsync(key, content, "image/png");
+        await _factory.PutObjectAsync(key, content);
 
-        var response = await Http.GetAsync(_storage.CreateDownloadUrl(key, "photo.png", inline: true).Url);
+        var response = await Http.GetAsync(_storage.CreateDownloadUrl(key).Url);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal(content, await response.Content.ReadAsByteArrayAsync());
     }
 
+    // The object is an encrypted file, which the browser reads itself: the link says nothing about what it is or what to call it.
     [Fact]
-    public async Task An_image_opens_in_the_page_and_any_other_file_downloads_under_its_own_name()
+    public async Task A_download_link_has_no_name_to_save_under_and_no_way_to_show_the_file()
     {
         var key = NewKey("attachments");
-        await _factory.PutObjectAsync(key, Bytes(50), "application/pdf");
+        await _factory.PutObjectAsync(key, Bytes(50), "application/octet-stream");
 
-        var inline = await Http.GetAsync(_storage.CreateDownloadUrl(key, "plan.pdf", inline: true).Url);
-        var download = await Http.GetAsync(_storage.CreateDownloadUrl(key, "plan.pdf", inline: false).Url);
-
-        Assert.Equal("inline", inline.Content.Headers.ContentDisposition?.DispositionType);
-        Assert.Equal("attachment", download.Content.Headers.ContentDisposition?.DispositionType);
-        Assert.Equal("plan.pdf", download.Content.Headers.ContentDisposition?.FileName?.Trim('"'));
-    }
-
-    // The name comes from the sender. It must not be able to end the header and start another.
-    [Fact]
-    public async Task A_file_name_with_quotes_and_line_breaks_cannot_inject_a_header()
-    {
-        var key = NewKey("attachments");
-        await _factory.PutObjectAsync(key, Bytes(50), "application/pdf");
-
-        var response = await Http.GetAsync(
-            _storage.CreateDownloadUrl(key, "a\"b\r\nX-Injected: 1.pdf", inline: false).Url);
+        var response = await Http.GetAsync(_storage.CreateDownloadUrl(key).Url);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.False(response.Headers.Contains("X-Injected"));
-        var disposition = string.Join(";", response.Content.Headers.GetValues("Content-Disposition"));
-        Assert.DoesNotContain('\r', disposition);
-        Assert.DoesNotContain('\n', disposition);
-    }
-
-    [Fact]
-    public async Task A_non_ascii_file_name_survives_in_the_encoded_form()
-    {
-        var key = NewKey("attachments");
-        await _factory.PutObjectAsync(key, Bytes(50), "application/pdf");
-
-        var response = await Http.GetAsync(_storage.CreateDownloadUrl(key, "résumé 履歴書.pdf", inline: false).Url);
-
-        Assert.Equal("résumé 履歴書.pdf", response.Content.Headers.ContentDisposition?.FileNameStar);
+        Assert.Null(response.Content.Headers.ContentDisposition);
+        Assert.DoesNotContain("response-content-disposition", _storage.CreateDownloadUrl(key).Url);
     }
 }

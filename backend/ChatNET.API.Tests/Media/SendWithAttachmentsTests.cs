@@ -18,10 +18,10 @@ using Microsoft.Extensions.Logging;
 
 namespace ChatNET.API.Tests.Media;
 
-// A message can carry files. They are uploaded first, straight to the bucket, and the message only names them.
-// Sending checks what was really stored, moves each file to its permanent place and saves the message together
-// with its files, so a message is never stored with a file that is not there and nothing is left behind when a
-// send fails.
+// A message can carry files. They are encrypted by the sender's browser and uploaded first, straight to the bucket, and the message
+// only names them. Sending checks what was really stored (its size: the server cannot read it), moves each file to its permanent
+// place and saves the message together with its files, so a message is never stored with a file that is not there and nothing is
+// left behind when a send fails.
 [Collection(IntegrationTestCollection.Name)]
 public class SendWithAttachmentsTests
 {
@@ -34,6 +34,7 @@ public class SendWithAttachmentsTests
         _factory = factory;
     }
 
+    // What a browser would have uploaded for a file: bytes of this length that mean nothing here. At least SealedFile.MinBytes.
     private static byte[] Bytes(int length)
     {
         var bytes = new byte[length];
@@ -64,24 +65,35 @@ public class SendWithAttachmentsTests
     // ##### What is stored and returned #####
 
     [Fact]
-    public async Task A_message_of_only_files_is_stored_with_empty_text_and_its_files()
+    public async Task A_message_of_only_files_is_stored_with_a_blob_and_its_files()
     {
         var (alice, _, conversation) = await _factory.DirectChatAsync();
         using var client = _factory.CreateClientFor(alice);
         var content = Bytes(300);
         var key = await client.UploadFileAsync(conversation, content);
 
-        var response = await client.PostMessageWithFilesAsync(conversation, null, [(key, "photo.png")]);
+        var response = await client.PostMessageWithFilesAsync(conversation, null, [key]);
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         var message = await response.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal("", message.ContentOf());
         var file = Assert.Single(message.AttachmentsOf());
-        Assert.Equal("Image", file.GetProperty("type").GetString());
-        Assert.Equal("photo.png", file.GetProperty("fileName").GetString());
-        Assert.Equal("image/png", file.GetProperty("contentType").GetString());
         Assert.Equal(300, file.GetProperty("sizeBytes").GetInt64());
         Assert.Equal(content, await (await MediaApi.FollowAsync(file)).Content.ReadAsByteArrayAsync());
+    }
+
+    // The server cannot say what a file is, so a file says nothing but its id, its size and where to get it.
+    [Fact]
+    public async Task A_file_is_returned_as_an_id_a_size_and_a_link_and_nothing_else()
+    {
+        var (alice, _, conversation) = await _factory.DirectChatAsync();
+        using var client = _factory.CreateClientFor(alice);
+        var key = await client.UploadFileAsync(conversation, Bytes(64));
+
+        var message = await client.SendMessageWithFilesAsync(conversation, null, key);
+
+        var file = Assert.Single(message.AttachmentsOf());
+        Assert.Equal(["id", "sizeBytes", "url"], file.EnumerateObject().Select(p => p.Name).Order());
     }
 
     [Fact]
@@ -89,9 +101,9 @@ public class SendWithAttachmentsTests
     {
         var (alice, _, conversation) = await _factory.DirectChatAsync();
         using var client = _factory.CreateClientFor(alice);
-        var key = await client.UploadFileAsync(conversation, Bytes(10));
+        var key = await client.UploadFileAsync(conversation, Bytes(64));
 
-        var message = await client.SendMessageWithFilesAsync(conversation, "look at this", (key, "a.png"));
+        var message = await client.SendMessageWithFilesAsync(conversation, "look at this", key);
 
         Assert.Equal("look at this", message.ContentOf());
         Assert.Single(message.AttachmentsOf());
@@ -105,7 +117,7 @@ public class SendWithAttachmentsTests
         var content = Bytes(64);
         var key = await client.UploadFileAsync(conversation, content);
 
-        await client.SendMessageWithFilesAsync(conversation, null, (key, "a.png"));
+        await client.SendMessageWithFilesAsync(conversation, null, key);
 
         var stored = Assert.Single(await StoredAttachmentsAsync(conversation));
         Assert.StartsWith($"attachments/{conversation}/{stored.Id}", stored.StorageKey);
@@ -113,23 +125,38 @@ public class SendWithAttachmentsTests
         Assert.False(await _factory.ObjectExistsAsync(key));
     }
 
+    // The bucket is told nothing about the file: the upload is signed for one content type, whatever the bytes are.
+    [Fact]
+    public async Task The_object_in_the_bucket_has_a_content_type_that_says_nothing_about_the_file()
+    {
+        var (alice, _, conversation) = await _factory.DirectChatAsync();
+        using var client = _factory.CreateClientFor(alice);
+        var key = await client.UploadFileAsync(conversation, Bytes(64));
+
+        await client.SendMessageWithFilesAsync(conversation, null, key);
+
+        var stored = Assert.Single(await StoredAttachmentsAsync(conversation));
+        var metadata = await _factory.Storage.GetObjectMetadataAsync(ChatApiFactory.StorageBucket, stored.StorageKey);
+        Assert.Equal("application/octet-stream", metadata.Headers.ContentType);
+    }
+
+    // The files of a message are told apart by their sizes here, which the tests choose to differ.
     [Fact]
     public async Task Files_keep_the_order_they_were_attached_in()
     {
         var (alice, _, conversation) = await _factory.DirectChatAsync();
         using var client = _factory.CreateClientFor(alice);
-        var one = await client.UploadFileAsync(conversation, Bytes(10), "image/png", "one.png");
-        var two = await client.UploadFileAsync(conversation, Bytes(20), "application/pdf", "two.pdf");
-        var three = await client.UploadFileAsync(conversation, Bytes(30), "image/png", "three.png");
-        var four = await client.UploadFileAsync(conversation, Bytes(40), "image/png", "four.png");
+        var one = await client.UploadFileAsync(conversation, Bytes(100));
+        var two = await client.UploadFileAsync(conversation, Bytes(200));
+        var three = await client.UploadFileAsync(conversation, Bytes(300));
+        var four = await client.UploadFileAsync(conversation, Bytes(400));
 
-        var message = await client.SendMessageWithFilesAsync(
-            conversation, null, (three, "three.png"), (one, "one.png"), (four, "four.png"), (two, "two.pdf"));
+        var message = await client.SendMessageWithFilesAsync(conversation, null, three, one, four, two);
 
-        var names = new[] { "three.png", "one.png", "four.png", "two.pdf" };
-        Assert.Equal(names, message.AttachmentsOf().Select(f => f.GetProperty("fileName").GetString()));
+        long[] sizes = [300, 100, 400, 200];
+        Assert.Equal(sizes, message.AttachmentsOf().Select(f => f.GetProperty("sizeBytes").GetInt64()));
         var history = await client.GetHistoryAsync(conversation);
-        Assert.Equal(names, history[^1].AttachmentsOf().Select(f => f.GetProperty("fileName").GetString()));
+        Assert.Equal(sizes, history[^1].AttachmentsOf().Select(f => f.GetProperty("sizeBytes").GetInt64()));
     }
 
     // The order is not in the ids: .NET's version 7 GUIDs made within one millisecond come out in a different order
@@ -140,96 +167,76 @@ public class SendWithAttachmentsTests
     public async Task Files_looked_at_within_one_millisecond_still_come_back_in_the_order_they_were_attached_in()
     {
         var (alice, _, conversation) = await _factory.DirectChatAsync();
+        var storage = new InstantBlobStorage();
         using var host = _factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
         {
             services.RemoveAll<IBlobStorage>();
-            services.AddSingleton<IBlobStorage, InstantBlobStorage>();
+            services.AddSingleton<IBlobStorage>(storage);
         }));
         using var client = Authorized(host, alice);
 
         for (var round = 0; round < 8; round++)
         {
-            var names = Enumerable.Range(0, 4).Select(i => $"file {round}-{i}.png").ToArray();
-            var files = names.Select(name => (AttachmentKeys.NewUploadKey(conversation, alice.Id), name)).ToArray();
+            var keys = Enumerable.Range(0, 4).Select(_ => AttachmentKeys.NewUploadKey(conversation, alice.Id)).ToArray();
 
-            await client.SendMessageWithFilesAsync(conversation, null, files);
+            await client.SendMessageWithFilesAsync(conversation, null, keys);
 
+            var expected = keys.Select(storage.LinkOf).ToArray();
             var history = await client.GetHistoryAsync(conversation);
-            Assert.Equal(names, history[^1].AttachmentsOf().Select(f => f.GetProperty("fileName").GetString()));
+            Assert.Equal(expected, history[^1].AttachmentsOf().Select(f => f.UrlOf()));
         }
     }
 
-    // Pictures are shown in the page; any other file is a download. Checked on the links of the answer to the send,
-    // of the push and of history, which are made in one place.
+    // Checked on the links of the answer to the send, of the push and of history, which are made in one place.
     [Fact]
-    public async Task The_links_in_a_message_show_a_picture_and_download_any_other_file()
+    public async Task The_links_in_a_message_download_the_bytes_that_were_stored()
     {
         var (alice, bob, conversation) = await _factory.DirectChatAsync();
         using var client = _factory.CreateClientFor(alice);
         await using var bobsTab = await HubClient.ConnectAsync(_factory, bob);
-        var picture = await client.UploadFileAsync(conversation, Bytes(10), "image/png", "pic.png");
-        var document = await client.UploadFileAsync(conversation, Bytes(10), "application/pdf", "doc.pdf");
+        var content = Bytes(500);
+        var key = await client.UploadFileAsync(conversation, content);
 
-        var sent = await client.SendMessageWithFilesAsync(conversation, null, (picture, "pic.png"), (document, "doc.pdf"));
+        var sent = await client.SendMessageWithFilesAsync(conversation, null, key);
 
         var pushed = await bobsTab.WaitForMessageAsync(conversation, sent.MessageIdOf());
         var fromHistory = (await client.GetHistoryAsync(conversation))[^1];
         foreach (var message in new[] { sent, pushed, fromHistory })
         {
-            var files = message.AttachmentsOf();
-            Assert.Equal("inline", (await MediaApi.FollowAsync(files[0])).Content.Headers.ContentDisposition?.DispositionType);
-            Assert.Equal("attachment", (await MediaApi.FollowAsync(files[1])).Content.Headers.ContentDisposition?.DispositionType);
+            var response = await MediaApi.FollowAsync(Assert.Single(message.AttachmentsOf()));
+            Assert.Equal(content, await response.Content.ReadAsByteArrayAsync());
+            Assert.Null(response.Content.Headers.ContentDisposition);
         }
     }
 
+    // The size is what the bucket holds, whatever the ticket promised.
     [Fact]
-    public async Task The_kind_of_a_file_follows_the_type_it_was_stored_with()
+    public async Task The_size_comes_from_the_stored_object_and_not_from_the_ticket()
     {
         var (alice, _, conversation) = await _factory.DirectChatAsync();
         using var client = _factory.CreateClientFor(alice);
-        var image = await client.UploadFileAsync(conversation, Bytes(10), "image/webp", "a.webp");
-        var video = await client.UploadFileAsync(conversation, Bytes(10), "video/mp4", "b.mp4");
-        var document = await client.UploadFileAsync(conversation, Bytes(10), "application/pdf", "c.pdf");
-
-        var message = await client.SendMessageWithFilesAsync(
-            conversation, null, (image, "a.webp"), (video, "b.mp4"), (document, "c.pdf"));
-
-        Assert.Equal(["Image", "Video", "File"], message.AttachmentsOf().Select(f => f.GetProperty("type").GetString()));
-    }
-
-    // What the sender claimed is not what is trusted: the object in the bucket is looked at.
-    [Fact]
-    public async Task The_type_and_size_come_from_the_stored_object_and_not_from_the_ticket()
-    {
-        var (alice, _, conversation) = await _factory.DirectChatAsync();
-        using var client = _factory.CreateClientFor(alice);
-        var ticket = await client.GetUploadTicketAsync(conversation, "photo.png", "image/png", 5);
+        var ticket = await client.GetUploadTicketAsync(conversation, SealedFile.MinBytes);
         var key = ticket.GetProperty("uploadKey").GetString()!;
-        await _factory.PutObjectAsync(key, Bytes(777), "application/pdf");
+        await _factory.PutObjectAsync(key, Bytes(777));
 
-        var message = await client.SendMessageWithFilesAsync(conversation, null, (key, "report.pdf"));
+        var message = await client.SendMessageWithFilesAsync(conversation, null, key);
 
-        var file = Assert.Single(message.AttachmentsOf());
-        Assert.Equal("application/pdf", file.GetProperty("contentType").GetString());
-        Assert.Equal("File", file.GetProperty("type").GetString());
-        Assert.Equal(777, file.GetProperty("sizeBytes").GetInt64());
+        Assert.Equal(777, Assert.Single(message.AttachmentsOf()).GetProperty("sizeBytes").GetInt64());
     }
 
-    [Theory]
-    [InlineData("C:\\Users\\me\\docs\\plan.pdf", "plan.pdf")]
-    [InlineData("../../etc/passwd", "passwd")]
-    [InlineData("invoice\u202Egpj.exe", "invoicegpj.exe")]
-    [InlineData("two\r\nlines.txt", "twolines.txt")]
-    public async Task A_file_name_is_made_harmless_before_it_is_stored(string sent, string stored)
+    // The server does not look at what a file is, so whatever the bucket was told about it is not a reason to refuse it.
+    [Fact]
+    public async Task A_file_is_not_refused_for_what_the_bucket_says_it_is()
     {
         var (alice, _, conversation) = await _factory.DirectChatAsync();
         using var client = _factory.CreateClientFor(alice);
-        var key = await client.UploadFileAsync(conversation, Bytes(10));
+        var ticket = await client.GetUploadTicketAsync(conversation, 64);
+        var key = ticket.GetProperty("uploadKey").GetString()!;
+        await _factory.PutObjectAsync(key, Bytes(64), "text/html");
 
-        var message = await client.SendMessageWithFilesAsync(conversation, null, (key, sent));
+        var response = await client.PostMessageWithFilesAsync(conversation, null, [key]);
 
-        Assert.Equal(stored, Assert.Single(message.AttachmentsOf()).GetProperty("fileName").GetString());
-        Assert.Equal(stored, Assert.Single(await StoredAttachmentsAsync(conversation)).FileName);
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
     }
 
     // ##### Reading and pushing #####
@@ -242,12 +249,11 @@ public class SendWithAttachmentsTests
         using var bobClient = _factory.CreateClientFor(bob);
         var content = Bytes(120);
         var key = await bobClient.UploadFileAsync(conversation, content);
-        await bobClient.SendMessageWithFilesAsync(conversation, "from bob", (key, "pic.png"));
+        await bobClient.SendMessageWithFilesAsync(conversation, "from bob", key);
 
         var history = await aliceClient.GetHistoryAsync(conversation);
 
         var file = Assert.Single(Assert.Single(history).AttachmentsOf());
-        Assert.Equal("pic.png", file.GetProperty("fileName").GetString());
         Assert.Equal(content, await (await MediaApi.FollowAsync(file)).Content.ReadAsByteArrayAsync());
     }
 
@@ -272,7 +278,7 @@ public class SendWithAttachmentsTests
         var content = Bytes(80);
         var key = await client.UploadFileAsync(conversation, content);
 
-        var sent = await client.SendMessageWithFilesAsync(conversation, null, (key, "pic.png"));
+        var sent = await client.SendMessageWithFilesAsync(conversation, null, key);
 
         var pushed = await bobsTab.WaitForMessageAsync(conversation, sent.MessageIdOf());
         var file = Assert.Single(pushed.AttachmentsOf());
@@ -286,11 +292,11 @@ public class SendWithAttachmentsTests
     {
         var (alice, _, conversation) = await _factory.DirectChatAsync();
         using var client = _factory.CreateClientFor(alice);
-        var files = new List<(string, string)>();
+        var keys = new List<string>();
         for (var i = 0; i < 5; i++)
-            files.Add((await client.UploadFileAsync(conversation, Bytes(10)), $"{i}.png"));
+            keys.Add(await client.UploadFileAsync(conversation, Bytes(64)));
 
-        var response = await client.PostMessageWithFilesAsync(conversation, null, files);
+        var response = await client.PostMessageWithFilesAsync(conversation, null, keys);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.True((await response.ReadProblemAsync()).Errors!.Value.TryGetProperty("Attachments", out _));
@@ -303,28 +309,46 @@ public class SendWithAttachmentsTests
     {
         var (alice, _, conversation) = await _factory.DirectChatAsync();
         using var client = _factory.CreateClientFor(alice);
-        var key = await client.UploadFileAsync(conversation, Bytes(10));
+        var key = await client.UploadFileAsync(conversation, Bytes(64));
 
-        var response = await client.PostMessageWithFilesAsync(conversation, null, [(key, "a.png"), (key, "b.png")]);
+        var response = await client.PostMessageWithFilesAsync(conversation, null, [key, key]);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Equal(0, await MessageCountAsync(conversation));
     }
 
     [Theory]
-    [InlineData(null, "a.png")]
-    [InlineData("", "a.png")]
-    [InlineData("pending/x", null)]
-    [InlineData("pending/x", "")]
-    public async Task A_file_without_a_key_or_a_name_is_refused(string? key, string? name)
+    [InlineData(null)]
+    [InlineData("")]
+    public async Task A_file_without_a_key_is_refused(string? key)
     {
         var (alice, _, conversation) = await _factory.DirectChatAsync();
         using var client = _factory.CreateClientFor(alice);
 
         var response = await client.PostAsJsonAsync($"/api/conversations/{conversation}/messages",
-            new { attachments = new[] { new { uploadKey = key, fileName = name } } });
+            new { attachments = new[] { new { uploadKey = key } } });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    // A name sent with a file is not read: the name of a file is inside the sealed message, and a client that still sends one
+    // is not refused for it.
+    [Fact]
+    public async Task A_name_sent_with_a_file_is_ignored_and_never_stored()
+    {
+        var (alice, _, conversation) = await _factory.DirectChatAsync();
+        using var client = _factory.CreateClientFor(alice);
+        var key = await client.UploadFileAsync(conversation, Bytes(64));
+
+        var response = await client.PostAsJsonAsync($"/api/conversations/{conversation}/messages", new
+        {
+            ciphertext = FakeMessage.Ciphertext(await client.CurrentEpochAsync(conversation), string.Empty),
+            clientMessageId = Guid.NewGuid(),
+            attachments = new[] { new { uploadKey = key, fileName = "holiday photo.png" } },
+        });
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        Assert.DoesNotContain("holiday", await response.Content.ReadAsStringAsync());
     }
 
     [Fact]
@@ -332,9 +356,9 @@ public class SendWithAttachmentsTests
     {
         var (alice, _, conversation) = await _factory.DirectChatAsync();
         using var client = _factory.CreateClientFor(alice);
-        var key = await client.UploadFileAsync(conversation, Bytes(10));
+        var key = await client.UploadFileAsync(conversation, Bytes(64));
 
-        var response = await client.PostMessageWithFilesAsync(conversation, new string('x', 32768), [(key, "a.png")]);
+        var response = await client.PostMessageWithFilesAsync(conversation, new string('x', 32768), [key]);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -344,12 +368,12 @@ public class SendWithAttachmentsTests
     {
         var (alice, _, conversation) = await _factory.DirectChatAsync();
         using var client = _factory.CreateClientFor(alice);
-        var key = await client.UploadFileAsync(conversation, Bytes(10));
+        var key = await client.UploadFileAsync(conversation, Bytes(64));
 
         var response = await client.PostAsJsonAsync($"/api/conversations/{conversation}/messages", new
         {
             clientMessageId = Guid.NewGuid(),
-            attachments = new[] { new { uploadKey = key, fileName = "a.png" } },
+            attachments = new[] { new { uploadKey = key } },
         });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -363,9 +387,9 @@ public class SendWithAttachmentsTests
         var (alice, bob, conversation) = await _factory.DirectChatAsync();
         using var aliceClient = _factory.CreateClientFor(alice);
         using var bobClient = _factory.CreateClientFor(bob);
-        var bobsKey = await bobClient.UploadFileAsync(conversation, Bytes(10));
+        var bobsKey = await bobClient.UploadFileAsync(conversation, Bytes(64));
 
-        var response = await aliceClient.PostMessageWithFilesAsync(conversation, null, [(bobsKey, "stolen.png")]);
+        var response = await aliceClient.PostMessageWithFilesAsync(conversation, null, [bobsKey]);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Equal(NotUploaded, (await response.ReadProblemAsync()).Detail);
@@ -379,9 +403,9 @@ public class SendWithAttachmentsTests
         var (alice, bob, conversation) = await _factory.DirectChatAsync();
         using var client = _factory.CreateClientFor(alice);
         var other = (await client.CreateGroupAsync("Elsewhere", bob.Id)).IdOf();
-        var key = await client.UploadFileAsync(other, Bytes(10));
+        var key = await client.UploadFileAsync(other, Bytes(64));
 
-        var response = await client.PostMessageWithFilesAsync(conversation, null, [(key, "a.png")]);
+        var response = await client.PostMessageWithFilesAsync(conversation, null, [key]);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.True(await _factory.ObjectExistsAsync(key));
@@ -395,7 +419,7 @@ public class SendWithAttachmentsTests
         var ticket = await client.GetUploadTicketAsync(conversation);
 
         var response = await client.PostMessageWithFilesAsync(
-            conversation, null, [(ticket.GetProperty("uploadKey").GetString()!, "a.png")]);
+            conversation, null, [ticket.GetProperty("uploadKey").GetString()!]);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Contains(NotUploaded, await response.Content.ReadAsStringAsync());
@@ -410,7 +434,7 @@ public class SendWithAttachmentsTests
         var (alice, _, conversation) = await _factory.DirectChatAsync();
         using var client = _factory.CreateClientFor(alice);
 
-        var response = await client.PostMessageWithFilesAsync(conversation, null, [(key, "a.png")]);
+        var response = await client.PostMessageWithFilesAsync(conversation, null, [key]);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Contains(NotUploaded, await response.Content.ReadAsStringAsync());
@@ -421,12 +445,12 @@ public class SendWithAttachmentsTests
     {
         var (alice, _, conversation) = await _factory.DirectChatAsync();
         using var client = _factory.CreateClientFor(alice);
-        var key = await client.UploadFileAsync(conversation, Bytes(10));
-        await client.SendMessageWithFilesAsync(conversation, null, (key, "a.png"));
+        var key = await client.UploadFileAsync(conversation, Bytes(64));
+        await client.SendMessageWithFilesAsync(conversation, null, key);
         var stored = Assert.Single(await StoredAttachmentsAsync(conversation));
 
-        var again = await client.PostMessageWithFilesAsync(conversation, null, [(stored.StorageKey, "again.png")]);
-        var sameUpload = await client.PostMessageWithFilesAsync(conversation, null, [(key, "again.png")]);
+        var again = await client.PostMessageWithFilesAsync(conversation, null, [stored.StorageKey]);
+        var sameUpload = await client.PostMessageWithFilesAsync(conversation, null, [key]);
 
         Assert.Equal(HttpStatusCode.BadRequest, again.StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, sameUpload.StatusCode);
@@ -440,11 +464,11 @@ public class SendWithAttachmentsTests
         using var host = WithSetting("Storage:MaxFileBytes", "1024");
         var (alice, _, conversation) = await _factory.DirectChatAsync();
         using var client = Authorized(host, alice);
-        var ticket = await client.GetUploadTicketAsync(conversation, "big.png", "image/png", 100);
+        var ticket = await client.GetUploadTicketAsync(conversation, 100);
         var key = ticket.GetProperty("uploadKey").GetString()!;
-        (await MediaApi.PutToTicketAsync(ticket, Bytes(5000), "image/png")).EnsureSuccessStatusCode();
+        (await MediaApi.PutToTicketAsync(ticket, Bytes(5000))).EnsureSuccessStatusCode();
 
-        var response = await client.PostMessageWithFilesAsync(conversation, null, [(key, "big.png")]);
+        var response = await client.PostMessageWithFilesAsync(conversation, null, [key]);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Contains("larger than the limit", await response.Content.ReadAsStringAsync());
@@ -452,36 +476,53 @@ public class SendWithAttachmentsTests
         Assert.Equal(0, await MessageCountAsync(conversation));
     }
 
+    // The limit is on the file as a person sees it, and the largest object is that file with its header and a tag for every chunk of
+    // 64 KiB: 1024 bytes become 1024 + 13 + 16 = 1053. One byte more is refused.
     [Fact]
-    public async Task An_empty_upload_is_refused_and_deleted()
+    public async Task The_largest_object_for_a_file_of_the_limit_is_accepted_and_one_byte_more_is_refused()
+    {
+        using var host = WithSetting("Storage:MaxFileBytes", "1024");
+        var (alice, _, conversation) = await _factory.DirectChatAsync();
+        using var client = Authorized(host, alice);
+        var largest = await client.UploadFileAsync(conversation, Bytes(1053));
+        var tooLarge = await client.UploadFileAsync(conversation, Bytes(1053));
+        await _factory.PutObjectAsync(tooLarge, Bytes(1054));
+
+        var accepted = await client.PostMessageWithFilesAsync(conversation, null, [largest]);
+        var refused = await client.PostMessageWithFilesAsync(conversation, null, [tooLarge]);
+
+        Assert.Equal(HttpStatusCode.Created, accepted.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
+        Assert.False(await _factory.ObjectExistsAsync(tooLarge));
+    }
+
+    // Nothing smaller than a header and the tag of an empty file is a sealed file.
+    [Fact]
+    public async Task An_upload_smaller_than_any_sealed_file_is_refused_and_deleted()
     {
         var (alice, _, conversation) = await _factory.DirectChatAsync();
         using var client = _factory.CreateClientFor(alice);
         var ticket = await client.GetUploadTicketAsync(conversation);
         var key = ticket.GetProperty("uploadKey").GetString()!;
-        (await MediaApi.PutToTicketAsync(ticket, [], "image/png")).EnsureSuccessStatusCode();
+        (await MediaApi.PutToTicketAsync(ticket, Bytes(SealedFile.MinBytes - 1))).EnsureSuccessStatusCode();
 
-        var response = await client.PostMessageWithFilesAsync(conversation, null, [(key, "empty.png")]);
+        var response = await client.PostMessageWithFilesAsync(conversation, null, [key]);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Contains("empty", await response.Content.ReadAsStringAsync());
+        Assert.Contains("too small", await response.Content.ReadAsStringAsync());
         Assert.False(await _factory.ObjectExistsAsync(key));
     }
 
     [Fact]
-    public async Task An_upload_of_a_type_that_is_not_allowed_is_refused_and_deleted()
+    public async Task The_smallest_sealed_file_is_accepted()
     {
         var (alice, _, conversation) = await _factory.DirectChatAsync();
         using var client = _factory.CreateClientFor(alice);
-        var ticket = await client.GetUploadTicketAsync(conversation);
-        var key = ticket.GetProperty("uploadKey").GetString()!;
-        await _factory.PutObjectAsync(key, Bytes(10), "text/html");
+        var key = await client.UploadFileAsync(conversation, Bytes(SealedFile.MinBytes));
 
-        var response = await client.PostMessageWithFilesAsync(conversation, null, [(key, "page.html")]);
+        var response = await client.PostMessageWithFilesAsync(conversation, null, [key]);
 
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Contains("type that cannot be sent", await response.Content.ReadAsStringAsync());
-        Assert.False(await _factory.ObjectExistsAsync(key));
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
     }
 
     [Fact]
@@ -490,12 +531,12 @@ public class SendWithAttachmentsTests
         using var host = WithSetting("Storage:MaxFileBytes", "1024");
         var (alice, _, conversation) = await _factory.DirectChatAsync();
         using var client = Authorized(host, alice);
-        var good = await client.UploadFileAsync(conversation, Bytes(100), "image/png", "good.png");
-        var bigTicket = await client.GetUploadTicketAsync(conversation, "big.png", "image/png", 10);
+        var good = await client.UploadFileAsync(conversation, Bytes(100));
+        var bigTicket = await client.GetUploadTicketAsync(conversation, 100);
         var big = bigTicket.GetProperty("uploadKey").GetString()!;
         await _factory.PutObjectAsync(big, Bytes(5000));
 
-        var response = await client.PostMessageWithFilesAsync(conversation, null, [(good, "good.png"), (big, "big.png")]);
+        var response = await client.PostMessageWithFilesAsync(conversation, null, [good, big]);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Empty(await _factory.ObjectKeysAsync($"attachments/{conversation}/"));
@@ -514,12 +555,12 @@ public class SendWithAttachmentsTests
             services.RemoveAll<IBlobStorage>();
             services.AddSingleton<IBlobStorage>(provider => new ReplacingBlobStorage(
                 ActivatorUtilities.CreateInstance<S3BlobStorage>(provider),
-                key => _factory.PutObjectAsync(key, Bytes(900), "image/png")));
+                key => _factory.PutObjectAsync(key, Bytes(900))));
         }));
         using var client = Authorized(host, alice);
         var key = await client.UploadFileAsync(conversation, Bytes(100));
 
-        var response = await client.PostMessageWithFilesAsync(conversation, null, [(key, "a.png")]);
+        var response = await client.PostMessageWithFilesAsync(conversation, null, [key]);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Contains(NotUploaded, await response.Content.ReadAsStringAsync());
@@ -532,14 +573,14 @@ public class SendWithAttachmentsTests
     {
         var (_, bob, conversation) = await _factory.DirectChatAsync();
         using var client = _factory.CreateClientFor(bob);
-        var key = await client.UploadFileAsync(conversation, Bytes(10));
+        var key = await client.UploadFileAsync(conversation, Bytes(64));
         await _factory.ExecuteDbAsync(async db =>
         {
             db.ConversationMembers.Single(m => m.ConversationId == conversation && m.UserId == bob.Id).LeftAt = DateTime.UtcNow;
             await db.SaveChangesAsync();
         });
 
-        var response = await client.PostMessageWithFilesAsync(conversation, null, [(key, "a.png")]);
+        var response = await client.PostMessageWithFilesAsync(conversation, null, [key]);
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
         Assert.True(await _factory.ObjectExistsAsync(key));
@@ -551,10 +592,10 @@ public class SendWithAttachmentsTests
     {
         var (alice, _, conversation) = await _factory.DirectChatAsync();
         using var client = _factory.CreateClientFor(alice);
-        var key = await client.UploadFileAsync(conversation, Bytes(10));
+        var key = await client.UploadFileAsync(conversation, Bytes(64));
         await _factory.DeactivateAsync(alice);
 
-        var response = await client.PostMessageWithFilesAsync(conversation, null, [(key, "a.png")]);
+        var response = await client.PostMessageWithFilesAsync(conversation, null, [key]);
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
         Assert.Empty(await _factory.ObjectKeysAsync($"attachments/{conversation}/"));
@@ -573,9 +614,9 @@ public class SendWithAttachmentsTests
                 new ThrowingMessageRepository(ActivatorUtilities.CreateInstance<MessageRepository>(provider)));
         }));
         using var client = Authorized(host, alice);
-        var key = await client.UploadFileAsync(conversation, Bytes(10));
+        var key = await client.UploadFileAsync(conversation, Bytes(64));
 
-        var response = await client.PostMessageWithFilesAsync(conversation, null, [(key, "a.png")]);
+        var response = await client.PostMessageWithFilesAsync(conversation, null, [key]);
 
         Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
         Assert.Empty(await _factory.ObjectKeysAsync($"attachments/{conversation}/"));
@@ -590,12 +631,12 @@ public class SendWithAttachmentsTests
     {
         var (alice, _, conversation) = await _factory.DirectChatAsync();
         using var client = _factory.CreateClientFor(alice);
-        var key = await client.UploadFileAsync(conversation, Bytes(10));
+        var key = await client.UploadFileAsync(conversation, Bytes(64));
         var clientMessageId = Guid.NewGuid();
-        var first = await client.PostMessageWithFilesAsync(conversation, "once", [(key, "a.png")], clientMessageId);
+        var first = await client.PostMessageWithFilesAsync(conversation, "once", [key], clientMessageId);
         var sent = await first.Content.ReadFromJsonAsync<JsonElement>();
 
-        var retry = await client.PostMessageWithFilesAsync(conversation, "once", [(key, "a.png")], clientMessageId);
+        var retry = await client.PostMessageWithFilesAsync(conversation, "once", [key], clientMessageId);
 
         Assert.Equal(HttpStatusCode.OK, retry.StatusCode);
         var again = await retry.Content.ReadFromJsonAsync<JsonElement>();
@@ -612,14 +653,14 @@ public class SendWithAttachmentsTests
     {
         var (alice, _, conversation) = await _factory.DirectChatAsync();
         using var client = _factory.CreateClientFor(alice);
-        var key = await client.UploadFileAsync(conversation, Bytes(10));
+        var key = await client.UploadFileAsync(conversation, Bytes(64));
         var clientMessageId = Guid.NewGuid();
-        var sent = await (await client.PostMessageWithFilesAsync(conversation, null, [(key, "a.png")], clientMessageId))
+        var sent = await (await client.PostMessageWithFilesAsync(conversation, null, [key], clientMessageId))
             .Content.ReadFromJsonAsync<JsonElement>();
         using var host = HostWhoseFirstLookupFindsNothing();
         using var late = Authorized(host, alice);
 
-        var response = await late.PostMessageWithFilesAsync(conversation, null, [(key, "a.png")], clientMessageId);
+        var response = await late.PostMessageWithFilesAsync(conversation, null, [key], clientMessageId);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal(sent.MessageIdOf(), (await response.Content.ReadFromJsonAsync<JsonElement>()).MessageIdOf());
@@ -632,13 +673,13 @@ public class SendWithAttachmentsTests
     {
         var (alice, _, conversation) = await _factory.DirectChatAsync();
         using var client = _factory.CreateClientFor(alice);
-        var key = await client.UploadFileAsync(conversation, Bytes(10));
+        var key = await client.UploadFileAsync(conversation, Bytes(64));
         var clientMessageId = Guid.NewGuid();
         await _factory.AddMessageAsync(conversation, alice.Id, "winner", DateTime.UtcNow.AddMinutes(-1), clientMessageId);
         using var host = HostWhoseFirstLookupFindsNothing();
         using var loser = Authorized(host, alice);
 
-        var response = await loser.PostMessageWithFilesAsync(conversation, null, [(key, "a.png")], clientMessageId);
+        var response = await loser.PostMessageWithFilesAsync(conversation, null, [key], clientMessageId);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal("winner", (await response.Content.ReadFromJsonAsync<JsonElement>()).ContentOf());
@@ -651,11 +692,11 @@ public class SendWithAttachmentsTests
     {
         var (alice, _, conversation) = await _factory.DirectChatAsync();
         using var client = _factory.CreateClientFor(alice);
-        var key = await client.UploadFileAsync(conversation, Bytes(10));
+        var key = await client.UploadFileAsync(conversation, Bytes(64));
         var clientMessageId = Guid.NewGuid();
 
         var responses = await Task.WhenAll(Enumerable.Range(0, 10)
-            .Select(_ => client.PostMessageWithFilesAsync(conversation, null, [(key, "a.png")], clientMessageId)));
+            .Select(_ => client.PostMessageWithFilesAsync(conversation, null, [key], clientMessageId)));
 
         Assert.Single(responses, r => r.StatusCode == HttpStatusCode.Created);
         Assert.Equal(9, responses.Count(r => r.StatusCode == HttpStatusCode.OK));
@@ -671,19 +712,19 @@ public class SendWithAttachmentsTests
     // ##### Logging #####
 
     [Fact]
-    public async Task The_log_has_ids_and_a_count_and_never_the_file_name_or_the_text()
+    public async Task The_log_has_ids_and_a_count_and_never_the_text_or_a_key()
     {
         var (alice, _, conversation) = await _factory.DirectChatAsync();
         var capture = new CapturingLoggerProvider();
         using var host = _factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
             services.AddLogging(logging => logging.AddProvider(capture))));
         using var client = Authorized(host, alice);
-        var key = await client.UploadFileAsync(conversation, Bytes(10), "image/png", "private holiday photo.png");
+        var key = await client.UploadFileAsync(conversation, Bytes(64));
 
-        var message = await client.SendMessageWithFilesAsync(conversation, "my secret caption", (key, "private holiday photo.png"));
+        var message = await client.SendMessageWithFilesAsync(conversation, "my secret caption", key);
 
         Assert.Contains(capture.Entries, e => e.Contains(message.MessageIdOf().ToString()) && e.Contains("with 1 attachments"));
-        Assert.DoesNotContain(capture.Entries, e => e.Contains("holiday") || e.Contains("secret caption"));
+        Assert.DoesNotContain(capture.Entries, e => e.Contains("secret caption") || e.Contains(key));
     }
 
     // A send whose first lookup finds nothing, whatever is stored, so that it goes on to look for the files and

@@ -9,17 +9,13 @@ public class MessageAttachment
     // stops working after a while (see AttachmentLoader).
     public string StorageKey { get; set; } = string.Empty;
 
-    public AttachmentType Type { get; set; }
-    public string FileName { get; set; } = string.Empty;
-
-    // The type the file was stored with. It decides how a browser treats the file, so it is the one the
-    // storage reported for the uploaded object and not the one the sender claimed.
-    public string ContentType { get; set; } = string.Empty;
-
+    // The size of the object in the bucket, which is the encrypted file. The name, type and plain size of the file, and the key that
+    // opens it, are inside the sealed message and nowhere here.
     public long FileSizeBytes { get; set; }
 
     // Files keep the order they were attached in, and the table has no column for a position. Each file of a
-    // message is stamped one microsecond after the one before it, and reads sort by this.
+    // message is stamped one microsecond after the one before it, and reads sort by this. The sealed message lists its files in
+    // the same order, which is how a reader knows which is which.
     public DateTime CreatedAt { get; set; }
 
     public Message Message { get; set; } = null!;

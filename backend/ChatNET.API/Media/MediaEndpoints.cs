@@ -7,20 +7,20 @@ using MediatR;
 
 namespace ChatNET.API.Media;
 
-public record CreateUploadRequest(string? FileName, string? ContentType, long SizeBytes);
+public record CreateUploadRequest(long SizeBytes);
 
 public static class MediaEndpoints
 {
     public static IEndpointRouteBuilder MapMediaEndpoints(this IEndpointRouteBuilder app)
     {
-        // Permission to upload one file to a conversation. The file itself goes straight to the bucket, to the
-        // address in the answer, and is attached by naming its key when the message is sent. Nothing is stored
+        // Permission to upload one file to a conversation. The file, already encrypted by the browser, goes straight to the
+        // bucket, to the address in the answer, and is attached by naming its key when the message is sent. Nothing is stored
         // by this call, so it answers 200 and not 201.
         app.MapPost("/api/conversations/{conversationId:guid}/uploads", async (
             Guid conversationId, CreateUploadRequest body, HttpContext http, IMediator mediator) =>
         {
             var ticket = await mediator.Send(new CreateUploadCommand(
-                conversationId, http.User.GetUserId(), body.FileName, body.ContentType, body.SizeBytes));
+                conversationId, http.User.GetUserId(), body.SizeBytes));
 
             return Results.Ok(ticket);
         })

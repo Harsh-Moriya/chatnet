@@ -19,10 +19,10 @@ public sealed class UploadMissingException : ValidationException
     }
 }
 
-// Turns the uploads a message names into attachments. A presigned PUT cannot cap the size or inspect what is
-// sent, so everything is checked here, on the object that was really stored: it must exist under a key made for
-// this person in this conversation, be within the limits and of an allowed type. Only then is it copied to its
-// permanent place, inside the storage, without the bytes passing through the server.
+// Turns the uploads a message names into attachments. A presigned PUT cannot cap the size of what is sent, so the
+// size is checked here, on the object that was really stored: it must exist under a key made for this person in
+// this conversation and be within the limits. The bytes are encrypted, so there is nothing else to check. Only then
+// is it copied to its permanent place, inside the storage, without the bytes passing through the server.
 public sealed class AttachmentIntake
 {
     private readonly IBlobStorage _storage;
@@ -61,13 +61,10 @@ public sealed class AttachmentIntake
                 var stored = await _storage.HeadAsync(uploadKey, cancellationToken)
                     ?? throw new UploadMissingException();
 
-                var contentType = AttachmentKinds.Normalize(stored.ContentType ?? string.Empty);
-                if (stored.SizeBytes <= 0)
-                    throw await RefuseAsync(uploadKey, "A file is empty.");
-                if (stored.SizeBytes > _options.MaxFileBytes)
+                if (stored.SizeBytes < SealedFile.MinBytes)
+                    throw await RefuseAsync(uploadKey, "A file is too small to be a sealed file.");
+                if (stored.SizeBytes > SealedFile.MaxBytes(_options.MaxFileBytes))
                     throw await RefuseAsync(uploadKey, "A file is larger than the limit.");
-                if (!_options.Allows(contentType))
-                    throw await RefuseAsync(uploadKey, "A file has a type that cannot be sent.");
 
                 var attachmentId = Guid.CreateVersion7();
                 var storageKey = AttachmentKeys.StoredKey(conversationId, attachmentId);
@@ -86,9 +83,6 @@ public sealed class AttachmentIntake
                 {
                     Id = attachmentId,
                     StorageKey = storageKey,
-                    Type = AttachmentKinds.TypeOf(contentType),
-                    FileName = AttachmentNames.Clean(input.FileName!),
-                    ContentType = contentType,
                     FileSizeBytes = stored.SizeBytes,
 
                     // One microsecond after the file before it: the order they were attached in (see MessageAttachment).

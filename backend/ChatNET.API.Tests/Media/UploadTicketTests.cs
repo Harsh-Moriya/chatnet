@@ -9,9 +9,9 @@ using Microsoft.Extensions.Logging;
 
 namespace ChatNET.API.Tests.Media;
 
-// Before a file is sent to the bucket the client asks the API for permission. The API checks that the person
-// may write in the conversation and that the file is of an allowed type and size, and answers with a link that
-// is good for exactly that upload.
+// Before a file is sent to the bucket the client asks the API for permission. The file is already encrypted, so the API is told only
+// its size: it checks that the person may write in the conversation and that the size is one a sealed file can have, and answers with a
+// link that is good for exactly that upload.
 [Collection(IntegrationTestCollection.Name)]
 public class UploadTicketTests
 {
@@ -24,6 +24,8 @@ public class UploadTicketTests
         _factory = factory;
     }
 
+    private long Limit => _factory.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<StorageOptions>>().Value.MaxFileBytes;
+
     // ##### A ticket #####
 
     [Fact]
@@ -31,7 +33,7 @@ public class UploadTicketTests
     {
         var (alice, _, conversation) = await _factory.DirectChatAsync();
         using var client = _factory.CreateClientFor(alice);
-        var response = await client.RequestUploadAsync(conversation, "photo.png", "image/png", 1234);
+        var response = await client.RequestUploadAsync(conversation, 1234);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var ticket = await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -53,35 +55,40 @@ public class UploadTicketTests
         Assert.NotEqual(first.GetProperty("uploadKey").GetString(), second.GetProperty("uploadKey").GetString());
     }
 
+    // The bucket is told nothing about the file: whatever the bytes are, the link takes them with one content type.
     [Fact]
-    public async Task The_link_accepts_the_file_with_the_content_type_that_was_asked_for_and_nothing_else()
+    public async Task The_link_accepts_the_file_with_the_one_content_type_it_was_signed_for_and_nothing_else()
     {
         var (alice, _, conversation) = await _factory.DirectChatAsync();
         using var client = _factory.CreateClientFor(alice);
-        var ticket = await client.GetUploadTicketAsync(conversation, "photo.png", "image/png", 50);
+        var ticket = await client.GetUploadTicketAsync(conversation, 50);
         var key = ticket.GetProperty("uploadKey").GetString()!;
 
-        var wrongType = await MediaApi.PutToTicketAsync(ticket, new byte[50], "application/x-msdownload");
+        var wrongType = await MediaApi.PutToTicketAsync(ticket, new byte[50], "image/png");
         Assert.False(wrongType.IsSuccessStatusCode);
         Assert.False(await _factory.ObjectExistsAsync(key));
 
-        var right = await MediaApi.PutToTicketAsync(ticket, new byte[50], "image/png");
+        var right = await MediaApi.PutToTicketAsync(ticket, new byte[50], "application/octet-stream");
         Assert.True(right.IsSuccessStatusCode);
         Assert.True(await _factory.ObjectExistsAsync(key));
     }
 
-    [Theory]
-    [InlineData("IMAGE/PNG")]
-    [InlineData("image/png; charset=binary")]
-    public async Task The_type_is_matched_without_case_or_parameters_and_signed_in_its_plain_form(string asked)
+    // A client that still sends a name or a type is not refused for it, and neither is read.
+    [Fact]
+    public async Task A_name_or_a_type_sent_with_the_size_is_ignored()
     {
         var (alice, _, conversation) = await _factory.DirectChatAsync();
         using var client = _factory.CreateClientFor(alice);
-        var ticket = await client.GetUploadTicketAsync(conversation, "photo.png", asked, 50);
 
-        var put = await MediaApi.PutToTicketAsync(ticket, new byte[50], "image/png");
+        var response = await client.PostAsJsonAsync($"/api/conversations/{conversation}/uploads",
+            new { fileName = "my secret tax return.pdf", contentType = "application/pdf", sizeBytes = 100 });
 
-        Assert.True(put.IsSuccessStatusCode);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var ticket = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var key = ticket.GetProperty("uploadKey").GetString()!;
+        Assert.DoesNotContain("tax", key);
+        Assert.DoesNotContain("tax", ticket.GetProperty("url").GetString());
+        Assert.True((await MediaApi.PutToTicketAsync(ticket, new byte[100])).IsSuccessStatusCode);
     }
 
     // ##### Who may ask #####
@@ -93,8 +100,8 @@ public class UploadTicketTests
         var stranger = await _factory.RegisterUserAsync("stranger");
         using var client = _factory.CreateClientFor(stranger);
 
-        var notMember = await client.RequestUploadAsync(conversation, "a.png", "image/png", 10);
-        var unknown = await client.RequestUploadAsync(Guid.NewGuid(), "a.png", "image/png", 10);
+        var notMember = await client.RequestUploadAsync(conversation, 100);
+        var unknown = await client.RequestUploadAsync(Guid.NewGuid(), 100);
 
         Assert.Equal(HttpStatusCode.Forbidden, notMember.StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, unknown.StatusCode);
@@ -114,7 +121,7 @@ public class UploadTicketTests
         });
         using var client = _factory.CreateClientFor(bob);
 
-        var response = await client.RequestUploadAsync(conversation, "a.png", "image/png", 10);
+        var response = await client.RequestUploadAsync(conversation, 100);
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
         Assert.NotNull(alice);
@@ -127,7 +134,7 @@ public class UploadTicketTests
         using var client = _factory.CreateClientFor(alice);
         await _factory.DeactivateAsync(alice);
 
-        var response = await client.RequestUploadAsync(conversation, "a.png", "image/png", 10);
+        var response = await client.RequestUploadAsync(conversation, 100);
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
@@ -138,63 +145,41 @@ public class UploadTicketTests
         var (_, _, conversation) = await _factory.DirectChatAsync();
         using var anonymous = _factory.CreateClient();
 
-        var response = await anonymous.RequestUploadAsync(conversation, "a.png", "image/png", 10);
+        var response = await anonymous.RequestUploadAsync(conversation, 100);
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
     // ##### What may be uploaded #####
 
-    [Theory]
-    [InlineData("image/svg+xml")]
-    [InlineData("text/html")]
-    [InlineData("application/x-msdownload")]
-    [InlineData("application/javascript")]
-    [InlineData("image")]
-    public async Task A_type_that_is_not_allowed_is_refused(string contentType)
-    {
-        var (alice, _, conversation) = await _factory.DirectChatAsync();
-        using var client = _factory.CreateClientFor(alice);
-
-        var response = await client.RequestUploadAsync(conversation, "file.bin", contentType, 100);
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.True((await response.ReadProblemAsync()).Errors!.Value.TryGetProperty("ContentType", out _));
-    }
-
-    [Theory]
-    [InlineData("image/jpeg")]
-    [InlineData("image/png")]
-    [InlineData("image/gif")]
-    [InlineData("image/webp")]
-    [InlineData("video/mp4")]
-    [InlineData("video/webm")]
-    [InlineData("application/pdf")]
-    [InlineData("text/plain")]
-    [InlineData("application/zip")]
-    public async Task Every_configured_type_is_accepted(string contentType)
-    {
-        var (alice, _, conversation) = await _factory.DirectChatAsync();
-        using var client = _factory.CreateClientFor(alice);
-
-        var response = await client.RequestUploadAsync(conversation, "file.bin", contentType, 100);
-
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-    }
-
+    // A file of the limit becomes the file, a header and a tag for each chunk of 64 KiB: 10 MiB are 160 chunks.
     [Fact]
-    public async Task A_file_of_exactly_the_size_limit_is_accepted_and_one_byte_more_is_refused()
+    public async Task The_largest_object_for_a_file_of_the_limit_is_accepted_and_one_byte_more_is_refused()
     {
         var (alice, _, conversation) = await _factory.DirectChatAsync();
         using var client = _factory.CreateClientFor(alice);
-        var limit = _factory.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<StorageOptions>>().Value.MaxFileBytes;
+        var largest = SealedFile.MaxBytes(Limit);
 
-        var atLimit = await client.RequestUploadAsync(conversation, "a.png", "image/png", limit);
-        var over = await client.RequestUploadAsync(conversation, "a.png", "image/png", limit + 1);
+        var atLimit = await client.RequestUploadAsync(conversation, largest);
+        var over = await client.RequestUploadAsync(conversation, largest + 1);
 
+        Assert.Equal(Limit + 13 + 160 * 16, largest);
         Assert.Equal(HttpStatusCode.OK, atLimit.StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, over.StatusCode);
         Assert.True((await over.ReadProblemAsync()).Errors!.Value.TryGetProperty("SizeBytes", out _));
+    }
+
+    [Fact]
+    public async Task The_smallest_sealed_file_is_accepted_and_one_byte_less_is_refused()
+    {
+        var (alice, _, conversation) = await _factory.DirectChatAsync();
+        using var client = _factory.CreateClientFor(alice);
+
+        var smallest = await client.RequestUploadAsync(conversation, SealedFile.MinBytes);
+        var smaller = await client.RequestUploadAsync(conversation, SealedFile.MinBytes - 1);
+
+        Assert.Equal(HttpStatusCode.OK, smallest.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, smaller.StatusCode);
     }
 
     [Theory]
@@ -205,47 +190,20 @@ public class UploadTicketTests
         var (alice, _, conversation) = await _factory.DirectChatAsync();
         using var client = _factory.CreateClientFor(alice);
 
-        var response = await client.RequestUploadAsync(conversation, "a.png", "image/png", size);
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-    }
-
-    [Theory]
-    [InlineData(null)]
-    [InlineData("")]
-    [InlineData("   ")]
-    public async Task A_missing_file_name_is_refused(string? name)
-    {
-        var (alice, _, conversation) = await _factory.DirectChatAsync();
-        using var client = _factory.CreateClientFor(alice);
-
-        var response = await client.RequestUploadAsync(conversation, name, "image/png", 100);
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.True((await response.ReadProblemAsync()).Errors!.Value.TryGetProperty("FileName", out _));
-    }
-
-    [Fact]
-    public async Task A_file_name_longer_than_255_characters_is_refused()
-    {
-        var (alice, _, conversation) = await _factory.DirectChatAsync();
-        using var client = _factory.CreateClientFor(alice);
-
-        var response = await client.RequestUploadAsync(conversation, new string('a', 256), "image/png", 100);
+        var response = await client.RequestUploadAsync(conversation, size);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     [Fact]
-    public async Task A_missing_content_type_is_refused()
+    public async Task A_request_with_no_size_is_refused()
     {
         var (alice, _, conversation) = await _factory.DirectChatAsync();
         using var client = _factory.CreateClientFor(alice);
 
-        var response = await client.RequestUploadAsync(conversation, "a.png", null, 100);
+        var response = await client.PostAsJsonAsync($"/api/conversations/{conversation}/uploads", new { });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.True((await response.ReadProblemAsync()).Errors!.Value.TryGetProperty("ContentType", out _));
     }
 
     // ##### Logging #####
@@ -260,7 +218,8 @@ public class UploadTicketTests
         using var client = host.CreateClient();
         client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", alice.Token);
 
-        var response = await client.RequestUploadAsync(conversation, "my secret tax return.pdf", "application/pdf", 100);
+        var response = await client.PostAsJsonAsync($"/api/conversations/{conversation}/uploads",
+            new { fileName = "my secret tax return.pdf", contentType = "application/pdf", sizeBytes = 100 });
         response.EnsureSuccessStatusCode();
 
         Assert.Contains(capture.Entries, e => e.Contains(conversation.ToString()) && e.Contains(alice.Id.ToString()));

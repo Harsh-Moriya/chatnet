@@ -1,32 +1,31 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using ChatNET.API.Media;
 using ChatNET.API.Messaging.Models;
 
 namespace ChatNET.API.Tests.Infrastructure;
 
 // Wrappers for uploading and attaching files, in the same spirit as MessageApi: a test reads as what a client
-// does (ask for permission, send the file to the bucket, name it in a message) and asserts on the JSON it gets.
+// does (ask for permission, send the file to the bucket, name it in a message) and asserts on the JSON it gets. A file is
+// bytes the server cannot read: what the tests send as a file stands for a file the browser has already encrypted.
 public static class MediaApi
 {
     // The bucket is another host to the API, and what a browser is to it is a plain HTTP client.
     private static readonly HttpClient Bucket = new();
 
-    public static Task<HttpResponseMessage> RequestUploadAsync(
-        this HttpClient client, Guid conversationId, string? fileName, string? contentType, long sizeBytes) =>
-        client.PostAsJsonAsync(
-            $"/api/conversations/{conversationId}/uploads", new { fileName, contentType, sizeBytes });
+    public static Task<HttpResponseMessage> RequestUploadAsync(this HttpClient client, Guid conversationId, long sizeBytes) =>
+        client.PostAsJsonAsync($"/api/conversations/{conversationId}/uploads", new { sizeBytes });
 
-    public static async Task<JsonElement> GetUploadTicketAsync(
-        this HttpClient client, Guid conversationId, string fileName = "photo.png", string contentType = "image/png", long sizeBytes = 100)
+    public static async Task<JsonElement> GetUploadTicketAsync(this HttpClient client, Guid conversationId, long sizeBytes = 100)
     {
-        var response = await client.RequestUploadAsync(conversationId, fileName, contentType, sizeBytes);
+        var response = await client.RequestUploadAsync(conversationId, sizeBytes);
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<JsonElement>();
     }
 
     // Sends a file to the address of a ticket, as a browser does, and returns what the bucket answered.
-    public static async Task<HttpResponseMessage> PutToTicketAsync(JsonElement ticket, byte[] content, string contentType)
+    public static async Task<HttpResponseMessage> PutToTicketAsync(JsonElement ticket, byte[] content, string contentType = SealedFile.ContentType)
     {
         var request = new HttpRequestMessage(HttpMethod.Put, ticket.GetProperty("url").GetString())
         {
@@ -39,31 +38,30 @@ public static class MediaApi
 
     // Asks for permission and sends the file: what the client does for each file before the message is sent.
     // Returns the key the message names.
-    public static async Task<string> UploadFileAsync(
-        this HttpClient client, Guid conversationId, byte[] content, string contentType = "image/png", string fileName = "photo.png")
+    public static async Task<string> UploadFileAsync(this HttpClient client, Guid conversationId, byte[] content)
     {
-        var ticket = await client.GetUploadTicketAsync(conversationId, fileName, contentType, content.Length);
-        (await PutToTicketAsync(ticket, content, contentType)).EnsureSuccessStatusCode();
+        var ticket = await client.GetUploadTicketAsync(conversationId, content.Length);
+        (await PutToTicketAsync(ticket, content)).EnsureSuccessStatusCode();
 
         return ticket.GetProperty("uploadKey").GetString()!;
     }
 
     // A message of only files has an empty text, which is still a blob.
     public static async Task<HttpResponseMessage> PostMessageWithFilesAsync(
-        this HttpClient client, Guid conversationId, string? content, IEnumerable<(string Key, string Name)> files, Guid? clientMessageId = null) =>
+        this HttpClient client, Guid conversationId, string? content, IEnumerable<string> uploadKeys, Guid? clientMessageId = null) =>
         await client.PostAsJsonAsync(
             $"/api/conversations/{conversationId}/messages",
             new
             {
                 ciphertext = FakeMessage.Ciphertext(await client.CurrentEpochAsync(conversationId), content ?? string.Empty),
                 clientMessageId = clientMessageId ?? Guid.NewGuid(),
-                attachments = files.Select(f => new { uploadKey = f.Key, fileName = f.Name }).ToArray(),
+                attachments = uploadKeys.Select(key => new { uploadKey = key }).ToArray(),
             });
 
     public static async Task<JsonElement> SendMessageWithFilesAsync(
-        this HttpClient client, Guid conversationId, string? content, params (string Key, string Name)[] files)
+        this HttpClient client, Guid conversationId, string? content, params string[] uploadKeys)
     {
-        var response = await client.PostMessageWithFilesAsync(conversationId, content, files);
+        var response = await client.PostMessageWithFilesAsync(conversationId, content, uploadKeys);
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<JsonElement>();
     }
@@ -105,10 +103,11 @@ public static class MediaApi
     }
 
     // Arranges a message with files without the API: for states it cannot produce (a message from the past, a
-    // deleted one) and for files that point at nothing. Returns the message and the ids of its files.
+    // deleted one) and for files that point at nothing. Returns the message and the ids of its files. The files are 100 bytes, 101 and so on, which
+    // is how a test tells them apart.
     public static async Task<(Guid MessageId, List<Guid> AttachmentIds)> AddMessageWithFilesAsync(
         this ChatApiFactory factory, Guid conversationId, Guid senderId, string content, DateTime createdAt,
-        int fileCount, bool deleted = false, string contentType = "image/png")
+        int fileCount, bool deleted = false)
     {
         var message = new Message
         {
@@ -125,10 +124,7 @@ public static class MediaApi
             {
                 Id = Guid.NewGuid(),
                 StorageKey = $"attachments/{conversationId}/{Guid.NewGuid()}",
-                Type = AttachmentType.Image,
-                FileName = $"file {i}.png",
-                ContentType = contentType,
-                FileSizeBytes = 100,
+                FileSizeBytes = 100 + i,
                 CreatedAt = createdAt.AddTicks(i * 10),
             }).ToList(),
         };

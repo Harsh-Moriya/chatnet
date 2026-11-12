@@ -270,12 +270,12 @@ public class EncryptedSendTests
     {
         var (owner, _, other, group) = await GroupAsync();
         using var client = _factory.CreateClientFor(owner);
-        var key = await client.UploadFileAsync(group, [1, 2, 3, 4], "image/png", "photo.png");
+        var key = await client.UploadFileAsync(group, new byte[64]);
         await client.RemoveMemberResponseAsync(group, other.Id);
 
-        var refused = await client.PostMessageWithFilesAsync(group, "with a file", [(key, "photo.png")]);
+        var refused = await client.PostMessageWithFilesAsync(group, "with a file", [key]);
         var epoch = await client.StoreNextEpochAsync(group);
-        var again = await client.PostMessageWithFilesAsync(group, "with a file", [(key, "photo.png")]);
+        var again = await client.PostMessageWithFilesAsync(group, "with a file", [key]);
 
         Assert.Equal(KeyEpochCodes.Due, (await refused.ReadProblemAsync()).Code);
         Assert.Equal(HttpStatusCode.Created, again.StatusCode);
@@ -288,10 +288,10 @@ public class EncryptedSendTests
     {
         var (owner, _, other, group) = await GroupAsync();
         using var client = _factory.CreateClientFor(owner);
-        var key = await client.UploadFileAsync(group, [1, 2, 3, 4], "image/png", "photo.png");
+        var key = await client.UploadFileAsync(group, new byte[64]);
         await client.RemoveMemberResponseAsync(group, other.Id);
 
-        var refused = await client.PostMessageWithFilesAsync(group, "with a file", [(key, "photo.png")]);
+        var refused = await client.PostMessageWithFilesAsync(group, "with a file", [key]);
 
         Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
         Assert.Empty(await _factory.ObjectKeysAsync($"attachments/{group}/"));

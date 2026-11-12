@@ -254,7 +254,7 @@ public class PastMemberTests
         Assert.Equal(HttpStatusCode.Forbidden, (await bob.DeleteMessageResponseAsync(s.Group, own)).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await bob.MarkReadResponseAsync(s.Group, s.Before[0])).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await bob.SetMutedResponseAsync(s.Group, true)).StatusCode);
-        Assert.Equal(HttpStatusCode.Forbidden, (await bob.RequestUploadAsync(s.Group, "a.png", "image/png", 100)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await bob.RequestUploadAsync(s.Group, 100)).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await bob.GetMembersResponseAsync(s.Group)).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await bob.LeaveResponseAsync(s.Group)).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await bob.AddMembersResponseAsync(s.Group, s.Alice.Id)).StatusCode);

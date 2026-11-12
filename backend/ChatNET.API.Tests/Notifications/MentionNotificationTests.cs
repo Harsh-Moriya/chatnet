@@ -185,9 +185,9 @@ public class MentionNotificationTests
     {
         var (alice, _, _, group) = await GroupOfThreeAsync();
         using var client = _factory.CreateClientFor(alice);
-        var key = await client.UploadFileAsync(group, new byte[10]);
+        var key = await client.UploadFileAsync(group, new byte[64]);
 
-        await client.SendMessageWithFilesAsync(group, null, (key, "a.png"));
+        await client.SendMessageWithFilesAsync(group, null, key);
 
         Assert.DoesNotContain(await NotificationsOfAsync(group), n => n.Type == NotificationType.Mention);
     }

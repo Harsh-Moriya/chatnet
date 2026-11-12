@@ -17,13 +17,7 @@ public sealed class AttachmentLoader
     }
 
     public AttachmentDto ToDto(MessageAttachment attachment)
-        => new(
-            attachment.Id,
-            attachment.Type,
-            attachment.FileName,
-            attachment.ContentType,
-            attachment.FileSizeBytes,
-            _storage.CreateDownloadUrl(attachment.StorageKey, attachment.FileName, inline: attachment.Type != AttachmentType.File).Url);
+        => new(attachment.Id, attachment.FileSizeBytes, _storage.CreateDownloadUrl(attachment.StorageKey).Url);
 
     public async Task<List<MessageDto>> AttachToAsync(List<MessageDto> messages, CancellationToken cancellationToken)
     {
