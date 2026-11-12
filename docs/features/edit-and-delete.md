@@ -2,24 +2,25 @@
 
 ## Editing
 
-`PATCH /api/conversations/{id}/messages/{messageId}` with `{ content }`.
+`PATCH /api/conversations/{id}/messages/{messageId}` with `{ ciphertext, editCount, mentionedUserIds }`.
 
 - Only the **sender** can edit, and only within `Messaging:EditWindow` (15 minutes) of the message being sent. An admin cannot edit someone else's words, only remove them.
 - A deleted message cannot be edited (409). An edit after the window closed is a 409.
-- The new text follows the rules of sending: trimmed, at most 4,000 code units, and blank only on a message that has files.
-- The same text again is a 200 that changes and pushes nothing.
-- An edit increments `editCount` and sets `editedAt`. The message shows an "edited" label.
-- **New `@mentions`** in the edited text are notified; people already notified by the earlier text are not notified again.
+- The new text is sealed in the browser like the first one, under the epoch the conversation is in. The browser keeps it within 4,000 code units and trims it, as for a send.
+- `editCount` is the count the edited message will have: one more than the count it has now. The count is part of what the sender signs, so the server cannot count for them. An edit made from an older version (another tab edited first) is a 409 with code `edit-count-stale`, and the browser reads the message again. Two edits made from the same version store one; the other gets that 409.
+- The epoch rules of sending apply: an edit sealed under another epoch is a 409 `epoch-stale`, and under an epoch marked for replacement a 409 `epoch-due`.
+- Every stored edit increments `editCount` and sets `editedAt`, including one that says the same thing, because a new blob is a new version. The message shows an "edited" label.
+- **New names** in `mentionedUserIds` are notified. The server remembers who the latest version named, so people already notified are not notified again, a name taken out is not un-notified, and a name put back by a later edit is notified again. Only active members other than the sender count.
 - An edit never moves the conversation in the sidebar.
 
-The change is one conditional `UPDATE` that checks the window and the not-deleted state and counts the edit, so an edit racing a delete is settled by Postgres: a delete that arrives first wins.
+The change is one conditional `UPDATE` that checks the window, the not-deleted state and the edit count, and writes the new blob, epoch, count and names together, so an edit racing a delete or another edit is settled by Postgres: a delete that arrives first wins. The conversation's keys are read first with a shared row lock, which keeps a removal from marking the epoch for replacement between the check and the commit.
 
 ## Deleting
 
 `DELETE /api/conversations/{id}/messages/{messageId}`.
 
 - The **sender** can delete at any time. In a group, the **owner or an admin** can delete anyone's message. In a direct chat both people are plain members, so only the sender can.
-- The row stays: `content` becomes null, `isDeleted` is true, and `deletedById` records who did it. The message's files are removed from the bucket after the commit, through an outbox job that the relay repeats until the bucket accepts it, so a storage outage cannot leave a file behind.
+- The row stays: `ciphertext` becomes null, `isDeleted` is true, and `deletedById` records who did it. The sealed text is gone from the database at once. The message's files are removed from the bucket after the commit, through an outbox job that the relay repeats until the bucket accepts it, so a storage outage cannot leave a file behind.
 - Deleting again answers 200 and does nothing else. A deleted message does not count as unread.
 - A delete cannot be undone: the text and the files are gone.
 
@@ -29,9 +30,9 @@ A message sent before the caller joined is a 404 for any edit or delete, even to
 
 ## Live update
 
-Both changes push `MessageUpdated(Message)` through the outbox to every connection in the conversation's group, including the changer's own tabs. The pushed copy is built from stored data when it is sent, so a late push of an edited and then deleted message carries none of its text.
+Both changes push `MessageUpdated(Message)` through the outbox to every connection in the conversation's group, including the changer's own tabs. The pushed copy is built from stored data when it is sent, so a late push of an edited and then deleted message carries no text.
 
-The browser keeps the later of two copies of one message: a deleted copy beats any other, otherwise the higher `editCount` wins. This holds for pushes, REST answers, loaded pages and repeated pushes, so a late copy cannot bring back text that was edited away or a message that was deleted. The sidebar preview, the unread count and the notification bell follow a change to a message of a conversation the tab never opened.
+The browser keeps the later of two copies of one message: a deleted copy beats any other, otherwise the higher `editCount` wins. When two copies are the same version and only one could be opened, the text of the one that could be opened is kept. This holds for pushes, REST answers, loaded pages and repeated pushes, so a late copy cannot bring back text that was edited away or a message that was deleted. The sidebar preview, the unread count and the notification bell follow a change to a message of a conversation the tab never opened.
 
 ## In the browser
 

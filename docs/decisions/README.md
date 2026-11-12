@@ -2,7 +2,7 @@
 
 Architecture decision records (ADRs): the choices that shape ChatNET, why they were made, what was passed over and what they cost. Each record has a status, the context that forced a decision, the decision, the alternatives considered and the consequences.
 
-All records here are **Accepted**. Where a choice replaced an earlier one, the record says what it replaced. This is a curated set of the decisions a reader is most likely to ask about, not a log of every small choice.
+Records are **Accepted** unless marked **Superseded**. Where a choice replaced an earlier one, the record says what it replaced or what replaced it. This is a curated set of the decisions a reader is most likely to ask about, not a log of every small choice.
 
 ## Structure
 
@@ -48,9 +48,9 @@ All records here are **Accepted**. Where a choice replaced an earlier one, the r
 | [0017: A retried send is stored once, by client message id](0017-idempotent-send.md) | The id the browser invents is stored under a partial unique index; a repeat answers 200 with the stored message. |
 | [0018: The read position is a timestamp moved forward by one UPDATE](0018-read-position.md) | One timestamp per member, set from a message's own time and only ever moved forward by a conditional UPDATE. |
 | [0019: Edit and delete are single conditional UPDATEs](0019-edit-and-delete-as-conditional-updates.md) | The statement itself checks the window and the deleted state, so races are settled by Postgres. |
-| [0020: Mentions are read by the server and saved with their cause](0020-server-parsed-mentions.md) | `@userName` in the text decides who is notified; the rows are saved in the same transaction as the message. |
+| [0020: Mentions are read by the server and saved with their cause](0020-server-parsed-mentions.md) | Superseded: the sender's browser names the people as ids, and the rows are saved in the same transaction as the message. |
 | [0021: Group changes run behind a per-conversation advisory lock](0021-group-changes-behind-an-advisory-lock.md) | Every membership change applies its rules to rows read after taking a lock on the conversation. |
-| [0022: Full-text search inside Postgres, in two phases](0022-postgres-full-text-search.md) | A GIN index on the conversation id and the message words, searched per conversation with a bounded recent phase first. |
+| [0022: Full-text search inside Postgres, in two phases](0022-postgres-full-text-search.md) | Superseded: the server cannot read messages and no longer searches them. It was a GIN index on the conversation id and the message words, searched per conversation with a bounded recent phase first. |
 
 ## Files
 
@@ -85,4 +85,4 @@ All records here are **Accepted**. Where a choice replaced an earlier one, the r
 | Record | Summary |
 |---|---|
 | [0037: Conversation keys are made by members and checked by the server only for completeness](0037-conversation-keys-made-by-members.md) | A member's browser makes and seals the key of each epoch; the server stores it and refuses an epoch that does not cover exactly the people in the conversation. |
-
+| [0038: Messages are sealed in the browser, and the server stores a blob it checks only for shape and epoch](0038-messages-stored-as-ciphertext.md) | The text is sealed and signed by the sender; the server checks the shape and the epoch, stores it as `Ciphertext`, and takes names as ids. |

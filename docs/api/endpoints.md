@@ -88,9 +88,9 @@ Authentication column: **Bearer** needs an access token; **Refresh cookie** need
 
 | Method and route | Auth | Limit | Statuses | Description |
 |---|---|---|---|---|
-| `POST /api/conversations/{conversationId}/messages` | Bearer | send | 200, 201, 400, 401, 403, 429 | Sends a message (`content`, `clientMessageId`, `attachments`). 201 for a new message, 200 with the stored message when this `clientMessageId` was already sent. |
+| `POST /api/conversations/{conversationId}/messages` | Bearer | send | 200, 201, 400, 401, 403, 429 | Sends a message sealed in the browser (`clientMessageId`, `ciphertext`, `mentionedUserIds`, `attachments`). 201 for a new message, 200 with the stored message when this `clientMessageId` was already sent. 409 with `epoch-stale` or `epoch-due` when the conversation is not in the epoch the message was sealed under, or that epoch is marked for replacement. |
 | `GET /api/conversations/{conversationId}/messages` | Bearer |  | 200, 400, 401, 403 | History, at most 50, oldest first. At most one of `before`, `after`, `around` (a message id). |
-| `PATCH /api/conversations/{conversationId}/messages/{messageId}` | Bearer | edit | 200, 400, 401, 403, 404, 409, 429 | Edits the caller's own message within the edit window (`content`). |
+| `PATCH /api/conversations/{conversationId}/messages/{messageId}` | Bearer | edit | 200, 400, 401, 403, 404, 409, 429 | Edits the caller's own message within the edit window, with a new sealed text (`ciphertext`, `editCount`, `mentionedUserIds`). `editCount` must be one more than the message has now, otherwise 409 `edit-count-stale`; the epoch rules of a send apply. |
 | `DELETE /api/conversations/{conversationId}/messages/{messageId}` | Bearer |  | 200, 401, 403, 404 | Deletes a message. The sender at any time; a group owner or admin for anyone's. |
 
 ## Files
@@ -104,7 +104,7 @@ Authentication column: **Bearer** needs an access token; **Refresh cookie** need
 
 | Method and route | Auth | Limit | Statuses | Description |
 |---|---|---|---|---|
-| `GET /api/notifications` | Bearer |  | 200, 400, 401 | The caller's notifications, 30 per page, newest first (`before` is a notification id), with `unreadCount` (stops at 100). |
+| `GET /api/notifications` | Bearer |  | 200, 400, 401 | The caller's notifications, 30 per page, newest first (`before` is a notification id), with `unreadCount` (stops at 100). A mention carries its message sealed. |
 | `POST /api/notifications/read` | Bearer |  | 204, 400, 401 | Marks notifications read (`ids`, at most 100), or all when `ids` is omitted. |
 | `DELETE /api/notifications/{notificationId}` | Bearer |  | 204, 401, 404 | Dismisses one notification for good. |
 
@@ -200,28 +200,34 @@ The refresh token is in the `Set-Cookie` header, not the body: `chatnet_refresh=
 
 `keyEpoch` is the newest key epoch of the conversation, 0 while it has none, and `keyRotationRequired` says someone left since it was made. See [conversation keys](../features/conversation-keys.md).
 
-For a direct chat `name` is the other person's display name and `otherUserId` is their id. For a group, `otherUserId` is null. `lastMessage` is null for an empty conversation, otherwise:
+For a direct chat `name` is the other person's display name and `otherUserId` is their id. For a group, `otherUserId` is null. `lastMessage` is null for an empty conversation, otherwise the last message as it was sealed, for the browser to open and draw the preview (`ciphertext` is null when the last message was deleted):
 
 ```json
 {
-  "senderId": "01a1ba93-d8f5-7d26-9b60-8314d89a1c5d",
-  "content": "Sounds good 3",
-  "createdAt": "2026-11-08T09:53:36.142447Z",
+  "senderId": "01a1cd65-b711-7f3d-9fb6-32c0504b30ca",
+  "ciphertext": "AQEAAAAB-7rRjlg1xo1xBDS5...",
+  "keyEpoch": 1,
+  "clientMessageId": "c024dc5c-a44c-4ab7-8e82-f94b84bfea61",
+  "editCount": 0,
+  "createdAt": "2026-11-12T01:35:59.408784Z",
   "attachmentCount": 0
 }
 ```
 
 ### Message
 
+`ciphertext` is the sealed text as unpadded base64url, and `keyEpoch` the epoch whose key opens it. Long values are shortened here.
+
 ```json
 {
-  "id": "01a1ba93-e0af-7e03-a39a-697fd0f2a5c4",
-  "conversationId": "01a1ba93-deb9-7a50-ac60-f3f94ff76779",
-  "senderId": "01a1ba93-d895-7db5-9ca8-59569a0b63b7",
+  "id": "01a1cd65-bd19-7725-8bfe-f49f2bea0477",
+  "conversationId": "2fefe767-605b-498f-90b5-507be4136ac1",
+  "senderId": "01a1cd65-b711-7f3d-9fb6-32c0504b30ca",
   "senderDisplayName": "Ana Example",
-  "content": "Hi everyone, shall we meet on Saturday?",
-  "createdAt": "2026-11-08T09:53:35.919264Z",
-  "clientMessageId": "2ad938ec-75e7-4ea3-a509-156441670f82",
+  "ciphertext": "AQEAAAAB2l_Y1p1QHoNbIAd7...",
+  "keyEpoch": 1,
+  "createdAt": "2026-11-12T01:35:59.257864Z",
+  "clientMessageId": "eff32cff-7690-4588-a8e6-7e2665d8a71d",
   "attachments": [],
   "editedAt": null,
   "editCount": 0,
@@ -233,16 +239,16 @@ A message with a file carries its attachments:
 
 ```json
 {
-  "id": "01a1ba93-e4f6-7243-ad69-5d77678d76e3",
+  "id": "01a1cd65-bf5f-739a-a773-d114d6566883",
   "type": "Image",
   "fileName": "map.png",
   "contentType": "image/png",
   "sizeBytes": 70,
-  "url": "http://localhost:9000/chatnet/attachments/01a1ba93-deb9-7a50-ac60-f3f94ff76779/01a1ba93-e4f6-7243-ad69-5d77678d76e3?<signature parameters>"
+  "url": "http://localhost:9000/chatnet/attachments/2fefe767-605b-498f-90b5-507be4136ac1/01a1cd65-bf5f-739a-a773-d114d6566883?<signature parameters>"
 }
 ```
 
-A deleted message has `content: null`, `isDeleted: true` and no attachments.
+A deleted message has `ciphertext: null`, `isDeleted: true` and no attachments.
 
 ### Member
 
@@ -287,9 +293,9 @@ A deleted message has `content: null`, `isDeleted: true` and no attachments.
 
 ```json
 {
-  "uploadKey": "pending/01a1ba93-deb9-7a50-ac60-f3f94ff76779/01a1ba93-d895-7db5-9ca8-59569a0b63b7/75b5b7dd-1cc0-4bb0-a9a3-0795242dd7ed",
-  "url": "http://localhost:9000/chatnet/pending/01a1ba93-deb9-7a50-ac60-f3f94ff76779/01a1ba93-d895-7db5-9ca8-59569a0b63b7/75b5b7dd-1cc0-4bb0-a9a3-0795242dd7ed?<signature parameters>",
-  "expiresAt": "2026-11-08T10:03:36Z"
+  "uploadKey": "pending/2fefe767-605b-498f-90b5-507be4136ac1/01a1cd65-b711-7f3d-9fb6-32c0504b30ca/da932653-bb8f-48bf-b7b3-89bc63164b87",
+  "url": "http://localhost:9000/chatnet/pending/2fefe767-605b-498f-90b5-507be4136ac1/01a1cd65-b711-7f3d-9fb6-32c0504b30ca/da932653-bb8f-48bf-b7b3-89bc63164b87?<signature parameters>",
+  "expiresAt": "2026-11-12T01:45:59Z"
 }
 ```
 
@@ -301,8 +307,8 @@ A deleted message has `content: null`, `isDeleted: true` and no attachments.
 
 ```json
 {
-  "url": "http://localhost:9000/chatnet/attachments/01a1ba93-deb9-7a50-ac60-f3f94ff76779/01a1ba93-e4f6-7243-ad69-5d77678d76e3?<signature parameters>",
-  "expiresAt": "2026-11-08T10:53:37Z"
+  "url": "http://localhost:9000/chatnet/attachments/2fefe767-605b-498f-90b5-507be4136ac1/01a1cd65-bf5f-739a-a773-d114d6566883?<signature parameters>",
+  "expiresAt": "2026-11-12T02:36:00Z"
 }
 ```
 
@@ -310,19 +316,26 @@ A deleted message has `content: null`, `isDeleted: true` and no attachments.
 
 `GET /api/notifications`:
 
+A mention carries the message it is about as `message`, sealed as it was sent (null for an invitation, and once the message is deleted). The person who sealed it is the `actorId`.
+
 ```json
 {
   "items": [
     {
-      "id": "01a1ba93-e13e-75a2-8fb8-ff6bdf90858a",
+      "id": "01a1cd65-bd4a-70a3-a61d-b143dabaf40a",
       "type": "Mention",
-      "conversationId": "01a1ba93-deb9-7a50-ac60-f3f94ff76779",
-      "actorId": "01a1ba93-d895-7db5-9ca8-59569a0b63b7",
-      "actorDisplayName": "Ana Example",
-      "messageId": "01a1ba93-e12c-7ee9-b9a4-8ac965d11952",
-      "messagePreview": "@ben_fgvdc can you book a table?",
+      "conversationId": "2fefe767-605b-498f-90b5-507be4136ac1",
+      "actorId": "01a1cd65-b7b6-7a60-813a-bc1fea32bc14",
+      "actorDisplayName": "Ben Example",
+      "messageId": "01a1cd65-bd47-7ecb-940b-0391246c14a0",
+      "message": {
+        "ciphertext": "AQEAAAABdWgRYKNSPb8mttmB...",
+        "keyEpoch": 1,
+        "clientMessageId": "2cc02192-5bbf-4d02-8a13-8c3b79a830df",
+        "editCount": 0
+      },
       "isRead": false,
-      "createdAt": "2026-11-08T09:53:36.044394Z"
+      "createdAt": "2026-11-12T01:35:59.303285Z"
     }
   ],
   "unreadCount": 2

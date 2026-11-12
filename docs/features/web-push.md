@@ -5,7 +5,7 @@ Alerts for a person who has the app closed. Optional: the server offers it only 
 ## Behaviour
 
 - A switch in the profile turns alerts on for **one browser**. The browser asks permission, subscribes to its vendor's push service, and registers the subscription with the API.
-- A person with **no live connection** gets an alert for a new message in a conversation that is not muted, a mention, or an invitation to a group. The text is the text of the in-page alert.
+- A person with **no live connection** gets an alert for a new message in a conversation that is not muted, a mention, or an invitation to a group. The text says who it is from and where, and never what was said: the server cannot read messages. A message alert has the sender's name as its title (with the group's name for a group) and "New message", or "Sent a file" or the number of files, as its body. A mention says that someone mentioned the person, with no body. An invitation says who added them to which group. The alert shown by an open page is richer, because the page can open the message.
 - "No live connection" is asked of Redis when the relay takes the row (the unexpired connection entries of the user), not the "online" of presence, which includes a short wait after the last connection closes. If Redis cannot say who is connected, the alert waits.
 - Alerts are outbox rows for the relay alone (`MessageAlertRequested`, `NotificationAlertRequested`), saved in the transaction of the change, so an alert survives a crash. Delivery is at least once; an alert with the same tag replaces the one before it on the screen.
 - A person who is connected gets the in-page alert instead.
@@ -22,7 +22,7 @@ Alerts for a person who has the app closed. Optional: the server offers it only 
 
 The payload is encrypted to the one browser it is for (RFC 8291, the `aes128gcm` content encoding), and the request is signed with VAPID (RFC 8292). Both are implemented on `System.Security.Cryptography` in this repository, with no package. The encryption is checked against the worked example in RFC 8291 byte for byte, and was accepted by Google's push service.
 
-The push service sees which endpoint, when and how big, never the text.
+The push service sees which endpoint, when and how big. The payload names the sender and the conversation and carries no text of any message.
 
 ## Rules for registrations
 

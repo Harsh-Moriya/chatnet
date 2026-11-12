@@ -56,6 +56,7 @@ sequenceDiagram
 | `MessageCreated` | pushes `ReceiveMessage` to the conversation's group |
 | `MessageUpdated` | pushes `MessageUpdated` (an edit or a deletion) to the group |
 | `MessageFilesRemoved` | removes a deleted message's files from the bucket (not a push) |
+| `StoredFileRemoved` | removes one object from the bucket by its key (not a push) |
 | `NotificationCreated` | pushes `NotificationReceived` to the recipient's tabs |
 | `MessageAlertRequested`, `NotificationAlertRequested` | sends Web Push alerts to people with no live connection |
 | `ConversationCreated` | pushes `AddedToConversation` for a new conversation |
@@ -92,6 +93,7 @@ When a message, mention or invitation is stored, the same transaction saves an a
 ## What the browser does
 
 - One `connectChat` function registers every handler before starting the connection and is the only place that touches hub events.
+- A pushed message is sealed, so each push is opened (its key found, its signature and text checked) before it goes into the store. The pushes of one conversation are opened one after another in the order they arrived, so an edit cannot overtake the message it edits while that is still being opened. A message that cannot be opened is stored as one that cannot be read, and is opened again when the keys of the conversation change.
 - Everything a handler receives goes into one Zustand store through actions that merge by id, so a message arriving twice (push and REST response) or during a history load is harmless. Of two copies of one message the store keeps the later one: a deleted copy beats any other, otherwise the higher edit count wins.
 - An unconfirmed message is matched to its confirmed copy by an id the browser made up (`clientMessageId`), never by text.
 - After a reconnect the client reloads the conversation list and catches up each loaded conversation over REST. See [messaging](../features/messaging.md).

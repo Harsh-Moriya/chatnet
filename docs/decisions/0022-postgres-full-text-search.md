@@ -25,4 +25,5 @@ One index, `IX_Messages_Search`, a GIN index on `(ConversationId, to_tsvector('s
 
 ## Related
 
+- [Messages are sealed in the browser, and the server stores a blob it checks only for shape and epoch](0038-messages-stored-as-ciphertext.md)
 - [Conversation keys](../features/conversation-keys.md)
