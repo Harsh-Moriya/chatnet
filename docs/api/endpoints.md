@@ -88,7 +88,7 @@ Authentication column: **Bearer** needs an access token; **Refresh cookie** need
 
 | Method and route | Auth | Limit | Statuses | Description |
 |---|---|---|---|---|
-| `POST /api/conversations/{conversationId}/messages` | Bearer | send | 200, 201, 400, 401, 403, 429 | Sends a message sealed in the browser (`clientMessageId`, `ciphertext`, `mentionedUserIds`, `attachments`). 201 for a new message, 200 with the stored message when this `clientMessageId` was already sent. 409 with `epoch-stale` or `epoch-due` when the conversation is not in the epoch the message was sealed under, or that epoch is marked for replacement. |
+| `POST /api/conversations/{conversationId}/messages` | Bearer | send | 200, 201, 400, 401, 403, 429 | Sends a message sealed in the browser (`clientMessageId`, `ciphertext`, `mentionedUserIds`, and `attachments`, each only `{ uploadKey }`: what a file is called and is lies inside `ciphertext`). 201 for a new message, 200 with the stored message when this `clientMessageId` was already sent. 409 with `epoch-stale` or `epoch-due` when the conversation is not in the epoch the message was sealed under, or that epoch is marked for replacement. |
 | `GET /api/conversations/{conversationId}/messages` | Bearer |  | 200, 400, 401, 403 | History, at most 50, oldest first. At most one of `before`, `after`, `around` (a message id). |
 | `PATCH /api/conversations/{conversationId}/messages/{messageId}` | Bearer | edit | 200, 400, 401, 403, 404, 409, 429 | Edits the caller's own message within the edit window, with a new sealed text (`ciphertext`, `editCount`, `mentionedUserIds`). `editCount` must be one more than the message has now, otherwise 409 `edit-count-stale`; the epoch rules of a send apply. |
 | `DELETE /api/conversations/{conversationId}/messages/{messageId}` | Bearer |  | 200, 401, 403, 404 | Deletes a message. The sender at any time; a group owner or admin for anyone's. |
@@ -97,7 +97,7 @@ Authentication column: **Bearer** needs an access token; **Refresh cookie** need
 
 | Method and route | Auth | Limit | Statuses | Description |
 |---|---|---|---|---|
-| `POST /api/conversations/{conversationId}/uploads` | Bearer | uploads | 200, 400, 401, 403, 429 | Ticket for uploading one attachment straight to the bucket (`fileName`, `contentType`, `sizeBytes`). |
+| `POST /api/conversations/{conversationId}/uploads` | Bearer | uploads | 200, 400, 401, 403, 429 | Ticket for uploading one encrypted attachment straight to the bucket (`sizeBytes`, the size of the encrypted file: 29 bytes to what a file of `Storage:MaxFileBytes` becomes). The upload is signed for `application/octet-stream`. |
 | `GET /api/attachments/{attachmentId}/url` | Bearer |  | 200, 401, 404 | A new signed link for a file the caller may read. One 404 for every refusal. |
 
 ## Notifications
@@ -204,12 +204,12 @@ For a direct chat `name` is the other person's display name and `otherUserId` is
 
 ```json
 {
-  "senderId": "01a1cd65-b711-7f3d-9fb6-32c0504b30ca",
-  "ciphertext": "AQEAAAAB-7rRjlg1xo1xBDS5...",
+  "senderId": "01a1d03b-2a2b-7542-ba59-8cc08bef7fd5",
+  "ciphertext": "AQEAAAABJzbMWKdBPmCoEFXz...",
   "keyEpoch": 1,
-  "clientMessageId": "c024dc5c-a44c-4ab7-8e82-f94b84bfea61",
+  "clientMessageId": "4a273f68-a4c6-495f-8925-ec85941794d9",
   "editCount": 0,
-  "createdAt": "2026-11-12T01:35:59.408784Z",
+  "createdAt": "2026-11-12T14:48:25.434739Z",
   "attachmentCount": 0
 }
 ```
@@ -220,14 +220,14 @@ For a direct chat `name` is the other person's display name and `otherUserId` is
 
 ```json
 {
-  "id": "01a1cd65-bd19-7725-8bfe-f49f2bea0477",
-  "conversationId": "2fefe767-605b-498f-90b5-507be4136ac1",
-  "senderId": "01a1cd65-b711-7f3d-9fb6-32c0504b30ca",
+  "id": "01a1d03b-3a2e-70f2-8ed2-e7bf5a915040",
+  "conversationId": "833b6b39-1545-46b1-8dd5-0b767196501b",
+  "senderId": "01a1d03b-2a2b-7542-ba59-8cc08bef7fd5",
   "senderDisplayName": "Ana Example",
-  "ciphertext": "AQEAAAAB2l_Y1p1QHoNbIAd7...",
+  "ciphertext": "AQEAAAABWdIbbic22qqLYI0Y...",
   "keyEpoch": 1,
-  "createdAt": "2026-11-12T01:35:59.257864Z",
-  "clientMessageId": "eff32cff-7690-4588-a8e6-7e2665d8a71d",
+  "createdAt": "2026-11-12T14:48:24.878495Z",
+  "clientMessageId": "3969dd9c-857d-40d7-ac28-a2f875d64c06",
   "attachments": [],
   "editedAt": null,
   "editCount": 0,
@@ -235,16 +235,13 @@ For a direct chat `name` is the other person's display name and `otherUserId` is
 }
 ```
 
-A message with a file carries its attachments:
+A message with a file carries its attachments, each an id, the stored size (the size of the encrypted file) and a link. What a file is called and is, and the key that opens it, are inside `ciphertext`:
 
 ```json
 {
-  "id": "01a1cd65-bf5f-739a-a773-d114d6566883",
-  "type": "Image",
-  "fileName": "map.png",
-  "contentType": "image/png",
-  "sizeBytes": 70,
-  "url": "http://localhost:9000/chatnet/attachments/2fefe767-605b-498f-90b5-507be4136ac1/01a1cd65-bf5f-739a-a773-d114d6566883?<signature parameters>"
+  "id": "01a1d03b-402a-7bc2-a2f9-6e5e97e2c1d7",
+  "sizeBytes": 2077,
+  "url": "http://localhost:9000/chatnet/attachments/833b6b39-1545-46b1-8dd5-0b767196501b/01a1d03b-402a-7bc2-a2f9-6e5e97e2c1d7?<signature parameters>"
 }
 ```
 
@@ -293,13 +290,13 @@ A deleted message has `ciphertext: null`, `isDeleted: true` and no attachments.
 
 ```json
 {
-  "uploadKey": "pending/2fefe767-605b-498f-90b5-507be4136ac1/01a1cd65-b711-7f3d-9fb6-32c0504b30ca/da932653-bb8f-48bf-b7b3-89bc63164b87",
-  "url": "http://localhost:9000/chatnet/pending/2fefe767-605b-498f-90b5-507be4136ac1/01a1cd65-b711-7f3d-9fb6-32c0504b30ca/da932653-bb8f-48bf-b7b3-89bc63164b87?<signature parameters>",
-  "expiresAt": "2026-11-12T01:45:59Z"
+  "uploadKey": "pending/833b6b39-1545-46b1-8dd5-0b767196501b/01a1d03b-2a2b-7542-ba59-8cc08bef7fd5/e3c87603-c50e-4971-8c05-d8f58ca6212b",
+  "url": "http://localhost:9000/chatnet/pending/833b6b39-1545-46b1-8dd5-0b767196501b/01a1d03b-2a2b-7542-ba59-8cc08bef7fd5/e3c87603-c50e-4971-8c05-d8f58ca6212b?<signature parameters>",
+  "expiresAt": "2026-11-12T14:58:26Z"
 }
 ```
 
-`url` is a presigned PUT to the bucket, valid for 10 minutes and for exactly the declared content type.
+`url` is a presigned PUT to the bucket, valid for 10 minutes. A file ticket is signed for `application/octet-stream` whatever the file is, since the file is encrypted; a picture ticket is signed for the declared content type.
 
 ### Attachment link
 
@@ -307,8 +304,8 @@ A deleted message has `ciphertext: null`, `isDeleted: true` and no attachments.
 
 ```json
 {
-  "url": "http://localhost:9000/chatnet/attachments/2fefe767-605b-498f-90b5-507be4136ac1/01a1cd65-bf5f-739a-a773-d114d6566883?<signature parameters>",
-  "expiresAt": "2026-11-12T02:36:00Z"
+  "url": "http://localhost:9000/chatnet/attachments/833b6b39-1545-46b1-8dd5-0b767196501b/01a1d03b-402a-7bc2-a2f9-6e5e97e2c1d7?<signature parameters>",
+  "expiresAt": "2026-11-12T15:48:26Z"
 }
 ```
 
@@ -322,20 +319,20 @@ A mention carries the message it is about as `message`, sealed as it was sent (n
 {
   "items": [
     {
-      "id": "01a1cd65-bd4a-70a3-a61d-b143dabaf40a",
+      "id": "01a1d03b-3b71-7784-85f0-80d72ac3b9e6",
       "type": "Mention",
-      "conversationId": "2fefe767-605b-498f-90b5-507be4136ac1",
-      "actorId": "01a1cd65-b7b6-7a60-813a-bc1fea32bc14",
+      "conversationId": "833b6b39-1545-46b1-8dd5-0b767196501b",
+      "actorId": "01a1d03b-2ed7-7d62-a10f-d3d5160ec916",
       "actorDisplayName": "Ben Example",
-      "messageId": "01a1cd65-bd47-7ecb-940b-0391246c14a0",
+      "messageId": "01a1d03b-3b59-7838-b023-b9bc42cd3341",
       "message": {
-        "ciphertext": "AQEAAAABdWgRYKNSPb8mttmB...",
+        "ciphertext": "AQEAAAABMsfq2SEtRHXJb1lO...",
         "keyEpoch": 1,
-        "clientMessageId": "2cc02192-5bbf-4d02-8a13-8c3b79a830df",
+        "clientMessageId": "b29174ec-8883-4014-a235-1600d2c7b68b",
         "editCount": 0
       },
       "isRead": false,
-      "createdAt": "2026-11-12T01:35:59.303285Z"
+      "createdAt": "2026-11-12T14:48:25.177396Z"
     }
   ],
   "unreadCount": 2

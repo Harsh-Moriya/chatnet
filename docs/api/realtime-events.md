@@ -48,14 +48,14 @@ Arguments are positional. The examples are real payloads as the JavaScript clien
 ```json
 [
   {
-    "id": "01a1cd65-bd19-7725-8bfe-f49f2bea0477",
-    "conversationId": "2fefe767-605b-498f-90b5-507be4136ac1",
-    "senderId": "01a1cd65-b711-7f3d-9fb6-32c0504b30ca",
+    "id": "01a1d03b-3a2e-70f2-8ed2-e7bf5a915040",
+    "conversationId": "833b6b39-1545-46b1-8dd5-0b767196501b",
+    "senderId": "01a1d03b-2a2b-7542-ba59-8cc08bef7fd5",
     "senderDisplayName": "Ana Example",
-    "ciphertext": "AQEAAAAB2l_Y1p1QHoNbIAd7...",
+    "ciphertext": "AQEAAAABWdIbbic22qqLYI0Y...",
     "keyEpoch": 1,
-    "createdAt": "2026-11-12T01:35:59.257864Z",
-    "clientMessageId": "eff32cff-7690-4588-a8e6-7e2665d8a71d",
+    "createdAt": "2026-11-12T14:48:24.878495Z",
+    "clientMessageId": "3969dd9c-857d-40d7-ac28-a2f875d64c06",
     "attachments": [],
     "editedAt": null,
     "editCount": 0,
@@ -211,20 +211,20 @@ Arguments are positional. The examples are real payloads as the JavaScript clien
 ```json
 [
   {
-    "id": "01a1cd65-bd4a-70a3-a61d-b143dabaf40a",
+    "id": "01a1d03b-3b71-7784-85f0-80d72ac3b9e6",
     "type": "Mention",
-    "conversationId": "2fefe767-605b-498f-90b5-507be4136ac1",
-    "actorId": "01a1cd65-b7b6-7a60-813a-bc1fea32bc14",
+    "conversationId": "833b6b39-1545-46b1-8dd5-0b767196501b",
+    "actorId": "01a1d03b-2ed7-7d62-a10f-d3d5160ec916",
     "actorDisplayName": "Ben Example",
-    "messageId": "01a1cd65-bd47-7ecb-940b-0391246c14a0",
+    "messageId": "01a1d03b-3b59-7838-b023-b9bc42cd3341",
     "message": {
-      "ciphertext": "AQEAAAABdWgRYKNSPb8mttmB...",
+      "ciphertext": "AQEAAAABMsfq2SEtRHXJb1lO...",
       "keyEpoch": 1,
-      "clientMessageId": "2cc02192-5bbf-4d02-8a13-8c3b79a830df",
+      "clientMessageId": "b29174ec-8883-4014-a235-1600d2c7b68b",
       "editCount": 0
     },
     "isRead": false,
-    "createdAt": "2026-11-12T01:35:59.303285Z"
+    "createdAt": "2026-11-12T14:48:25.177396Z"
   }
 ]
 ```

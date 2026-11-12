@@ -40,7 +40,7 @@ The API and Caddy containers drop all Linux capabilities and cannot gain new pri
 
 The bucket needs two things, the same ones `docker/storage/init.sh` applies to the local object store:
 
-1. A **CORS rule** that allows `PUT`, `GET` and `HEAD` from your site's origin and exposes the `ETag` header. Start from `docker/storage/cors.json` and replace `AllowedOrigins` with `https://<your domain>`.
+1. A **CORS rule** that allows `PUT`, `GET` and `HEAD` from your site's origin and exposes the `ETag` header. The browser uploads and fetches files itself, so `GET` and `PUT` from the site's origin are both required. Start from `docker/storage/cors.json` and replace `AllowedOrigins` with `https://<your domain>`.
 2. A **lifecycle rule** that expires objects under `pending/` after one day (`docker/storage/lifecycle.json`), so uploads that were never attached to a message do not stay.
 
 Both are standard S3 API calls (`put-bucket-cors`, `put-bucket-lifecycle-configuration`).
@@ -75,6 +75,8 @@ docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
 The migration job runs first and does nothing when the database is already up to date. The API instances are replaced together, so there is a short break while they start. Take a [backup](backups.md) before an update that includes migrations.
 
 **Updating a database that holds messages from before they were sealed.** The migration that makes messages ciphertext deletes every message that exists, with its notifications and the pending pushes about them, because the server holds those in the clear and cannot seal them: only the sender's browser can. It cannot be undone, and rolling the migration back puts the columns back without the data. The files those messages carried are removed from the bucket by the outbox relay once the API runs, one row for each file. Take a dump first if the old messages matter.
+
+**Updating a database that holds files from before they were encrypted.** The migration that encrypts files deletes every message that carries a file, with its notifications and the pending pushes about them, and removes the name, type and kind columns of the attachment table, because the server holds those in the clear and cannot encrypt a file: only the sender's browser can. It cannot be undone, and rolling it back puts the columns back without the data. The stored files are removed from the bucket by the outbox relay once the API runs, one row for each file. Messages with text only are kept.
 
 ## Trying it on one machine
 

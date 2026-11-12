@@ -41,9 +41,8 @@ Options are bound to classes and **validated when the host starts**, so a missin
 | `Storage:ServiceUrl` | none | An absolute http or https address. It is signed into links, so browsers must reach the same address as the server (R2: `https://<account id>.r2.cloudflarestorage.com`; locally `http://localhost:9000`). |
 | `Storage:Bucket` | none | 3 to 63 lowercase letters, digits or hyphens |
 | `Storage:Region` | `auto` | must be set (Cloudflare R2 takes `auto`) |
-| `Storage:MaxFileBytes` | 10485760 (10 MB) | above zero |
+| `Storage:MaxFileBytes` | 10485760 (10 MiB) | above zero. The largest file as a person sees it, before it is encrypted; the largest object stored for it is a little more (a header and a tag for each 64 KiB) |
 | `Storage:MaxFilesPerMessage` | 4 | 1 to 20 |
-| `Storage:AllowedContentTypes` | JPEG, PNG, GIF, WebP, MP4, WebM, PDF, plain text, ZIP | at least one, each `type/subtype` |
 | `Storage:UploadUrlMinutes` | 10 | above zero |
 | `Storage:DownloadUrlMinutes` | 60 | above zero |
 

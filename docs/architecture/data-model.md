@@ -31,7 +31,7 @@ erDiagram
 
 - **Keys** are UUIDs. Messages, conversations and notifications get a time-ordered UUID (version 7) made by the application; the column default `gen_random_uuid()` is only a fallback.
 - **Timestamps** are `timestamp with time zone`, stored and returned in UTC.
-- **Enums** are stored as text (`Direct`, `Group`, `Owner`, `Admin`, `Member`, `Image`, `Video`, `File`, `Mention`, `MemberAdded`), so a query against the database is readable.
+- **Enums** are stored as text (`Direct`, `Group`, `Owner`, `Admin`, `Member`, `Mention`, `MemberAdded`), so a query against the database is readable.
 - **Soft delete.** Messages and users are never removed. A deleted message keeps its row with `Ciphertext` set to null; a deactivated user keeps their account with `IsDeactivated`.
 - **Integrity in the database.** Every unique or integrity rule is enforced by an index or constraint as well as in code, and a race is settled by catching the specific violation.
 - **Indexes** exist for queries that exist. Query-cost tests ask Postgres how many rows the real query reads.
@@ -114,13 +114,10 @@ Indexes:
 | `Id` | uuid | primary key |
 | `MessageId` | uuid | foreign key, cascade; indexed |
 | `StorageKey` | text | `attachments/{conversationId}/{attachmentId}` in the bucket |
-| `Type` | text | `Image`, `Video` or `File` |
-| `ContentType` | text | the type the bucket stored |
-| `FileName` | text | cleaned: path parts and control characters removed, at most 255 characters |
-| `FileSizeBytes` | bigint | |
-| `CreatedAt` | timestamptz | |
+| `FileSizeBytes` | bigint | the size of the stored object, which is the encrypted file |
+| `CreatedAt` | timestamptz | one microsecond after the file before it in the same message, which is the order the files were attached in |
 
-The table stores keys, never links. A link is signed for the reader each time it is sent.
+The table stores keys and sizes, never links. A link is signed for the reader each time it is sent. A file is stored encrypted, so the table holds no name and no type: both are inside the sealed message, next to the key that opens the file, and the n-th row of a message is described by the n-th entry in it.
 
 ## RefreshTokens
 

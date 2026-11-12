@@ -29,7 +29,7 @@ The sender's browser seals the text under the key of the conversation's current 
 
 ## Consequences
 
-- The server holds no plaintext of any message, in the database, the outbox, the logs or Web Push payloads. It still sees who writes to whom, when, how large a blob is (padded to 256 bytes), how many files a message has, and the names, types and sizes of files.
+- The server holds no plaintext of any message, in the database, the outbox, the logs or Web Push payloads. It still sees who writes to whom, when, how large a blob is (padded to 256 bytes), how many files a message has and how large each is.
 - Search, previews and notification text run in the browser over what it can open. The server has no search endpoint.
 - A member who is the sender can store a blob nobody can open. It is shown as a message that cannot be opened.
 - A conversation that cannot get an epoch, because someone in it has not set up encryption, accepts no messages until they do or are removed.

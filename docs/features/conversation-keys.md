@@ -2,7 +2,7 @@
 
 Every conversation has a key for each period of its life, called an **epoch**. A member's browser makes the key of an epoch, seals it once for each member with that member's public key, and sends the sealed copies (**envelopes**) to the server, which stores and hands them out and can open none of them. A new epoch begins when people join, and one is due when someone leaves, so a person who left cannot read what comes after and a person who joined cannot read what came before. The [encryption formats](../architecture/encryption-format.md) specify the bytes, and [encryption keys and devices](encryption-keys.md) covers the keys each person holds.
 
-This page covers how the keys of a conversation are made, delivered and checked. The text of every message is sealed under the key of the epoch it is sent in (see [messaging](messaging.md)); files are not sealed with them.
+This page covers how the keys of a conversation are made, delivered and checked. The text of every message is sealed under the key of the epoch it is sent in (see [messaging](messaging.md)); each file is encrypted under a key of its own, which is carried inside the sealed message (see [attachments](attachments.md)).
 
 ## Behaviour
 

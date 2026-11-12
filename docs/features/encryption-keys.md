@@ -2,7 +2,7 @@
 
 A person has encryption keys that are made in their browser, backed up under a passphrase only they know, and handed from one of their devices to another. The server stores the public half of the keys, the encrypted backup and the list of devices, and can open none of the private material. The [encryption formats](../architecture/encryption-format.md) specify the bytes.
 
-This page covers the keys and the devices that hold them. The keys of conversations, sealed to these, are on the [conversation keys](conversation-keys.md) page. Message text and files are still sent and stored as before; protecting them with these keys is a separate step.
+This page covers the keys and the devices that hold them. The keys of conversations, sealed to these, are on the [conversation keys](conversation-keys.md) page. The text of messages is sealed with them, and every file is encrypted under a key of its own that travels inside the sealed message (see [messaging](messaging.md) and [attachments](attachments.md)).
 
 ## Behaviour
 

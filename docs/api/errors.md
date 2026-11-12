@@ -138,7 +138,7 @@ A conversation that does not exist and one the caller is not in give this same a
   "title": "Conflict",
   "status": 409,
   "detail": "This message was deleted.",
-  "traceId": "00-abec0e232255fe2cdcc156a4cd97e505-e82bb42e8182b6d4-01"
+  "traceId": "00-c328eb8fda589d54bb1ec80d737eb506-ee275a07a97cfc51-01"
 }
 ```
 
@@ -175,7 +175,7 @@ A message under an epoch that is not the one the conversation is in:
   "status": 409,
   "detail": "The keys of this conversation changed. Look at the conversation again.",
   "code": "epoch-stale",
-  "traceId": "00-2deadcf3704d1bcc881cbded84857ea2-934ea6e1c0fc6c51-01"
+  "traceId": "00-58b06082d83cba74634e053243c570c0-9cc1f7026784fc26-01"
 }
 ```
 
@@ -188,7 +188,7 @@ A message under an epoch that a removal marked for replacement:
   "status": 409,
   "detail": "The keys of this conversation must be replaced before anything more is said.",
   "code": "epoch-due",
-  "traceId": "00-d686e02464172c28cc8ec7ae11c34e13-07348f1fbae0328f-01"
+  "traceId": "00-ece60c2c205fac86d86f18720e152c45-e3d5f3f44763926a-01"
 }
 ```
 
@@ -201,7 +201,7 @@ An edit made from an older version of the message:
   "status": 409,
   "detail": "This message was edited somewhere else first. Look at its latest version.",
   "code": "edit-count-stale",
-  "traceId": "00-703f23bab9aa841d1794ef6b6b7986ca-dcb0a0dd08883941-01"
+  "traceId": "00-cd7e4f8aeb63c0b21d228efc71f95794-40915cae3aa621c2-01"
 }
 ```
 
@@ -218,7 +218,7 @@ A message that is not a well formed sealed message, and a send with no client me
       "The message is not a well formed encrypted message."
     ]
   },
-  "traceId": "00-86b445dfd83f5e10e667a3ea33a9f29a-fdaf5efdafa5b677-01"
+  "traceId": "00-6ced7758dbe24a3af265a3586ba3e6a2-c446748374b1f63a-01"
 }
 ```
 
@@ -233,7 +233,7 @@ A message that is not a well formed sealed message, and a send with no client me
       "'Client Message Id' must not be empty."
     ]
   },
-  "traceId": "00-b38095ff2014ca5ec3112f7f0fecc6e2-a0cebde644801f77-01"
+  "traceId": "00-5b67d39bf608b1462db0c888b4651a64-202c7c8834e5eec6-01"
 }
 ```
 
