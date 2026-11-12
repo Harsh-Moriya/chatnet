@@ -1,5 +1,11 @@
-// These mirror the JSON the API sends (see section 6.3 of the architecture overview). Enums are
-// strings, timestamps are ISO 8601 UTC strings, and IDs are opaque UUID strings.
+// These mirror the JSON the API sends (see section 6.3 of the architecture overview), except where a type says it is what the
+// app works with: the server hands over messages sealed (the *Wire types) and the browser opens them, so the rest of the app deals
+// in text. Enums are strings, timestamps are ISO 8601 UTC strings, and IDs are opaque UUID strings.
+
+import type { UnreadableReason } from '../encryption/sealedMessages'
+
+// Why the text of a message is not shown. 'pending' only while it is being opened here.
+export type Unreadable = UnreadableReason | 'pending'
 
 export type ConversationType = 'Direct' | 'Group'
 
@@ -35,13 +41,41 @@ export interface ConversationKeyChange {
   keyRotationRequired: boolean
 }
 
+// The last message of a conversation as the server sends it: sealed.
+export interface LastMessageWire {
+  senderId: string
+  // Null when the last message was deleted.
+  ciphertext: string | null
+  keyEpoch: number
+  clientMessageId: string
+  editCount: number
+  createdAt: string
+  attachmentCount: number
+}
+
+// What a message was sealed as, kept with what was opened from it so it can be opened again when its key arrives.
+export interface SealedPreview {
+  ciphertext: string
+  keyEpoch: number
+  clientMessageId: string
+  editCount: number
+}
+
+// The conversation list's account of a conversation as the server sends it: its last message sealed.
+export type ConversationWire = Omit<Conversation, 'lastMessage'> & { lastMessage: LastMessageWire | null }
+
 export interface LastMessage {
   senderId: string
-  // Null when the last message was deleted. Empty when it was only files.
+  // The start of the text, opened here. Null when the last message was deleted, and while its text is not shown (see `unreadable`).
+  // Empty when it was only files.
   content: string | null
+  // Why the text is not shown, when the message was not deleted and its text is not here.
+  unreadable?: Unreadable | null
   createdAt: string
   // How many files the last message carries, so a message of only files can still be previewed.
   attachmentCount: number
+  // The message as sealed, to open it again. Null for a deleted message.
+  sealed?: SealedPreview | null
 }
 
 export type AttachmentType = 'Image' | 'Video' | 'File'
@@ -57,14 +91,35 @@ export interface Attachment {
   url: string
 }
 
+// A message as the server sends it: its text sealed by the sender (see the encryption formats). Null when it was deleted.
+export interface MessageWire {
+  id: string
+  conversationId: string
+  senderId: string
+  senderDisplayName: string
+  ciphertext: string | null
+  keyEpoch: number
+  createdAt: string
+  attachments: Attachment[]
+  clientMessageId: string
+  editedAt: string | null
+  editCount: number
+  isDeleted: boolean
+}
+
 export interface Message {
   id: string
   conversationId: string
   senderId: string
   senderDisplayName: string
-  // Null for a deleted message: it keeps its place in the timeline but has no text. A message of only files
-  // has an empty string.
+  // The text, opened here. Null for a deleted message: it keeps its place in the timeline but has no text. A message of only
+  // files has an empty string. Null too, with `unreadable` set, for a message whose text could not be opened on this device.
   content: string | null
+  // Why `content` is null although the message was not deleted.
+  unreadable?: Unreadable | null
+  // The message as sealed, to open it again when its key arrives. Absent for a message made here before the server confirmed it.
+  ciphertext?: string | null
+  keyEpoch?: number
   createdAt: string
   attachments: Attachment[]
   // The id the sender's tab invented for its optimistic copy: on the response to a send, on its push, and

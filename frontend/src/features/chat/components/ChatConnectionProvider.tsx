@@ -1,5 +1,6 @@
 import { type ReactNode, useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
+import { useKeyStatusStore } from '../../encryption/keyStatus'
 import { useNotificationStore } from '../../notifications/store/notificationStore'
 import { usePresenceStore } from '../../presence/store/presenceStore'
 import { useProfileSync } from '../../profile/hooks/useProfileSync'
@@ -19,11 +20,12 @@ export function ChatConnectionProvider({ children }: { children: ReactNode }) {
   useServiceWorkerNavigation()
 
   // Leaving the chat, by signing out or because the session expired, must not leave one person's
-  // conversations in memory for the next person to sign in on this browser. The store and the
-  // query cache are both emptied when the chat unmounts.
+  // conversations in memory for the next person to sign in on this browser. The stores and the
+  // query cache are all emptied when the chat unmounts.
   useEffect(
     () => () => {
       useChatStore.getState().reset()
+      useKeyStatusStore.getState().reset()
       useNotificationStore.getState().reset()
       usePresenceStore.getState().reset()
       queryClient.clear()

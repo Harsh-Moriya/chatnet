@@ -1,5 +1,6 @@
-import type { Conversation, LastMessage, Member, Message } from './types'
 import { compareTimestamps } from '../../lib/time'
+import { previewOf } from './preview'
+import type { Conversation, LastMessage, Member, Message, SealedPreview } from './types'
 
 // The rules for messages that change after they were sent, as plain functions so they can be tested without a
 // browser. The store holds the messages; these decide which copy of one is the newer, and who may do what.
@@ -8,7 +9,8 @@ import { compareTimestamps } from '../../lib/time'
 // that decides; this only keeps the button from being offered when the answer would be no.
 export const EDIT_WINDOW_MS = 15 * 60 * 1000
 
-// The largest a message's text may be, as on the server (SendMessageCommandValidator.MaxContentLength).
+// The largest a message's text may be. The server cannot read the text, so it is this side that keeps to it (the server only keeps a
+// sealed message within the largest size the formats allow, which 4000 characters of any language fit in).
 export const MAX_MESSAGE_LENGTH = 4000
 
 // How far along a message is. A deleted message is past any edit, so it outranks every count; otherwise the one
@@ -24,9 +26,37 @@ export function isNewer(candidate: Message, held: Message): boolean {
 }
 
 // Of the copy held and the copy that arrived, the one to keep. A tie goes to the one that arrived: it was read from
-// the server later and carries fresh download links.
+// the server later and carries fresh download links. Its text is the held one's when the held copy could be opened and the one that
+// arrived could not (the same version of the message, which the keys of this browser opened a moment ago).
 export function latest(held: Message | undefined, incoming: Message): Message {
-  return held && rank(held) > rank(incoming) ? held : incoming
+  if (held && rank(held) > rank(incoming)) return held
+
+  const lostItsText = held && rank(held) === rank(incoming) && incoming.content === null && !incoming.isDeleted && held.content !== null
+  return lostItsText ? { ...incoming, content: held.content, unreadable: null } : incoming
+}
+
+// What a message was sealed as, to open it again; null for a message that was deleted, or made here and not confirmed.
+export function sealedPreviewOf(message: Message): SealedPreview | null {
+  if (message.isDeleted || message.ciphertext == null || message.keyEpoch === undefined || message.clientMessageId === null) return null
+
+  return {
+    ciphertext: message.ciphertext,
+    keyEpoch: message.keyEpoch,
+    clientMessageId: message.clientMessageId,
+    editCount: message.editCount,
+  }
+}
+
+// The preview of a conversation that shows this message.
+export function previewFrom(message: Message): LastMessage {
+  return {
+    senderId: message.senderId,
+    content: message.isDeleted ? null : previewOf(message.content),
+    unreadable: message.isDeleted ? null : (message.unreadable ?? null),
+    createdAt: message.createdAt,
+    attachmentCount: message.isDeleted ? 0 : message.attachments.length,
+    sealed: sealedPreviewOf(message),
+  }
 }
 
 // Whether the reader should be offered "Edit": the message is theirs, still has its text, and was sent less than the
@@ -63,11 +93,15 @@ export function withChangedPreview(conversation: Conversation, message: Message)
   const shown = conversation.lastMessage
   if (!shown || !isPreviewOf(shown, message)) return conversation
 
-  const content = message.isDeleted ? null : message.content
-  const attachmentCount = message.isDeleted ? 0 : message.attachments.length
-  if (shown.content === content && shown.attachmentCount === attachmentCount) return conversation
+  const next = previewFrom(message)
+  const same =
+    shown.content === next.content &&
+    shown.attachmentCount === next.attachmentCount &&
+    (shown.unreadable ?? null) === next.unreadable &&
+    shown.sealed?.editCount === next.sealed?.editCount
+  if (same) return conversation
 
-  return { ...conversation, lastMessage: { ...shown, content, attachmentCount } }
+  return { ...conversation, lastMessage: next }
 }
 
 // The conversation after someone else's message was deleted: one fewer unread, if the message was one of them.

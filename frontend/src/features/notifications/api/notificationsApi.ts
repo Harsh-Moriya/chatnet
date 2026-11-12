@@ -1,7 +1,8 @@
 import { api } from '../../../lib/api'
+import { openNotification } from '../../chat/api/openWire'
 import { waitForConnection } from '../../chat/store/waitForConnection'
 import { useNotificationStore } from '../store/notificationStore'
-import type { NotificationList } from '../types'
+import type { NotificationList, NotificationListWire } from '../types'
 
 // Every REST call the bell makes. As in the chat API, the functions that bring server data into the store do it
 // themselves, so the store is fed from one place whoever asked, and a change the server confirmed is applied at
@@ -14,9 +15,10 @@ const store = () => useNotificationStore.getState()
 export async function fetchNotifications(signal?: AbortSignal): Promise<NotificationList> {
   await waitForConnection(signal)
 
-  const { data } = await api.get<NotificationList>('/notifications', { signal })
-  store().seedFirstPage(data)
-  return data
+  const { data } = await api.get<NotificationListWire>('/notifications', { signal })
+  const list: NotificationList = { ...data, items: await Promise.all(data.items.map(openNotification)) }
+  store().seedFirstPage(list)
+  return list
 }
 
 // The page just older than the oldest one held. Nothing to ask for when none is held.
@@ -24,8 +26,8 @@ export async function fetchOlderNotifications(): Promise<void> {
   const oldest = store().items.at(-1)
   if (!oldest) return
 
-  const { data } = await api.get<NotificationList>('/notifications', { params: { before: oldest.id } })
-  store().appendOlder(data.items)
+  const { data } = await api.get<NotificationListWire>('/notifications', { params: { before: oldest.id } })
+  store().appendOlder(await Promise.all(data.items.map(openNotification)))
 }
 
 // The ones named, or all of them when none are named. The server only marks the user's own.

@@ -5,12 +5,16 @@ import { HISTORY_PAGE_SIZE } from '../history'
 import { useChatStore } from '../store/chatStore'
 import type { Message } from '../types'
 import { CATCH_UP_MAX_PAGES, catchUp, catchUpAll } from './catchUp'
+import { asServerSends, resetKeysDouble } from './keysDouble'
+
+// The keys of a conversation need a signed-in person and this browser's stores; see keysDouble.ts for what stands in for them.
+vi.mock('../../encryption/conversationKeys', async () => (await import('./keysDouble')).keysModule)
 
 const store = () => useChatStore.getState()
 
 // ##### Helpers #####
 
-const respond = <T>(data: T) => ({ data }) as AxiosResponse<T>
+const respond = <T>(data: T) => ({ data: asServerSends(data) }) as AxiosResponse<T>
 
 function deferred<T>() {
   let resolve!: (value: T) => void
@@ -83,6 +87,7 @@ const noReset = () => ({ onTooFarBehind: vi.fn() })
 beforeEach(() => {
   store().reset()
   store().setConnection('connected')
+  resetKeysDouble()
 })
 
 afterEach(() => {

@@ -72,6 +72,8 @@ export function ConversationListItem({ conversation, currentUserId, now }: Conve
                     <span className="text-blue-600">{typing}</span>
                   ) : last === null ? (
                     <span className="italic">No messages yet</span>
+                  ) : last.unreadable ? (
+                    <span className="italic">{last.unreadable === 'pending' ? 'Encrypted message' : "Can't be decrypted on this device"}</span>
                   ) : last.content === null ? (
                     <span className="italic">Message deleted</span>
                   ) : (

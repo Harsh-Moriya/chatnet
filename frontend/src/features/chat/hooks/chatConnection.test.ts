@@ -1,8 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { connectChat, READINESS_PING, TYPING_TTL_MS, type ChatHub } from './chatConnection'
 import { useChatStore } from '../store/chatStore'
-import type { NotificationItem } from '../../notifications/types'
+import type { NotificationItem, NotificationWire } from '../../notifications/types'
+import { opener, resetKeysDouble, sealed, wire } from '../api/keysDouble'
+import { inArrivalOrder } from '../api/openWire'
 import type { Conversation, Message } from '../types'
+
+// Opening what the server pushes needs a signed-in person and this browser's stores; see keysDouble.ts for what stands in for them.
+vi.mock('../../encryption/conversationKeys', async () => (await import('../api/keysDouble')).keysModule)
 
 const store = () => useChatStore.getState()
 
@@ -131,6 +136,7 @@ function setup(options: { hub?: FakeHub } = {}) {
   const onMessageUpdated = vi.fn()
   const onRejoined = vi.fn()
   const onProfileChanged = vi.fn()
+  const onKeysChanged = vi.fn()
   const onNotificationReceived = vi.fn()
   const onNotificationsRead = vi.fn()
   const onNotificationDismissed = vi.fn()
@@ -143,6 +149,7 @@ function setup(options: { hub?: FakeHub } = {}) {
     onMessageUpdated,
     onRejoined,
     onProfileChanged,
+    onKeysChanged,
     onNotificationReceived,
     onNotificationsRead,
     onNotificationDismissed,
@@ -158,6 +165,7 @@ function setup(options: { hub?: FakeHub } = {}) {
     onMessageUpdated,
     onRejoined,
     onProfileChanged,
+    onKeysChanged,
     onNotificationReceived,
     onNotificationsRead,
     onNotificationDismissed,
@@ -167,6 +175,10 @@ function setup(options: { hub?: FakeHub } = {}) {
 
 // Lets promise callbacks run, and any timers due now.
 const flush = () => vi.advanceTimersByTimeAsync(0)
+
+// What the server pushes is opened before it is used, which takes more than a turn of the event loop. Waits until everything pushed
+// so far, for the conversations the tests use and for the notifications, has been taken.
+const settled = () => Promise.all(['c1', 'never-opened', 'notifications'].map((queue) => inArrivalOrder(queue, async () => undefined)))
 
 // Brings a connection fully up so a test can start from "connected".
 async function connected() {
@@ -179,6 +191,7 @@ async function connected() {
 beforeEach(() => {
   vi.useFakeTimers()
   store().reset()
+  resetKeysDouble()
 })
 
 afterEach(() => {
@@ -222,26 +235,28 @@ describe('event handlers', () => {
     const { hub } = await connected()
     hub.invokeImpl = () => Promise.resolve('a value the handler must not pass on')
 
-    expect(hub.emit('ReceiveMessage', message('m1'))).toBeUndefined()
+    expect(hub.emit('ReceiveMessage', wire(message('m1')))).toBeUndefined()
     expect(hub.emit('AddedToConversation', conversation('c9'))).toBeUndefined()
     expect(hub.emit('UserTyping', 'c1', 'bob', 'Bob', true)).toBeUndefined()
     expect(hub.emit('MessageRead', 'c1', 'bob', '2026-10-11T10:00:00Z')).toBeUndefined()
-    expect(hub.emit('MessageUpdated', message('m1'))).toBeUndefined()
+    expect(hub.emit('MessageUpdated', wire(message('m1')))).toBeUndefined()
     expect(hub.emit('PresenceChanged', { userId: 'bob', isOnline: true, lastSeenAt: null, at: '2026-10-11T10:00:00Z' })).toBeUndefined()
     expect(hub.emit('ConversationMuteChanged', 'c1', true)).toBeUndefined()
-    expect(hub.emit('NotificationReceived', mention('n1'))).toBeUndefined()
+    expect(hub.emit('NotificationReceived', mentionWire('n1'))).toBeUndefined()
     expect(hub.emit('NotificationsRead', ['n1'])).toBeUndefined()
     expect(hub.emit('NotificationDismissed', 'n1')).toBeUndefined()
     expect(hub.emit('MembersChanged', { conversationId: 'c1', members: [], removedUserIds: [] })).toBeUndefined()
     expect(hub.emit('ConversationUpdated', { id: 'c1', name: 'New', avatarUrl: null })).toBeUndefined()
     expect(hub.emit('ConversationKeyChanged', { conversationId: 'c1', keyEpoch: 2, keyRotationRequired: false })).toBeUndefined()
     expect(hub.emit('RemovedFromConversation', 'c1', '2026-10-11T10:00:00Z')).toBeUndefined()
+    await settled()
   })
 
   it('puts a pushed message into the store', async () => {
     const { hub } = await connected()
 
-    hub.emit('ReceiveMessage', message('m1'))
+    hub.emit('ReceiveMessage', wire(message('m1')))
+    await settled()
 
     expect(store().messages.c1.map((m) => m.id)).toEqual(['m1'])
   })
@@ -250,10 +265,12 @@ describe('event handlers', () => {
     const { hub } = await connected()
     store().seedConversations([{ ...conversation('c1'), unreadCount: 1 }])
 
-    hub.emit('ReceiveMessage', message('m1', { senderId: 'bob', createdAt: '2026-10-11T10:00:01Z' }))
+    hub.emit('ReceiveMessage', wire(message('m1', { senderId: 'bob', createdAt: '2026-10-11T10:00:01Z' })))
+    await settled()
     expect(store().conversations.c1.unreadCount).toBe(2)
 
-    hub.emit('ReceiveMessage', message('m2', { senderId: 'me', createdAt: '2026-10-11T10:00:02Z' }))
+    hub.emit('ReceiveMessage', wire(message('m2', { senderId: 'me', createdAt: '2026-10-11T10:00:02Z' })))
+    await settled()
     expect(store().conversations.c1.unreadCount).toBe(0)
   })
 
@@ -277,9 +294,11 @@ describe('event handlers', () => {
 
   it('puts a pushed edit in place of the message it is about', async () => {
     const { hub } = await connected()
-    hub.emit('ReceiveMessage', message('m1'))
+    hub.emit('ReceiveMessage', wire(message('m1')))
+    await settled()
 
-    hub.emit('MessageUpdated', message('m1', { content: 'edited', editCount: 1, editedAt: '2026-10-11T10:05:00Z' }))
+    hub.emit('MessageUpdated', wire(message('m1', { content: 'edited', editCount: 1, editedAt: '2026-10-11T10:05:00Z' })))
+    await settled()
 
     expect(store().messages.c1[0]).toMatchObject({ content: 'edited', editCount: 1 })
   })
@@ -289,7 +308,8 @@ describe('event handlers', () => {
     store().seedConversations([{ ...conversation('c1'), unreadCount: 1 }])
     store().seedMessages('c1', [message('m1')])
 
-    hub.emit('MessageUpdated', message('m1', { isDeleted: true, content: null }))
+    hub.emit('MessageUpdated', wire(message('m1', { isDeleted: true, content: null })))
+    await settled()
 
     expect(store().messages.c1[0].isDeleted).toBe(true)
     expect(store().conversations.c1.unreadCount).toBe(0)
@@ -299,16 +319,18 @@ describe('event handlers', () => {
     const { hub, onMessageUpdated } = await connected()
     const changed = message('m9', { content: 'edited', editCount: 1 })
 
-    hub.emit('MessageUpdated', changed)
+    hub.emit('MessageUpdated', wire(changed))
+    await settled()
 
-    expect(onMessageUpdated).toHaveBeenCalledWith(changed)
+    expect(onMessageUpdated).toHaveBeenCalledWith(expect.objectContaining(changed))
   })
 
   it('does not announce a pushed edit as a new message', async () => {
     const { hub, onMessageArrived } = await connected()
     store().seedMessages('c1', [message('m1')])
 
-    hub.emit('MessageUpdated', message('m1', { content: 'edited', editCount: 1 }))
+    hub.emit('MessageUpdated', wire(message('m1', { content: 'edited', editCount: 1 })))
+    await settled()
 
     expect(onMessageArrived).not.toHaveBeenCalled()
   })
@@ -865,6 +887,11 @@ describe('a connection attempt the server refuses with 401', () => {
 
 // ##### Muting, notifications and alerts #####
 
+function mentionWire(id: string): NotificationWire {
+  const { messagePreview, ...rest } = mention(id)
+  return { ...rest, message: { ciphertext: sealed(messagePreview ?? ''), keyEpoch: 1, clientMessageId: 'cid-1', editCount: 0 } }
+}
+
 function mention(id: string): NotificationItem {
   return {
     id,
@@ -922,20 +949,21 @@ describe('a conversation muted in another tab', () => {
 })
 
 describe('notifications pushed by the server', () => {
-  it('hands a new notification to whoever owns the connection, unchanged', async () => {
+  it('hands a new notification to whoever owns the connection, opened', async () => {
     const { hub, onNotificationReceived } = await connected()
-    const pushed = mention('n1')
 
-    hub.emit('NotificationReceived', pushed)
+    hub.emit('NotificationReceived', mentionWire('n1'))
+    await settled()
 
     expect(onNotificationReceived).toHaveBeenCalledTimes(1)
-    expect(onNotificationReceived).toHaveBeenCalledWith(pushed)
+    expect(onNotificationReceived).toHaveBeenCalledWith(mention('n1'))
   })
 
   it('hands over the ids that were read', async () => {
     const { hub, onNotificationsRead } = await connected()
 
     hub.emit('NotificationsRead', ['n1', 'n2'])
+    await settled()
 
     expect(onNotificationsRead).toHaveBeenCalledWith(['n1', 'n2'])
   })
@@ -944,6 +972,7 @@ describe('notifications pushed by the server', () => {
     const { hub, onNotificationDismissed } = await connected()
 
     hub.emit('NotificationDismissed', 'n1')
+    await settled()
 
     expect(onNotificationDismissed).toHaveBeenCalledWith('n1')
   })
@@ -957,7 +986,8 @@ describe('telling the owner a message arrived', () => {
       heldWhenTold = (store().messages[m.conversationId] ?? []).map((x) => x.id)
     })
 
-    hub.emit('ReceiveMessage', message('m1'))
+    hub.emit('ReceiveMessage', wire(message('m1')))
+    await settled()
 
     expect(onMessageArrived).toHaveBeenCalledTimes(1)
     expect(onMessageArrived).toHaveBeenCalledWith(expect.objectContaining({ id: 'm1' }))
@@ -968,7 +998,8 @@ describe('telling the owner a message arrived', () => {
     const { hub, onMessageArrived } = await connected()
     store().seedMessages('c1', [message('m1')])
 
-    hub.emit('ReceiveMessage', message('m1'))
+    hub.emit('ReceiveMessage', wire(message('m1')))
+    await settled()
 
     expect(onMessageArrived).not.toHaveBeenCalled()
   })
@@ -976,8 +1007,10 @@ describe('telling the owner a message arrived', () => {
   it('does not twice for the same message pushed twice', async () => {
     const { hub, onMessageArrived } = await connected()
 
-    hub.emit('ReceiveMessage', message('m1'))
-    hub.emit('ReceiveMessage', message('m1'))
+    hub.emit('ReceiveMessage', wire(message('m1')))
+    await settled()
+    hub.emit('ReceiveMessage', wire(message('m1')))
+    await settled()
 
     expect(onMessageArrived).toHaveBeenCalledTimes(1)
   })
@@ -985,8 +1018,102 @@ describe('telling the owner a message arrived', () => {
   it('does for a message in a conversation that was never opened', async () => {
     const { hub, onMessageArrived } = await connected()
 
-    hub.emit('ReceiveMessage', message('m1', { conversationId: 'never-opened' }))
+    hub.emit('ReceiveMessage', wire(message('m1', { conversationId: 'never-opened' })))
+    await settled()
 
     expect(onMessageArrived).toHaveBeenCalledTimes(1)
+  })
+})
+
+// ##### Opening what is pushed #####
+
+describe('opening what the server pushes', () => {
+  it('takes an edit after the message it is an edit of, even when that message is slow to open', async () => {
+    const { hub } = await connected()
+    const opening = deferred()
+    opener.open.mockImplementationOnce(async (sealedMessage: { ciphertext: string }) => {
+      await opening.promise
+      return { readable: true as const, text: sealedMessage.ciphertext.slice('sealed:'.length) }
+    })
+
+    hub.emit('ReceiveMessage', wire(message('m1')))
+    hub.emit('MessageUpdated', wire(message('m1', { content: 'edited', editCount: 1, editedAt: '2026-10-11T10:05:00Z' })))
+    opening.resolve()
+    await settled()
+
+    expect(store().messages.c1).toHaveLength(1)
+    expect(store().messages.c1[0]).toMatchObject({ content: 'edited', editCount: 1 })
+  })
+
+  it('shows a message that cannot be opened as one that cannot be, and keeps the rest of the conversation', async () => {
+    const { hub, onMessageArrived } = await connected()
+
+    hub.emit('ReceiveMessage', { ...wire(message('m1')), ciphertext: 'not sealed here' })
+    hub.emit('ReceiveMessage', wire(message('m2', { createdAt: '2026-10-11T10:00:01Z' })))
+    await settled()
+
+    expect(store().messages.c1[0]).toMatchObject({ id: 'm1', content: null, unreadable: 'invalid' })
+    expect(store().messages.c1[1]).toMatchObject({ id: 'm2', content: 'hello', unreadable: null })
+    expect(onMessageArrived).toHaveBeenCalledTimes(2)
+  })
+
+  it('says there is no key when the keys of this browser are not available', async () => {
+    const { hub } = await connected()
+    opener.open.mockRejectedValueOnce(new Error('no keys'))
+
+    hub.emit('ReceiveMessage', wire(message('m1')))
+    await settled()
+
+    expect(store().messages.c1[0]).toMatchObject({ content: null, unreadable: 'noKey' })
+  })
+
+  it('does not put a message into the store once the connection was disposed while it was being opened', async () => {
+    const { hub, connection, onMessageArrived } = await connected()
+    const opening = deferred()
+    opener.open.mockImplementationOnce(async () => {
+      await opening.promise
+      return { readable: true as const, text: 'late' }
+    })
+
+    hub.emit('ReceiveMessage', wire(message('m1')))
+    connection.dispose()
+    opening.resolve()
+    await settled()
+
+    expect(store().messages.c1).toBeUndefined()
+    expect(onMessageArrived).not.toHaveBeenCalled()
+  })
+
+  it('hands a notification on without a preview when its message cannot be opened', async () => {
+    const { hub, onNotificationReceived } = await connected()
+    const pushed = mentionWire('n1')
+
+    hub.emit('NotificationReceived', { ...pushed, message: { ...pushed.message!, ciphertext: 'not sealed here' } })
+    await settled()
+
+    expect(onNotificationReceived).toHaveBeenCalledWith({ ...mention('n1'), messagePreview: null })
+  })
+
+  it('hands a notification about no message on as it is', async () => {
+    const { hub, onNotificationReceived } = await connected()
+
+    hub.emit('NotificationReceived', { ...mentionWire('n1'), type: 'MemberAdded', messageId: null, message: null })
+    await settled()
+
+    expect(onNotificationReceived).toHaveBeenCalledWith({ ...mention('n1'), type: 'MemberAdded', messageId: null, messagePreview: null })
+  })
+
+  it('tells the owner when the keys of a conversation changed, once the store has taken the news', async () => {
+    const { hub, onKeysChanged } = await connected()
+    store().seedConversations([conversation('c1')])
+    let epochWhenTold = -1
+    onKeysChanged.mockImplementation((conversationId: string) => {
+      epochWhenTold = store().conversations[conversationId].keyEpoch
+    })
+
+    hub.emit('ConversationKeyChanged', { conversationId: 'c1', keyEpoch: 4, keyRotationRequired: false })
+
+    expect(onKeysChanged).toHaveBeenCalledWith('c1')
+    expect(epochWhenTold).toBe(4)
   })
 })

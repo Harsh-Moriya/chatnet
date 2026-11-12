@@ -1,8 +1,18 @@
 import { isUnauthorized, reconnectDelay } from '../../../lib/signalr'
+import { conversationOf, inArrivalOrder, openMessage, openNotification } from '../api/openWire'
+import { openPreviews } from '../api/previews'
 import { useChatStore } from '../store/chatStore'
-import type { NotificationItem } from '../../notifications/types'
+import type { NotificationItem, NotificationWire } from '../../notifications/types'
 import type { Presence } from '../../presence/types'
-import type { Conversation, ConversationKeyChange, ConversationUpdate, MembersChange, Message, UserSummary } from '../types'
+import type {
+  ConversationKeyChange,
+  ConversationUpdate,
+  ConversationWire,
+  MembersChange,
+  Message,
+  MessageWire,
+  UserSummary,
+} from '../types'
 
 // Everything that connects the SignalR hub to the chat store, as plain functions with no React so it
 // can be tested with a fake hub. This is the only place that registers hub event handlers. The
@@ -38,7 +48,10 @@ export interface ChatConnectionDeps {
   // Called with every name and picture change pushed by the server, the signed-in user's own included (made in another tab). The
   // store has already taken it; this is for what lives elsewhere, which is the signed-in user's own profile.
   onProfileChanged: (profile: UserSummary) => void
-  // Called with each notification pushed to the user: someone mentioned them, or added them to a group.
+  // Called when the keys of a conversation changed (a new epoch was announced), once the store has taken the news: what could not be
+  // opened for want of a key may be opened now.
+  onKeysChanged: (conversationId: string) => void
+  // Called with each notification pushed to the user, opened: someone mentioned them, or added them to a group.
   onNotificationReceived: (notification: NotificationItem) => void
   // Called with the ids of notifications that were marked read, here or in another tab or by reading the
   // conversation they are about.
@@ -60,6 +73,9 @@ export interface ChatConnection {
 // refresh interval (2.5 seconds), so a steady typist never flickers, and short enough that a lost
 // "stopped" event (a closed tab, a dropped connection) does not leave the indicator on.
 export const TYPING_TTL_MS = 6000
+
+// The key under which the pushes about notifications are taken in order, as the messages are by conversation.
+const NOTIFICATIONS = 'notifications'
 
 // Stopping typing in a conversation nobody is in is a harmless no-op on the server. Here it is used
 // as a round trip. When start() resolves the server may still be putting the connection into its
@@ -84,19 +100,31 @@ export function connectChat(hub: ChatHub, deps: ChatConnectionDeps): ChatConnect
   // Handlers use block bodies and return nothing. The SignalR JavaScript client treats a returned
   // value as the reply to the server and logs an error when none was asked for.
 
-  hub.on('ReceiveMessage', (message: Message) => {
-    const known = chat().messages[message.conversationId]?.some((m) => m.id === message.id) ?? false
+  // A message arrives sealed and is opened before the store takes it, one after another in the order they arrived: opening takes a
+  // moment, and an edit must not overtake the message it is an edit of.
+  hub.on('ReceiveMessage', (wire: MessageWire) => {
+    void inArrivalOrder(wire.conversationId, async () => {
+      const message = await openMessage(wire)
+      if (disposed) return
 
-    chat().receiveMessage(message, deps.getUserId() ?? undefined)
+      const known = chat().messages[message.conversationId]?.some((m) => m.id === message.id) ?? false
 
-    if (!known) deps.onMessageArrived(message)
+      chat().receiveMessage(message, deps.getUserId() ?? undefined)
+
+      if (!known) deps.onMessageArrived(message)
+    })
   })
 
   // A message was edited or deleted, by its sender or (for a deletion) a group admin. Every tab shows the later version,
   // and a push that is late or repeated is ignored when the tab already has that version or a later one.
-  hub.on('MessageUpdated', (message: Message) => {
-    chat().replaceMessage(message, deps.getUserId() ?? undefined)
-    deps.onMessageUpdated(message)
+  hub.on('MessageUpdated', (wire: MessageWire) => {
+    void inArrivalOrder(wire.conversationId, async () => {
+      const message = await openMessage(wire)
+      if (disposed) return
+
+      chat().replaceMessage(message, deps.getUserId() ?? undefined)
+      deps.onMessageUpdated(message)
+    })
   })
 
   // The signed-in user muted or unmuted a conversation in one of their tabs; every tab follows.
@@ -104,16 +132,21 @@ export function connectChat(hub: ChatHub, deps: ChatConnectionDeps): ChatConnect
     chat().setMuted(conversationId, isMuted)
   })
 
-  hub.on('NotificationReceived', (notification: NotificationItem) => {
-    deps.onNotificationReceived(notification)
+  // The notifications are taken one after another too: a notification is opened before it is shown, and a push that says it was read
+  // or dismissed must not overtake it.
+  hub.on('NotificationReceived', (wire: NotificationWire) => {
+    void inArrivalOrder(NOTIFICATIONS, async () => {
+      const notification = await openNotification(wire)
+      if (!disposed) deps.onNotificationReceived(notification)
+    })
   })
 
   hub.on('NotificationsRead', (ids: string[]) => {
-    deps.onNotificationsRead(ids)
+    void inArrivalOrder(NOTIFICATIONS, async () => deps.onNotificationsRead(ids))
   })
 
   hub.on('NotificationDismissed', (id: string) => {
-    deps.onNotificationDismissed(id)
+    void inArrivalOrder(NOTIFICATIONS, async () => deps.onNotificationDismissed(id))
   })
 
   // Someone read a conversation up to readAt. For the signed-in user this is another tab of theirs
@@ -126,9 +159,11 @@ export function connectChat(hub: ChatHub, deps: ChatConnectionDeps): ChatConnect
     deps.onPresenceChanged(presence)
   })
 
-  hub.on('AddedToConversation', (conversation: Conversation) => {
+  hub.on('AddedToConversation', (wire: ConversationWire) => {
+    const conversation = conversationOf(wire)
     const hadLeft = Boolean(chat().conversations[conversation.id]?.leftAt)
     chat().addConversation(conversation)
+    void openPreviews([conversation])
     if (hadLeft && conversation.leftAt === null) deps.onRejoined(conversation.id)
 
     // Nothing else puts this connection into the new conversation's group. A refused join is not
@@ -149,6 +184,7 @@ export function connectChat(hub: ChatHub, deps: ChatConnectionDeps): ChatConnect
   // The keys of a conversation changed. Sent only to the people who are in it.
   hub.on('ConversationKeyChanged', (change: ConversationKeyChange) => {
     chat().applyKeyChange(change)
+    deps.onKeysChanged(change.conversationId)
   })
 
   // Someone who shares a conversation with this user (or this user, in another tab) changed their name or picture.

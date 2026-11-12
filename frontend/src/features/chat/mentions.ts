@@ -1,8 +1,8 @@
 import type { Member } from './types'
 
-// Mentioning someone is writing "@userName" in a message. The server reads the same text with the same rule
-// (MentionParser) to decide who is notified, so this file and that one must agree: a name is 3 to 50 letters,
-// digits or underscores, and the "@" must not be glued to a word before it (so an email address is not a mention).
+// Mentioning someone is writing "@userName" in a message. The server cannot read the text, so the sender's browser finds the names with
+// this rule and tells the server which people they are, as ids, next to the message. A name is 3 to 50 letters, digits or
+// underscores, and the "@" must not be glued to a word before it (so an email address is not a mention).
 const NAME_CHARS = '[A-Za-z0-9_]'
 const MENTION = new RegExp(`(?<!${NAME_CHARS})@(${NAME_CHARS}{3,50})(?!${NAME_CHARS})`, 'g')
 

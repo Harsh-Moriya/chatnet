@@ -25,6 +25,7 @@ export function describeKeyFailure(error: unknown, nameOf: (userId: string) => s
       const code = (error as { code?: string | null }).code
       if (code === 'member-has-no-keys') return 'Someone in this conversation has not set up encryption yet.'
       if (code === 'epoch-too-soon') return 'The keys of this conversation were replaced recently, so they cannot be replaced again yet.'
+      if (code === 'edit-count-stale') return 'This message was edited somewhere else first. Its latest text is shown now; edit it again from there.'
       return 'The conversation changed while its keys were being made. Please try again.'
     }
 

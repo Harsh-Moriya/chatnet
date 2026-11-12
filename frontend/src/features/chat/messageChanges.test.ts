@@ -92,6 +92,29 @@ describe('latest', () => {
 
     expect(latest(undefined, incoming)).toBe(incoming)
   })
+
+  // A page of history and a push of the same version race, and one of them may have been opened before the key of the conversation
+  // reached this browser. The later arrival must not take the text away from the copy that was opened.
+  it('keeps the text of a held copy that was opened when the same version arrives unopened', () => {
+    const held = message({ content: 'opened' })
+    const incoming = message({ content: null, unreadable: 'noKey', attachments: [] })
+
+    expect(latest(held, incoming)).toEqual({ ...incoming, content: 'opened', unreadable: null })
+  })
+
+  it('does not give a text to a copy that was edited since, or to a deleted one', () => {
+    const edited = message({ editCount: 1, content: null, unreadable: 'noKey' })
+    const deleted = message({ isDeleted: true, content: null })
+
+    expect(latest(message({ content: 'opened' }), edited)).toBe(edited)
+    expect(latest(message({ content: 'opened' }), deleted)).toBe(deleted)
+  })
+
+  it('takes the arrival that could not be opened when the held copy could not be opened either', () => {
+    const incoming = message({ content: null, unreadable: 'invalid' })
+
+    expect(latest(message({ content: null, unreadable: 'noKey' }), incoming)).toBe(incoming)
+  })
 })
 
 // ##### What the reader may do #####

@@ -8,10 +8,7 @@ import { addMembers, changeMemberRole, leaveConversation, removeMember, renameCo
 
 
 // The keys of a conversation need a signed-in person and this browser's stores; see keysDouble.ts for what stands in for them.
-vi.mock('../../encryption/conversationKeys', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../encryption/conversationKeys')>()),
-  ...(await import('./keysDouble')).keysDouble,
-}))
+vi.mock('../../encryption/conversationKeys', async () => (await import('./keysDouble')).keysModule)
 
 const store = () => useChatStore.getState()
 

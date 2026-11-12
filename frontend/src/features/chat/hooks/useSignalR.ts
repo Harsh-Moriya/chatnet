@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { createChatConnection } from '../../../lib/signalr'
 import { catchUpAll } from '../api/catchUp'
+import { reopenConversation } from '../api/reopen'
 import { session } from '../../auth/session'
 import { useAuthStore } from '../../auth/store/authStore'
 import { useNotificationStore } from '../../notifications/store/notificationStore'
@@ -40,8 +41,14 @@ export function useSignalR() {
         // A push patches the stores directly (the bell does not ask the server again); the browser alert is
         // raised on top of that when the rules in alerts.ts say the user should be told.
         onMessageArrived: alerts.message,
-        onMessageUpdated: (message) =>
-          useNotificationStore.getState().applyMessageChange(message.id, message.isDeleted ? null : message.content),
+        // What the bell shows of a message follows its text, once the text is known: a message that could not be opened leaves it as it was.
+        onMessageUpdated: (message) => {
+          if (message.isDeleted || message.content !== null) {
+            useNotificationStore.getState().applyMessageChange(message.id, message.isDeleted ? null : message.content)
+          }
+        },
+        // What could not be opened for want of a key may be opened now.
+        onKeysChanged: (conversationId) => void reopenConversation(conversationId),
         // Back in a group after leaving it: the cached pages and people belong to the time before the new join.
         onProfileChanged: (profile) => useAuthStore.getState().updateProfile(profile),
         onRejoined: (conversationId) => {

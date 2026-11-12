@@ -1,16 +1,18 @@
 import { create } from 'zustand'
 import { compareTimestamps } from '../../../lib/time'
-import { afterDeletion, isNewer, isPreviewOf, latest, withChangedPreview } from '../messageChanges'
+import { afterDeletion, isNewer, isPreviewOf, latest, previewFrom, withChangedPreview } from '../messageChanges'
 import type {
   ConnectionStatus,
   Conversation,
   ConversationKeyChange,
   ConversationUpdate,
+  LastMessage,
   Member,
   MembersChange,
   Message,
   PendingMessage,
   TypingUser,
+  Unreadable,
   UserSummary,
 } from '../types'
 
@@ -84,6 +86,11 @@ interface ChatState {
   // the unread count that depended on it. A message that is not held is ignored (loading its page brings it as it is),
   // and so is a copy that is not newer than the one held. selfId is the signed-in user.
   replaceMessage: (message: Message, selfId?: string) => void
+  // The text of a message that was held sealed (or could not be opened) has been opened: puts it in. Only for the version the text
+  // is of, so a later edit that arrived meanwhile is not undone.
+  applyOpened: (conversationId: string, messageId: string, editCount: number, opened: Opened) => void
+  // The preview of a conversation has been opened. Only when the conversation still shows that message.
+  applyOpenedPreview: (conversationId: string, opened: LastMessage) => void
   // A message's attachment links stop working after a while; this puts in the fresh link the server gave.
   setAttachmentUrl: (conversationId: string, messageId: string, attachmentId: string, url: string) => void
   // A member read the conversation up to readAt. selfId is the signed-in user, whose own count it lowers.
@@ -99,6 +106,12 @@ interface ChatState {
   removePending: (conversationId: string, clientMessageId: string) => void
   setTyping: (conversationId: string, user: TypingUser, isTyping: boolean) => void
   reset: () => void
+}
+
+// What opening a message gave: its text, or why there is none.
+export interface Opened {
+  content: string | null
+  unreadable: Unreadable | null
 }
 
 type Data = Pick<
@@ -179,6 +192,18 @@ function laterKeyState(a: KeyState, b: KeyState): KeyState {
   return { keyEpoch: a.keyEpoch, keyRotationRequired: a.keyRotationRequired || b.keyRotationRequired }
 }
 
+// The preview of a conversation when the copy that arrived says it is still being opened and the one held already opened the same
+// message: what was opened is not given up for the wait.
+function keepingOpened(chosen: Conversation, other: Conversation): Conversation {
+  const shown = chosen.lastMessage
+  const opened = other.lastMessage
+  if (!shown || !opened || shown.unreadable !== 'pending' || opened.unreadable === 'pending') return chosen
+  if (shown.senderId !== opened.senderId || compareTimestamps(shown.createdAt, opened.createdAt) !== 0) return chosen
+  if (shown.sealed?.editCount !== opened.sealed?.editCount) return chosen
+
+  return { ...chosen, lastMessage: opened }
+}
+
 // Of two copies of the same conversation, the one with the later activity is the fresher. Its keys are the later of the two copies' keys,
 // whichever copy that is, because making an epoch is not activity: a copy that is older by activity can know a newer epoch.
 function fresher(existing: Conversation | undefined, incoming: Conversation): Conversation {
@@ -186,10 +211,11 @@ function fresher(existing: Conversation | undefined, incoming: Conversation): Co
 
   const fresh = compareTimestamps(existing.updatedAt, incoming.updatedAt) > 0 ? existing : incoming
   const keys = laterKeyState(existing, incoming)
+  const chosen = keepingOpened(fresh, fresh === existing ? incoming : existing)
 
-  return keys.keyEpoch === fresh.keyEpoch && keys.keyRotationRequired === fresh.keyRotationRequired
-    ? fresh
-    : { ...fresh, keyEpoch: keys.keyEpoch, keyRotationRequired: keys.keyRotationRequired }
+  return keys.keyEpoch === chosen.keyEpoch && keys.keyRotationRequired === chosen.keyRotationRequired
+    ? chosen
+    : { ...chosen, keyEpoch: keys.keyEpoch, keyRotationRequired: keys.keyRotationRequired }
 }
 
 // A copy of the record without one key.
@@ -525,12 +551,7 @@ export const useChatStore = create<ChatState>()((set) => ({
           ...next,
           updatedAt:
             compareTimestamps(message.createdAt, next.updatedAt) > 0 ? message.createdAt : next.updatedAt,
-          lastMessage: {
-            senderId: message.senderId,
-            content: message.content,
-            createdAt: message.createdAt,
-            attachmentCount: message.attachments.length,
-          },
+          lastMessage: previewFrom(message),
         }
       }
 
@@ -560,6 +581,36 @@ export const useChatStore = create<ChatState>()((set) => ({
 
   replaceMessage: (message, selfId) =>
     set((state) => changeOf(state, message, selfId) ?? state),
+
+  applyOpened: (conversationId, messageId, editCount, opened) =>
+    set((state) => {
+      const list = state.messages[conversationId]
+      const message = list?.find((m) => m.id === messageId)
+      if (!list || !message || message.isDeleted || message.editCount !== editCount) return state
+      if (message.content === opened.content && (message.unreadable ?? null) === opened.unreadable) return state
+
+      const next = { ...message, content: opened.content, unreadable: opened.unreadable }
+      const patch: Partial<Data> = { messages: { ...state.messages, [conversationId]: list.map((m) => (m.id === messageId ? next : m)) } }
+
+      const conversation = state.conversations[conversationId]
+      if (conversation) {
+        const shown = withChangedPreview(conversation, next)
+        if (shown !== conversation) patch.conversations = { ...state.conversations, [conversationId]: shown }
+      }
+
+      return patch
+    }),
+
+  applyOpenedPreview: (conversationId, opened) =>
+    set((state) => {
+      const conversation = state.conversations[conversationId]
+      const shown = conversation?.lastMessage
+      if (!conversation || !shown) return state
+      if (shown.senderId !== opened.senderId || compareTimestamps(shown.createdAt, opened.createdAt) !== 0) return state
+      if (shown.sealed?.editCount !== opened.sealed?.editCount) return state
+
+      return { conversations: { ...state.conversations, [conversationId]: { ...conversation, lastMessage: opened } } }
+    }),
 
   setAttachmentUrl: (conversationId, messageId, attachmentId, url) =>
     set((state) => {

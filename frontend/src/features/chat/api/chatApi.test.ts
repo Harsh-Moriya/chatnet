@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { api } from '../../../lib/api'
 import { useChatStore } from '../store/chatStore'
 import type { Conversation, Member, Message, PendingAttachment, UserSummary } from '../types'
-import { deps, keysDouble, prepared, resetKeysDouble } from './keysDouble'
+import { deps, keysDouble, prepared, resetKeysDouble, sealed, wire } from './keysDouble'
 import {
   createDirect,
   createGroup,
@@ -22,10 +22,7 @@ import {
 
 
 // The keys of a conversation need a signed-in person and this browser's stores; see keysDouble.ts for what stands in for them.
-vi.mock('../../encryption/conversationKeys', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../encryption/conversationKeys')>()),
-  ...(await import('./keysDouble')).keysDouble,
-}))
+vi.mock('../../encryption/conversationKeys', async () => (await import('./keysDouble')).keysModule)
 
 const store = () => useChatStore.getState()
 
@@ -130,7 +127,7 @@ describe('loading the conversation list', () => {
 
 describe('loading a conversation\'s history', () => {
   it('waits for the live connection before asking the server', async () => {
-    const get = vi.spyOn(api, 'get').mockResolvedValue(respond([message({ id: 'a' })]))
+    const get = vi.spyOn(api, 'get').mockResolvedValue(respond([wire(message({ id: 'a' }))]))
 
     const loading = fetchMessages('c1')
     await flush()
@@ -143,12 +140,12 @@ describe('loading a conversation\'s history', () => {
 
   it('merges the history into the store without losing a message pushed meanwhile', async () => {
     store().setConnection('connected')
-    const response = deferred<AxiosResponse<Message[]>>()
+    const response = deferred<AxiosResponse<unknown>>()
     vi.spyOn(api, 'get').mockReturnValue(response.promise)
 
     const loading = fetchMessages('c1')
     store().receiveMessage(message({ id: 'pushed', createdAt: '2026-10-11T10:00:09Z' }))
-    response.resolve(respond([message({ id: 'old', createdAt: '2026-10-11T10:00:01Z' })]))
+    response.resolve(respond([wire(message({ id: 'old', createdAt: '2026-10-11T10:00:01Z' }))]))
     await loading
 
     expect(store().messages.c1.map((m) => m.id)).toEqual(['old', 'pushed'])
@@ -193,8 +190,8 @@ describe('loading a conversation\'s history', () => {
     ])
     vi.spyOn(api, 'get').mockResolvedValue(
       respond([
-        message({ id: 'a', createdAt: '2026-10-11T10:00:10Z' }),
-        message({ id: 'b', createdAt: '2026-10-11T10:00:20Z' }),
+        wire(message({ id: 'a', createdAt: '2026-10-11T10:00:10Z' })),
+        wire(message({ id: 'b', createdAt: '2026-10-11T10:00:20Z' })),
       ]),
     )
 
@@ -208,8 +205,8 @@ describe('loading a conversation\'s history', () => {
     store().seedMessages('c1', [message({ id: 'b', createdAt: '2026-10-11T10:00:20Z' })])
     vi.spyOn(api, 'get').mockResolvedValue(
       respond([
-        message({ id: 'a', createdAt: '2026-10-11T10:00:10Z' }),
-        message({ id: 'b', createdAt: '2026-10-11T10:00:20Z' }),
+        wire(message({ id: 'a', createdAt: '2026-10-11T10:00:10Z' })),
+        wire(message({ id: 'b', createdAt: '2026-10-11T10:00:20Z' })),
       ]),
     )
 
@@ -235,7 +232,7 @@ describe('requesting a page of history without adding it to the store', () => {
   it('returns the page and leaves the store as it was', async () => {
     store().setConnection('connected')
     store().seedMessages('c1', [message({ id: 'held' })])
-    vi.spyOn(api, 'get').mockResolvedValue(respond([message({ id: 'requested', createdAt: '2026-10-11T10:00:09Z' })]))
+    vi.spyOn(api, 'get').mockResolvedValue(respond([wire(message({ id: 'requested', createdAt: '2026-10-11T10:00:09Z' }))]))
 
     const page = await requestMessages('c1')
 
@@ -377,7 +374,7 @@ describe('starting a conversation', () => {
 
 describe('sending a message', () => {
   it('shows the message at once as sending, before the server answers', async () => {
-    const response = deferred<AxiosResponse<Message>>()
+    const response = deferred<AxiosResponse<unknown>>()
     vi.spyOn(api, 'post').mockReturnValue(response.promise)
 
     const sending = sendMessage('c1', 'Hello')
@@ -385,24 +382,28 @@ describe('sending a message', () => {
     expect(store().pending.c1).toHaveLength(1)
     expect(store().pending.c1[0]).toMatchObject({ content: 'Hello', status: 'sending', error: null })
 
-    response.resolve(respond(message({ id: 'real', content: 'Hello', clientMessageId: store().pending.c1[0].clientMessageId })))
+    response.resolve(respond(wire(message({ id: 'real', content: 'Hello', clientMessageId: store().pending.c1[0].clientMessageId }))))
     await sending
   })
 
   it('sends the trimmed text with the id it invented for the unconfirmed copy', async () => {
-    const post = vi.spyOn(api, 'post').mockResolvedValue(respond(message({ id: 'real' })))
+    const post = vi.spyOn(api, 'post').mockResolvedValue(respond(wire(message({ id: 'real' }))))
 
     await sendMessage('c1', '  Hello  \n')
 
     const [url, body, config] = post.mock.calls[0]
     expect(url).toBe('/conversations/c1/messages')
-    expect(body).toEqual({ content: 'Hello', clientMessageId: expect.stringMatching(/^[0-9a-f-]{36}$/) })
+    expect(body).toEqual({
+      ciphertext: sealed('Hello'),
+      clientMessageId: expect.stringMatching(/^[0-9a-f-]{36}$/),
+      mentionedUserIds: [],
+    })
     expect(config).toMatchObject({ timeout: expect.any(Number) })
   })
 
   it('replaces the unconfirmed copy with the server\'s message', async () => {
     vi.spyOn(api, 'post').mockImplementation((_url, body) =>
-      Promise.resolve(respond(message({ id: 'real', content: 'Hello', clientMessageId: (body as { clientMessageId: string }).clientMessageId }))),
+      Promise.resolve(respond(wire(message({ id: 'real', content: 'Hello', clientMessageId: (body as { clientMessageId: string }).clientMessageId })))),
     )
 
     await sendMessage('c1', 'Hello')
@@ -412,13 +413,13 @@ describe('sending a message', () => {
   })
 
   it('shows the message once when the push arrives before the response', async () => {
-    const response = deferred<AxiosResponse<Message>>()
+    const response = deferred<AxiosResponse<unknown>>()
     vi.spyOn(api, 'post').mockReturnValue(response.promise)
     const sending = sendMessage('c1', 'Hello')
     const confirmed = message({ id: 'real', content: 'Hello', clientMessageId: store().pending.c1[0].clientMessageId })
 
     store().receiveMessage(confirmed)
-    response.resolve(respond(confirmed))
+    response.resolve(respond(wire(confirmed)))
     await sending
 
     expect(store().messages.c1.map((m) => m.id)).toEqual(['real'])
@@ -438,7 +439,7 @@ describe('sending a message', () => {
   })
 
   it('does not mark a message failed that the push already confirmed', async () => {
-    const response = deferred<AxiosResponse<Message>>()
+    const response = deferred<AxiosResponse<unknown>>()
     vi.spyOn(api, 'post').mockReturnValue(response.promise)
     const sending = sendMessage('c1', 'Hello')
     store().receiveMessage(message({ id: 'real', clientMessageId: store().pending.c1[0].clientMessageId }))
@@ -481,12 +482,12 @@ describe('retrying and dismissing', () => {
   it('sends again with the same id, so the push of the first attempt would still match it', async () => {
     const failed = await failedMessage()
     const post = vi.spyOn(api, 'post').mockResolvedValue(
-      respond(message({ id: 'real', content: 'Hello', clientMessageId: failed.clientMessageId })),
+      respond(wire(message({ id: 'real', content: 'Hello', clientMessageId: failed.clientMessageId }))),
     )
 
     await retryMessage('c1', failed.clientMessageId)
 
-    expect(post.mock.calls[0][1]).toEqual({ content: 'Hello', clientMessageId: failed.clientMessageId })
+    expect(post.mock.calls[0][1]).toEqual({ ciphertext: sealed('Hello'), clientMessageId: failed.clientMessageId, mentionedUserIds: [] })
     expect(store().pending.c1).toEqual([])
     expect(store().messages.c1.map((m) => m.id)).toEqual(['real'])
   })
@@ -678,7 +679,7 @@ describe('sending a message counts as reading', () => {
       },
     ])
     vi.spyOn(api, 'post').mockResolvedValue(
-      respond(message({ id: 'real', senderId: 'me', createdAt: '2026-10-11T10:00:00Z' })),
+      respond(wire(message({ id: 'real', senderId: 'me', createdAt: '2026-10-11T10:00:00Z' }))),
     )
 
     await sendMessage('c1', 'on my way')
@@ -702,13 +703,14 @@ function upload(n: number): PendingAttachment {
 
 describe('sending files', () => {
   it('sends a message of only files, naming each upload and nothing else about it', async () => {
-    const post = vi.spyOn(api, 'post').mockResolvedValue(respond(message({ id: 'real', content: '' })))
+    const post = vi.spyOn(api, 'post').mockResolvedValue(respond(wire(message({ id: 'real', content: '' }))))
 
     await sendMessage('c1', '   ', [upload(1), upload(2)])
 
     expect(post.mock.calls[0][1]).toEqual({
-      content: '',
+      ciphertext: sealed(''),
       clientMessageId: expect.stringMatching(/^[0-9a-f-]{36}$/),
+      mentionedUserIds: [],
       attachments: [
         { uploadKey: 'pending/c1/me/key-1', fileName: 'file 1.png' },
         { uploadKey: 'pending/c1/me/key-2', fileName: 'file 2.png' },
@@ -717,11 +719,11 @@ describe('sending files', () => {
   })
 
   it('sends the text together with the files', async () => {
-    const post = vi.spyOn(api, 'post').mockResolvedValue(respond(message({ id: 'real' })))
+    const post = vi.spyOn(api, 'post').mockResolvedValue(respond(wire(message({ id: 'real' }))))
 
     await sendMessage('c1', ' look ', [upload(1)])
 
-    expect(post.mock.calls[0][1]).toMatchObject({ content: 'look', attachments: [{ uploadKey: 'pending/c1/me/key-1' }] })
+    expect(post.mock.calls[0][1]).toMatchObject({ ciphertext: sealed('look'), attachments: [{ uploadKey: 'pending/c1/me/key-1' }] })
   })
 
   it('does not send a message with neither text nor files', async () => {
@@ -734,13 +736,13 @@ describe('sending files', () => {
   })
 
   it('keeps the files on the unconfirmed message so they can be drawn while it is sending', async () => {
-    const response = deferred<AxiosResponse<Message>>()
+    const response = deferred<AxiosResponse<unknown>>()
     vi.spyOn(api, 'post').mockReturnValue(response.promise)
 
     const sending = sendMessage('c1', '', [upload(1), upload(2)])
 
     expect(store().pending.c1[0].attachments.map((a) => a.fileName)).toEqual(['file 1.png', 'file 2.png'])
-    response.resolve(respond(message({ id: 'real', clientMessageId: store().pending.c1[0].clientMessageId })))
+    response.resolve(respond(wire(message({ id: 'real', clientMessageId: store().pending.c1[0].clientMessageId }))))
     await sending
   })
 
@@ -748,14 +750,14 @@ describe('sending files', () => {
     vi.spyOn(api, 'post').mockImplementation((_url, body) =>
       Promise.resolve(
         respond(
-          message({
+          wire(message({
             id: 'real',
             content: '',
             clientMessageId: (body as { clientMessageId: string }).clientMessageId,
             attachments: [
               { id: 'a1', type: 'Image', fileName: 'file 1.png', contentType: 'image/png', sizeBytes: 100, url: 'https://files.test/a1' },
             ],
-          }),
+          })),
         ),
       ),
     )
@@ -776,7 +778,7 @@ describe('sending files', () => {
   })
 
   it('sends the same uploads again with the same id when the message is retried', async () => {
-    const post = vi.spyOn(api, 'post').mockRejectedValueOnce(failure(500, 'x')).mockResolvedValue(respond(message({ id: 'real' })))
+    const post = vi.spyOn(api, 'post').mockRejectedValueOnce(failure(500, 'x')).mockResolvedValue(respond(wire(message({ id: 'real' }))))
     await sendMessage('c1', 'text', [upload(1), upload(2)])
     const failed = store().pending.c1[0]
 
