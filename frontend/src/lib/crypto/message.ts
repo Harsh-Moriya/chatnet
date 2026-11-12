@@ -9,11 +9,15 @@
 // edit. The sender signs after encrypting, and readers verify before decrypting.
 
 import { CryptoError, concat, fromBase64Url, fromUtf8, readU32, u32, utf8, uuidBytes, type Bytes } from './bytes'
+import { MAX_CHUNK_BYTES } from './file'
 import { KEY_BYTES, LABELS, NONCE_BYTES, SIGNATURE_BYTES, SUITE_V1, TAG_BYTES, VERSION, labelled } from './formats'
 import { aesGcmDecrypt, aesGcmEncrypt, ed25519Sign, ed25519Verify, randomBytes, type KeyPair } from './primitives'
 
 export const PADDING_BLOCK = 256
 export const MAX_MESSAGE_BLOB_BYTES = 32 * 1024
+
+// The longest name a file entry may have, in UTF-16 code units. Four of them and the text of a message have to fit in a blob.
+export const MAX_FILE_NAME_LENGTH = 255
 
 const HEADER_BYTES = 2 + 4 + NONCE_BYTES
 const MIN_BLOB_BYTES = HEADER_BYTES + TAG_BYTES + SIGNATURE_BYTES
@@ -91,6 +95,8 @@ export function decodePayload(bytes: Uint8Array): MessagePayload {
       ) {
         throw new CryptoError('malformed', 'A file entry has the wrong shape')
       }
+      if (file.name.length > MAX_FILE_NAME_LENGTH) throw new CryptoError('malformed', 'A file name is too long')
+      if ((file.chunkSize as number) > MAX_CHUNK_BYTES) throw new CryptoError('malformed', 'A file chunk size is out of range')
       if (fromBase64Url(file.key).length !== KEY_BYTES) throw new CryptoError('malformed', 'A file key is 32 bytes')
       return { name: file.name, type: file.type, size: file.size as number, key: file.key, chunkSize: file.chunkSize as number }
     }),

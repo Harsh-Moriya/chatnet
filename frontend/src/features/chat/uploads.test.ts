@@ -9,9 +9,16 @@ import {
   removeItem,
   setProgress,
   toPendingAttachments,
+  type Uploaded,
 } from './uploads'
 
 const fake = (name: string, type = 'image/png', size = 1000) => ({ name, type, size }) as File
+
+// What an upload gives back when it has finished: the key the message names, and the entry the sealed message carries.
+const uploaded = (key: string, name = 'a.png', size = 1000): Uploaded => ({
+  uploadKey: key,
+  ref: { name, type: 'image/png', size, key: 'k'.repeat(43), chunkSize: 65536 },
+})
 
 let counter = 0
 const newId = () => `u${++counter}`
@@ -27,7 +34,7 @@ describe('addFiles', () => {
     expect(items).toHaveLength(2)
     expect(added).toEqual(items)
     expect(rejected).toEqual([])
-    expect(items[0]).toMatchObject({ status: 'uploading', progress: 0, uploadKey: null, error: null })
+    expect(items[0]).toMatchObject({ status: 'uploading', progress: 0, uploadKey: null, ref: null, error: null })
     expect(items[0].id).not.toBe(items[1].id)
   })
 
@@ -71,12 +78,13 @@ describe('upload progress and outcome', () => {
     expect(setProgress(items, items[0].id, 0.4)[0].progress).toBe(0.4)
   })
 
-  it('marks an upload ready with the key the server gave, and complete', () => {
+  it('marks an upload ready with the key the server gave and the entry that describes the file, and complete', () => {
     const items = listOf(fake('a.png'))
 
-    const ready = markReady(items, items[0].id, 'pending/c/u/k')[0]
+    const ready = markReady(items, items[0].id, uploaded('pending/c/u/k', 'a.png', 1000))[0]
 
     expect(ready).toMatchObject({ status: 'ready', progress: 1, uploadKey: 'pending/c/u/k' })
+    expect(ready.ref).toMatchObject({ name: 'a.png', size: 1000 })
   })
 
   it('marks an upload failed with the reason', () => {
@@ -88,21 +96,21 @@ describe('upload progress and outcome', () => {
   it('ignores progress, success and failure after an upload has ended', () => {
     const start = listOf(fake('a.png'))
     const id = start[0].id
-    const ready = markReady(start, id, 'k1')
+    const ready = markReady(start, id, uploaded('k1'))
     const failed = markFailed(start, id, 'boom')
 
     expect(setProgress(ready, id, 0.2)).toBe(ready)
     expect(markFailed(ready, id, 'late failure')).toBe(ready)
-    expect(markReady(ready, id, 'k2')).toBe(ready)
+    expect(markReady(ready, id, uploaded('k2'))).toBe(ready)
     expect(setProgress(failed, id, 0.9)).toBe(failed)
-    expect(markReady(failed, id, 'k3')).toBe(failed)
+    expect(markReady(failed, id, uploaded('k3'))).toBe(failed)
   })
 
   it('returns the same list for an id that is not there', () => {
     const items = listOf(fake('a.png'))
 
     expect(setProgress(items, 'nope', 0.5)).toBe(items)
-    expect(markReady(items, 'nope', 'k')).toBe(items)
+    expect(markReady(items, 'nope', uploaded('k'))).toBe(items)
     expect(markFailed(items, 'nope', 'x')).toBe(items)
     expect(removeItem(items, 'nope')).toBe(items)
   })
@@ -116,7 +124,7 @@ describe('upload progress and outcome', () => {
   it('changes only the upload it is about', () => {
     const items = listOf(fake('a.png'), fake('b.png'))
 
-    const next = markReady(items, items[1].id, 'k')
+    const next = markReady(items, items[1].id, uploaded('k'))
 
     expect(next[0]).toBe(items[0])
     expect(next[1].status).toBe('ready')
@@ -140,19 +148,19 @@ describe('canSend', () => {
     const items = listOf(fake('a.png'))
 
     expect(canSend(items, '')).toBe(false)
-    expect(canSend(markReady(items, items[0].id, 'k'), '')).toBe(true)
+    expect(canSend(markReady(items, items[0].id, uploaded('k')), '')).toBe(true)
   })
 
   it('waits while any upload is still going, even with text', () => {
     const items = listOf(fake('a.png'), fake('b.png'))
-    const oneReady = markReady(items, items[0].id, 'k')
+    const oneReady = markReady(items, items[0].id, uploaded('k'))
 
     expect(canSend(oneReady, 'look at these')).toBe(false)
   })
 
   it('does not send past a failed upload, which has to be removed first', () => {
     const items = listOf(fake('a.png'), fake('b.png'))
-    const mixed = markFailed(markReady(items, items[0].id, 'k'), items[1].id, 'No')
+    const mixed = markFailed(markReady(items, items[0].id, uploaded('k')), items[1].id, 'No')
 
     expect(canSend(mixed, 'text')).toBe(false)
     expect(canSend(removeItem(mixed, items[1].id), 'text')).toBe(true)
@@ -160,15 +168,28 @@ describe('canSend', () => {
 })
 
 describe('toPendingAttachments', () => {
-  it('describes the files that are ready and leaves out the others', () => {
+  it('describes the files that are ready, with their keys and entries, and leaves out the others', () => {
     const items = listOf(fake('a.png', 'image/png', 500), fake('b.pdf', 'application/pdf', 900), fake('c.mp4', 'video/mp4'))
-    const mixed = markReady(markReady(items, items[0].id, 'k1'), items[1].id, 'k2')
+    const mixed = markReady(markReady(items, items[0].id, uploaded('k1', 'a.png', 500)), items[1].id, uploaded('k2', 'b.pdf', 900))
 
     const pending = toPendingAttachments(mixed)
 
-    expect(pending.map((p) => [p.uploadKey, p.fileName, p.type, p.sizeBytes])).toEqual([
-      ['k1', 'a.png', 'Image', 500],
-      ['k2', 'b.pdf', 'File', 900],
+    expect(pending.map((p) => [p.uploadKey, p.ref.name, p.ref.size])).toEqual([
+      ['k1', 'a.png', 500],
+      ['k2', 'b.pdf', 900],
     ])
+  })
+
+  it('keeps the file itself, to draw a preview of it', () => {
+    const items = listOf(fake('a.png'))
+
+    expect(toPendingAttachments(markReady(items, items[0].id, uploaded('k')))[0].file).toBe(items[0].file)
+  })
+
+  it('keeps the same entry however many times it is asked', () => {
+    const items = listOf(fake('a.png'))
+    const ready = markReady(items, items[0].id, uploaded('k'))
+
+    expect(toPendingAttachments(ready)[0].ref).toBe(toPendingAttachments(ready)[0].ref)
   })
 })

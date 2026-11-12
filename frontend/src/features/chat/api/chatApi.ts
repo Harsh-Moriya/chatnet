@@ -17,6 +17,7 @@ import type {
   PendingAttachment,
   UserSummary,
 } from '../types'
+import { entriesOf } from '../files/joinFiles'
 import { conversationOf, openMessage as openWireMessage, openMessages, ownMessage } from './openWire'
 import { openPreviews } from './previews'
 import { fetchAttachmentLink } from './uploadsApi'
@@ -246,6 +247,11 @@ export async function editMessage(
   const held = chat().messages[conversationId]?.find((m) => m.id === messageId)
   if (!held || held.clientMessageId === null) throw new Error('This message is not loaded, so it cannot be edited.')
 
+  // The edit replaces the whole sealed message, so the entries of its files go into it again, or nobody could open the files. An entry
+  // that cannot be given would shift the others out of place.
+  const files = entriesOf(held.attachments)
+  if (files === null) throw new Error('This message has a file that cannot be opened, so it cannot be edited.')
+
   const text = content.trim()
   const editCount = held.editCount + 1
   const mentioned = mentionedUserIds(text, chat().members[conversationId], selfId)
@@ -255,7 +261,7 @@ export async function editMessage(
     const data = await keys.sealAndSend(
       conversationId,
       keyStateOf(conversationId),
-      { clientMessageId: held.clientMessageId, editCount, text },
+      { clientMessageId: held.clientMessageId, editCount, text, files },
       async (sealed) => {
         try {
           const { data } = await api.patch<MessageWire>(`/conversations/${conversationId}/messages/${messageId}`, {
@@ -270,7 +276,7 @@ export async function editMessage(
       },
     )
 
-    const message = ownMessage(data, text)
+    const message = ownMessage(data, text, files)
     chat().replaceMessage(message, selfId)
     return message
   } catch (failure) {
@@ -410,7 +416,7 @@ async function post(
     const data = await keys.sealAndSend(
       conversationId,
       keyStateOf(conversationId),
-      { clientMessageId, editCount: 0, text: content },
+      { clientMessageId, editCount: 0, text: content, files: attachments.map((attachment) => attachment.ref) },
       async (sealed) => {
         try {
           const { data } = await api.post<MessageWire>(
@@ -421,7 +427,7 @@ async function post(
               mentionedUserIds: mentioned,
               // Left out when there are none, so a message of only text is the request it always was.
               ...(attachments.length > 0 && {
-                attachments: attachments.map(({ uploadKey, fileName }) => ({ uploadKey, fileName })),
+                attachments: attachments.map(({ uploadKey }) => ({ uploadKey })),
               }),
             },
             { timeout: SEND_TIMEOUT_MS },
@@ -433,8 +439,8 @@ async function post(
       },
     )
 
-    // The response to a send is the sender's own message, so its sender is the signed-in user, and its text is the text that was sealed.
-    chat().receiveMessage(ownMessage(data, content), data.senderId)
+    // The response to a send is the sender's own message, so its sender is the signed-in user, and its text and files are what was sealed.
+    chat().receiveMessage(ownMessage(data, content, attachments.map((attachment) => attachment.ref)), data.senderId)
   } catch (error) {
     // A message the push already confirmed is no longer unconfirmed, and failing an unknown id
     // does nothing, so a lost response cannot turn a delivered message into a failed one.
@@ -444,13 +450,14 @@ async function post(
 
 // ##### Attachment links #####
 
-// The links that come with a message stop working after a while. A picture that fails to load asks for a
-// new one, and the store puts it in the message so the picture is drawn again.
+// The links that come with a message stop working after a while. A file that cannot be fetched asks for a
+// new one, and the store puts it in the message so the file is fetched again. Answers the new address.
 export async function refreshAttachmentUrl(
   conversationId: string,
   messageId: string,
   attachmentId: string,
-): Promise<void> {
+): Promise<string> {
   const { url } = await fetchAttachmentLink(attachmentId)
   chat().setAttachmentUrl(conversationId, messageId, attachmentId, url)
+  return url
 }

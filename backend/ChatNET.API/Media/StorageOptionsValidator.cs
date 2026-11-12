@@ -33,10 +33,6 @@ public sealed partial class StorageOptionsValidator : IValidateOptions<StorageOp
         if (options.MaxFilesPerMessage is < 1 or > 20)
             failures.Add("Storage:MaxFilesPerMessage must be between 1 and 20.");
 
-        if (options.AllowedContentTypes.Length == 0
-            || options.AllowedContentTypes.Any(type => string.IsNullOrWhiteSpace(type) || !type.Contains('/')))
-            failures.Add("Storage:AllowedContentTypes must list at least one type, each written as type/subtype.");
-
         if (options.UploadUrlMinutes <= 0)
             failures.Add("Storage:UploadUrlMinutes must be greater than zero.");
 

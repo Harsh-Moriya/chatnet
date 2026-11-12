@@ -227,9 +227,9 @@ public class PushAlertTests : IAsyncLifetime
         var bobsBrowser = await SubscribeAsync(bob);
         using var rig = NewRig();
         using var client = rig.ClientFor(alice);
-        var first = await client.UploadFileAsync(team, [1, 2, 3], fileName: "one.png");
-        var second = await client.UploadFileAsync(team, [4, 5, 6], fileName: "two.png");
-        await client.SendMessageWithFilesAsync(team, null, (first, "one.png"), (second, "two.png"));
+        var first = await client.UploadFileAsync(team, new byte[64]);
+        var second = await client.UploadFileAsync(team, new byte[64]);
+        await client.SendMessageWithFilesAsync(team, null, first, second);
 
         await rig.RunRelayAsync();
 

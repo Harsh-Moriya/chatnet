@@ -15,9 +15,9 @@ public interface IBlobStorage
     // signed, so the storage refuses an upload that claims another one.
     SignedUrl CreateUploadUrl(string key, string contentType);
 
-    // A link the browser can GET the object from. A file that is not an image or a video is served as a
-    // download under its own name instead of being opened in the page.
-    SignedUrl CreateDownloadUrl(string key, string fileName, bool inline);
+    // A link the browser can GET the object from. The object is an encrypted file, which the browser fetches and decrypts itself, so
+    // the link says nothing about a name or how to show it.
+    SignedUrl CreateDownloadUrl(string key);
 
     // Null when there is no such object.
     Task<StoredObject?> HeadAsync(string key, CancellationToken cancellationToken);

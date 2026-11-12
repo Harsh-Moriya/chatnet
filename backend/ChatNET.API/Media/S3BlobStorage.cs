@@ -49,14 +49,9 @@ public sealed class S3BlobStorage : IBlobStorage
         return new SignedUrl(url, expiresAt);
     }
 
-    public SignedUrl CreateDownloadUrl(string key, string fileName, bool inline)
+    public SignedUrl CreateDownloadUrl(string key)
     {
         var expiresAt = ExpiryIn(_options.DownloadUrlMinutes);
-
-        // The header builder writes a non-ASCII or quoted name in the encoded form browsers understand, so a
-        // file name cannot break out of the header.
-        var disposition = new ContentDispositionHeaderValue(inline ? "inline" : "attachment");
-        disposition.SetHttpFileName(fileName);
 
         var url = _s3.GetPreSignedURL(new GetPreSignedUrlRequest
         {
@@ -65,7 +60,6 @@ public sealed class S3BlobStorage : IBlobStorage
             Verb = HttpVerb.GET,
             Expires = expiresAt,
             Protocol = _protocol,
-            ResponseHeaderOverrides = new ResponseHeaderOverrides { ContentDisposition = disposition.ToString() },
         });
 
         return new SignedUrl(url, expiresAt);

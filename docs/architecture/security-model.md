@@ -50,12 +50,14 @@ Races are settled by the database, not by check-then-write.
 
 ## Files
 
-- The upload ticket checks membership, the account, and the file's declared type and size. The send re-checks the object that was really stored, because a presigned PUT cannot enforce limits itself: the key belongs to the caller, the object exists, its size is between 1 byte and the limit, and its stored content type is on the allowed list.
-- The allowed list has no SVG, HTML, script or executable types. Pictures of people and groups allow only PNG, JPEG, WebP and GIF, up to 2 MB.
-- A file that is not an image or a video is served with `Content-Disposition: attachment`.
-- File names are cleaned (path parts and control characters removed, 255 characters at most).
+- A file is encrypted in the sender's browser, in chunks, under a key made for it, and the key travels only inside the sealed message. The bucket holds ciphertext; the server and the storage provider can read neither the content nor the name or the type.
+- Because the server cannot see what a file is, it enforces size and count only. The upload ticket checks membership, the account and the size of the encrypted file. The send re-checks the object that was really stored, because a presigned PUT cannot enforce limits itself: the key belongs to the caller, the object exists, and its size is between the smallest and the largest an encrypted file can have.
+- Every upload is signed for the content type `application/octet-stream`, so the storage never learns or serves a file as anything else.
+- What a file is called and what type it is are claims by the sender, made inside the sealed message. A reader cleans the name (path parts, control characters and invisible formatting characters removed, 255 characters at most), gives a picture or a video its type only when it is one of PNG, JPEG, GIF, WebP, MP4 or WebM, and saves everything else as opaque bytes, so a file that says it is a web page or an SVG is never opened as one in the app's origin.
+- A file is tied to its entry in the message by position and by size, and its chunks are authenticated, so a file swapped in the bucket, cut short or paired with another entry is refused, and nothing of it is drawn or saved.
+- Pictures of people and groups are not encrypted: they allow only PNG, JPEG, WebP and GIF, up to 2 MB, and are served by the API.
 - Links are signed for the reader and expire (upload links after 10 minutes, download links after 60). Renewal re-checks membership, the join window and deletion, and gives one 404 for every refusal.
-- A link that leaks works until it expires. Someone who saved a link can use it for up to an hour after losing access.
+- A link that leaks works until it expires, and gives bytes that cannot be opened without the key in the message. Someone who saved a link can fetch the encrypted file for up to an hour after losing access.
 - There is no virus scan, and files are served from the storage host rather than a separate origin.
 
 ## Keys and devices
@@ -100,7 +102,7 @@ The text of a message is sealed in the sender's browser under the key of the con
 | Editing | The new blob is for the next edit count, and the server requires exactly that, so a stale edit is a `409` (`edit-count-stale`) | |
 | Mentions | The sender's browser says which people the text names, as ids. The server keeps the active members other than the sender | A sender can name a member the text does not mention; it notifies them |
 | Alerts | Web Push carries who and where, never text. A page that is open shows the text it opened | |
-| What stays visible | Who writes to whom and when, the size of a blob (padded to 256 bytes), the number of files, and the names, types and sizes of files, which are stored as uploaded | |
+| What stays visible | Who writes to whom and when, the size of a blob (padded to 256 bytes), the number of files, and the size of each file (a little more than the file) | |
 
 ## Rate limiting
 

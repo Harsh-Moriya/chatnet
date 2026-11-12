@@ -29,7 +29,6 @@ public class StorageOptionsTests
         SecretKey = "a-secret-key",
         MaxFileBytes = 10 * 1024 * 1024,
         MaxFilesPerMessage = 4,
-        AllowedContentTypes = ["image/png", "application/pdf"],
         UploadUrlMinutes = 10,
         DownloadUrlMinutes = 60,
     };
@@ -126,27 +125,6 @@ public class StorageOptionsTests
         options.MaxFilesPerMessage = count;
 
         Assert.Contains(Failures(options), f => f.Contains("Storage:MaxFilesPerMessage"));
-    }
-
-    [Theory]
-    [InlineData("")]
-    [InlineData("png")]
-    [InlineData(" ")]
-    public void A_content_type_that_is_not_type_slash_subtype_is_refused(string type)
-    {
-        var options = Valid();
-        options.AllowedContentTypes = ["image/png", type];
-
-        Assert.Contains(Failures(options), f => f.Contains("Storage:AllowedContentTypes"));
-    }
-
-    [Fact]
-    public void An_empty_list_of_content_types_is_refused()
-    {
-        var options = Valid();
-        options.AllowedContentTypes = [];
-
-        Assert.Contains(Failures(options), f => f.Contains("Storage:AllowedContentTypes"));
     }
 
     [Theory]

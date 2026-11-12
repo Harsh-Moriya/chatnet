@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { fromBase64Url, newEd25519, toBase64Url } from '../../lib/crypto'
+import { type FileRef, fromBase64Url, newEd25519, toBase64Url } from '../../lib/crypto'
 import { EpochContestedError, EpochRefused, MAX_ATTEMPTS, ensureEpoch, loadEpochKeys, prepareAddingMembers, saveKey } from './epochs'
 import { type Person, newPerson, start } from './epochTestKit'
 import { FakeEpochServer } from './fakeEpochServer'
@@ -31,12 +31,12 @@ async function messageFrom(
   sender: Person,
   conversationId: string,
   text: string,
-  options: { epoch?: number; editCount?: number; clientMessageId?: string } = {},
+  options: { epoch?: number; editCount?: number; clientMessageId?: string; files?: FileRef[] } = {},
 ): Promise<SealedMessage> {
   const clientMessageId = options.clientMessageId ?? `00000000-0000-4000-8000-${String(++counter).padStart(12, '0')}`
   const editCount = options.editCount ?? 0
   const epoch = options.epoch ?? 1
-  const sealed = await sealText(sender.deps, { conversationId, clientMessageId, editCount, epoch, text })
+  const sealed = await sealText(sender.deps, { conversationId, clientMessageId, editCount, epoch, text, files: options.files })
 
   return { conversationId, senderId: sender.id, clientMessageId, editCount, keyEpoch: sealed.keyEpoch, ciphertext: sealed.ciphertext }
 }
@@ -48,8 +48,8 @@ describe('a message sealed by one person and opened by another', () => {
     const { everyone: [ana, ben], id } = await conversationOf(2)
     const message = await messageFrom(ana, id, 'Hello, Ben')
 
-    expect(await createMessageOpener(ben.deps).open(message)).toEqual({ readable: true, text: 'Hello, Ben' })
-    expect(await createMessageOpener(ana.deps).open(message)).toEqual({ readable: true, text: 'Hello, Ben' })
+    expect(await createMessageOpener(ben.deps).open(message)).toEqual({ readable: true, text: 'Hello, Ben', files: [] })
+    expect(await createMessageOpener(ana.deps).open(message)).toEqual({ readable: true, text: 'Hello, Ben', files: [] })
   })
 
   it('keeps any text as it was written, whatever it holds', async () => {
@@ -57,7 +57,7 @@ describe('a message sealed by one person and opened by another', () => {
     const opener = createMessageOpener(ben.deps)
 
     for (const text of ['', 'a', 'こんにちは 👩🏽‍💻 é', 'x'.repeat(4000), '{"text":"nested"}', ' padded ']) {
-      expect(await opener.open(await messageFrom(ana, id, text))).toEqual({ readable: true, text })
+      expect(await opener.open(await messageFrom(ana, id, text))).toEqual({ readable: true, text, files: [] })
     }
   })
 
@@ -103,7 +103,7 @@ describe('a message sealed by one person and opened by another', () => {
     await loadEpochKeys(ben.deps, id, { from: 2 })
     expect(await ben.keys.load(ben.id, id, 1)).toBeNull()
 
-    expect(await createMessageOpener(ben.deps).open(old)).toEqual({ readable: true, text: 'from the first epoch' })
+    expect(await createMessageOpener(ben.deps).open(old)).toEqual({ readable: true, text: 'from the first epoch', files: [] })
   })
 
   it('opens what was sealed under a later epoch after the keys are fetched', async () => {
@@ -114,7 +114,55 @@ describe('a message sealed by one person and opened by another', () => {
     const message = await messageFrom(ana, id, 'second epoch', { epoch: 2 })
 
     expect(message.keyEpoch).toBe(2)
-    expect(await createMessageOpener(ben.deps).open(message)).toEqual({ readable: true, text: 'second epoch' })
+    expect(await createMessageOpener(ben.deps).open(message)).toEqual({ readable: true, text: 'second epoch', files: [] })
+  })
+})
+
+const entry = (name: string, size = 100): FileRef => ({ name, type: 'image/png', size, key: toBase64Url(new Uint8Array(32).fill(size)), chunkSize: 65536 })
+
+describe('a message with files', () => {
+  it('carries the entries of its files, in order, to the other person and back to the sender', async () => {
+    const { everyone: [ana, ben], id } = await conversationOf(2)
+    const files = [entry('one.png', 1), entry('two.pdf', 2), entry('three.txt', 3)]
+
+    const message = await messageFrom(ana, id, 'look', { files })
+
+    expect(await createMessageOpener(ben.deps).open(message)).toEqual({ readable: true, text: 'look', files })
+    expect(await createMessageOpener(ana.deps).open(message)).toEqual({ readable: true, text: 'look', files })
+  })
+
+  it('has no files when none are given', async () => {
+    const { everyone: [ana, ben], id } = await conversationOf(2)
+
+    expect(await createMessageOpener(ben.deps).open(await messageFrom(ana, id, 'plain'))).toMatchObject({ files: [] })
+  })
+
+  it('keeps the entries when the message is edited, if the edit is sealed with them', async () => {
+    const { everyone: [ana, ben], id } = await conversationOf(2)
+    const files = [entry('keep.png')]
+    const original = await messageFrom(ana, id, 'first', { files, clientMessageId: '00000000-0000-4000-8000-0000000000aa' })
+
+    const edited = await messageFrom(ana, id, 'second', { files, editCount: 1, clientMessageId: '00000000-0000-4000-8000-0000000000aa' })
+
+    expect(await createMessageOpener(ben.deps).open(original)).toMatchObject({ text: 'first', files })
+    expect(await createMessageOpener(ben.deps).open(edited)).toMatchObject({ text: 'second', files })
+  })
+
+  it('does not show the keys of the files to the server: they are inside the sealed blob', async () => {
+    const { everyone: [ana], id } = await conversationOf(1)
+    const files = [entry('secret holiday.png')]
+
+    const sealed = (await messageFrom(ana, id, 'look', { files })).ciphertext
+
+    expect(sealed).not.toContain(files[0].key)
+    expect(sealed).not.toContain(toBase64Url(new TextEncoder().encode('secret holiday')))
+  })
+
+  it('refuses a blob whose file entry is not what an entry has to be, as a message that is not valid', async () => {
+    const { everyone: [ana, ben], id } = await conversationOf(2)
+    const message = await messageFrom(ana, id, 'look', { files: [{ ...entry('a.png'), chunkSize: 16777217 }] })
+
+    expect(await createMessageOpener(ben.deps).open(message)).toEqual({ readable: false, reason: 'invalid' })
   })
 })
 
@@ -246,7 +294,7 @@ describe('a message that cannot be shown', () => {
     expect(await opener.open({ ...message, senderId: ben.id })).toEqual({ readable: false, reason: 'invalid' })
     expect(await opener.open({ ...message, editCount: 0 })).toEqual({ readable: false, reason: 'invalid' })
     expect(await opener.open({ ...message, clientMessageId: crypto.randomUUID() })).toEqual({ readable: false, reason: 'invalid' })
-    expect(await opener.open(message)).toEqual({ readable: true, text: 'as written' })
+    expect(await opener.open(message)).toEqual({ readable: true, text: 'as written', files: [] })
   })
 
   it('is invalid when the key held for its epoch is not the one it was sealed under', async () => {
@@ -303,7 +351,7 @@ describe('a message that cannot be shown', () => {
 
     expect(await opener.open(message)).toEqual({ readable: false, reason: 'senderUnknown' })
     reachable = true
-    expect(await opener.open(message)).toEqual({ readable: true, text: 'from cy' })
+    expect(await opener.open(message)).toEqual({ readable: true, text: 'from cy', files: [] })
     expect(server.calls.length).toBeGreaterThan(0)
   })
 
@@ -312,7 +360,7 @@ describe('a message that cannot be shown', () => {
     const message = await messageFrom(ana, id, 'mine')
     server.calls.length = 0
 
-    expect(await createMessageOpener(ana.deps).open(message)).toEqual({ readable: true, text: 'mine' })
+    expect(await createMessageOpener(ana.deps).open(message)).toEqual({ readable: true, text: 'mine', files: [] })
     expect(callsTo(server, 'lookupKeys')).toBe(0)
   })
 

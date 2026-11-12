@@ -11,7 +11,7 @@ One page per feature: what it does, the endpoints and hub events it uses, and it
 | [Editing and deleting](edit-and-delete.md) | The edit window, who can delete, live updates |
 | [Read state](read-state.md) | Read position, unread counts, "Seen" |
 | [Presence and typing](presence-and-typing.md) | Online dot, last seen, typing indicators |
-| [Attachments](attachments.md) | Direct-to-storage uploads, checked at send, signed links |
+| [Attachments](attachments.md) | Files encrypted in the browser, uploaded straight to storage, checked for size at send, signed links |
 | [Notifications and mentions](notifications.md) | The bell, `@mentions`, mute, browser alerts |
 | [Group management](group-management.md) | Roles, add, remove, hand over, rename, leave |
 | [Profiles and pictures](profiles-and-pictures.md) | Display name, pictures for people and groups |

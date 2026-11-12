@@ -18,7 +18,11 @@ export async function reopenConversation(conversationId: string): Promise<void> 
     if (!wire) continue
 
     const opened = await openMessage(wire)
-    chat().applyOpened(conversationId, message.id, message.editCount, { content: opened.content, unreadable: opened.unreadable ?? null })
+    chat().applyOpened(conversationId, message.id, message.editCount, {
+      content: opened.content,
+      unreadable: opened.unreadable ?? null,
+      attachments: opened.attachments,
+    })
   }
 
   const shown = chat().conversations[conversationId]?.lastMessage

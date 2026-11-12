@@ -11,7 +11,7 @@ The text of a message is sealed in the sender's browser before it is sent, and o
 - The browser keeps the text within 4,000 UTF-16 code units and trims it before sealing; the server cannot count characters it cannot read.
 - `clientMessageId` is a UUID the browser makes up. It is required, because it is bound into the sealed message: a message without one could not be opened. It is stored and returned everywhere, and it makes the send **idempotent**: a send whose conversation, sender and id are already stored is answered with the stored message, with status 200 instead of 201, and the message is pushed again (the first push may have failed). Two copies arriving together are settled by a unique index; the loser answers with the winner's message.
 - `mentionedUserIds` are the people the text names, at most 20. The server keeps the ones that are active members other than the sender and notifies them; the rest are dropped without saying which. See [notifications](notifications.md).
-- `attachments` is up to 4 files named by upload ticket. See [attachments](attachments.md).
+- `attachments` is up to 4 files, each named by the key of its upload and nothing else. What each file is (name, type, size and the key that opens it) is inside the sealed message. See [attachments](attachments.md).
 - A message is stored only under the epoch the conversation is in, and only while that epoch is not marked for replacement. A send sealed under another epoch is a 409 with code `epoch-stale`; a send under an epoch that a removal or a leave marked for replacement is a 409 with code `epoch-due`. In both cases nothing is stored and the browser looks at the conversation's keys again and seals once more. The check and the insert are one transaction, so a removal and a send racing each other are settled by the database: whichever commits second is refused.
 - The message and the conversation's `UpdatedAt` are saved in one transaction, with an outbox row for the push. The request then pushes `ReceiveMessage` to the conversation's group, including the sender's own tabs, and marks the row. A failing push is logged and does not fail the request; the relay delivers it later.
 - Sending moves the sender's read position to the new message.
@@ -29,7 +29,7 @@ The text of a message is sealed in the sender's browser before it is sent, and o
 
 A page shorter than 50 is the end in that direction. The cursor is a message id, looked up inside the caller's own window; anything else (unknown, from another conversation, or sent before they joined) is the same 400. History is keyset-paged on `(CreatedAt, Id)`, so it is stable while new messages arrive, and every query reads about 50 rows whether the conversation holds 50 messages or 6,000.
 
-Each message carries `ciphertext` and `keyEpoch` where a plain text would have been. A deleted message comes back with `ciphertext: null`, `isDeleted: true` and no attachments. Every message carries its attachments with links signed for this response.
+Each message carries `ciphertext` and `keyEpoch` where a plain text would have been. A deleted message comes back with `ciphertext: null`, `isDeleted: true` and no attachments. Every message carries its attachments, each as an id, the stored size and a link signed for this response.
 
 ## Ordering
 
@@ -54,4 +54,4 @@ Messages are ordered by `CreatedAt`, set by the server that handled the send, th
 - The server cannot search or preview text, so it has no search endpoint; the sidebar preview and the notification text are opened in the browser.
 - The deletion of a message older than the last 50 held, in a tab that was away for more than a page of new messages, shows after a reload.
 - Sending is limited to 30 messages per 10 seconds per person.
-- Files are stored as they are uploaded, so their content, names, types and sizes are visible to the server. See [attachments](attachments.md).
+- Files are encrypted in the browser, so the server sees how many there are and how large each is, never what they are called, what type they are or what they hold. See [attachments](attachments.md).

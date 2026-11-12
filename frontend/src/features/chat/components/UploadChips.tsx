@@ -2,7 +2,7 @@ import { AlertCircle, X } from 'lucide-react'
 import { Button } from '../../../components/ui/Button'
 import { cn } from '../../../lib/cn'
 import { formatFileSize } from '../../../lib/format'
-import { attachmentTypeOf } from '../attachments'
+import { imageTypeOf } from '../files/fileNames'
 import type { UploadItem } from '../uploads'
 import { AttachmentIcon } from './AttachmentIcon'
 import { PreviewImage } from './PreviewImage'
@@ -28,7 +28,7 @@ export function UploadChips({ items, onRemove }: UploadChipsProps) {
               failed ? 'border-red-400' : 'border-line',
             )}
           >
-            {attachmentTypeOf(item.file.type) === 'Image' ? (
+            {imageTypeOf(item.file.type) !== null ? (
               <PreviewImage file={item.file} alt="" className="h-10 w-10 shrink-0 rounded-lg object-cover" />
             ) : (
               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500">

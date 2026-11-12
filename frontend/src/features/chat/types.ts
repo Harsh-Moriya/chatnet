@@ -2,6 +2,7 @@
 // app works with: the server hands over messages sealed (the *Wire types) and the browser opens them, so the rest of the app deals
 // in text. Enums are strings, timestamps are ISO 8601 UTC strings, and IDs are opaque UUID strings.
 
+import type { FileRef } from '../../lib/crypto/message'
 import type { UnreadableReason } from '../encryption/sealedMessages'
 
 // Why the text of a message is not shown. 'pending' only while it is being opened here.
@@ -78,17 +79,20 @@ export interface LastMessage {
   sealed?: SealedPreview | null
 }
 
-export type AttachmentType = 'Image' | 'Video' | 'File'
-
-// A file attached to a confirmed message. `url` is a link signed by the server that stops working after a
-// while (see refreshAttachmentUrl), so it is never kept beyond the page that shows it.
-export interface Attachment {
+// A file attached to a confirmed message, as the server sends it. The file is encrypted: `sizeBytes` is the size of what is stored, and `url`
+// is a link to it, signed by the server, that stops working after a while (see refreshAttachmentUrl), so it is never kept beyond the page
+// that shows it. What the file is called and what it is are in the sealed message, not here.
+export interface AttachmentWire {
   id: string
-  type: AttachmentType
-  fileName: string
-  contentType: string
   sizeBytes: number
   url: string
+}
+
+// A file attached to a message, joined to what the sealed message says about it (see joinFiles). `file` is the entry of the sealed message
+// that describes it: the name, the type, the size, and the key that opens it. It is null when the sealed message does not vouch for the
+// attachment, and then nothing is shown of it but that it cannot be opened.
+export interface Attachment extends AttachmentWire {
+  file: FileRef | null
 }
 
 // A message as the server sends it: its text sealed by the sender (see the encryption formats). Null when it was deleted.
@@ -100,7 +104,7 @@ export interface MessageWire {
   ciphertext: string | null
   keyEpoch: number
   createdAt: string
-  attachments: Attachment[]
+  attachments: AttachmentWire[]
   clientMessageId: string
   editedAt: string | null
   editCount: number
@@ -133,14 +137,12 @@ export interface Message {
 }
 
 // A file that finished uploading and is attached to a message that has not been confirmed yet. `uploadKey` is
-// what the server gave for it; the message names it so the server can find the uploaded file. The file itself
-// is kept to draw a preview of an image while the message is unconfirmed.
+// what the server gave for it; the message names it so the server can find the uploaded file. `ref` is what the sealed message says about
+// it, with the key the file was encrypted under, and stays the same through every try at sending the message. The file itself is kept to
+// draw a preview of an image while the message is unconfirmed.
 export interface PendingAttachment {
   uploadKey: string
-  fileName: string
-  contentType: string
-  sizeBytes: number
-  type: AttachmentType
+  ref: FileRef
   file: File
 }
 

@@ -91,9 +91,43 @@ describe('editMessage', () => {
     expect(keysDouble.sealAndSend).toHaveBeenCalledWith(
       'c1',
       { keyEpoch: 0, keyRotationRequired: false },
-      { clientMessageId: 'cid-1', editCount: 3, text: 'third draft' },
+      { clientMessageId: 'cid-1', editCount: 3, text: 'third draft', files: [] },
       expect.any(Function),
     )
+  })
+
+  it('seals the entries of the files into the edit again, in order, or nobody could open the files', async () => {
+    const first = { name: 'a.png', type: 'image/png', size: 10, key: 'a'.repeat(43), chunkSize: 65536 }
+    const second = { name: 'b.pdf', type: 'application/pdf', size: 20, key: 'b'.repeat(43), chunkSize: 65536 }
+    const held = [
+      { id: 'a1', sizeBytes: 39, url: 'https://files.test/a1', file: first },
+      { id: 'a2', sizeBytes: 49, url: 'https://files.test/a2', file: second },
+    ]
+    store().seedMessages('c1', [message({ attachments: held })])
+    const patch = vi.spyOn(api, 'patch').mockResolvedValue(respond(wire(message({ content: 'new', editCount: 1, attachments: held }))))
+
+    const result = await editMessage('c1', 'm1', 'new', 'me')
+
+    expect(patch.mock.calls[0][1]).toMatchObject({ ciphertext: sealed('new', [first, second]) })
+    expect(result.attachments.map((a) => a.file)).toEqual([first, second])
+  })
+
+  it('refuses at once to edit a message with a file that the sealed message does not vouch for', async () => {
+    const entry = { name: 'a.png', type: 'image/png', size: 10, key: 'a'.repeat(43), chunkSize: 65536 }
+    store().seedMessages('c1', [
+      message({
+        attachments: [
+          { id: 'a1', sizeBytes: 39, url: 'https://files.test/a1', file: entry },
+          { id: 'a2', sizeBytes: 49, url: 'https://files.test/a2', file: null },
+        ],
+      }),
+    ])
+    const patch = vi.spyOn(api, 'patch')
+
+    await expect(editMessage('c1', 'm1', 'x', 'me')).rejects.toThrow('cannot be opened')
+
+    expect(patch).not.toHaveBeenCalled()
+    expect(keysDouble.sealAndSend).not.toHaveBeenCalled()
   })
 
   it('goes by the keys the conversation is known to be in', async () => {

@@ -289,17 +289,18 @@ public class OutboxRelayTests : IAsyncLifetime
         using var relayHost = _factory.WithClock(clock);
         using var broken = BrokenHub();
         using var client = Authorized(broken, alice);
-        var key = await client.UploadFileAsync(conversation, "hello"u8.ToArray(), "text/plain", "note.txt");
-        var sent = await (await client.PostMessageWithFilesAsync(conversation, "see file", [(key, "note.txt")])).ReadJsonAsync();
+        var content = new byte[64];
+        Random.Shared.NextBytes(content);
+        var key = await client.UploadFileAsync(conversation, content);
+        var sent = await (await client.PostMessageWithFilesAsync(conversation, "see file", [key])).ReadJsonAsync();
 
         clock.Advance(TimeSpan.FromMinutes(3));
         await RunAsync(relayHost);
 
         var pushed = await bobTab.WaitForMessageAsync(conversation, sent.MessageIdOf());
         var attachment = Assert.Single(pushed.AttachmentsOf());
-        Assert.Equal("note.txt", attachment.GetProperty("fileName").GetString());
         var download = await MediaApi.FollowAsync(attachment);
-        Assert.Equal("hello", await download.Content.ReadAsStringAsync());
+        Assert.Equal(content, await download.Content.ReadAsByteArrayAsync());
     }
 
     [Fact]
@@ -575,8 +576,8 @@ public class OutboxRelayTests : IAsyncLifetime
     private async Task<(Guid Conversation, Guid MessageId, MessageAttachment File)> MessageWithFileAsync(TestUser sender, Guid conversation)
     {
         using var client = _factory.CreateClientFor(sender);
-        var key = await client.UploadFileAsync(conversation, "hello"u8.ToArray(), "text/plain", "note.txt");
-        var sent = await client.SendMessageWithFilesAsync(conversation, "see file", (key, "note.txt"));
+        var key = await client.UploadFileAsync(conversation, new byte[64]);
+        var sent = await client.SendMessageWithFilesAsync(conversation, "see file", key);
         var file = await _factory.QueryDbAsync(db => db.MessageAttachments.SingleAsync(a => a.MessageId == sent.MessageIdOf()));
 
         return (conversation, sent.MessageIdOf(), file);

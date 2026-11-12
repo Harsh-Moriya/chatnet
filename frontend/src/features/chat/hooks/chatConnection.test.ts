@@ -1033,7 +1033,7 @@ describe('opening what the server pushes', () => {
     const opening = deferred()
     opener.open.mockImplementationOnce(async (sealedMessage: { ciphertext: string }) => {
       await opening.promise
-      return { readable: true as const, text: sealedMessage.ciphertext.slice('sealed:'.length) }
+      return { readable: true as const, text: sealedMessage.ciphertext.slice('sealed:'.length), files: [] }
     })
 
     hub.emit('ReceiveMessage', wire(message('m1')))
@@ -1072,7 +1072,7 @@ describe('opening what the server pushes', () => {
     const opening = deferred()
     opener.open.mockImplementationOnce(async () => {
       await opening.promise
-      return { readable: true as const, text: 'late' }
+      return { readable: true as const, text: 'late', files: [] }
     })
 
     hub.emit('ReceiveMessage', wire(message('m1')))
@@ -1091,7 +1091,7 @@ describe('opening what the server pushes', () => {
     const opening = deferred()
     opener.open.mockImplementationOnce(async () => {
       await opening.promise
-      return { readable: true as const, text: 'edited late' }
+      return { readable: true as const, text: 'edited late', files: [] }
     })
 
     hub.emit('MessageUpdated', wire(message('m1', { content: 'edited late', editCount: 1 })))
@@ -1108,7 +1108,7 @@ describe('opening what the server pushes', () => {
     const opening = deferred()
     opener.open.mockImplementationOnce(async () => {
       await opening.promise
-      return { readable: true as const, text: 'late' }
+      return { readable: true as const, text: 'late', files: [] }
     })
 
     hub.emit('NotificationReceived', mentionWire('n1'))

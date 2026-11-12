@@ -1,6 +1,7 @@
 import { AxiosError, type AxiosResponse } from 'axios'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { api } from '../../../lib/api'
+import { encryptedFileLength } from '../../../lib/crypto/file'
 import { useChatStore } from '../store/chatStore'
 import type { Conversation, Member, Message, PendingAttachment, UserSummary } from '../types'
 import { deps, keysDouble, prepared, resetKeysDouble, sealed, wire } from './keysDouble'
@@ -409,7 +410,7 @@ describe('sending a message', () => {
     expect(keysDouble.sealAndSend).toHaveBeenCalledWith(
       'c1',
       { keyEpoch: 0, keyRotationRequired: false },
-      { clientMessageId: expect.stringMatching(/^[0-9a-f-]{36}$/), editCount: 0, text: 'Hello' },
+      { clientMessageId: expect.stringMatching(/^[0-9a-f-]{36}$/), editCount: 0, text: 'Hello', files: [] },
       expect.any(Function),
     )
   })
@@ -718,29 +719,29 @@ describe('sending a message counts as reading', () => {
 function upload(n: number): PendingAttachment {
   return {
     uploadKey: `pending/c1/me/key-${n}`,
-    fileName: `file ${n}.png`,
-    contentType: 'image/png',
-    sizeBytes: 100 * n,
-    type: 'Image',
+    ref: { name: `file ${n}.png`, type: 'image/png', size: 100 * n, key: String(n).repeat(43).slice(0, 43), chunkSize: 65536 },
     file: {} as File,
   }
 }
 
+// The file as the server holds it once it is attached: the encrypted size of the upload, and a link.
+const stored = (id: string, n: number) => ({ id, sizeBytes: encryptedFileLength(100 * n, 65536), url: `https://files.test/${id}` })
+
 describe('sending files', () => {
-  it('sends a message of only files, naming each upload and nothing else about it', async () => {
+  // The server is told which uploads belong to the message and nothing about what they are: the name, the type, the size and the key are
+  // inside the sealed message.
+  it('sends a message of only files, naming each upload and nothing else about it, and sealing what each file is', async () => {
     const post = vi.spyOn(api, 'post').mockResolvedValue(respond(wire(message({ id: 'real', content: '' }))))
 
     await sendMessage('c1', '   ', [upload(1), upload(2)])
 
     expect(post.mock.calls[0][1]).toEqual({
-      ciphertext: sealed(''),
+      ciphertext: sealed('', [upload(1).ref, upload(2).ref]),
       clientMessageId: expect.stringMatching(/^[0-9a-f-]{36}$/),
       mentionedUserIds: [],
-      attachments: [
-        { uploadKey: 'pending/c1/me/key-1', fileName: 'file 1.png' },
-        { uploadKey: 'pending/c1/me/key-2', fileName: 'file 2.png' },
-      ],
+      attachments: [{ uploadKey: 'pending/c1/me/key-1' }, { uploadKey: 'pending/c1/me/key-2' }],
     })
+    expect(JSON.stringify((post.mock.calls[0][1] as { attachments: unknown }).attachments)).not.toContain('file 1.png')
   })
 
   it('sends the text together with the files', async () => {
@@ -748,7 +749,7 @@ describe('sending files', () => {
 
     await sendMessage('c1', ' look ', [upload(1)])
 
-    expect(post.mock.calls[0][1]).toMatchObject({ ciphertext: sealed('look'), attachments: [{ uploadKey: 'pending/c1/me/key-1' }] })
+    expect(post.mock.calls[0][1]).toMatchObject({ ciphertext: sealed('look', [upload(1).ref]), attachments: [{ uploadKey: 'pending/c1/me/key-1' }] })
   })
 
   it('does not send a message with neither text nor files', async () => {
@@ -766,12 +767,12 @@ describe('sending files', () => {
 
     const sending = sendMessage('c1', '', [upload(1), upload(2)])
 
-    expect(store().pending.c1[0].attachments.map((a) => a.fileName)).toEqual(['file 1.png', 'file 2.png'])
+    expect(store().pending.c1[0].attachments.map((a) => a.ref.name)).toEqual(['file 1.png', 'file 2.png'])
     response.resolve(respond(wire(message({ id: 'real', clientMessageId: store().pending.c1[0].clientMessageId }))))
     await sending
   })
 
-  it('replaces the unconfirmed message with the server\'s, which carries the files with their links', async () => {
+  it('replaces the unconfirmed message with the server\'s, which carries the files with their links and what the sealed message says they are', async () => {
     vi.spyOn(api, 'post').mockImplementation((_url, body) =>
       Promise.resolve(
         respond(
@@ -779,9 +780,7 @@ describe('sending files', () => {
             id: 'real',
             content: '',
             clientMessageId: (body as { clientMessageId: string }).clientMessageId,
-            attachments: [
-              { id: 'a1', type: 'Image', fileName: 'file 1.png', contentType: 'image/png', sizeBytes: 100, url: 'https://files.test/a1' },
-            ],
+            attachments: [{ ...stored('a1', 1), file: upload(1).ref }],
           })),
         ),
       ),
@@ -790,7 +789,36 @@ describe('sending files', () => {
     await sendMessage('c1', '', [upload(1)])
 
     expect(store().pending.c1).toEqual([])
-    expect(store().messages.c1[0].attachments[0].url).toBe('https://files.test/a1')
+    expect(store().messages.c1[0].attachments[0]).toMatchObject({ url: 'https://files.test/a1', file: upload(1).ref })
+  })
+
+  it('does not vouch for a file the server stored in another size than the upload was', async () => {
+    vi.spyOn(api, 'post').mockImplementation((_url, body) =>
+      Promise.resolve(
+        respond(
+          wire(message({
+            id: 'real',
+            content: '',
+            clientMessageId: (body as { clientMessageId: string }).clientMessageId,
+            attachments: [{ id: 'a1', sizeBytes: 5, url: 'https://files.test/a1', file: null }],
+          })),
+        ),
+      ),
+    )
+
+    await sendMessage('c1', '', [upload(1)])
+
+    expect(store().messages.c1[0].attachments[0].file).toBeNull()
+  })
+
+  it('seals the same entries again when the message is sent again, and the same keys', async () => {
+    const post = vi.spyOn(api, 'post').mockRejectedValueOnce(failure(500, 'boom')).mockResolvedValue(respond(wire(message({ id: 'real' }))))
+    await sendMessage('c1', 'text', [upload(1)])
+    const failed = store().pending.c1[0]
+
+    await retryMessage('c1', failed.clientMessageId)
+
+    expect(post.mock.calls[1][1]).toMatchObject({ ciphertext: sealed('text', [upload(1).ref]), clientMessageId: failed.clientMessageId })
   })
 
   it('shows the failure and keeps the uploads, so the message can be sent again as it was', async () => {
@@ -841,7 +869,7 @@ describe('renewing a link to a file', () => {
     store().seedMessages('c1', [
       message({
         id: 'm1',
-        attachments: [{ id: 'a1', type: 'Image', fileName: 'a.png', contentType: 'image/png', sizeBytes: 1, url: 'https://files.test/old' }],
+        attachments: [{ id: 'a1', sizeBytes: 1, url: 'https://files.test/old', file: null }],
       }),
     ])
 
@@ -849,9 +877,10 @@ describe('renewing a link to a file', () => {
     withFile()
     const get = vi.spyOn(api, 'get').mockResolvedValue(respond({ url: 'https://files.test/new', expiresAt: '2026-10-22T12:00:00Z' }))
 
-    await refreshAttachmentUrl('c1', 'm1', 'a1')
+    const url = await refreshAttachmentUrl('c1', 'm1', 'a1')
 
     expect(get.mock.calls[0][0]).toBe('/attachments/a1/url')
+    expect(url).toBe('https://files.test/new')
     expect(store().messages.c1[0].attachments[0].url).toBe('https://files.test/new')
   })
 

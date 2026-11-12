@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using ChatNET.API.Tests.Infrastructure;
 using Microsoft.AspNetCore.TestHost;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -28,14 +29,13 @@ public class AttachmentLinkTests
     }
 
     // A message from someone, with one real file, sent through the API.
-    private async Task<(TestUser Alice, TestUser Bob, Guid Conversation, Guid Attachment, byte[] Content)> SentFileAsync(
-        string contentType = "image/png", string fileName = "photo.png")
+    private async Task<(TestUser Alice, TestUser Bob, Guid Conversation, Guid Attachment, byte[] Content)> SentFileAsync()
     {
         var (alice, bob, conversation) = await _factory.DirectChatAsync();
         using var client = _factory.CreateClientFor(alice);
         var content = Bytes(150);
-        var key = await client.UploadFileAsync(conversation, content, contentType, fileName);
-        var message = await client.SendMessageWithFilesAsync(conversation, null, (key, fileName));
+        var key = await client.UploadFileAsync(conversation, content);
+        var message = await client.SendMessageWithFilesAsync(conversation, null, key);
 
         return (alice, bob, conversation, Assert.Single(message.AttachmentsOf()).IdOf(), content);
     }
@@ -65,24 +65,19 @@ public class AttachmentLinkTests
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
+    // The file is encrypted and the browser opens it itself, so the link carries no name to save it under and no way to show it.
     [Fact]
-    public async Task A_picture_is_offered_to_be_shown_and_any_other_file_to_be_downloaded()
+    public async Task The_link_offers_the_bytes_as_stored_with_no_name_to_save_them_under()
     {
-        var picture = await SentFileAsync("image/png", "photo.png");
-        var document = await SentFileAsync("application/pdf", "plan.pdf");
-        using var pictureReader = _factory.CreateClientFor(picture.Bob);
-        using var documentReader = _factory.CreateClientFor(document.Bob);
+        var (_, bob, _, attachment, content) = await SentFileAsync();
+        using var client = _factory.CreateClientFor(bob);
 
-        var pictureLink = await (await pictureReader.GetAttachmentLinkResponseAsync(picture.Attachment))
-            .Content.ReadFromJsonAsync<JsonElement>();
-        var documentLink = await (await documentReader.GetAttachmentLinkResponseAsync(document.Attachment))
-            .Content.ReadFromJsonAsync<JsonElement>();
+        var link = await (await client.GetAttachmentLinkResponseAsync(attachment)).Content.ReadFromJsonAsync<JsonElement>();
+        var download = await new HttpClient().GetAsync(link.GetProperty("url").GetString());
 
-        var shown = await new HttpClient().GetAsync(pictureLink.GetProperty("url").GetString());
-        var downloaded = await new HttpClient().GetAsync(documentLink.GetProperty("url").GetString());
-        Assert.Equal("inline", shown.Content.Headers.ContentDisposition?.DispositionType);
-        Assert.Equal("attachment", downloaded.Content.Headers.ContentDisposition?.DispositionType);
-        Assert.Equal("plan.pdf", downloaded.Content.Headers.ContentDisposition?.FileName?.Trim('"'));
+        Assert.Equal(content, await download.Content.ReadAsByteArrayAsync());
+        Assert.Null(download.Content.Headers.ContentDisposition);
+        Assert.Equal("application/octet-stream", download.Content.Headers.ContentType?.MediaType);
     }
 
     // ##### Who may ask #####
@@ -185,7 +180,8 @@ public class AttachmentLinkTests
     [Fact]
     public async Task A_refused_request_is_logged_with_ids_only()
     {
-        var (_, _, _, attachment, _) = await SentFileAsync("application/pdf", "private contract.pdf");
+        var (_, _, _, attachment, _) = await SentFileAsync();
+        var storageKey = await _factory.QueryDbAsync(db => db.MessageAttachments.Where(a => a.Id == attachment).Select(a => a.StorageKey).SingleAsync());
         var stranger = await _factory.RegisterUserAsync("stranger");
         var capture = new CapturingLoggerProvider();
         using var host = _factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
@@ -199,6 +195,6 @@ public class AttachmentLinkTests
         Assert.StartsWith("[Warning]", line);
         Assert.Contains(attachment.ToString(), line);
         Assert.Contains(stranger.Id.ToString(), line);
-        Assert.DoesNotContain(capture.Entries, e => e.Contains("private contract"));
+        Assert.DoesNotContain(capture.Entries, e => e.Contains(storageKey));
     }
 }

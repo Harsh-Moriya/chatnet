@@ -1,3 +1,4 @@
+import type { FileRef } from '../../lib/crypto'
 import { useAuthStore } from '../auth/store/authStore'
 import { epochApi } from './epochApi'
 import { indexedDbEpochKeyStore } from './epochKeyStore'
@@ -72,6 +73,7 @@ export interface SendInput {
   // 0 for the first version of a message, and one more for each edit.
   editCount: number
   text: string
+  files?: FileRef[]
 }
 
 // Seals the text under the epoch the conversation is in and hands it to `send`, which makes the request. When the server says the epoch

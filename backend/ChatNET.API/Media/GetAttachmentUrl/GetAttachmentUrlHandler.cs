@@ -47,9 +47,7 @@ public class GetAttachmentUrlHandler : IRequestHandler<GetAttachmentUrlQuery, At
             throw new NotFoundException("Attachment", request.AttachmentId);
         }
 
-        var attachment = found.Attachment;
-        var link = _storage.CreateDownloadUrl(
-            attachment.StorageKey, attachment.FileName, inline: attachment.Type != AttachmentType.File);
+        var link = _storage.CreateDownloadUrl(found.Attachment.StorageKey);
 
         return new AttachmentLinkDto(link.Url, link.ExpiresAt);
     }

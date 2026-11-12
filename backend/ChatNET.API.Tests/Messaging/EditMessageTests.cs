@@ -369,14 +369,13 @@ public class EditMessageTests
         var (alice, bob, conversation) = await _factory.DirectChatAsync();
         await using var bobTab = await HubClient.ConnectAsync(_factory, bob);
         using var client = _factory.CreateClientFor(alice);
-        var key = await client.UploadFileAsync(conversation, "hello"u8.ToArray(), "text/plain", "note.txt");
-        var sent = await client.SendMessageWithFilesAsync(conversation, "see file", (key, "note.txt"));
+        var key = await client.UploadFileAsync(conversation, new byte[64]);
+        var sent = await client.SendMessageWithFilesAsync(conversation, "see file", key);
 
         var edited = await client.EditMessageAsync(conversation, sent.MessageIdOf(), "");
 
         Assert.Equal("", edited.ContentOf());
-        var file = Assert.Single(edited.AttachmentsOf());
-        Assert.Equal("note.txt", file.GetProperty("fileName").GetString());
+        Assert.Single(edited.AttachmentsOf());
         var pushed = await bobTab.WaitForUpdateAsync(sent.MessageIdOf());
         Assert.Single(pushed.AttachmentsOf());
     }

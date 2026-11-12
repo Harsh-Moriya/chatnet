@@ -20,8 +20,7 @@ public sealed class UndeletableBlobStorage : IBlobStorage
 
     public SignedUrl CreateUploadUrl(string key, string contentType) => _inner.CreateUploadUrl(key, contentType);
 
-    public SignedUrl CreateDownloadUrl(string key, string fileName, bool inline) =>
-        _inner.CreateDownloadUrl(key, fileName, inline);
+    public SignedUrl CreateDownloadUrl(string key) => _inner.CreateDownloadUrl(key);
 
     public Task<StoredObject?> HeadAsync(string key, CancellationToken cancellationToken) =>
         _inner.HeadAsync(key, cancellationToken);

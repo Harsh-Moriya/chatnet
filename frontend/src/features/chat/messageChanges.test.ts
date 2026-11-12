@@ -9,7 +9,7 @@ import {
   latest,
   withChangedPreview,
 } from './messageChanges'
-import type { Conversation, Message } from './types'
+import type { Attachment, Conversation, Message } from './types'
 
 function message(overrides: Partial<Message> = {}): Message {
   return {
@@ -47,6 +47,14 @@ function conversation(overrides: Partial<Conversation> = {}): Conversation {
 }
 
 const sentAt = new Date('2026-10-11T10:00:00Z').getTime()
+
+const entry = (name: string) => ({ name, type: 'image/png', size: 10, key: 'k'.repeat(43), chunkSize: 65536 })
+const file = (id: string, name: string | null, url = `https://files.test/${id}`): Attachment => ({
+  id,
+  sizeBytes: 39,
+  url,
+  file: name === null ? null : entry(name),
+})
 
 // ##### Which copy is the newer #####
 
@@ -102,6 +110,32 @@ describe('latest', () => {
     expect(latest(held, incoming)).toEqual({ ...incoming, content: 'opened', unreadable: null })
   })
 
+  it('keeps what the files are, by file, when the same version arrives unopened, and takes the fresher links', () => {
+    const held = message({
+      content: 'opened',
+      attachments: [file('a1', 'one.png', 'https://files.test/a1?old'), file('a2', 'two.png', 'https://files.test/a2?old')],
+    })
+    const incoming = message({
+      content: null,
+      unreadable: 'noKey',
+      attachments: [file('a1', null, 'https://files.test/a1?new'), file('a2', null, 'https://files.test/a2?new')],
+    })
+
+    const result = latest(held, incoming)
+
+    expect(result.attachments.map((a) => [a.id, a.file?.name, a.url])).toEqual([
+      ['a1', 'one.png', 'https://files.test/a1?new'],
+      ['a2', 'two.png', 'https://files.test/a2?new'],
+    ])
+  })
+
+  it('does not give an entry to a file the held copy did not have', () => {
+    const held = message({ content: 'opened', attachments: [file('a1', 'one.png')] })
+    const incoming = message({ content: null, unreadable: 'noKey', attachments: [file('a1', null), file('a9', null)] })
+
+    expect(latest(held, incoming).attachments.map((a) => a.file?.name ?? null)).toEqual(['one.png', null])
+  })
+
   it('does not give a text to a copy that was edited since, or to a deleted one', () => {
     const edited = message({ editCount: 1, content: null, unreadable: 'noKey' })
     const deleted = message({ isDeleted: true, content: null })
@@ -134,6 +168,20 @@ describe('canEdit', () => {
 
   it('is never for a deleted message', () => {
     expect(canEdit(message({ senderId: 'me', isDeleted: true }), 'me', sentAt + 1000)).toBe(false)
+  })
+
+  // An edit seals the message again, and a message that could not be opened has no text to start from.
+  it('is never for a message that could not be opened', () => {
+    expect(canEdit(message({ senderId: 'me', content: null, unreadable: 'noKey' }), 'me', sentAt + 1000)).toBe(false)
+  })
+
+  it('is for a message whose files are all described by the sealed message', () => {
+    expect(canEdit(message({ senderId: 'me', attachments: [file('a1', 'one.png'), file('a2', 'two.png')] }), 'me', sentAt + 1000)).toBe(true)
+  })
+
+  // The entries of the files go into the edit again, in order. One that is missing would shift the others onto the wrong files.
+  it('is never for a message with a file that the sealed message does not describe', () => {
+    expect(canEdit(message({ senderId: 'me', attachments: [file('a1', 'one.png'), file('a2', null)] }), 'me', sentAt + 1000)).toBe(false)
   })
 })
 
@@ -196,7 +244,7 @@ describe('withChangedPreview', () => {
 
   it('counts the files of an edited message', () => {
     const shown = conversation({ lastMessage: preview() })
-    const files = [{ id: 'a1', type: 'File' as const, fileName: 'a', contentType: 'text/plain', sizeBytes: 1, url: 'u' }]
+    const files = [{ id: 'a1', sizeBytes: 1, url: 'u', file: null }]
 
     expect(withChangedPreview(shown, message({ attachments: files })).lastMessage?.attachmentCount).toBe(1)
   })

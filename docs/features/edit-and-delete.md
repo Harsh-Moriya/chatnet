@@ -6,7 +6,7 @@
 
 - Only the **sender** can edit, and only within `Messaging:EditWindow` (15 minutes) of the message being sent. An admin cannot edit someone else's words, only remove them.
 - A deleted message cannot be edited (409). An edit after the window closed is a 409.
-- The new text is sealed in the browser like the first one, under the epoch the conversation is in. The browser keeps it within 4,000 code units and trims it, as for a send.
+- The new text is sealed in the browser like the first one, under the epoch the conversation is in. The browser keeps it within 4,000 code units and trims it, as for a send. The edit carries the entries of the message's files again, so the files stay readable; a message with a file that can't be opened is not offered for editing.
 - `editCount` is the count the edited message will have: one more than the count it has now. The count is part of what the sender signs, so the server cannot count for them. An edit made from an older version (another tab edited first) is a 409 with code `edit-count-stale`, and the browser reads the message again. Two edits made from the same version store one; the other gets that 409.
 - The epoch rules of sending apply: an edit sealed under another epoch is a 409 `epoch-stale`, and under an epoch marked for replacement a 409 `epoch-due`.
 - Every stored edit increments `editCount` and sets `editedAt`, including one that says the same thing, because a new blob is a new version. The message shows an "edited" label.

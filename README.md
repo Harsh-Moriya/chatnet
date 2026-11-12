@@ -10,7 +10,7 @@ A real-time, multi-user chat application with direct (1:1) and group conversatio
 - **Live messaging.** Messages, typing indicators, read receipts ("Seen"), unread counts and online presence arrive over SignalR, correctly across several server instances.
 - **Reliable history.** Cursor-paged history, gap-free catch-up after a reconnect, and sends that are safe to retry: a message is stored once however many times the request arrives.
 - **Edit and delete.** Edit your own message for 15 minutes; delete at any time (group owners and admins can delete anyone's). Everyone sees the change live.
-- **Files and pictures.** Up to four files per message, uploaded straight to S3-compatible object storage and checked when the message is sent. Profile and group pictures.
+- **Files and pictures.** Up to four files per message, encrypted in the browser and uploaded straight to S3-compatible object storage, so the bucket holds ciphertext. Profile and group pictures.
 - **Notifications.** `@mentions`, group invitations, a bell with an unread count, browser alerts, per-conversation mute, and optional Web Push alerts while the app is closed.
 - **Sessions.** Short-lived access tokens with rotating refresh tokens in an httpOnly cookie, and sign-out that ends the session.
 - **Account recovery.** A forgotten password is reset by email with a single-use link that expires. The server answers the same for every address, and a reset ends every session of the account.

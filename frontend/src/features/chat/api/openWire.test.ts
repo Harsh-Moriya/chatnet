@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { encryptedFileLength } from '../../../lib/crypto/file'
+import type { FileRef } from '../../../lib/crypto/message'
 import type { NotificationWire } from '../../notifications/types'
 import { PREVIEW_LENGTH } from '../preview'
 import type { ConversationWire, LastMessage, LastMessageWire, MessageWire } from '../types'
@@ -80,6 +82,10 @@ function notificationWire(overrides: Partial<NotificationWire> = {}): Notificati
   }
 }
 
+// A file as the sealed message describes it, and as the server holds it once stored.
+const entry = (name: string, size: number): FileRef => ({ name, type: 'image/png', size, key: 'k'.repeat(43), chunkSize: 65536 })
+const storedFile = (id: string, size: number) => ({ id, sizeBytes: encryptedFileLength(size, 65536), url: `https://files.test/${id}` })
+
 beforeEach(() => {
   resetKeysDouble()
 })
@@ -150,16 +156,87 @@ describe('opening a message', () => {
   })
 })
 
+describe('opening the files of a message', () => {
+  it('says what each file is from the sealed message, pairing the n-th file with the n-th entry', async () => {
+    const files = [entry('one.png', 100), entry('two.png', 200)]
+
+    const message = await openMessage(
+      wireMessage({ ciphertext: sealed('look', files), attachments: [storedFile('a1', 100), storedFile('a2', 200)] }),
+    )
+
+    expect(message.attachments.map((a) => [a.id, a.file])).toEqual([
+      ['a1', files[0]],
+      ['a2', files[1]],
+    ])
+  })
+
+  it('does not say what a file is when the sealed message describes a file of another size', async () => {
+    const message = await openMessage(wireMessage({ ciphertext: sealed('look', [entry('one.png', 100)]), attachments: [storedFile('a1', 101)] }))
+
+    expect(message.attachments[0].file).toBeNull()
+  })
+
+  it('does not say what a file is when the server holds more files than the sealed message describes', async () => {
+    const message = await openMessage(
+      wireMessage({ ciphertext: sealed('look', [entry('one.png', 100)]), attachments: [storedFile('a1', 100), storedFile('a2', 100)] }),
+    )
+
+    expect(message.attachments.map((a) => a.file?.name ?? null)).toEqual(['one.png', null])
+  })
+
+  it('does not say what a file is when the message lists none, as one sealed before files were sealed does', async () => {
+    const message = await openMessage(wireMessage({ ciphertext: sealed('look'), attachments: [storedFile('a1', 100)] }))
+
+    expect(message).toMatchObject({ content: 'look' })
+    expect(message.attachments[0].file).toBeNull()
+  })
+
+  it('does not say what a file is when the message cannot be opened', async () => {
+    opener.open.mockResolvedValueOnce({ readable: false as never, reason: 'noKey' } as never)
+
+    const message = await openMessage(wireMessage({ attachments: [storedFile('a1', 100)] }))
+
+    expect(message).toMatchObject({ content: null, unreadable: 'noKey' })
+    expect(message.attachments[0]).toMatchObject({ id: 'a1', file: null })
+  })
+
+  it('does not say what a file is for a deleted message, which has nothing to open', async () => {
+    const message = await openMessage(wireMessage({ ciphertext: null, isDeleted: true, attachments: [storedFile('a1', 100)] }))
+
+    expect(message.attachments[0].file).toBeNull()
+  })
+
+  it('keeps the link and the stored size of each file as the server sent them', async () => {
+    const message = await openMessage(wireMessage({ ciphertext: sealed('x', [entry('one.png', 100)]), attachments: [storedFile('a1', 100)] }))
+
+    expect(message.attachments[0]).toMatchObject({ id: 'a1', sizeBytes: encryptedFileLength(100, 65536), url: 'https://files.test/a1' })
+  })
+})
+
 describe('a message this tab sealed itself', () => {
   it('has the text that was written, and is not opened again', async () => {
-    const message = ownMessage(wireMessage({ ciphertext: sealed('what the server stored') }), 'what was written')
+    const message = ownMessage(wireMessage({ ciphertext: sealed('what the server stored') }), 'what was written', [])
 
     expect(message).toMatchObject({ content: 'what was written', unreadable: null })
     expect(opener.open).not.toHaveBeenCalled()
   })
+
+  it('knows what its files are from what was sealed, and checks them against what the server stored', () => {
+    const files = [entry('one.png', 100), entry('two.png', 200)]
+
+    const message = ownMessage(wireMessage({ attachments: [storedFile('a1', 100), storedFile('a2', 5)] }), 'x', files)
+
+    expect(message.attachments.map((a) => a.file?.name ?? null)).toEqual(['one.png', null])
+  })
 })
 
 describe('sealing a message held again, to open it once its key arrives', () => {
+  it('gives the files as the server sent them, which say nothing of what they are', async () => {
+    const message = await openMessage(wireMessage({ ciphertext: sealed('x', [entry('one.png', 100)]), attachments: [storedFile('a1', 100)] }))
+
+    expect(sealedOf(message)?.attachments).toEqual([storedFile('a1', 100)])
+  })
+
   it('gives back what the server sent', async () => {
     const wire = wireMessage({ attachments: [], editCount: 2, editedAt: '2026-10-11T10:05:00Z' })
 

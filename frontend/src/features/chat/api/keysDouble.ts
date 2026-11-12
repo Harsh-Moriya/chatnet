@@ -1,4 +1,6 @@
 import { vi } from 'vitest'
+import type { FileRef } from '../../../lib/crypto/message'
+import type { Attachment, AttachmentWire } from '../types'
 import { refusalOf } from '../../encryption/epochApi'
 import { withEpochRetries } from '../../encryption/epochs'
 
@@ -24,12 +26,26 @@ export const addition = {
 // the real thing in features/encryption.
 export const SEALED = 'sealed:'
 
-export const sealed = (text: string) => `${SEALED}${text}`
+// What separates the text from the entries of the files in what is sealed here.
+const FILES_AT = '\u0001'
 
-// A message as the server sends it: its text sealed, and no text.
-export function wire<T extends { content: string | null }>(message: T): Omit<T, 'content'> & { ciphertext: string | null; keyEpoch: number } {
-  const { content, ...rest } = message
-  return { ...rest, ciphertext: content === null ? null : sealed(content), keyEpoch: 1 }
+// The text and the entries of the files, sealed. A message with no files seals as the text alone.
+export const sealed = (text: string, files: readonly FileRef[] = []) =>
+  files.length === 0 ? `${SEALED}${text}` : `${SEALED}${text}${FILES_AT}${JSON.stringify(files)}`
+
+// A message as the server sends it: its text and the entries of its files sealed, and the files as the server holds them, which say nothing
+// of what they are.
+export function wire<T extends { content: string | null; attachments?: Attachment[] }>(
+  message: T,
+): Omit<T, 'content' | 'attachments'> & { ciphertext: string | null; keyEpoch: number; attachments: AttachmentWire[] } {
+  const { content, attachments = [], ...rest } = message
+  const files = attachments.flatMap((attachment) => (attachment.file ? [attachment.file] : []))
+  return {
+    ...rest,
+    ciphertext: content === null ? null : sealed(content, files),
+    keyEpoch: 1,
+    attachments: attachments.map(({ id, sizeBytes, url }) => ({ id, sizeBytes, url })),
+  }
 }
 
 const isMessage = (value: unknown): value is { content: string | null } =>
@@ -42,10 +58,12 @@ export function asServerSends<T>(data: T): unknown {
   return isMessage(data) ? wire(data) : data
 }
 
-const openSealed = async (message: { ciphertext: string }) =>
-  message.ciphertext.startsWith(SEALED)
-    ? { readable: true as const, text: message.ciphertext.slice(SEALED.length) }
-    : { readable: false as const, reason: 'invalid' as const }
+const openSealed = async (message: { ciphertext: string }) => {
+  if (!message.ciphertext.startsWith(SEALED)) return { readable: false as const, reason: 'invalid' as const }
+
+  const [text, files] = message.ciphertext.slice(SEALED.length).split(FILES_AT)
+  return { readable: true as const, text, files: files === undefined ? [] : (JSON.parse(files) as FileRef[]) }
+}
 
 export const opener = {
   open: vi.fn(openSealed),
@@ -55,9 +73,9 @@ export const opener = {
 const sealAndSendThrough = async (
   _conversationId: string,
   _known: unknown,
-  input: { text: string },
+  input: { text: string; files?: FileRef[] },
   send: (sealed: { ciphertext: string; keyEpoch: number }) => Promise<unknown>,
-) => send({ ciphertext: sealed(input.text), keyEpoch: 1 })
+) => send({ ciphertext: sealed(input.text, input.files), keyEpoch: 1 })
 
 export const keysDouble = {
   epochDeps: vi.fn(() => deps),

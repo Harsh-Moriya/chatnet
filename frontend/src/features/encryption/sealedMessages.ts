@@ -1,4 +1,4 @@
-import { CryptoError, fromBase64Url, openMessage, readMessageEpoch, sealMessage, toBase64Url } from '../../lib/crypto'
+import { CryptoError, type FileRef, fromBase64Url, openMessage, readMessageEpoch, sealMessage, toBase64Url } from '../../lib/crypto'
 import { type EpochDeps, type KnownKeyState, MissingKeysError, ensureEpoch, loadEpochKeys, resolvePeers, withEpochRetries } from './epochs'
 import { IdentityChangedError } from './pins'
 
@@ -31,7 +31,8 @@ export type UnreadableReason =
   // The sender's identity key is not the one this browser first saw for them.
   | 'senderChanged'
 
-export type OpenedMessage = { readable: true; text: string } | { readable: false; reason: UnreadableReason }
+// A message that can be read has its text and the entries of its files, in the order of the message's attachments.
+export type OpenedMessage = { readable: true; text: string; files: FileRef[] } | { readable: false; reason: UnreadableReason }
 
 const unreadable = (reason: UnreadableReason): OpenedMessage => ({ readable: false, reason })
 
@@ -60,6 +61,9 @@ export interface SealInput {
   editCount: number
   epoch: number
   text: string
+  // The files of the message, with the keys that open them. An edit carries the files of the message it edits, because it replaces the
+  // whole sealed message and a file whose entry is left out can no longer be opened by anyone.
+  files?: FileRef[]
 }
 
 export interface Sealed {
@@ -67,8 +71,7 @@ export interface Sealed {
   keyEpoch: number
 }
 
-// The text as a blob sealed under the key of the epoch and signed by this person's identity key. The files of a message are not part
-// of it yet, so the payload names none.
+// The text and the entries of the files as a blob sealed under the key of the epoch and signed by this person's identity key.
 export async function sealText(deps: EpochDeps, input: SealInput): Promise<Sealed> {
   const epochKey = await heldKey(deps, input.conversationId, input.epoch)
   if (!epochKey) throw new EpochKeyMissingError(input.epoch)
@@ -82,7 +85,7 @@ export async function sealText(deps: EpochDeps, input: SealInput): Promise<Seale
     },
     epoch: input.epoch,
     epochKey,
-    payload: { text: input.text, files: [] },
+    payload: { text: input.text, files: input.files ?? [] },
     signer: deps.self.secrets.identity,
   })
 
@@ -204,7 +207,7 @@ export function createMessageOpener(deps: EpochDeps): MessageOpener {
           blob,
         })
 
-        return { readable: true, text: payload.text }
+        return { readable: true, text: payload.text, files: payload.files }
       } catch (failure) {
         // A blob that does not check out is wrong; anything else (the network, the key store) may be right the next time.
         return unreadable(failure instanceof CryptoError ? 'invalid' : 'noKey')

@@ -1,11 +1,13 @@
 import { formatFileSize } from '../../lib/format'
-import type { AttachmentType } from './types'
 
-// The limits the server enforces (Storage in the API configuration), repeated here so that a file that cannot
-// be sent is refused before it is uploaded. The server stays the authority: it checks the same things again
-// and answers with a message of its own if this copy of the limits has drifted.
+// The size and the count the server enforces (Storage in the API configuration), repeated here so that a file that cannot be sent is
+// refused before it is encrypted and uploaded. The server stays the authority for these two and answers with a message of its own if this
+// copy has drifted. The size is that of the file as a person sees it: what is stored for it is a little larger (a header, and a tag for
+// every 64 KiB), which the server allows for.
 export const MAX_FILE_BYTES = 10 * 1024 * 1024
 export const MAX_FILES_PER_MESSAGE = 4
+
+// What kinds of file a message may carry is decided here and nowhere else: the server cannot see what a file is, because it is encrypted.
 
 export const ALLOWED_CONTENT_TYPES: readonly string[] = [
   'image/jpeg',
@@ -21,13 +23,6 @@ export const ALLOWED_CONTENT_TYPES: readonly string[] = [
 
 // What the file dialog offers. A browser may still let someone pick another type, which is checked below.
 export const FILE_PICKER_ACCEPT = ALLOWED_CONTENT_TYPES.join(',')
-
-// Images and videos are shown in the message; everything else is a file to download.
-export function attachmentTypeOf(contentType: string): AttachmentType {
-  if (contentType.startsWith('image/')) return 'Image'
-  if (contentType.startsWith('video/')) return 'Video'
-  return 'File'
-}
 
 export interface FileDetails {
   name: string

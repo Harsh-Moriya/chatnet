@@ -42,11 +42,10 @@ public class CreateUploadHandler : IRequestHandler<CreateUploadCommand, UploadTi
         if (user is null || user.IsDeactivated)
             throw new ForbiddenException("This account can no longer send messages.");
 
-        // The type that is signed is the one the options list, in the form the validator matched it to. The
-        // browser has to send exactly this content type, or the storage refuses the upload.
-        var contentType = AttachmentKinds.Normalize(request.ContentType!);
+        // The upload is signed for one content type, whatever the file is: the browser has to send exactly it, and the storage never
+        // learns what the bytes are.
         var uploadKey = AttachmentKeys.NewUploadKey(request.ConversationId, request.UserId);
-        var link = _storage.CreateUploadUrl(uploadKey, contentType);
+        var link = _storage.CreateUploadUrl(uploadKey, SealedFile.ContentType);
 
         _logger.LogInformation(
             "User {UserId} was given an upload for conversation {ConversationId}", request.UserId, request.ConversationId);

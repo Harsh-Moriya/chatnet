@@ -1,6 +1,7 @@
 // The encryption formats. Each module is one blob type; docs/architecture/encryption-format.md
 // is the specification they implement.
 
+export * from './attachment'
 export * from './backup'
 export * from './bytes'
 export * from './epoch'

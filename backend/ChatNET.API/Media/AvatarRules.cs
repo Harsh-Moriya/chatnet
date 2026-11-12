@@ -9,10 +9,13 @@ public static class AvatarRules
 
     private static readonly string[] AllowedTypes = ["image/png", "image/jpeg", "image/webp", "image/gif"];
 
-    // The allowed type this one matches (ignoring case and parameters), or null.
+    // The allowed type this one matches (ignoring case and parameters), or null. "Image/PNG; charset=x" is "image/png", so an uppercase
+    // letter cannot get a picture past the list.
     public static string? Match(string contentType)
     {
-        var normalized = AttachmentKinds.Normalize(contentType);
+        var parameters = contentType.IndexOf(';');
+        var normalized = (parameters < 0 ? contentType : contentType[..parameters]).Trim().ToLowerInvariant();
+
         return AllowedTypes.FirstOrDefault(type => type == normalized);
     }
 }

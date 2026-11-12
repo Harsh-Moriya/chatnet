@@ -179,13 +179,13 @@ The plaintext is a JSON object in UTF-8, written compactly with the keys in this
 ```
 
 - `text`: the message text. Empty when the message is only files.
-- `files`: the files of the message, in the order the attachments are stored. Each holds the original name, the content type, the size in bytes of the unencrypted file, the key of that file as unpadded base64url, and the chunk size used to encrypt it.
+- `files`: the files of the message, in the order the attachments are stored. Each holds the original name (at most 255 UTF-16 code units), the content type, the size in bytes of the unencrypted file, the key of that file as unpadded base64url, and the chunk size used to encrypt it (1 to 16777216).
 
 Readers accept any JSON of this shape, with fields they do not know ignored.
 
-**Padding:** the JSON bytes, then `80`, then zero bytes up to the next multiple of 256. There is always at least one padding byte. A reader removes trailing zeros and then the `80`, and rejects the payload if the `80` is missing. All messages whose JSON is shorter than 256 bytes therefore have the same length.
+**Pairing with the stored files.** The server holds the encrypted files as attachments of the message and says nothing about what they are. The n-th attachment, in the order they were attached, is described by the n-th entry of `files`. A reader takes the pairing as true only when the length of an encrypted file with that entry's size and chunk size equals the stored size of the attachment (see [File](#file)). An attachment with no entry, with an entry of another size, or in a message that could not be opened is not vouched for: it is never decrypted or shown as a file.
 
-A message whose files are stored as uploaded carries an empty `files` list.
+**Padding:** the JSON bytes, then `80`, then zero bytes up to the next multiple of 256. There is always at least one padding byte. A reader removes trailing zeros and then the `80`, and rejects the payload if the `80` is missing. All messages whose JSON is shorter than 256 bytes therefore have the same length.
 
 ### What the server checks
 
@@ -207,6 +207,8 @@ The file is cut into pieces of the chunk size; the last piece may be shorter, an
 
 - **Nonce of chunk `i`:** `prefix(7) || i(4) || final(1)`, where `final` is `01` for the last chunk and `00` for the others.
 - **Associated data:** `label("chatnet/v1/file-chunk", header(13))`.
+
+**Stored length.** A file of `n` bytes cut into pieces of `chunkSize` is stored as `13 + n + max(1, ceil(n / chunkSize)) * 16` bytes. A reader checks that length, and that the chunk size in the header is the one in the entry, before it decrypts anything. The server accepts any stored file of at least 29 bytes, and at most the length of a file of the largest size allowed at pieces of 65536 bytes.
 
 Putting the index and the final flag in the nonce means chunks cannot be reordered, the end cannot be cut off without detection, and a chunk cannot be moved to another file. To read one chunk, fetch bytes `13 + i * (chunkSize + 16)` for `chunkSize + 16` bytes (fewer for the last chunk), and decrypt knowing whether it is the last. Chunk `i` is the last when the stored file ends within it.
 
@@ -239,7 +241,8 @@ A reader treats each of these as an error and does not try to repair the input:
 
 - an unknown version or suite, a wrong length, or an unknown key derivation in a backup
 - a chunk size or iteration count outside the range given above
-- a payload that is not valid UTF-8 or JSON of the shape above, a file key that is not 32 bytes, or missing padding
+- a payload that is not valid UTF-8 or JSON of the shape above, a file key that is not 32 bytes, a file name longer than 255 code units, a chunk size above 16777216, or missing padding
+- a stored file whose length is not the one its entry gives, or whose header names another chunk size than the entry
 - a signature that does not verify, a ciphertext that does not authenticate, or an association (conversation, sender, client message id, edit count, epoch, member, generation) that differs from the one the blob was made for
 - an epoch key that does not match its commitment
 - an account key generation list that does not ascend
@@ -247,7 +250,7 @@ A reader treats each of these as an error and does not try to repair the input:
 ## Limits of the formats
 
 - **No forward secrecy inside an epoch.** The key of an epoch opens every message of that epoch. Epochs bound the exposure when membership changes, and a new epoch is started when membership changes, or by a member, at most once a day.
-- **Padding is coarse.** Messages are padded to a multiple of 256 bytes, so a long message still shows roughly how long it is, and the number and sizes of files are visible.
+- **Padding is coarse.** Messages are padded to a multiple of 256 bytes, so a long message still shows roughly how long it is, and the number and sizes of files are visible. A file is not padded: its stored size is its size plus a fixed overhead.
 - **Trust in an identity key is not in the format.** A client remembers the identity key of a person the first time it sees it, and a change is something to show the user. The safety number is how two people confirm the key out of band.
 - **Who a message is between, and when, is not hidden.** Only content is encrypted.
 

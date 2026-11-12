@@ -40,7 +40,7 @@ export function useAttachmentUploads(conversationId: string) {
     running.current.set(item.id, controller)
 
     uploadFile(conversationId, item.file, (fraction) => apply((list) => setProgress(list, item.id, fraction)), controller.signal)
-      .then((uploadKey) => apply((list) => markReady(list, item.id, uploadKey)))
+      .then((uploaded) => apply((list) => markReady(list, item.id, uploaded)))
       .catch((error: unknown) => {
         // A removed upload is cancelled on purpose and is already gone from the list.
         if (axios.isCancel(error)) return

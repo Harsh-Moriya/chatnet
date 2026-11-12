@@ -148,7 +148,7 @@ describe('what an alert says', () => {
         message({
           content: '',
           attachments: Array.from({ length: count }, (_, i) => ({
-            id: `a${i}`, type: 'File' as const, fileName: 'f', contentType: 'text/plain', sizeBytes: 1, url: 'u',
+            id: `a${i}`, sizeBytes: 1, url: 'u', file: null,
           })),
         }),
         conversation(),
@@ -175,7 +175,7 @@ describe('what an alert says', () => {
     const unopened = message({
       content: null,
       unreadable: 'noKey',
-      attachments: [{ id: 'a1', type: 'File', fileName: 'f', contentType: 'text/plain', sizeBytes: 1, url: 'u' }],
+      attachments: [{ id: 'a1', sizeBytes: 1, url: 'u', file: null }],
     })
 
     expect(messageAlertText(unopened, conversation()).body).toBe('Sent a file')

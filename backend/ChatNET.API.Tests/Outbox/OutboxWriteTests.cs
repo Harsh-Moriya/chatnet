@@ -323,9 +323,9 @@ public class OutboxWriteTests
         using var client = _factory.CreateClientFor(alice);
         var text = $"private-{Guid.NewGuid():N}";
 
-        var key = await client.UploadFileAsync(conversation, "hello"u8.ToArray(), "text/plain", "note.txt");
+        var key = await client.UploadFileAsync(conversation, new byte[64]);
 
-        var sent = await client.SendMessageWithFilesAsync(conversation, text, (key, "note.txt"));
+        var sent = await client.SendMessageWithFilesAsync(conversation, text, key);
 
         var row = Assert.Single(await _factory.OutboxRowsAboutAsync("messageId", sent.MessageIdOf()));
         Assert.DoesNotContain("http", row.Payload);

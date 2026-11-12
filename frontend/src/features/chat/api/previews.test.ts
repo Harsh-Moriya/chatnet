@@ -86,7 +86,7 @@ describe('opening the previews of the list', () => {
       most = Math.max(most, active)
       await new Promise((resolve) => setTimeout(resolve, 5))
       active--
-      return { readable: true as const, text: message.ciphertext.slice('sealed:'.length) }
+      return { readable: true as const, text: message.ciphertext.slice('sealed:'.length), files: [] }
     })
 
     await openPreviews(list)
@@ -108,7 +108,7 @@ describe('opening the previews of the list', () => {
       await new Promise<void>((resolve) => {
         release = resolve
       })
-      return { readable: true as const, text: 'old text' }
+      return { readable: true as const, text: 'old text', files: [] }
     })
 
     const opening = openPreviews(list)

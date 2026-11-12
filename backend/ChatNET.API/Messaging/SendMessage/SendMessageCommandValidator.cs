@@ -46,7 +46,6 @@ public class SendMessageCommandValidator : AbstractValidator<SendMessageCommand>
             .ChildRules(file =>
             {
                 file.RuleFor(f => f.UploadKey).NotEmpty().MaximumLength(MaxUploadKeyLength);
-                file.RuleFor(f => f.FileName).NotEmpty().MaximumLength(AttachmentNames.MaxLength);
             });
     }
 }

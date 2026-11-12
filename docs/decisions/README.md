@@ -57,7 +57,7 @@ Records are **Accepted** unless marked **Superseded**. Where a choice replaced a
 | Record | Summary |
 |---|---|
 | [0023: S3-compatible object storage](0023-s3-compatible-object-storage.md) | Files live in a bucket reached through the S3 API: designed for Cloudflare R2, with RustFS locally and in tests. |
-| [0024: Uploads go straight to storage and are checked when the message is sent](0024-direct-uploads-checked-at-send.md) | A ticket gives a presigned PUT; the send inspects what was really stored and copies it only if it is unchanged. |
+| [0024: Uploads go straight to storage and are checked when the message is sent](0024-direct-uploads-checked-at-send.md) | A ticket gives a presigned PUT; the send inspects what was really stored and copies it only if it is unchanged. Accepted, in part superseded: the type and name checks went when files were encrypted. |
 | [0025: Pictures at immutable addresses served by the API](0025-immutable-picture-addresses.md) | A picture is served from the private bucket without a token at an address that never serves two pictures, cached for a year. |
 
 ## Security
@@ -86,3 +86,4 @@ Records are **Accepted** unless marked **Superseded**. Where a choice replaced a
 |---|---|
 | [0037: Conversation keys are made by members and checked by the server only for completeness](0037-conversation-keys-made-by-members.md) | A member's browser makes and seals the key of each epoch; the server stores it and refuses an epoch that does not cover exactly the people in the conversation. |
 | [0038: Messages are sealed in the browser, and the server stores a blob it checks only for shape and epoch](0038-messages-stored-as-ciphertext.md) | The text is sealed and signed by the sender; the server checks the shape and the epoch, stores it as `Ciphertext`, and takes names as ids. |
+| [0039: Files are encrypted in the browser, and the server enforces size and count only](0039-files-encrypted-in-the-browser.md) | Each file is encrypted in pieces under a key made for it, the key travels inside the sealed message, and the server limits size and count because it cannot see what a file is. |

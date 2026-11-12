@@ -180,11 +180,11 @@ public class PersonRateLimitTests
         using var client = ClientFor(host, alice);
         var group = (await client.CreateGroupAsync("Team", bob.Id)).IdOf();
 
-        Assert.Equal(HttpStatusCode.OK, (await client.RequestUploadAsync(conversation, "a.txt", "text/plain", 10)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.RequestUploadAsync(conversation, 100)).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await client.AvatarUploadResponseAsync(null, "image/png", 100)).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await client.AvatarUploadResponseAsync(group, "image/png", 100)).StatusCode);
 
-        await AssertRefusedWithTheWaitAsync(await client.RequestUploadAsync(conversation, "b.txt", "text/plain", 10), atMostSeconds: 3600);
+        await AssertRefusedWithTheWaitAsync(await client.RequestUploadAsync(conversation, 100), atMostSeconds: 3600);
         await AssertRefusedWithTheWaitAsync(await client.AvatarUploadResponseAsync(null, "image/png", 100), atMostSeconds: 3600);
         await AssertRefusedWithTheWaitAsync(await client.AvatarUploadResponseAsync(group, "image/png", 100), atMostSeconds: 3600);
     }
