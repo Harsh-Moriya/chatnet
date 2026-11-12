@@ -9,6 +9,7 @@ import { attachmentPreview } from '../attachments'
 import { unreadLabel } from '../readState'
 import { typingLabel } from '../typingLabel'
 import type { Conversation } from '../types'
+import { unreadableText } from '../unreadable'
 
 interface ConversationListItemProps {
   conversation: Conversation
@@ -73,7 +74,7 @@ export function ConversationListItem({ conversation, currentUserId, now }: Conve
                   ) : last === null ? (
                     <span className="italic">No messages yet</span>
                   ) : last.unreadable ? (
-                    <span className="italic">{last.unreadable === 'pending' ? 'Encrypted message' : "Can't be decrypted on this device"}</span>
+                    <span className="italic">{unreadableText(last.unreadable)}</span>
                   ) : last.content === null ? (
                     <span className="italic">Message deleted</span>
                   ) : (
