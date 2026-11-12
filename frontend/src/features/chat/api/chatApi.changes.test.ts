@@ -119,6 +119,16 @@ describe('editMessage', () => {
     expect(patch.mock.calls[0][1]).toMatchObject({ mentionedUserIds: ['bob'] })
   })
 
+  it('refuses at once a message that the server has not confirmed, which has no id to seal under', async () => {
+    store().seedMessages('c1', [message({ clientMessageId: null })])
+    const patch = vi.spyOn(api, 'patch')
+
+    await expect(editMessage('c1', 'm1', 'x', 'me')).rejects.toThrow('not loaded')
+
+    expect(patch).not.toHaveBeenCalled()
+    expect(keysDouble.sealAndSend).not.toHaveBeenCalled()
+  })
+
   it('refuses at once, asking nothing of the server, a message that is not loaded', async () => {
     const patch = vi.spyOn(api, 'patch')
 

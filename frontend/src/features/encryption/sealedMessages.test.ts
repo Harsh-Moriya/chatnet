@@ -163,6 +163,49 @@ describe('a message that cannot be shown', () => {
     expect(callsTo(server, 'getEpochs')).toBe(1)
   })
 
+  it('is reported as having no key, not as a bad message, when this browser cannot read its key store', async () => {
+    const { everyone: [ana, ben], id } = await conversationOf(2)
+    const message = await messageFrom(ana, id, 'x')
+    const unreadableStore = {
+      ...ben.deps,
+      keys: {
+        load: async (): Promise<never> => {
+          throw new Error('the store could not be read')
+        },
+        save: ben.keys.save.bind(ben.keys),
+        highest: ben.keys.highest.bind(ben.keys),
+        removeAll: ben.keys.removeAll.bind(ben.keys),
+      },
+    }
+
+    expect(await createMessageOpener(unreadableStore).open(message)).toEqual({ readable: false, reason: 'noKey' })
+  })
+
+  it('forgets what was missing for the conversation it is told about and for no other', async () => {
+    const server = new FakeEpochServer()
+    const ana = await newPerson(server)
+    const dee = await newPerson(server)
+    const conversations: string[] = []
+    for (let i = 0; i < 2; i++) {
+      const id = await start(server, ana, [])
+      const added = await prepareAddingMembers(ana.deps, id, [dee.id])
+      server.addWithEpoch(ana.id, id, [dee.id], added.body)
+      conversations.push(id)
+    }
+    const opener = createMessageOpener(dee.deps)
+    const [first, second] = [await messageFrom(ana, conversations[0], 'one'), await messageFrom(ana, conversations[1], 'two')]
+    await opener.open(first)
+    await opener.open(second)
+
+    opener.forget(conversations[0])
+    server.calls.length = 0
+    await opener.open(second)
+    expect(callsTo(server, 'getEpochs')).toBe(0)
+
+    await opener.open(first)
+    expect(callsTo(server, 'getEpochs')).toBe(1)
+  })
+
   it('is invalid when the blob was changed on its way', async () => {
     const { everyone: [ana, ben], id } = await conversationOf(2)
     const message = await messageFrom(ana, id, 'untouched')
@@ -238,6 +281,39 @@ describe('a message that cannot be shown', () => {
       readable: false,
       reason: 'senderUnknown',
     })
+  })
+
+  it('looks the sender up again when the server could not be reached the first time', async () => {
+    const { server, everyone: [, ben, cy], id } = await conversationOf(3)
+    const message = await messageFrom(cy, id, 'from cy')
+    let reachable = true
+    const flaky = {
+      ...ben.deps,
+      api: {
+        ...ben.deps.api,
+        lookupKeys: async (userIds: string[]) => {
+          if (!reachable) throw new Error('network down')
+          return ben.deps.api.lookupKeys(userIds)
+        },
+      },
+    }
+    const opener = createMessageOpener(flaky)
+    await loadEpochKeys(flaky, id)
+    reachable = false
+
+    expect(await opener.open(message)).toEqual({ readable: false, reason: 'senderUnknown' })
+    reachable = true
+    expect(await opener.open(message)).toEqual({ readable: true, text: 'from cy' })
+    expect(server.calls.length).toBeGreaterThan(0)
+  })
+
+  it('checks a message of its own against its own key, without asking the server who it is', async () => {
+    const { server, everyone: [ana], id } = await conversationOf(2)
+    const message = await messageFrom(ana, id, 'mine')
+    server.calls.length = 0
+
+    expect(await createMessageOpener(ana.deps).open(message)).toEqual({ readable: true, text: 'mine' })
+    expect(callsTo(server, 'lookupKeys')).toBe(0)
   })
 
   it('has a changed sender when their identity key is not the one first seen', async () => {
@@ -322,6 +398,19 @@ describe('sending under the conversation\'s current epoch', () => {
     server.requireRotation(id)
 
     expect(await underCurrentEpoch(ana.deps, id, { keyEpoch: 1, keyRotationRequired: true }, work(server, id))).toBe(2)
+  })
+
+  it('does not even try an epoch it knows is due, so the one made first is the one used', async () => {
+    const { server, everyone: [ana], id } = await conversationOf(2)
+    server.requireRotation(id)
+    const tried: number[] = []
+
+    await underCurrentEpoch(ana.deps, id, { keyEpoch: 1, keyRotationRequired: true }, async (epoch) => {
+      tried.push(epoch)
+      return work(server, id)(epoch)
+    })
+
+    expect(tried).toEqual([2])
   })
 
   it('looks again and adopts the epoch another member stored, when the one it went by was out of date', async () => {

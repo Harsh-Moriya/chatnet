@@ -1084,6 +1084,41 @@ describe('opening what the server pushes', () => {
     expect(onMessageArrived).not.toHaveBeenCalled()
   })
 
+  it('does not put an edit into the store once the connection was disposed while it was being opened', async () => {
+    const { hub, connection, onMessageUpdated } = await connected()
+    hub.emit('ReceiveMessage', wire(message('m1')))
+    await settled()
+    const opening = deferred()
+    opener.open.mockImplementationOnce(async () => {
+      await opening.promise
+      return { readable: true as const, text: 'edited late' }
+    })
+
+    hub.emit('MessageUpdated', wire(message('m1', { content: 'edited late', editCount: 1 })))
+    connection.dispose()
+    opening.resolve()
+    await settled()
+
+    expect(store().messages.c1[0]).toMatchObject({ content: 'hello', editCount: 0 })
+    expect(onMessageUpdated).not.toHaveBeenCalled()
+  })
+
+  it('does not hand a notification on once the connection was disposed while it was being opened', async () => {
+    const { hub, connection, onNotificationReceived } = await connected()
+    const opening = deferred()
+    opener.open.mockImplementationOnce(async () => {
+      await opening.promise
+      return { readable: true as const, text: 'late' }
+    })
+
+    hub.emit('NotificationReceived', mentionWire('n1'))
+    connection.dispose()
+    opening.resolve()
+    await settled()
+
+    expect(onNotificationReceived).not.toHaveBeenCalled()
+  })
+
   it('hands a notification on without a preview when its message cannot be opened', async () => {
     const { hub, onNotificationReceived } = await connected()
     const pushed = mentionWire('n1')

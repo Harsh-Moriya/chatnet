@@ -401,6 +401,31 @@ describe('sending a message', () => {
     expect(config).toMatchObject({ timeout: expect.any(Number) })
   })
 
+  it('seals the text as the first version of a message, under the id the unconfirmed copy has', async () => {
+    vi.spyOn(api, 'post').mockResolvedValue(respond(wire(message({ id: 'real' }))))
+
+    await sendMessage('c1', 'Hello')
+
+    expect(keysDouble.sealAndSend).toHaveBeenCalledWith(
+      'c1',
+      { keyEpoch: 0, keyRotationRequired: false },
+      { clientMessageId: expect.stringMatching(/^[0-9a-f-]{36}$/), editCount: 0, text: 'Hello' },
+      expect.any(Function),
+    )
+  })
+
+  it('says who the text names, as ids, for the members of the conversation', async () => {
+    store().seedMembers('c1', [
+      { userId: 'bob', userName: 'bob_99', displayName: 'Bob', avatarUrl: null, role: 'Member', lastReadAt: null },
+      { userId: 'cy', userName: 'cy_77', displayName: 'Cy', avatarUrl: null, role: 'Member', lastReadAt: null },
+    ])
+    const post = vi.spyOn(api, 'post').mockResolvedValue(respond(wire(message({ id: 'real' }))))
+
+    await sendMessage('c1', 'hi @bob_99, and @nobody_here')
+
+    expect(post.mock.calls[0][1]).toMatchObject({ mentionedUserIds: ['bob'] })
+  })
+
   it('replaces the unconfirmed copy with the server\'s message', async () => {
     vi.spyOn(api, 'post').mockImplementation((_url, body) =>
       Promise.resolve(respond(wire(message({ id: 'real', content: 'Hello', clientMessageId: (body as { clientMessageId: string }).clientMessageId })))),

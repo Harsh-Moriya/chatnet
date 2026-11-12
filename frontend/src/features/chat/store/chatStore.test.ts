@@ -1162,6 +1162,28 @@ describe('a list that arrives while the previews held are already opened', () =>
     expect(store().conversations.c1.lastMessage).toMatchObject({ content: null, unreadable: 'pending' })
   })
 
+  it('takes the new one when it is of another message than the one that was opened', () => {
+    store().seedConversations([row('opened text', null)])
+    const another = row(null, 'pending')
+    another.updatedAt = '2026-10-11T10:05:00Z'
+    another.lastMessage!.createdAt = '2026-10-11T10:05:00Z'
+
+    store().seedConversations([another])
+
+    expect(store().conversations.c1.lastMessage).toMatchObject({ content: null, unreadable: 'pending', createdAt: '2026-10-11T10:05:00Z' })
+  })
+
+  it('takes the new one when it is of another sender than the one that was opened', () => {
+    store().seedConversations([row('opened text', null)])
+    const another = row(null, 'pending')
+    another.updatedAt = '2026-10-11T10:00:01Z'
+    another.lastMessage!.senderId = 'carol'
+
+    store().seedConversations([another])
+
+    expect(store().conversations.c1.lastMessage).toMatchObject({ content: null, unreadable: 'pending', senderId: 'carol' })
+  })
+
   it('takes an opened preview that arrives over one that is waiting', () => {
     store().seedConversations([row(null, 'pending')])
 
