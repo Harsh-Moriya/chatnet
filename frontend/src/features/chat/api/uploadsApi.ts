@@ -1,9 +1,16 @@
 import axios from 'axios'
 import { api } from '../../../lib/api'
+import { cleanFileName } from '../files/fileNames'
+import type { Uploaded } from '../uploads'
 
-// Uploading a file is two requests. The first asks the API for permission and gets a link that points
-// straight at the storage bucket; the second sends the file there, without going through the API. The file's
-// bytes never pass through the server, which is why a presigned link is used.
+// Uploading a file is three steps. The file is encrypted here, under a key made for it that only goes into the sealed message. The API is
+// asked for permission, and told only how large the encrypted file is, and gives a link that points straight at the storage bucket; and the
+// encrypted file is sent there, without going through the API. The file's bytes never pass through the server, which is why a presigned link
+// is used, and the server never learns what the file is or is called.
+const loadFileCrypto = () => import('../../../lib/crypto/attachment')
+
+// The one content type every upload is signed for, whatever the file is.
+const STORED_CONTENT_TYPE = 'application/octet-stream'
 
 interface UploadTicket {
   // What the message names later to attach this file.
@@ -20,25 +27,28 @@ export class UploadFailed extends Error {
   }
 }
 
-// Returns the key of the uploaded file. `onProgress` is called with how much has been sent, from 0 to 1.
-// Aborting through `signal` ends it with the library's cancel error, which the caller is expected to ignore.
+// Returns the key of the uploaded file and what the sealed message has to say about it. `onProgress` is called with how much of the upload has
+// been sent, from 0 to 1. Aborting through `signal` ends it with the library's cancel error, which the caller is expected to ignore.
 export async function uploadFile(
   conversationId: string,
   file: File,
   onProgress: (fraction: number) => void,
   signal: AbortSignal,
-): Promise<string> {
+): Promise<Uploaded> {
+  const { sealAttachment } = await loadFileCrypto()
+  const { stored, ref } = await sealAttachment({ name: cleanFileName(file.name), type: file.type }, new Uint8Array(await file.arrayBuffer()))
+
   const { data: ticket } = await api.post<UploadTicket>(
     `/conversations/${conversationId}/uploads`,
-    { fileName: file.name, contentType: file.type, sizeBytes: file.size },
+    { sizeBytes: stored.length },
     { signal },
   )
 
   try {
     // The plain axios, not the API client: this goes to another host, and the API's token must not be sent
     // there. The content type is part of what the link was signed for, so it has to match.
-    await axios.put(ticket.url, file, {
-      headers: { 'Content-Type': file.type },
+    await axios.put(ticket.url, stored, {
+      headers: { 'Content-Type': STORED_CONTENT_TYPE },
       signal,
       onUploadProgress: (event) => onProgress(event.total ? event.loaded / event.total : 0),
     })
@@ -47,7 +57,7 @@ export async function uploadFile(
     throw new UploadFailed()
   }
 
-  return ticket.uploadKey
+  return { uploadKey: ticket.uploadKey, ref }
 }
 
 interface AttachmentLink {

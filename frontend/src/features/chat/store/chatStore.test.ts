@@ -40,11 +40,9 @@ function conversation(overrides: Partial<Conversation> & { id: string }): Conver
 function attachment(id: string, overrides: Partial<Attachment> = {}): Attachment {
   return {
     id,
-    type: 'Image',
-    fileName: `${id}.png`,
-    contentType: 'image/png',
     sizeBytes: 1000,
     url: `https://files.test/${id}?signature=old`,
+    file: null,
     ...overrides,
   }
 }
@@ -1065,6 +1063,43 @@ describe('applyOpened', () => {
     store().applyOpened('other', 'm1', 0, { content: 'text', unreadable: null })
 
     expect(store().messages.c1[0].content).toBeNull()
+  })
+
+  it('says what the files are when the opening does, which a message that could not be opened could not say', () => {
+    store().seedMessages('c1', [message({ id: 'm1', content: null, unreadable: 'noKey', attachments: [attachment('a1')] })])
+    const entry = { name: 'one.png', type: 'image/png', size: 10, key: 'k'.repeat(43), chunkSize: 65536 }
+
+    store().applyOpened('c1', 'm1', 0, { content: 'now readable', unreadable: null, attachments: [attachment('a1', { file: entry })] })
+
+    expect(store().messages.c1[0].attachments[0]).toMatchObject({ id: 'a1', file: entry })
+  })
+
+  it('shows the files too when only they changed, not the text', () => {
+    store().seedMessages('c1', [message({ id: 'm1', content: 'same', unreadable: null, attachments: [attachment('a1')] })])
+    const entry = { name: 'one.png', type: 'image/png', size: 10, key: 'k'.repeat(43), chunkSize: 65536 }
+
+    store().applyOpened('c1', 'm1', 0, { content: 'same', unreadable: null, attachments: [attachment('a1', { file: entry })] })
+
+    expect(store().messages.c1[0].attachments[0].file).toEqual(entry)
+  })
+
+  it('leaves the files as they are when the opening says nothing of them', () => {
+    const entry = { name: 'one.png', type: 'image/png', size: 10, key: 'k'.repeat(43), chunkSize: 65536 }
+    store().seedMessages('c1', [message({ id: 'm1', content: null, unreadable: 'noKey', attachments: [attachment('a1', { file: entry })] })])
+
+    store().applyOpened('c1', 'm1', 0, { content: 'now readable', unreadable: null })
+
+    expect(store().messages.c1[0].attachments[0].file).toEqual(entry)
+  })
+
+  it('changes nothing when the message and its files already show that', () => {
+    const entry = { name: 'one.png', type: 'image/png', size: 10, key: 'k'.repeat(43), chunkSize: 65536 }
+    store().seedMessages('c1', [message({ id: 'm1', content: 'same', unreadable: null, attachments: [attachment('a1', { file: entry })] })])
+    const before = store().messages
+
+    store().applyOpened('c1', 'm1', 0, { content: 'same', unreadable: null, attachments: [attachment('a1', { file: { ...entry } })] })
+
+    expect(store().messages).toBe(before)
   })
 
   it('changes nothing when the message already shows that', () => {

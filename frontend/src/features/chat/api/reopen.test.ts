@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { encryptedFileLength } from '../../../lib/crypto/file'
 import { useChatStore } from '../store/chatStore'
 import type { Conversation, Message } from '../types'
 import { keysDouble, opener, resetKeysDouble, sealed } from './keysDouble'
@@ -71,6 +72,17 @@ describe('opening a conversation again once its keys may have arrived', () => {
     ])
   })
 
+  it('says what the files of a message are once it can be opened', async () => {
+    const entry = { name: 'one.png', type: 'image/png', size: 100, key: 'k'.repeat(43), chunkSize: 65536 }
+    store().seedMessages('c1', [
+      unreadable('m1', 'first', { ciphertext: sealed('first', [entry]), attachments: [{ id: 'a1', sizeBytes: encryptedFileLength(100, 65536), url: 'u', file: null }] }),
+    ])
+
+    await reopenConversation('c1')
+
+    expect(store().messages.c1[0].attachments[0].file).toEqual(entry)
+  })
+
   it('opens each as what it was sealed as', async () => {
     store().seedMessages('c1', [unreadable('m1', 'first', { editCount: 3, keyEpoch: 4 })])
 
@@ -119,7 +131,7 @@ describe('opening a conversation again once its keys may have arrived', () => {
       await new Promise<void>((resolve) => {
         release = resolve
       })
-      return { readable: true as const, text: 'first' }
+      return { readable: true as const, text: 'first', files: [] }
     })
 
     const reopening = reopenConversation('c1')

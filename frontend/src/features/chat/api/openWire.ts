@@ -1,6 +1,8 @@
+import type { FileRef } from '../../../lib/crypto/message'
 import { createKeyedQueue } from '../../../lib/keyedQueue'
 import type { UnreadableReason } from '../../encryption/sealedMessages'
 import type { NotificationItem, NotificationWire } from '../../notifications/types'
+import { joinFiles, unvouched } from '../files/joinFiles'
 import { previewOf } from '../preview'
 import type { Conversation, ConversationWire, LastMessage, Message, MessageWire } from '../types'
 
@@ -33,10 +35,10 @@ interface Sealed {
   ciphertext: string
 }
 
-async function open(sealed: Sealed): Promise<{ text: string } | { reason: UnreadableReason }> {
+async function open(sealed: Sealed): Promise<{ text: string; files: FileRef[] } | { reason: UnreadableReason }> {
   try {
     const result = await (await loadKeys()).messageOpener().open(sealed)
-    return result.readable ? { text: result.text } : { reason: result.reason }
+    return result.readable ? { text: result.text, files: result.files } : { reason: result.reason }
   } catch {
     // The keys are not available (nobody is signed in, or the page that holds them could not be loaded): nothing is lost, and the
     // message is opened again when they are.
@@ -52,8 +54,9 @@ export const inArrivalOrder = <T>(conversationId: string, job: () => Promise<T>)
 
 // ##### Messages #####
 
+// The message as the server sent it, with nothing opened: its files are not vouched for until the sealed message says what they are.
 function held(wire: MessageWire): Message {
-  return { ...wire, content: null, unreadable: null }
+  return { ...wire, content: null, unreadable: null, attachments: unvouched(wire.attachments) }
 }
 
 export async function openMessage(wire: MessageWire): Promise<Message> {
@@ -68,14 +71,16 @@ export async function openMessage(wire: MessageWire): Promise<Message> {
     ciphertext: wire.ciphertext,
   })
 
-  return 'text' in opened ? { ...held(wire), content: opened.text } : { ...held(wire), unreadable: opened.reason }
+  return 'text' in opened
+    ? { ...held(wire), content: opened.text, attachments: joinFiles(wire.attachments, opened.files) }
+    : { ...held(wire), unreadable: opened.reason }
 }
 
 export const openMessages = (wires: MessageWire[]): Promise<Message[]> => Promise.all(wires.map(openMessage))
 
-// The message this tab sealed and the server stored: the text is known, so it is not opened again.
-export function ownMessage(wire: MessageWire, text: string): Message {
-  return { ...held(wire), content: text }
+// The message this tab sealed and the server stored: the text and the entries of its files are known, so it is not opened again.
+export function ownMessage(wire: MessageWire, text: string, files: readonly FileRef[]): Message {
+  return { ...held(wire), content: text, attachments: joinFiles(wire.attachments, files) }
 }
 
 // A message as the app holds it, sealed again as the server would hand it over, to open it once its key has arrived.
@@ -90,7 +95,7 @@ export function sealedOf(message: Message): MessageWire | null {
     ciphertext: message.ciphertext,
     keyEpoch: message.keyEpoch,
     createdAt: message.createdAt,
-    attachments: message.attachments,
+    attachments: message.attachments.map(({ id, sizeBytes, url }) => ({ id, sizeBytes, url })),
     clientMessageId: message.clientMessageId,
     editedAt: message.editedAt,
     editCount: message.editCount,

@@ -1,6 +1,6 @@
 import { compareTimestamps } from '../../lib/time'
 import { previewOf } from './preview'
-import type { Conversation, LastMessage, Member, Message, SealedPreview } from './types'
+import type { Attachment, Conversation, LastMessage, Member, Message, SealedPreview } from './types'
 
 // The rules for messages that change after they were sent, as plain functions so they can be tested without a
 // browser. The store holds the messages; these decide which copy of one is the newer, and who may do what.
@@ -32,7 +32,12 @@ export function latest(held: Message | undefined, incoming: Message): Message {
   if (held && rank(held) > rank(incoming)) return held
 
   const lostItsText = held && rank(held) === rank(incoming) && incoming.content === null && !incoming.isDeleted && held.content !== null
-  return lostItsText ? { ...incoming, content: held.content, unreadable: null } : incoming
+  return lostItsText ? { ...incoming, content: held.content, unreadable: null, attachments: withEntriesOf(held.attachments, incoming.attachments) } : incoming
+}
+
+// The attachments of the copy that arrived (their links are the fresher), with the entries the held copy was opened with, by attachment.
+function withEntriesOf(held: Attachment[], incoming: Attachment[]): Attachment[] {
+  return incoming.map((attachment) => ({ ...attachment, file: attachment.file ?? held.find((h) => h.id === attachment.id)?.file ?? null }))
 }
 
 // What a message was sealed as, to open it again; null for a message that was deleted, or made here and not confirmed.
@@ -64,6 +69,10 @@ export function previewFrom(message: Message): LastMessage {
 // changes whether the button shows; the server answers for the rest.
 export function canEdit(message: Message, selfId: string, now: number): boolean {
   if (message.isDeleted || message.senderId !== selfId) return false
+
+  // An edit seals the message again with its text and the entries of its files. A message that could not be opened has neither, and one
+  // with a file the sealed message does not vouch for has an entry missing, which would put the others out of place: it is not offered.
+  if (message.unreadable || message.attachments.some((attachment) => attachment.file === null)) return false
 
   const age = now - new Date(message.createdAt).getTime()
   return age < EDIT_WINDOW_MS

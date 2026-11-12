@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { compareTimestamps } from '../../../lib/time'
 import { afterDeletion, isNewer, isPreviewOf, latest, previewFrom, withChangedPreview } from '../messageChanges'
 import type {
+  Attachment,
   ConnectionStatus,
   Conversation,
   ConversationKeyChange,
@@ -112,6 +113,13 @@ interface ChatState {
 export interface Opened {
   content: string | null
   unreadable: Unreadable | null
+  // The files of the message joined to what the sealed message says they are. Left out when the opening says nothing about them.
+  attachments?: Attachment[]
+}
+
+// Whether two lists of attachments are the same files with the same entries.
+function sameFiles(a: Attachment[], b: Attachment[]): boolean {
+  return a.length === b.length && a.every((file, i) => file.id === b[i].id && file.file?.key === b[i].file?.key)
 }
 
 type Data = Pick<
@@ -587,9 +595,10 @@ export const useChatStore = create<ChatState>()((set) => ({
       const list = state.messages[conversationId]
       const message = list?.find((m) => m.id === messageId)
       if (!list || !message || message.isDeleted || message.editCount !== editCount) return state
-      if (message.content === opened.content && (message.unreadable ?? null) === opened.unreadable) return state
+      const filesChanged = opened.attachments !== undefined && !sameFiles(message.attachments, opened.attachments)
+      if (message.content === opened.content && (message.unreadable ?? null) === opened.unreadable && !filesChanged) return state
 
-      const next = { ...message, content: opened.content, unreadable: opened.unreadable }
+      const next = { ...message, content: opened.content, unreadable: opened.unreadable, ...(opened.attachments && { attachments: opened.attachments }) }
       const patch: Partial<Data> = { messages: { ...state.messages, [conversationId]: list.map((m) => (m.id === messageId ? next : m)) } }
 
       const conversation = state.conversations[conversationId]

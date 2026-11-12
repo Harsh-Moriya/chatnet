@@ -5,22 +5,10 @@ import {
   MAX_FILE_BYTES,
   MAX_FILES_PER_MESSAGE,
   attachmentPreview,
-  attachmentTypeOf,
   checkFile,
 } from './attachments'
 
 const file = (type: string, size = 1000, name = 'file.bin') => ({ name, size, type })
-
-describe('attachmentTypeOf', () => {
-  it('treats images and videos as such and everything else as a file', () => {
-    expect(attachmentTypeOf('image/png')).toBe('Image')
-    expect(attachmentTypeOf('image/webp')).toBe('Image')
-    expect(attachmentTypeOf('video/mp4')).toBe('Video')
-    expect(attachmentTypeOf('application/pdf')).toBe('File')
-    expect(attachmentTypeOf('text/plain')).toBe('File')
-    expect(attachmentTypeOf('application/zip')).toBe('File')
-  })
-})
 
 describe('checkFile', () => {
   it('accepts every allowed type', () => {

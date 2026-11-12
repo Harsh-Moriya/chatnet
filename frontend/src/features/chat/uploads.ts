@@ -1,4 +1,5 @@
-import { attachmentTypeOf, checkFile } from './attachments'
+import type { FileRef } from '../../lib/crypto/message'
+import { checkFile } from './attachments'
 import type { PendingAttachment } from './types'
 
 // The files being attached to the message that is being written, and what has become of each upload.
@@ -15,7 +16,16 @@ export interface UploadItem {
   progress: number
   // Set once the upload has finished: what the message names to attach the file.
   uploadKey: string | null
+  // And what the sealed message says about it, with the key the file was encrypted under. It is made when the file is chosen and stays
+  // with the file until the message is sent, through every try at sending it.
+  ref: FileRef | null
   error: string | null
+}
+
+// What an upload gives back when it has finished.
+export interface Uploaded {
+  uploadKey: string
+  ref: FileRef
 }
 
 export interface AddResult {
@@ -38,7 +48,7 @@ export function addFiles(items: UploadItem[], files: File[], newId: () => string
       continue
     }
 
-    added.push({ id: newId(), file, status: 'uploading', progress: 0, uploadKey: null, error: null })
+    added.push({ id: newId(), file, status: 'uploading', progress: 0, uploadKey: null, ref: null, error: null })
   }
 
   return { items: added.length > 0 ? [...items, ...added] : items, added, rejected }
@@ -61,9 +71,9 @@ export function setProgress(items: UploadItem[], id: string, progress: number): 
   )
 }
 
-export function markReady(items: UploadItem[], id: string, uploadKey: string): UploadItem[] {
+export function markReady(items: UploadItem[], id: string, uploaded: Uploaded): UploadItem[] {
   return update(items, id, (item) =>
-    item.status === 'uploading' ? { ...item, status: 'ready', progress: 1, uploadKey } : item,
+    item.status === 'uploading' ? { ...item, status: 'ready', progress: 1, uploadKey: uploaded.uploadKey, ref: uploaded.ref } : item,
   )
 }
 
@@ -85,17 +95,8 @@ export function canSend(items: UploadItem[], text: string): boolean {
 
 export function toPendingAttachments(items: UploadItem[]): PendingAttachment[] {
   return items.flatMap((item) =>
-    item.status === 'ready' && item.uploadKey !== null
-      ? [
-          {
-            uploadKey: item.uploadKey,
-            fileName: item.file.name,
-            contentType: item.file.type,
-            sizeBytes: item.file.size,
-            type: attachmentTypeOf(item.file.type),
-            file: item.file,
-          },
-        ]
+    item.status === 'ready' && item.uploadKey !== null && item.ref !== null
+      ? [{ uploadKey: item.uploadKey, ref: item.ref, file: item.file }]
       : [],
   )
 }
