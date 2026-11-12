@@ -177,8 +177,16 @@ describe('message payload', () => {
     ['a file key of the wrong length', '{"text":"x","files":[{"name":"n","type":"a","size":1,"key":"AAAA","chunkSize":1}]}'],
     ['a file with chunk size 0', `{"text":"x","files":[{"name":"n","type":"a","size":1,"key":"${toBase64Url(new Uint8Array(32))}","chunkSize":0}]}`],
     ['a file with a fractional size', `{"text":"x","files":[{"name":"n","type":"a","size":1.5,"key":"${toBase64Url(new Uint8Array(32))}","chunkSize":1}]}`],
+    ['a file with a chunk size above the largest', `{"text":"x","files":[{"name":"n","type":"a","size":1,"key":"${toBase64Url(new Uint8Array(32))}","chunkSize":16777217}]}`],
+    ['a file with a name that is too long', `{"text":"x","files":[{"name":"${'n'.repeat(256)}","type":"a","size":1,"key":"${toBase64Url(new Uint8Array(32))}","chunkSize":1}]}`],
   ])('refuses %s', (_name, json) => {
     expect(() => decodePayload(utf8(json))).toThrow(CryptoError)
+  })
+
+  it('accepts the largest chunk size and the longest name', () => {
+    const files = [{ name: 'n'.repeat(255), type: 'a', size: 1, key: toBase64Url(new Uint8Array(32)), chunkSize: 16777216 }]
+
+    expect(decodePayload(utf8(JSON.stringify({ text: 'x', files })))).toEqual({ text: 'x', files })
   })
 
   it('refuses text that is not valid UTF-8 instead of repairing it', () => {
