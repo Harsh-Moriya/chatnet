@@ -282,6 +282,21 @@ public class EncryptedSendTests
         Assert.Equal(epoch, (await again.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("keyEpoch").GetInt32());
     }
 
+    // The copy of the file that was made for the message that was refused must not stay in the bucket.
+    [Fact]
+    public async Task A_refused_send_removes_the_copy_it_made_of_the_file()
+    {
+        var (owner, _, other, group) = await GroupAsync();
+        using var client = _factory.CreateClientFor(owner);
+        var key = await client.UploadFileAsync(group, [1, 2, 3, 4], "image/png", "photo.png");
+        await client.RemoveMemberResponseAsync(group, other.Id);
+
+        var refused = await client.PostMessageWithFilesAsync(group, "with a file", [(key, "photo.png")]);
+
+        Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
+        Assert.Empty(await _factory.ObjectKeysAsync($"attachments/{group}/"));
+    }
+
     // ##### Who a message names #####
 
     [Fact]

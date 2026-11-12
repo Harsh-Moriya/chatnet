@@ -79,6 +79,13 @@ public class EncryptedEditTests
 
     // ##### The edit count #####
 
+    // The word a client looks for in the problem details of an edit made from an older version: a change here is a change to the API.
+    [Fact]
+    public void An_edit_made_from_an_older_version_is_known_by_the_word_clients_look_for()
+    {
+        Assert.Equal("edit-count-stale", MessageCodes.EditCountStale);
+    }
+
     [Fact]
     public async Task An_edit_must_be_the_next_one_after_the_count_the_message_has()
     {
