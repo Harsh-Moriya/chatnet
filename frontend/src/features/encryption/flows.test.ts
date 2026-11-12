@@ -12,6 +12,7 @@ import {
   toBase64Url,
   toHex,
 } from '../../lib/crypto'
+import { MemoryLocalStore } from '../search/store/memoryLocalStore'
 import { MemoryEpochKeyStore, MemoryPinStore } from './fakeEpochServer'
 import { FakeKeysServer, MemoryDeviceStore, ServerRefused } from './fakeKeysServer'
 import { forgetKept } from './release'
@@ -53,7 +54,7 @@ function browser(server: FakeKeysServer, name = 'Chrome on Windows', gate?: Prom
       signal?.throwIfAborted()
       await (gate ?? new Promise((resolve) => setTimeout(resolve, 0)))
     },
-    forgetConversationKeys: (userId) => forgetKept({ epochKeys, pins }, userId),
+    forgetConversationKeys: (userId) => forgetKept({ epochKeys, pins, messages: new MemoryLocalStore() }, userId),
   }
   return { deps, store, epochKeys, pins, waits }
 }

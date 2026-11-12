@@ -2,6 +2,7 @@ import { type ReactNode, useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useKeyStatusStore } from '../../encryption/keyStatus'
 import { useNotificationStore } from '../../notifications/store/notificationStore'
+import { useLocalSearchSync } from '../../search/hooks/useLocalSearchSync'
 import { usePresenceStore } from '../../presence/store/presenceStore'
 import { useProfileSync } from '../../profile/hooks/useProfileSync'
 import { usePushSync } from '../../push/hooks/usePushSync'
@@ -18,6 +19,7 @@ export function ChatConnectionProvider({ children }: { children: ReactNode }) {
   useProfileSync()
   usePushSync()
   useServiceWorkerNavigation()
+  useLocalSearchSync()
 
   // Leaving the chat, by signing out or because the session expired, must not leave one person's
   // conversations in memory for the next person to sign in on this browser. The stores and the

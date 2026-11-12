@@ -33,6 +33,7 @@ function conversation(overrides: Partial<Conversation> & { id: string }): Conver
     leftAt: null,
     keyEpoch: 0,
     keyRotationRequired: false,
+    changeSeq: 0,
     ...overrides,
   }
 }

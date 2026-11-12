@@ -35,6 +35,7 @@ function conversation(overrides: Partial<Conversation> = {}): Conversation {
     leftAt: null,
     keyEpoch: 0,
     keyRotationRequired: false,
+    changeSeq: 0,
     ...overrides,
   }
 }

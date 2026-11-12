@@ -16,6 +16,7 @@ function conversation(id: string, unreadCount: number, isMuted = false): Convers
     leftAt: null,
     keyEpoch: 0,
     keyRotationRequired: false,
+    changeSeq: 0,
   }
 }
 

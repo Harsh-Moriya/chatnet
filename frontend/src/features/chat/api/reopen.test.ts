@@ -1,9 +1,9 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { encryptedFileLength } from '../../../lib/crypto/file'
 import { useChatStore } from '../store/chatStore'
 import type { Conversation, Message } from '../types'
 import { keysDouble, opener, resetKeysDouble, sealed } from './keysDouble'
-import { reopenConversation } from './reopen'
+import { reopenConversation, setReopenListener } from './reopen'
 
 // The keys of a conversation need a signed-in person and this browser's stores; see keysDouble.ts for what stands in for them.
 vi.mock('../../encryption/conversationKeys', async () => (await import('./keysDouble')).keysModule)
@@ -27,6 +27,7 @@ function unreadable(id: string, text: string, overrides: Partial<Message> = {}):
     editCount: 0,
     isDeleted: false,
     attachments: [],
+    changeSeq: 1,
     ...overrides,
   }
 }
@@ -45,6 +46,7 @@ function conversation(overrides: Partial<Conversation> = {}): Conversation {
     leftAt: null,
     keyEpoch: 2,
     keyRotationRequired: false,
+    changeSeq: 0,
     ...overrides,
   }
 }
@@ -55,6 +57,45 @@ beforeEach(() => {
 })
 
 describe('opening a conversation again once its keys may have arrived', () => {
+  afterEach(() => setReopenListener(null))
+
+  it('lets whoever keeps messages open its own again, once those held here are opened', async () => {
+    const order: string[] = []
+    setReopenListener(async (conversationId) => {
+      order.push(`listener ${conversationId}`)
+    })
+    store().seedMessages('c1', [unreadable('m1', 'first')])
+    opener.open.mockImplementationOnce(async (message) => {
+      order.push('opened here')
+      return { readable: true as const, text: message.ciphertext.slice('sealed:'.length), files: [] }
+    })
+
+    await reopenConversation('c1')
+
+    expect(order).toEqual(['opened here', 'listener c1'])
+  })
+
+  it('lets it open its own when there is nothing here to open', async () => {
+    const listener = vi.fn(async () => undefined)
+    setReopenListener(listener)
+
+    await reopenConversation('c1')
+
+    expect(listener).toHaveBeenCalledWith('c1')
+  })
+
+  it('does not call it when the keys of this browser are not available', async () => {
+    const listener = vi.fn(async () => undefined)
+    setReopenListener(listener)
+    keysDouble.messageOpener.mockImplementationOnce(() => {
+      throw new Error('The encryption keys are not available.')
+    })
+
+    await reopenConversation('c1')
+
+    expect(listener).not.toHaveBeenCalled()
+  })
+
   it('tells the opener to forget that keys were missing, so it asks for them again', async () => {
     await reopenConversation('c1')
 

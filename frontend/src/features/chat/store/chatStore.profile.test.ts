@@ -18,6 +18,7 @@ function conversation(id: string, overrides: Partial<Conversation> = {}): Conver
     leftAt: null,
     keyEpoch: 0,
     keyRotationRequired: false,
+    changeSeq: 0,
     ...overrides,
   }
 }

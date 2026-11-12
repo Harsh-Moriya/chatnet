@@ -59,7 +59,27 @@ function held(wire: MessageWire): Message {
   return { ...wire, content: null, unreadable: null, attachments: unvouched(wire.attachments) }
 }
 
-export async function openMessage(wire: MessageWire): Promise<Message> {
+// Whoever keeps what the person reads (the local store search runs over) is handed each message as it is opened, so there is one
+// place that sees every message that reaches the browser: a page of history, a push, the answer to a send or an edit. It is registered
+// from outside, so the chat does not depend on it, and what it does with a message can never stop the message from being shown.
+type OpenedSink = (message: Message) => void
+
+let sink: OpenedSink | null = null
+
+export function setOpenedSink(next: OpenedSink | null): void {
+  sink = next
+}
+
+function remember(message: Message): Message {
+  try {
+    sink?.(message)
+  } catch {
+    // Keeping a message is for later; it is never a reason not to show it.
+  }
+  return message
+}
+
+async function openOne(wire: MessageWire): Promise<Message> {
   if (wire.ciphertext === null) return held(wire)
 
   const opened = await open({
@@ -76,16 +96,21 @@ export async function openMessage(wire: MessageWire): Promise<Message> {
     : { ...held(wire), unreadable: opened.reason }
 }
 
+export const openMessage = async (wire: MessageWire): Promise<Message> => remember(await openOne(wire))
+
 export const openMessages = (wires: MessageWire[]): Promise<Message[]> => Promise.all(wires.map(openMessage))
+
+// Opens messages for the one that keeps them, which writes what it opens itself and must not be handed it twice.
+export const openMessagesQuietly = (wires: MessageWire[]): Promise<Message[]> => Promise.all(wires.map(openOne))
 
 // The message this tab sealed and the server stored: the text and the entries of its files are known, so it is not opened again.
 export function ownMessage(wire: MessageWire, text: string, files: readonly FileRef[]): Message {
-  return { ...held(wire), content: text, attachments: joinFiles(wire.attachments, files) }
+  return remember({ ...held(wire), content: text, attachments: joinFiles(wire.attachments, files) })
 }
 
 // A message as the app holds it, sealed again as the server would hand it over, to open it once its key has arrived.
 export function sealedOf(message: Message): MessageWire | null {
-  if (message.ciphertext == null || message.keyEpoch === undefined || message.clientMessageId === null) return null
+  if (message.ciphertext == null || message.keyEpoch === undefined || message.clientMessageId === null || message.changeSeq === undefined) return null
 
   return {
     id: message.id,
@@ -100,6 +125,7 @@ export function sealedOf(message: Message): MessageWire | null {
     editedAt: message.editedAt,
     editCount: message.editCount,
     isDeleted: message.isDeleted,
+    changeSeq: message.changeSeq,
   }
 }
 

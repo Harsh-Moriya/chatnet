@@ -14,6 +14,7 @@ import {
   startLink,
   unlock,
 } from './flows'
+import { indexedDbLocalStore } from '../search/store/indexedDbLocalStore'
 import { keysApi } from './keysApi'
 import { indexedDbPinStore } from './pinStore'
 import { forgetKept } from './release'
@@ -51,7 +52,7 @@ function deps(): FlowDeps {
     store: indexedDbDeviceStore,
     device: { kind: 'Web', name: describeBrowser(navigator.userAgent) },
     wait,
-    forgetConversationKeys: (userId) => forgetKept({ epochKeys: indexedDbEpochKeyStore, pins: indexedDbPinStore }, userId),
+    forgetConversationKeys: (userId) => forgetKept({ epochKeys: indexedDbEpochKeyStore, pins: indexedDbPinStore, messages: indexedDbLocalStore }, userId),
   }
 }
 
