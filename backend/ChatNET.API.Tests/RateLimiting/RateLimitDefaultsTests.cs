@@ -17,7 +17,6 @@ public class RateLimitDefaultsTests
     [InlineData("send", 30, 10)]
     [InlineData("uploads", 60, 3600)]
     [InlineData("edit", 20, 60)]
-    [InlineData("search", 30, 10)]
     [InlineData("avatars", 600, 60)]
     [InlineData("push", 20, 60)]
     [InlineData("forgot-password", 5, 900)]

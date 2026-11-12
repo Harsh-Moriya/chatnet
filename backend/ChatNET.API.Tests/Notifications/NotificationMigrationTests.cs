@@ -91,7 +91,7 @@ public class NotificationMigrationTests
         {
             Id = Guid.NewGuid(), Type = ConversationType.Group, Name = "Mentions", CreatedAt = now, UpdatedAt = now, CreatedById = user.Id,
         };
-        var message = new Message { Id = Guid.NewGuid(), ConversationId = conversation.Id, SenderId = user.Id, Content = "hi", CreatedAt = now };
+        var message = new Message { Id = Guid.NewGuid(), ConversationId = conversation.Id, SenderId = user.Id, Ciphertext = FakeMessage.Blob(1, "hi"), KeyEpoch = 1, ClientMessageId = Guid.NewGuid(), CreatedAt = now };
         await scratch.AddAsync(conversation, message);
 
         var notification = Guid.NewGuid();

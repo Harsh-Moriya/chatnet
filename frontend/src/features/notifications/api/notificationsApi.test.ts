@@ -3,13 +3,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { api } from '../../../lib/api'
 import { useChatStore } from '../../chat/store/chatStore'
 import { NOTIFICATION_PAGE_SIZE, useNotificationStore } from '../store/notificationStore'
-import type { NotificationItem, NotificationList } from '../types'
+import { opener, resetKeysDouble, sealed } from '../../chat/api/keysDouble'
+import type { NotificationItem, NotificationList, NotificationListWire } from '../types'
 import {
   dismissNotification,
   fetchNotifications,
   fetchOlderNotifications,
   markNotificationsRead,
 } from './notificationsApi'
+
+// Opening what the server sends needs a signed-in person and this browser's stores; see keysDouble.ts for what stands in for them.
+vi.mock('../../encryption/conversationKeys', async () => (await import('../../chat/api/keysDouble')).keysModule)
 
 const store = () => useNotificationStore.getState()
 
@@ -48,12 +52,23 @@ function n(second: number, overrides: Partial<NotificationItem> = {}): Notificat
 }
 
 const list = (items: NotificationItem[], unreadCount = items.length): NotificationList => ({ items, unreadCount })
+
+// The list as the server sends it: the message a mention is about sealed.
+const wireList = (items: NotificationItem[], unreadCount = items.length): NotificationListWire => ({
+  unreadCount,
+  items: items.map(({ messagePreview, ...rest }) => ({
+    ...rest,
+    message:
+      messagePreview === null ? null : { ciphertext: sealed(messagePreview), keyEpoch: 1, clientMessageId: 'cid-1', editCount: 0 },
+  })),
+})
 const flush = () => new Promise<void>((resolve) => setTimeout(resolve, 0))
 
 beforeEach(() => {
   store().reset()
   useChatStore.getState().reset()
   useChatStore.getState().setConnection('connected')
+  resetKeysDouble()
 })
 
 afterEach(() => {
@@ -62,7 +77,7 @@ afterEach(() => {
 
 describe('loading the list', () => {
   it('asks for the newest page and puts it in the store', async () => {
-    const get = vi.spyOn(api, 'get').mockResolvedValue(respond(list([n(2), n(1)], 7)))
+    const get = vi.spyOn(api, 'get').mockResolvedValue(respond(wireList([n(2), n(1)], 7)))
 
     await fetchNotifications()
 
@@ -71,9 +86,39 @@ describe('loading the list', () => {
     expect(store().unreadCount).toBe(7)
   })
 
+  it('shows the start of the message of each mention, opened here', async () => {
+    vi.spyOn(api, 'get').mockResolvedValue(
+      respond(wireList([n(2, { messagePreview: 'first words' }), n(1, { type: 'MemberAdded', messageId: null, messagePreview: null })])),
+    )
+
+    const loaded = await fetchNotifications()
+
+    expect(store().items.map((i) => i.messagePreview)).toEqual(['first words', null])
+    expect(loaded.items.map((i) => i.messagePreview)).toEqual(['first words', null])
+    expect(store().items[0]).not.toHaveProperty('message')
+  })
+
+  it('shows a mention whose message cannot be opened, without a preview', async () => {
+    opener.open.mockResolvedValueOnce({ readable: false, reason: 'noKey' } as never)
+    vi.spyOn(api, 'get').mockResolvedValue(respond(wireList([n(2), n(1)])))
+
+    await fetchNotifications()
+
+    expect(store().items.map((i) => i.messagePreview)).toEqual([null, 'hello'])
+  })
+
+  it('opens the older page too', async () => {
+    store().seedFirstPage(list([n(3)]))
+    vi.spyOn(api, 'get').mockResolvedValue(respond(wireList([n(2, { messagePreview: 'older words' })])))
+
+    await fetchOlderNotifications()
+
+    expect(store().items.map((i) => i.messagePreview)).toEqual(['hello', 'older words'])
+  })
+
   it('waits for the live connection first, so a push is not lost in the gap', async () => {
     useChatStore.getState().setConnection('connecting')
-    const get = vi.spyOn(api, 'get').mockResolvedValue(respond(list([])))
+    const get = vi.spyOn(api, 'get').mockResolvedValue(respond(wireList([])))
 
     const loading = fetchNotifications()
     await flush()
@@ -86,7 +131,7 @@ describe('loading the list', () => {
 
   it('asks for the page before the oldest one held', async () => {
     store().seedFirstPage(list([n(3), n(2)]))
-    const get = vi.spyOn(api, 'get').mockResolvedValue(respond(list([n(1)])))
+    const get = vi.spyOn(api, 'get').mockResolvedValue(respond(wireList([n(1)])))
 
     await fetchOlderNotifications()
 
@@ -98,7 +143,7 @@ describe('loading the list', () => {
   it('says there may be more when the older page is full', async () => {
     store().seedFirstPage(list([n(90)]))
     vi.spyOn(api, 'get').mockResolvedValue(
-      respond(list(Array.from({ length: NOTIFICATION_PAGE_SIZE }, (_, i) => n(60 - i)))),
+      respond(wireList(Array.from({ length: NOTIFICATION_PAGE_SIZE }, (_, i) => n(60 - i)))),
     )
 
     await fetchOlderNotifications()

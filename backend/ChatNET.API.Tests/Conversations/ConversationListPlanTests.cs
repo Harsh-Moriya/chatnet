@@ -70,7 +70,7 @@ public class ConversationListPlanTests
             var list = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
             Assert.Equal(3, list.GetArrayLength());
             Assert.All(list.EnumerateArray(), c =>
-                Assert.Equal("newer", c.GetProperty("lastMessage").GetProperty("content").GetString()));
+                Assert.Equal("newer", c.GetProperty("lastMessage").ContentOf()));
 
             var listQuery = Assert.Single(recorder.Commands);
             var rowsRead = await _factory.QueryDbAsync(db =>
@@ -106,8 +106,8 @@ public class ConversationListPlanTests
         await _factory.ExecuteDbAsync(async db =>
         {
             await db.Database.ExecuteSqlInterpolatedAsync($@"
-                INSERT INTO ""Messages"" (""Id"", ""ConversationId"", ""SenderId"", ""Content"", ""CreatedAt"")
-                SELECT gen_random_uuid(), {conversation}, {bob.Id}, 'unread', now() - (s * interval '1 second')
+                INSERT INTO ""Messages"" (""Id"", ""ConversationId"", ""SenderId"", ""Ciphertext"", ""KeyEpoch"", ""ClientMessageId"", ""CreatedAt"")
+                SELECT gen_random_uuid(), {conversation}, {bob.Id}, decode('0101' || '00000001' || repeat('00', 12), 'hex') || convert_to('unread', 'UTF8') || decode(repeat('00', 80), 'hex'), 1, gen_random_uuid(), now() - (s * interval '1 second')
                 FROM generate_series(1, {unread}) s");
             await db.Database.ExecuteSqlRawAsync(@"ANALYZE ""Messages""");
         });
@@ -152,8 +152,8 @@ public class ConversationListPlanTests
                 FROM generate_series(1, {UnrelatedConversations}) g");
 
             await db.Database.ExecuteSqlInterpolatedAsync($@"
-                INSERT INTO ""Messages"" (""Id"", ""ConversationId"", ""SenderId"", ""Content"", ""CreatedAt"")
-                SELECT gen_random_uuid(), c.""Id"", {ownerId}, 'noise', now() - (random() * interval '30 days')
+                INSERT INTO ""Messages"" (""Id"", ""ConversationId"", ""SenderId"", ""Ciphertext"", ""KeyEpoch"", ""ClientMessageId"", ""CreatedAt"")
+                SELECT gen_random_uuid(), c.""Id"", {ownerId}, decode('0101' || '00000001' || repeat('00', 12), 'hex') || convert_to('noise', 'UTF8') || decode(repeat('00', 80), 'hex'), 1, gen_random_uuid(), now() - (random() * interval '30 days')
                 FROM ""Conversations"" c
                 CROSS JOIN generate_series(1, {MessagesPerConversation}) s
                 WHERE c.""Name"" LIKE {namePattern}");

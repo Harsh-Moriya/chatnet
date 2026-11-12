@@ -41,6 +41,19 @@ describe('telling a person why a conversation could not be started', () => {
     expect(sentence).not.toContain('try again')
   })
 
+  it('says a message was edited somewhere else first, and not to try the same edit again', () => {
+    const sentence = describeKeyFailure(new EpochRefused('edit-count-stale'), nameOf)
+
+    expect(sentence).toContain('edited somewhere else first')
+    expect(sentence).not.toContain('try again')
+  })
+
+  it('says the key of the conversation is not here when a message could not be sealed', () => {
+    const missing = Object.assign(new Error('x'), { name: 'EpochKeyMissingError' })
+
+    expect(describeKeyFailure(missing, nameOf)).toContain('not available on this browser')
+  })
+
   it('explains keys that do not match, and keys that are not here', () => {
     expect(describeKeyFailure(new KeysMismatchError(), nameOf)).toContain('not the ones on the server')
     const notReady = Object.assign(new Error('x'), { name: 'EncryptionNotReadyError' })

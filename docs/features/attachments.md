@@ -16,7 +16,7 @@ sequenceDiagram
     B->>A: POST /api/conversations/{id}/uploads {fileName, contentType, sizeBytes}
     A-->>B: {uploadKey, url (presigned PUT, 10 min), expiresAt}
     B->>S: PUT file to url
-    B->>A: POST /messages {content, attachments: [{uploadKey, fileName}]}
+    B->>A: POST /messages {ciphertext, clientMessageId, attachments: [{uploadKey, fileName}]}
     A->>S: HEAD each object (exists, size, content type, key is the caller's)
     A->>S: copy to attachments/{conversation}/{attachmentId}, only if the ETag is unchanged
     A->>A: save message and attachment rows in one transaction
@@ -34,6 +34,10 @@ sequenceDiagram
 - Images and videos are served inline; any other file is served with `Content-Disposition: attachment`.
 - `GET /api/attachments/{id}/url` returns a new link `{ url, expiresAt }` under the rule that decides who can read the message: member, inside their join window, message not deleted. Every refusal is one 404.
 - The browser renews a dead link once and puts the new link into the message.
+
+## What the server can see
+
+The text of the message that carries the files is sealed, but the files are not: they are stored as they were uploaded, and the server sees their content, names, types and sizes.
 
 ## In the browser
 

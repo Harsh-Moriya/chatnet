@@ -23,7 +23,7 @@ Every endpoint requires authentication unless it is marked anonymous (sign-in, r
 
 - **Identity comes from the token.** A request body never says who the caller is.
 - **Membership is checked in the handler or the hub**, never trusted from the client. A conversation that does not exist and one the caller is not in get the identical 403, so ids reveal nothing.
-- **History is bounded by the member's window.** Reading, searching, marking read, renewing a file link and editing all apply `JoinedAt` and `LeftAt` inside the query.
+- **History is bounded by the member's window.** Reading, marking read, renewing a file link and editing all apply `JoinedAt` and `LeftAt` inside the query.
 - **Roles.** A group has one owner, any number of admins and plain members. The owner can do everything; an admin can add people, remove plain members, rename and delete messages; a plain member can only send and leave. A direct chat has no admins.
 - **Notifications** are scoped by the caller's id in the same statement as the read or update. Someone else's id is a 404, is ignored, or gets the same 400 as an unknown id.
 - **Presence** is visible only to contacts, never to the user themselves, and the push is addressed to user ids so a non-contact receives nothing.
@@ -34,7 +34,9 @@ Every endpoint requires authentication unless it is marked anonymous (sign-in, r
 Races are settled by the database, not by check-then-write.
 
 - A direct chat is unique per pair through a partial unique index on `DirectKey`.
-- A retried send is stored once through a partial unique index on `(ConversationId, SenderId, ClientMessageId)`.
+- A retried send is stored once through a unique index on `(ConversationId, SenderId, ClientMessageId)`.
+- A send is stored only under the epoch the conversation is in and not marked for replacement: one conditional `UPDATE` of the conversation row, in the transaction of the insert, decides it, and it takes the row lock that every change of the conversation's keys takes, so a removal and a send racing each other are settled by Postgres and a message is never stored under an epoch that a removal had already marked.
+- An edit reads the conversation's keys with a shared row lock and then updates the message only if its edit count is the one before the new count, so two edits made from one version store one, and an edit cannot land between a removal's marking and its commit.
 - The read position moves with one conditional `UPDATE`, only forward.
 - An edit and a delete are each one conditional `UPDATE`, so a delete that arrives first wins.
 - Every change to a group's members runs in a transaction behind a per-conversation advisory lock, with the rules applied to the rows read after the lock was taken, so there is exactly one owner at every moment.
@@ -85,6 +87,21 @@ The key of each period of a conversation is made in a member's browser and seale
 | Stale and concurrent epochs | The next number is required, and the primary key of the table decides any tie. The later request gets a `409` with a code the client acts on | |
 | Logs | Ids and sizes only: never an envelope, a commitment or a signature | |
 
+### Messages
+
+The text of a message is sealed in the sender's browser under the key of the conversation's epoch and signed with the sender's identity key. The format is in [encryption formats](encryption-format.md).
+
+| Concern | How it is handled | Limit |
+|---|---|---|
+| Who can read a message | The members' browsers, with the epoch key they hold. The database stores `Ciphertext` and the server has no key that opens it | A person who holds the epoch key can read every message of the epoch, and the server serves the JavaScript, so a malicious server could change the code that seals and opens |
+| What the server checks | The shape of the blob: version and suite bytes, 98 to 32,768 bytes, and an epoch of at least 1 that is the one stored with the message. It cannot open or verify a blob; readers verify the signature | A member who is the sender can store a blob that nobody can open; it is shown as one that cannot be opened |
+| Moving or replaying a message | The conversation, sender, client message id and edit count are bound into the encryption and the signature, so a blob moved to another conversation, shown as sent by someone else or replaced by an older version fails to open | |
+| Under which key | A send or an edit under an epoch other than the current one is a `409` (`epoch-stale`), and under one marked for replacement a `409` (`epoch-due`), so what is sent after a removal is never sealed under a key the removed person holds | |
+| Editing | The new blob is for the next edit count, and the server requires exactly that, so a stale edit is a `409` (`edit-count-stale`) | |
+| Mentions | The sender's browser says which people the text names, as ids. The server keeps the active members other than the sender | A sender can name a member the text does not mention; it notifies them |
+| Alerts | Web Push carries who and where, never text. A page that is open shows the text it opened | |
+| What stays visible | Who writes to whom and when, the size of a blob (padded to 256 bytes), the number of files, and the names, types and sizes of files, which are stored as uploaded | |
+
 ## Rate limiting
 
 Counts live in Redis, so every API instance applies one limit. A refused request is not carried out or counted.
@@ -97,7 +114,6 @@ Counts live in Redis, so every API instance applies one limit. A refused request
 | `send` | person | 30 per 10 s |
 | `uploads` (upload tickets, including pictures) | person | 60 per hour |
 | `edit` | person | 20 per 60 s |
-| `search` | person | 30 per 10 s |
 | `push` | person | 20 per 60 s |
 | `keys` (keys, backup, devices, link requests, key lookup, conversation key epochs) | person | 60 per 60 s |
 | `forgot-password` (asking for a reset link) | client address | 5 per 900 s |

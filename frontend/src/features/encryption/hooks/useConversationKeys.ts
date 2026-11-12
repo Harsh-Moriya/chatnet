@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { reopenConversation } from '../../chat/api/reopen'
 import { useChatStore } from '../../chat/store/chatStore'
 
 // A conversation is made ready as a member opens it: its newest key period exists, was made for the people in it and is held in this
@@ -13,6 +14,9 @@ export function useConversationKeys(conversationId: string) {
   useEffect(() => {
     if (!active) return
 
-    void import('../conversationKeys').then((keys) => keys.readyConversation(conversationId, { keyEpoch, keyRotationRequired }))
+    // Once the keys are here, what was held of the conversation that could not be opened is opened.
+    void import('../conversationKeys')
+      .then((keys) => keys.readyConversation(conversationId, { keyEpoch, keyRotationRequired }))
+      .then((ready) => (ready ? reopenConversation(conversationId) : undefined))
   }, [active, conversationId, keyEpoch, keyRotationRequired])
 }

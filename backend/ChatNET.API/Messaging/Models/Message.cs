@@ -9,16 +9,25 @@ public class Message
     public Guid ConversationId { get; set; }
     public Guid SenderId { get; set; }
 
-    // Nullable: set to null when the message is deleted. This removes the content
-    // while preserving the message row so the timeline stays intact (no gaps).
-    public string? Content { get; set; }
+    // The text of the message sealed in the browser of its sender: one opaque blob (see MessageBlob) that the server stores and
+    // hands on and cannot read. Null exactly when the message is deleted, which removes what was said and keeps the row so the
+    // timeline stays intact (no gaps).
+    public byte[]? Ciphertext { get; set; }
+
+    // The key period the blob was sealed under, read from its header. It says which key opens the message, and is kept when the
+    // message is deleted.
+    public int KeyEpoch { get; set; }
 
     public DateTime CreatedAt { get; set; }
 
-    // The UUID the sending client made up for its optimistic copy, kept so that sending the same message
-    // again (a retry after a timeout, a double click) finds the first one instead of creating a second.
-    // Null for a message sent without one. Unique per conversation and sender, see MessageConfiguration.
-    public Guid? ClientMessageId { get; set; }
+    // The UUID the sending client made up for the message. It is part of what the sender signed, so a message cannot be shown
+    // under another id, and it is what a send that arrives twice (a retry after a timeout, a double click) is recognised by:
+    // the second finds the first instead of creating another. Unique per conversation and sender, see MessageConfiguration.
+    public Guid ClientMessageId { get; set; }
+
+    // The people the latest version of the message names, as the sender said (the server cannot read the text): only members of
+    // the conversation, never the sender. An edit notifies the people it names who this did not.
+    public Guid[] MentionedUserIds { get; set; } = [];
 
     public int EditCount { get; set; }
     public DateTime? EditedAt { get; set; }

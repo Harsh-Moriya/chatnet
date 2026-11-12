@@ -1,4 +1,4 @@
-import { AlertCircle, CheckCheck, Clock, RotateCw } from 'lucide-react'
+import { AlertCircle, CheckCheck, Clock, Lock, RotateCw } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { Button } from '../../../components/ui/Button'
 import { Menu, type MenuItem } from '../../../components/ui/Menu'
@@ -6,7 +6,8 @@ import { cn } from '../../../lib/cn'
 import { formatClock } from '../../../lib/format'
 import { messageDomId } from '../messageDom'
 import type { Seen } from '../readState'
-import type { Member } from '../types'
+import type { Member, Unreadable } from '../types'
+import { unreadableText } from '../unreadable'
 import { MessageText } from './MessageText'
 
 interface MessageBubbleProps {
@@ -21,8 +22,10 @@ interface MessageBubbleProps {
   continuing: boolean
   // Shown above the bubble; only set when the sender should be named.
   senderName?: string
-  // Null for a deleted message. Empty for a message of only files.
+  // Null for a deleted message and for one whose text cannot be shown (see `unreadable`). Empty for a message of only files.
   content: string | null
+  // Why the text cannot be shown, when the message was not deleted.
+  unreadable?: Unreadable | null
   // The message's files, drawn above its text.
   attachments?: ReactNode
   // Absent while the message is unconfirmed.
@@ -50,6 +53,7 @@ export function MessageBubble({
   continuing,
   senderName,
   content,
+  unreadable,
   attachments,
   createdAt,
   editedAt,
@@ -62,7 +66,7 @@ export function MessageBubble({
   onDismiss,
 }: MessageBubbleProps) {
   const failed = status === 'failed'
-  const deleted = content === null
+  const deleted = content === null && !unreadable
   // While it is being edited the bubble is a plain white box, so the editor's buttons and text read on any message.
   const editing = editor !== undefined && !deleted
   // The colour of the bubble decides the colour of the ring drawn inside it.
@@ -96,11 +100,16 @@ export function MessageBubble({
         >
           {deleted ? (
             <p className={cn('italic', own ? 'text-blue-100' : 'text-slate-400')}>This message was deleted</p>
+          ) : unreadable ? (
+            <p className={cn('flex items-center gap-1.5 italic', own ? 'text-blue-100' : 'text-slate-500')}>
+              <Lock className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              {unreadableText(unreadable)}
+            </p>
           ) : (
             <>
               {attachments}
               {editor ??
-                (content !== '' && (
+                (content !== null && content !== '' && (
                   <p className={cn('whitespace-pre-wrap break-words', attachments ? 'mt-2' : undefined)}>
                     <MessageText content={content} members={members} selfUserName={selfUserName} own={own} />
                   </p>

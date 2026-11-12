@@ -74,6 +74,8 @@ docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
 
 The migration job runs first and does nothing when the database is already up to date. The API instances are replaced together, so there is a short break while they start. Take a [backup](backups.md) before an update that includes migrations.
 
+**Updating a database that holds messages from before they were sealed.** The migration that makes messages ciphertext deletes every message that exists, with its notifications and the pending pushes about them, because the server holds those in the clear and cannot seal them: only the sender's browser can. It cannot be undone, and rolling the migration back puts the columns back without the data. The files those messages carried are removed from the bucket by the outbox relay once the API runs, one row for each file. Take a dump first if the old messages matter.
+
 ## Trying it on one machine
 
 Set `DOMAIN=localhost` in `.env.prod`. Caddy then uses its own certificate authority, which a browser does not trust, so the browser warns once; `curl -k https://localhost/health` shows the stack answering. To skip TLS altogether, also set `SITE_ADDRESS=http://localhost`. This stack is named `chatnet-prod`, so it never shares volumes with the development file, whose project name comes from the folder it is in.
@@ -97,5 +99,5 @@ The API container must reach the relay on its port, outbound. The reset link poi
 - One Postgres and one Redis, with no replication and no automatic backups.
 - The rate limits are counted in Redis. While Redis cannot be reached they are not applied (only the account lockout, in Postgres, still protects a password), and a Redis that loses its data starts the counts again from zero. Behind the proxy, an outage of Redis also takes the API out of the rotation within ten seconds, because `/health` includes Redis.
 - Updates are not rolling: the API instances are replaced together.
-- The migrations create two Postgres extensions, `btree_gin` and `pg_trgm`, for message search and the people search. Both ship with Postgres and are trusted, so the owner of the database may create them, which works with the Compose Postgres and with a managed one. The indexes are built inside the migration, which holds writes to the messages and users tables while they build: seconds on a small database, longer on a large one. Keep autovacuum on, which the search plans rely on.
+- The migrations create the Postgres extension `pg_trgm` for the people search. It ships with Postgres and is trusted, so the owner of the database may create it, which works with the Compose Postgres and with a managed one. The index is built inside the migration, which holds writes to the users table while it builds: seconds on a small database, longer on a large one. Keep autovacuum on, which the people search plan relies on.
 - The Docker network is trusted as a whole: anything else started on it could claim a client address. `TRUSTED_PROXY_NETWORK` names the network Caddy reaches the API from.

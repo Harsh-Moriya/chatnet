@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { activeMention, applyMention, MAX_SUGGESTIONS, splitMentions, suggestMembers } from './mentions'
+import { MAX_MENTIONS, MAX_SUGGESTIONS, activeMention, applyMention, mentionedUserIds, splitMentions, suggestMembers } from './mentions'
 import type { Member } from './types'
 
 function member(userId: string, userName: string, displayName = userName): Member {
@@ -182,5 +182,51 @@ describe('applyMention', () => {
     const { text } = applyMention('@bo', mention, 3, 'bob_99')
 
     expect(splitMentions(text, members, 'x')[0].mention?.userName).toBe('bob_99')
+  })
+})
+
+describe('mentionedUserIds', () => {
+  it('names the members the text names, once each, in the order they first appear', () => {
+    expect(mentionedUserIds('@carol and @alice, then @carol again', members, undefined)).toEqual(['u3', 'u1'])
+  })
+
+  it('matches without regard to case', () => {
+    expect(mentionedUserIds('@ALICE @Bob_99', members, undefined)).toEqual(['u1', 'u2'])
+  })
+
+  it('leaves out the sender, so writing to oneself notifies nobody', () => {
+    expect(mentionedUserIds('@alice @bob_99', members, 'u1')).toEqual(['u2'])
+  })
+
+  it('leaves out names that are not members of the conversation', () => {
+    expect(mentionedUserIds('@nobody and @alice', members, undefined)).toEqual(['u1'])
+  })
+
+  it('does not read an email address, or a word with the name inside it, as a mention', () => {
+    expect(mentionedUserIds('write to bob@alice.example or to x@carol_smith', members, undefined)).toEqual([])
+  })
+
+  it('ends a name at punctuation', () => {
+    expect(mentionedUserIds('thanks @alice. And @bob_99, you too', members, undefined)).toEqual(['u1', 'u2'])
+  })
+
+  it('says nobody when the members are not known or the text names no one', () => {
+    expect(mentionedUserIds('@alice', undefined, undefined)).toEqual([])
+    expect(mentionedUserIds('@alice', [], undefined)).toEqual([])
+    expect(mentionedUserIds('no names here', members, undefined)).toEqual([])
+  })
+
+  it('looks only at the first twenty different names, members or not', () => {
+    const crowd = Array.from({ length: 25 }, (_, i) => member(`id${i}`, `person_${String(i).padStart(2, '0')}`))
+    const text = crowd.map((m) => `@${m.userName}`).join(' ')
+
+    const ids = mentionedUserIds(text, crowd, undefined)
+
+    expect(MAX_MENTIONS).toBe(20)
+    expect(ids).toHaveLength(20)
+    expect(ids[19]).toBe('id19')
+
+    const withStrangers = Array.from({ length: 20 }, (_, i) => `@stranger_${String(i).padStart(2, '0')}`).join(' ') + ' @alice'
+    expect(mentionedUserIds(withStrangers, members, undefined)).toEqual([])
   })
 })

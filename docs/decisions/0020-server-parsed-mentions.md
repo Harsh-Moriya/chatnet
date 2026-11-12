@@ -1,6 +1,6 @@
 # Mentions are read by the server and saved with their cause
 
-Status: Accepted
+Status: Superseded
 
 ## Context
 
@@ -20,7 +20,9 @@ A mention is `@userName` in the message text: 3 to 50 letters, digits or undersc
 
 - A message cannot reveal who exists elsewhere or notify a whole conversation at once.
 - A repeated send answers before it reaches the save, so it cannot notify twice.
+- Superseded: the server cannot read the text of a message, so the sender's browser finds the names and sends the people as ids. The server keeps only active members other than the sender, which is the same protection the list of ids was passed over for here, and saves the notifications in the message's own transaction as before.
 
 ## Related
 
 - [Notifications and mentions](../features/notifications.md)
+- [Messages are sealed in the browser, and the server stores a blob it checks only for shape and epoch](0038-messages-stored-as-ciphertext.md)

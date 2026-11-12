@@ -17,7 +17,7 @@ A deleted message keeps its row: `Content` becomes null, `IsDeleted`, `DeletedAt
 ## Consequences
 
 - A deleted message cannot be restored: text and files are gone.
-- Readers must treat `isDeleted` messages as placeholders everywhere (unread counts, search, previews).
+- Readers must treat `isDeleted` messages as placeholders everywhere (unread counts, previews).
 
 ## Related
 

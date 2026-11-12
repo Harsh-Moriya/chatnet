@@ -6,7 +6,7 @@ There are **no automatic backups**. This page says what to back up, how to do it
 
 | Data | Where | In a database dump? |
 |---|---|---|
-| Accounts, conversations, messages, read positions, notifications, refresh-token hashes, push registrations, the outbox | PostgreSQL | yes |
+| Accounts, conversations, messages (sealed: the dump holds ciphertext, not text), read positions, notifications, refresh-token hashes, push registrations, the outbox | PostgreSQL | yes |
 | Attachments and pictures | the object storage bucket | no |
 | Who is online, rate-limit counts, SignalR group state | Redis | no, and it does not need one: it is rebuilt as people connect |
 | The HTTPS certificate account | Caddy's `caddy-data` volume (production) | no |

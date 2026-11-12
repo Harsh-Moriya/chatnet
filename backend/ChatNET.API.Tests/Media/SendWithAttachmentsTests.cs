@@ -85,13 +85,13 @@ public class SendWithAttachmentsTests
     }
 
     [Fact]
-    public async Task Text_and_files_are_sent_together_and_the_text_is_trimmed()
+    public async Task Text_and_files_are_sent_together()
     {
         var (alice, _, conversation) = await _factory.DirectChatAsync();
         using var client = _factory.CreateClientFor(alice);
         var key = await client.UploadFileAsync(conversation, Bytes(10));
 
-        var message = await client.SendMessageWithFilesAsync(conversation, "  look at this  ", (key, "a.png"));
+        var message = await client.SendMessageWithFilesAsync(conversation, "look at this", (key, "a.png"));
 
         Assert.Equal("look at this", message.ContentOf());
         Assert.Single(message.AttachmentsOf());
@@ -328,26 +328,31 @@ public class SendWithAttachmentsTests
     }
 
     [Fact]
-    public async Task Text_that_is_too_long_is_still_refused_when_files_are_attached()
+    public async Task A_sealed_text_that_is_too_long_is_still_refused_when_files_are_attached()
     {
         var (alice, _, conversation) = await _factory.DirectChatAsync();
         using var client = _factory.CreateClientFor(alice);
         var key = await client.UploadFileAsync(conversation, Bytes(10));
 
-        var response = await client.PostMessageWithFilesAsync(conversation, new string('x', 4001), [(key, "a.png")]);
+        var response = await client.PostMessageWithFilesAsync(conversation, new string('x', 32768), [(key, "a.png")]);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     [Fact]
-    public async Task A_message_with_neither_text_nor_files_is_still_refused()
+    public async Task A_message_with_files_but_nothing_sealed_is_refused()
     {
         var (alice, _, conversation) = await _factory.DirectChatAsync();
         using var client = _factory.CreateClientFor(alice);
+        var key = await client.UploadFileAsync(conversation, Bytes(10));
 
-        var empty = await client.PostMessageWithFilesAsync(conversation, "   ", []);
+        var response = await client.PostAsJsonAsync($"/api/conversations/{conversation}/messages", new
+        {
+            clientMessageId = Guid.NewGuid(),
+            attachments = new[] { new { uploadKey = key, fileName = "a.png" } },
+        });
 
-        Assert.Equal(HttpStatusCode.BadRequest, empty.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     // Someone else's key must say nothing about their files: it is refused exactly as a key that points at

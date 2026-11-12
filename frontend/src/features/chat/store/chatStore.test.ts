@@ -149,7 +149,7 @@ describe('seedMessages', () => {
   it('lets the server copy win when a message changed (for example it was deleted)', () => {
     store().receiveMessage(message({ id: 'm', content: 'secret' }))
 
-    store().seedMessages('c1', [message({ id: 'm', content: null })])
+    store().seedMessages('c1', [message({ id: 'm', content: null, isDeleted: true })])
 
     expect(store().messages.c1[0].content).toBeNull()
   })
@@ -390,8 +390,10 @@ describe('conversations', () => {
     expect(list[0].lastMessage).toEqual({
       senderId: 'bob',
       content: 'hello',
+      unreadable: null,
       createdAt: '2026-10-11T10:00:00Z',
       attachmentCount: 0,
+      sealed: null,
     })
   })
 
@@ -1025,5 +1027,168 @@ describe('the keys of a conversation when copies of it are merged', () => {
     store().seedConversations([conversation({ id: 'c1', updatedAt: NEW, keyEpoch: 2, keyRotationRequired: true })])
 
     expect(store().conversations.c1).toStrictEqual(before)
+  })
+})
+
+// ##### Opening what could not be opened #####
+
+describe('applyOpened', () => {
+  it('puts the text on a message that could not be opened', () => {
+    store().seedMessages('c1', [message({ id: 'm1', content: null, unreadable: 'noKey' })])
+
+    store().applyOpened('c1', 'm1', 0, { content: 'now readable', unreadable: null })
+
+    expect(store().messages.c1[0]).toMatchObject({ content: 'now readable', unreadable: null })
+  })
+
+  it('records why a message is still not shown', () => {
+    store().seedMessages('c1', [message({ id: 'm1', content: null, unreadable: 'noKey' })])
+
+    store().applyOpened('c1', 'm1', 0, { content: null, unreadable: 'senderChanged' })
+
+    expect(store().messages.c1[0]).toMatchObject({ content: null, unreadable: 'senderChanged' })
+  })
+
+  it('ignores a result for an older version than the one held', () => {
+    store().seedMessages('c1', [message({ id: 'm1', content: null, unreadable: 'noKey', editCount: 2 })])
+
+    store().applyOpened('c1', 'm1', 1, { content: 'old text', unreadable: null })
+
+    expect(store().messages.c1[0]).toMatchObject({ content: null, unreadable: 'noKey', editCount: 2 })
+  })
+
+  it('ignores a result for a message that was deleted, or that is not held', () => {
+    store().seedMessages('c1', [message({ id: 'm1', content: null, isDeleted: true })])
+
+    store().applyOpened('c1', 'm1', 0, { content: 'text', unreadable: null })
+    store().applyOpened('c1', 'nope', 0, { content: 'text', unreadable: null })
+    store().applyOpened('other', 'm1', 0, { content: 'text', unreadable: null })
+
+    expect(store().messages.c1[0].content).toBeNull()
+  })
+
+  it('changes nothing when the message already shows that', () => {
+    store().seedMessages('c1', [message({ id: 'm1', content: 'same', unreadable: null })])
+    const before = store().messages
+
+    store().applyOpened('c1', 'm1', 0, { content: 'same', unreadable: null })
+
+    expect(store().messages).toBe(before)
+  })
+
+  it('shows the text in the list too, when the message is the last one', () => {
+    store().seedConversations([conversation({ id: 'c1' })])
+    store().receiveMessage(message({ id: 'm1', content: null, unreadable: 'noKey', createdAt: '2026-10-11T10:00:00Z' }))
+    expect(store().conversations.c1.lastMessage).toMatchObject({ content: null, unreadable: 'noKey' })
+
+    store().applyOpened('c1', 'm1', 0, { content: 'the last one', unreadable: null })
+
+    expect(store().conversations.c1.lastMessage).toMatchObject({ content: 'the last one', unreadable: null })
+  })
+})
+
+describe('applyOpenedPreview', () => {
+  const pending = (overrides: Partial<NonNullable<Conversation['lastMessage']>> = {}): NonNullable<Conversation['lastMessage']> => ({
+    senderId: 'bob',
+    content: null,
+    unreadable: 'pending',
+    createdAt: '2026-10-11T10:00:00Z',
+    attachmentCount: 0,
+    sealed: { ciphertext: 'c', keyEpoch: 1, clientMessageId: 'cid', editCount: 0 },
+    ...overrides,
+  })
+
+  it('puts the opened preview in place of the one that said it was being opened', () => {
+    store().seedConversations([conversation({ id: 'c1', lastMessage: pending() })])
+
+    store().applyOpenedPreview('c1', pending({ content: 'hello', unreadable: null }))
+
+    expect(store().conversations.c1.lastMessage).toMatchObject({ content: 'hello', unreadable: null })
+  })
+
+  it('ignores a preview of a message that is no longer the last one, in sender, time or edit', () => {
+    store().seedConversations([conversation({ id: 'c1', lastMessage: pending() })])
+
+    store().applyOpenedPreview('c1', pending({ senderId: 'carol', content: 'a', unreadable: null }))
+    store().applyOpenedPreview('c1', pending({ createdAt: '2026-10-11T10:05:00Z', content: 'b', unreadable: null }))
+    store().applyOpenedPreview(
+      'c1',
+      pending({ sealed: { ciphertext: 'c', keyEpoch: 1, clientMessageId: 'cid', editCount: 1 }, content: 'c', unreadable: null }),
+    )
+
+    expect(store().conversations.c1.lastMessage?.unreadable).toBe('pending')
+  })
+
+  it('ignores a preview for a conversation that is not held, or that has no message', () => {
+    store().seedConversations([conversation({ id: 'c1' })])
+    const before = store().conversations
+
+    store().applyOpenedPreview('c1', pending({ content: 'a', unreadable: null }))
+    store().applyOpenedPreview('nope', pending({ content: 'a', unreadable: null }))
+
+    expect(store().conversations).toBe(before)
+  })
+})
+
+describe('a list that arrives while the previews held are already opened', () => {
+  const sealedPreview = { ciphertext: 'c', keyEpoch: 1, clientMessageId: 'cid', editCount: 0 }
+  const row = (content: string | null, unreadable: 'pending' | null, editCount = 0) =>
+    conversation({
+      id: 'c1',
+      updatedAt: '2026-10-11T10:00:00Z',
+      lastMessage: {
+        senderId: 'bob',
+        content,
+        unreadable,
+        createdAt: '2026-10-11T10:00:00Z',
+        attachmentCount: 0,
+        sealed: { ...sealedPreview, editCount },
+      },
+    })
+
+  it('keeps the opened preview of the same message, and does not go back to waiting', () => {
+    store().seedConversations([row('opened text', null)])
+
+    store().seedConversations([row(null, 'pending')])
+
+    expect(store().conversations.c1.lastMessage).toMatchObject({ content: 'opened text', unreadable: null })
+  })
+
+  it('takes the new one when the message was edited since', () => {
+    store().seedConversations([row('opened text', null)])
+
+    store().seedConversations([row(null, 'pending', 1)])
+
+    expect(store().conversations.c1.lastMessage).toMatchObject({ content: null, unreadable: 'pending' })
+  })
+
+  it('takes the new one when it is of another message than the one that was opened', () => {
+    store().seedConversations([row('opened text', null)])
+    const another = row(null, 'pending')
+    another.updatedAt = '2026-10-11T10:05:00Z'
+    another.lastMessage!.createdAt = '2026-10-11T10:05:00Z'
+
+    store().seedConversations([another])
+
+    expect(store().conversations.c1.lastMessage).toMatchObject({ content: null, unreadable: 'pending', createdAt: '2026-10-11T10:05:00Z' })
+  })
+
+  it('takes the new one when it is of another sender than the one that was opened', () => {
+    store().seedConversations([row('opened text', null)])
+    const another = row(null, 'pending')
+    another.updatedAt = '2026-10-11T10:00:01Z'
+    another.lastMessage!.senderId = 'carol'
+
+    store().seedConversations([another])
+
+    expect(store().conversations.c1.lastMessage).toMatchObject({ content: null, unreadable: 'pending', senderId: 'carol' })
+  })
+
+  it('takes an opened preview that arrives over one that is waiting', () => {
+    store().seedConversations([row(null, 'pending')])
+
+    store().seedConversations([row('opened text', null)])
+
+    expect(store().conversations.c1.lastMessage).toMatchObject({ content: 'opened text', unreadable: null })
   })
 })

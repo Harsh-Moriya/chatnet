@@ -2,12 +2,13 @@ using ChatNET.API.Auth.Models;
 using ChatNET.API.Common.Exceptions;
 using ChatNET.API.Common.Time;
 using ChatNET.API.Conversations;
+using ChatNET.API.Conversations.KeyEpochs;
 using ChatNET.API.Conversations.Persistence;
+using ChatNET.API.Keys;
 using ChatNET.API.Media;
 using ChatNET.API.Messaging.Hubs;
 using ChatNET.API.Messaging.Models;
 using ChatNET.API.Messaging.Persistence;
-using ChatNET.API.Notifications;
 using ChatNET.API.Notifications.Models;
 using ChatNET.API.Notifications.Persistence;
 using ChatNET.API.Outbox;
@@ -112,22 +113,25 @@ public class SendMessageHandler : IRequestHandler<SendMessageCommand, SendMessag
             }
         }
 
+        // The blob was accepted by the validator, so it decodes. The epoch it is stored under is the one in its header, which the sender
+        // signed: the request states no other, so the two cannot disagree.
+        var blob = MessageBlob.Decode(request.Ciphertext)!;
+
         // The id is made here, not by the database, because the outbox rows saved with the message name it.
         var message = new Message
         {
             Id = Guid.CreateVersion7(),
             ConversationId = request.ConversationId,
             SenderId = request.SenderId,
-
-            // Empty, not null, for a message of only files: null is how a deleted message is told.
-            Content = request.Content?.Trim() ?? string.Empty,
+            Ciphertext = blob,
+            KeyEpoch = MessageBlob.EpochOf(blob),
             CreatedAt = createdAt,
-            ClientMessageId = request.ClientMessageId,
+            ClientMessageId = request.ClientMessageId!.Value,
         };
         if (staged is not null)
             message.Attachments = staged.Attachments;
 
-        var mentions = await MentionsAsync(message, cancellationToken);
+        var mentions = await MentionsAsync(message, request.MentionedUserIds, cancellationToken);
 
         // One row for the message and one for each mention, saved with them. If this request stops before it has
         // pushed, or the push fails, the relay makes the push from these rows. The rows that alert the people who are away
@@ -140,11 +144,12 @@ public class SendMessageHandler : IRequestHandler<SendMessageCommand, SendMessag
 
         // Two copies of one send can arrive together, both find nothing above, and both insert. The unique
         // index lets one in; the other is told so here, and answers with the winner's message. The files this
-        // copy made are of no use to anyone then, and are removed, as they are when the save fails.
-        bool added;
+        // copy made are of no use to anyone then, and are removed, as they are when the save fails or when the
+        // conversation's keys are not the ones the message was sealed under.
+        AddOutcome outcome;
         try
         {
-            added = await _messages.TryAddAsync(message, mentions, [messageRow, .. mentionRows, .. alertRows], cancellationToken);
+            outcome = await _messages.TryAddAsync(message, mentions, [messageRow, .. mentionRows, .. alertRows], cancellationToken);
         }
         catch
         {
@@ -154,10 +159,16 @@ public class SendMessageHandler : IRequestHandler<SendMessageCommand, SendMessag
             throw;
         }
 
-        if (!added)
+        if (outcome != AddOutcome.Added)
         {
             if (staged is not null)
                 await _intake.DiscardAsync(staged.Attachments);
+
+            if (outcome == AddOutcome.EpochStale)
+                throw new ConflictException("The keys of this conversation changed. Look at the conversation again.", KeyEpochCodes.Stale);
+
+            if (outcome == AddOutcome.EpochDue)
+                throw new ConflictException("The keys of this conversation must be replaced before anything more is said.", KeyEpochCodes.Due);
 
             var winner = await _messages.FindByClientMessageIdAsync(
                 request.ConversationId, request.SenderId, request.ClientMessageId!.Value, cancellationToken);
@@ -177,7 +188,7 @@ public class SendMessageHandler : IRequestHandler<SendMessageCommand, SendMessag
 
         var dto = new MessageDto(
             message.Id, message.ConversationId, message.SenderId, sender.DisplayName,
-            message.Content, message.CreatedAt, request.ClientMessageId,
+            KeyFormats.Encode(blob), message.KeyEpoch, message.CreatedAt, message.ClientMessageId,
             message.Attachments.Select(_attachmentLoader.ToDto).ToList(),
             EditedAt: null, EditCount: 0, IsDeleted: false);
 
@@ -188,7 +199,7 @@ public class SendMessageHandler : IRequestHandler<SendMessageCommand, SendMessag
             var mention = mentions[i];
             var notification = new NotificationDto(
                 mention.Id, mention.Type, mention.ConversationId, mention.ActorId, sender.DisplayName,
-                message.Id, MessagePreview.Of(message.Content), mention.IsRead, mention.CreatedAt);
+                message.Id, NotificationMessageDto.Of(dto), mention.IsRead, mention.CreatedAt);
 
             await _outbox.DeliverAsync(
                 mentionRows[i],
@@ -199,17 +210,20 @@ public class SendMessageHandler : IRequestHandler<SendMessageCommand, SendMessag
         return new SendMessageResult(dto, Created: true);
     }
 
-    // The people the message names with "@username", as notifications that are saved in the same transaction as the
-    // message. A mention counts in a muted conversation too: someone addressed the person by name. Only active members
-    // can be mentioned, so a name says nothing about who exists elsewhere.
-    private async Task<List<Notification>> MentionsAsync(Message message, CancellationToken cancellationToken)
+    // The people the sender says the message names, as notifications that are saved in the same transaction as the message. The
+    // server cannot read the text, so it goes by the ids it is given. A mention counts in a muted conversation too: someone
+    // addressed the person by name. Only active members can be mentioned, so an id says nothing about who exists elsewhere. The
+    // ones that count are kept on the message, so an edit notifies only the people it names who this did not.
+    private async Task<List<Notification>> MentionsAsync(
+        Message message, IReadOnlyList<Guid>? named, CancellationToken cancellationToken)
     {
-        var names = MentionParser.NormalizedUserNamesIn(message.Content);
-        if (names.Count == 0)
+        if (named is not { Count: > 0 })
             return [];
 
-        var recipients = await _notifications.FindMentionedMembersAsync(
-            message.ConversationId, message.SenderId, names, cancellationToken);
+        var recipients = await _notifications.FindMentionableMemberIdsAsync(
+            message.ConversationId, message.SenderId, named, cancellationToken);
+
+        message.MentionedUserIds = [.. recipients];
 
         return recipients.Select(userId => new Notification
         {

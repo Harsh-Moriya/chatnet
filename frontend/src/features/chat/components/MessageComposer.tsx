@@ -7,11 +7,12 @@ import {
   useRef,
   useState,
 } from 'react'
-import { AlertCircle, Paperclip, Send } from 'lucide-react'
+import { AlertCircle, Lock, Paperclip, Send } from 'lucide-react'
 import { Button } from '../../../components/ui/Button'
 import { Textarea } from '../../../components/ui/Textarea'
 import { cn } from '../../../lib/cn'
 import { useAuth } from '../../auth/hooks/useAuth'
+import { useKeyStatusStore } from '../../encryption/keyStatus'
 import { sendMessage } from '../api/chatApi'
 import { FILE_PICKER_ACCEPT, MAX_FILES_PER_MESSAGE } from '../attachments'
 import { useAttachmentUploads } from '../hooks/useAttachmentUploads'
@@ -22,8 +23,8 @@ import type { Member } from '../types'
 import { canSend, toPendingAttachments } from '../uploads'
 import { UploadChips } from './UploadChips'
 
-// The server's limit, counted the way it counts: in UTF-16 code units, which is also what the
-// browser's maxLength counts.
+// The most a message may hold, counted in UTF-16 code units, which is also what the browser's maxLength counts. The server cannot read
+// a message, so it is here that the limit is kept.
 const MAX_LENGTH = 4000
 const SHOW_COUNTER_FROM = 3500
 const MAX_HEIGHT_PX = 160
@@ -39,13 +40,19 @@ export function MessageComposer({ conversationId }: { conversationId: string }) 
   const typing = useTypingIndicator(conversationId)
   const uploads = useAttachmentUploads(conversationId)
 
-  const sendable = canSend(uploads.items, text)
+  // Someone in the conversation has not set up encryption, so no key can be sealed for them and nothing can be written until they do (or
+  // are removed). Said above the box, with who it is waiting for.
+  const members = useChatStore((state) => state.members[conversationId])
+  const waitingFor = useKeyStatusStore((state) => state.waitingFor[conversationId])
+  const blocked = waitingFor !== undefined && waitingFor.length > 0
+  const waitingNames = (waitingFor ?? []).map((userId) => members?.find((m) => m.userId === userId)?.displayName ?? 'Someone')
+
+  const sendable = canSend(uploads.items, text) && !blocked
 
   // ##### Mentions #####
   // Typing "@" and a few letters offers the people in the conversation. The cursor position decides whether a
   // name is being typed, so it is kept alongside the text. A choice made with Escape is remembered by where the
   // "@" is, so the list stays closed for that name and comes back for the next one.
-  const members = useChatStore((state) => state.members[conversationId])
   const [caret, setCaret] = useState(0)
   const [focused, setFocused] = useState(false)
   const [dismissedAt, setDismissedAt] = useState<number | null>(null)
@@ -194,6 +201,15 @@ export function MessageComposer({ conversationId }: { conversationId: string }) 
         </ul>
       )}
 
+      {blocked && (
+        <p className="mb-2 flex items-start gap-1.5 text-xs text-slate-600" role="status">
+          <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          <span>
+            Waiting for {waitingNames.join(', ')} to set up encryption. You can write here once they have.
+          </span>
+        </p>
+      )}
+
       {uploads.rejected.length > 0 && (
         <ul className="mb-2 space-y-0.5 text-xs text-red-500" role="alert">
           {uploads.rejected.map((problem) => (
@@ -222,7 +238,7 @@ export function MessageComposer({ conversationId }: { conversationId: string }) 
           size="icon"
           aria-label="Attach files"
           title={`Attach files (up to ${MAX_FILES_PER_MESSAGE})`}
-          disabled={uploads.items.length >= MAX_FILES_PER_MESSAGE}
+          disabled={blocked || uploads.items.length >= MAX_FILES_PER_MESSAGE}
           onClick={() => picker.current?.click()}
           className="mb-0.5 h-10 w-10"
         >
@@ -234,7 +250,8 @@ export function MessageComposer({ conversationId }: { conversationId: string }) 
           rows={1}
           value={text}
           maxLength={MAX_LENGTH}
-          placeholder="Write a message"
+          placeholder={blocked ? 'Waiting for encryption to be set up' : 'Write a message'}
+          disabled={blocked}
           aria-label="Message"
           role="combobox"
           aria-autocomplete="list"

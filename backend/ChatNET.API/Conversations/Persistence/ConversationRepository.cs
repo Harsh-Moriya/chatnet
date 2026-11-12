@@ -1,7 +1,7 @@
 using ChatNET.API.Common.Persistence;
+using ChatNET.API.Keys;
 using ChatNET.API.Conversations.Models;
 using ChatNET.API.Media;
-using ChatNET.API.Messaging;
 using ChatNET.API.Notifications.Models;
 using ChatNET.API.Outbox.Models;
 using Microsoft.EntityFrameworkCore;
@@ -255,7 +255,10 @@ public class ConversationRepository : IConversationRepository
                other."UserId" AS "OtherUserId",
                LEAST(c."UpdatedAt", COALESCE(mine."LeftAt", 'infinity'::timestamptz)) AS "UpdatedAt",
                lm."SenderId" AS "LastMessageSenderId",
-               CASE WHEN lm."IsDeleted" THEN NULL ELSE lm."Content" END AS "LastMessageContent",
+               lm."Ciphertext" AS "LastMessageCiphertext",
+               lm."KeyEpoch" AS "LastMessageKeyEpoch",
+               lm."ClientMessageId" AS "LastMessageClientMessageId",
+               lm."EditCount" AS "LastMessageEditCount",
                lm."CreatedAt" AS "LastMessageCreatedAt",
                CASE WHEN lm."Id" IS NULL OR lm."IsDeleted" THEN 0
                     ELSE (SELECT COUNT(*)::int FROM "MessageAttachments" a WHERE a."MessageId" = lm."Id") END
@@ -286,7 +289,7 @@ public class ConversationRepository : IConversationRepository
             LIMIT 1
         ) other ON TRUE
         LEFT JOIN LATERAL (
-            SELECT m."Id", m."SenderId", m."Content", m."IsDeleted", m."CreatedAt"
+            SELECT m."Id", m."SenderId", m."Ciphertext", m."KeyEpoch", m."ClientMessageId", m."EditCount", m."IsDeleted", m."CreatedAt"
             FROM "Messages" m
             WHERE m."ConversationId" = c."Id"
               AND m."CreatedAt" >= mine."JoinedAt"
@@ -309,8 +312,17 @@ public class ConversationRepository : IConversationRepository
 
     private static ConversationDto ToDto(ConversationRow row)
     {
-        var last = row.LastMessageSenderId is { } senderId && row.LastMessageCreatedAt is { } createdAt
-            ? new LastMessageDto(senderId, MessagePreview.Of(row.LastMessageContent), createdAt, row.LastMessageAttachmentCount)
+        var last = row is
+        {
+            LastMessageSenderId: { } senderId,
+            LastMessageCreatedAt: { } createdAt,
+            LastMessageKeyEpoch: { } keyEpoch,
+            LastMessageClientMessageId: { } clientMessageId,
+            LastMessageEditCount: { } editCount,
+        }
+            ? new LastMessageDto(
+                senderId, row.LastMessageCiphertext is { } blob ? KeyFormats.Encode(blob) : null, keyEpoch, clientMessageId, editCount,
+                createdAt, row.LastMessageAttachmentCount)
             : null;
 
         return new ConversationDto(
@@ -328,7 +340,10 @@ public class ConversationRepository : IConversationRepository
         public string? AvatarKey { get; set; }
         public DateTime UpdatedAt { get; set; }
         public Guid? LastMessageSenderId { get; set; }
-        public string? LastMessageContent { get; set; }
+        public byte[]? LastMessageCiphertext { get; set; }
+        public int? LastMessageKeyEpoch { get; set; }
+        public Guid? LastMessageClientMessageId { get; set; }
+        public int? LastMessageEditCount { get; set; }
         public DateTime? LastMessageCreatedAt { get; set; }
         public int LastMessageAttachmentCount { get; set; }
         public int UnreadCount { get; set; }

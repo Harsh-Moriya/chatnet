@@ -41,6 +41,17 @@ public sealed record MessageFilesRemoved(Guid MessageId) : IOutboxEvent
     public string Kind => Name;
 }
 
+// The object of a file that belonged to a message that no longer exists is taken out of the bucket. Like MessageFilesRemoved it is not
+// a push. It names the key and not the message, because the rows are made by SQL at the moment the messages are removed, when the
+// files can no longer be found by their message. The key is a path made by the server (see AttachmentKeys), not content.
+public sealed record StoredFileRemoved(string Key) : IOutboxEvent
+{
+    public const string Name = nameof(StoredFileRemoved);
+
+    [JsonIgnore]
+    public string Kind => Name;
+}
+
 // A notification was stored: its recipient's open tabs are sent it.
 public sealed record NotificationCreated(Guid NotificationId, Guid UserId) : IOutboxEvent
 {
@@ -186,6 +197,7 @@ public static class OutboxEvents
         MessageCreated.Name => Deserialize<MessageCreated>(payload),
         MessageUpdated.Name => Deserialize<MessageUpdated>(payload),
         MessageFilesRemoved.Name => Deserialize<MessageFilesRemoved>(payload),
+        StoredFileRemoved.Name => Deserialize<StoredFileRemoved>(payload),
         NotificationCreated.Name => Deserialize<NotificationCreated>(payload),
         MessageAlertRequested.Name => Deserialize<MessageAlertRequested>(payload),
         NotificationAlertRequested.Name => Deserialize<NotificationAlertRequested>(payload),

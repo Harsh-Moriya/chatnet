@@ -32,7 +32,7 @@ erDiagram
 - **Keys** are UUIDs. Messages, conversations and notifications get a time-ordered UUID (version 7) made by the application; the column default `gen_random_uuid()` is only a fallback.
 - **Timestamps** are `timestamp with time zone`, stored and returned in UTC.
 - **Enums** are stored as text (`Direct`, `Group`, `Owner`, `Admin`, `Member`, `Image`, `Video`, `File`, `Mention`, `MemberAdded`), so a query against the database is readable.
-- **Soft delete.** Messages and users are never removed. A deleted message keeps its row with `Content` set to null; a deactivated user keeps their account with `IsDeactivated`.
+- **Soft delete.** Messages and users are never removed. A deleted message keeps its row with `Ciphertext` set to null; a deactivated user keeps their account with `IsDeactivated`.
 - **Integrity in the database.** Every unique or integrity rule is enforced by an index or constraint as well as in code, and a race is settled by catching the specific violation.
 - **Indexes** exist for queries that exist. Query-cost tests ask Postgres how many rows the real query reads.
 
@@ -92,17 +92,19 @@ Someone added again after leaving reuses their row: `JoinedAt` is reset, `LeftAt
 |---|---|---|
 | `Id` | uuid | primary key |
 | `ConversationId`, `SenderId` | uuid | foreign keys; cascade on the conversation |
-| `Content` | text, null | at most 4,000 UTF-16 code units; null for a deleted message |
+| `Ciphertext` | bytea, null | the sealed text of the message, 98 to 32,768 bytes, in the [format](encryption-format.md) the sender's browser made; null exactly when the message is deleted. The server cannot read it |
+| `KeyEpoch` | integer | the epoch the message was sealed under, taken from the blob's header; at least 1 |
+| `MentionedUserIds` | uuid[] | the active members the latest version of the message named, other than the sender, so an edit notifies only new names |
 | `CreatedAt` | timestamptz | set by the server; with `Id` it orders messages |
 | `EditCount`, `EditedAt` | integer, timestamptz null | |
 | `IsDeleted`, `DeletedAt`, `DeletedById` | boolean, timestamptz null, uuid null | who deleted it: the sender, or a group owner or admin |
-| `ClientMessageId` | uuid, null | the id the browser made up for the send, for idempotency |
+| `ClientMessageId` | uuid | the id the browser made up for the send, for idempotency; bound into the sealed message |
 
 Indexes:
 
 - `IX_Messages_ConversationId_CreatedAt` on `(ConversationId, CreatedAt DESC)`: every history query walks this index from a cursor and stops after 50 rows.
-- `IX_Messages_ConversationId_SenderId_ClientMessageId`: **unique and partial** (where `ClientMessageId` is not null). Concurrent copies of one send are settled by this index.
-- `IX_Messages_Search`: a GIN index on `(ConversationId, to_tsvector('simple', coalesce(Content, '')))`, using `btree_gin`, for message search.
+- `IX_Messages_ConversationId_SenderId_ClientMessageId`: **unique**. Concurrent copies of one send are settled by this index.
+- Two check constraints: `CK_Messages_Ciphertext` (a deleted message has no blob and every other message has one of 98 to 32,768 bytes) and `CK_Messages_KeyEpoch` (at least 1).
 - Indexes on `SenderId` and `DeletedById` for the foreign keys.
 
 ## MessageAttachments
@@ -244,7 +246,7 @@ Index `(UserId, IsRead, CreatedAt DESC)` serves the list, which reads two ordere
 |---|---|---|
 | `Id` | uuid | primary key |
 | `Kind` | varchar(64) | the event name, for example `MessageCreated` |
-| `Payload` | jsonb | ids only |
+| `Payload` | jsonb | ids only; a file to be removed from the bucket is named by its storage key |
 | `CreatedAt`, `NextAttemptAt` | timestamptz | |
 | `DispatchedAt` | timestamptz, null | set when delivered |
 | `Attempts` | integer | |

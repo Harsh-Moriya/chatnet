@@ -481,11 +481,11 @@ namespace ChatNET.API.Migrations
                         .HasColumnType("uuid")
                         .HasDefaultValueSql("gen_random_uuid()");
 
-                    b.Property<Guid?>("ClientMessageId")
-                        .HasColumnType("uuid");
+                    b.Property<byte[]>("Ciphertext")
+                        .HasColumnType("bytea");
 
-                    b.Property<string>("Content")
-                        .HasColumnType("text");
+                    b.Property<Guid>("ClientMessageId")
+                        .HasColumnType("uuid");
 
                     b.Property<Guid>("ConversationId")
                         .HasColumnType("uuid");
@@ -512,6 +512,15 @@ namespace ChatNET.API.Migrations
                         .HasColumnType("boolean")
                         .HasDefaultValue(false);
 
+                    b.Property<int>("KeyEpoch")
+                        .HasColumnType("integer");
+
+                    b.PrimitiveCollection<Guid[]>("MentionedUserIds")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid[]")
+                        .HasDefaultValueSql("'{}'");
+
                     b.Property<Guid>("SenderId")
                         .HasColumnType("uuid");
 
@@ -526,10 +535,14 @@ namespace ChatNET.API.Migrations
 
                     b.HasIndex("ConversationId", "SenderId", "ClientMessageId")
                         .IsUnique()
-                        .HasDatabaseName("IX_Messages_ConversationId_SenderId_ClientMessageId")
-                        .HasFilter("\"ClientMessageId\" IS NOT NULL");
+                        .HasDatabaseName("IX_Messages_ConversationId_SenderId_ClientMessageId");
 
-                    b.ToTable("Messages");
+                    b.ToTable("Messages", t =>
+                        {
+                            t.HasCheckConstraint("CK_Messages_Ciphertext", "(\"IsDeleted\" AND \"Ciphertext\" IS NULL) OR (NOT \"IsDeleted\" AND \"Ciphertext\" IS NOT NULL AND length(\"Ciphertext\") BETWEEN 98 AND 32768)");
+
+                            t.HasCheckConstraint("CK_Messages_KeyEpoch", "\"KeyEpoch\" >= 1");
+                        });
                 });
 
             modelBuilder.Entity("ChatNET.API.Messaging.Models.MessageAttachment", b =>

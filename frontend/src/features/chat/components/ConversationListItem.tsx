@@ -9,6 +9,7 @@ import { attachmentPreview } from '../attachments'
 import { unreadLabel } from '../readState'
 import { typingLabel } from '../typingLabel'
 import type { Conversation } from '../types'
+import { unreadableText } from '../unreadable'
 
 interface ConversationListItemProps {
   conversation: Conversation
@@ -72,6 +73,8 @@ export function ConversationListItem({ conversation, currentUserId, now }: Conve
                     <span className="text-blue-600">{typing}</span>
                   ) : last === null ? (
                     <span className="italic">No messages yet</span>
+                  ) : last.unreadable ? (
+                    <span className="italic">{unreadableText(last.unreadable)}</span>
                   ) : last.content === null ? (
                     <span className="italic">Message deleted</span>
                   ) : (

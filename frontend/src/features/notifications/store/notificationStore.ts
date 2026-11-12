@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { compareTimestamps } from '../../../lib/time'
+import { previewOf } from '../../chat/preview'
 import type { NotificationItem, NotificationList } from '../types'
 
 // The signed-in user's notifications, newest first. As with the chat store, two sources feed it and neither
@@ -8,9 +9,6 @@ import type { NotificationItem, NotificationList } from '../types'
 
 // How many the server returns in a page. A page of this size may be followed by another.
 export const NOTIFICATION_PAGE_SIZE = 30
-
-// How much of a message's text a notification shows. Matches MessagePreview.Length on the server.
-const PREVIEW_LENGTH = 100
 
 interface NotificationState {
   items: NotificationItem[]
@@ -167,7 +165,7 @@ export const useNotificationStore = create<NotificationState>()((set) => ({
 
   applyMessageChange: (messageId, text) =>
     set((state) => {
-      const preview = text === null ? null : text.slice(0, PREVIEW_LENGTH)
+      const preview = previewOf(text)
       const changing = state.items.filter(
         (n) => n.messageId === messageId && n.messagePreview !== null && n.messagePreview !== preview,
       )

@@ -1,10 +1,24 @@
 import { api } from '../../../lib/api'
 import { getApiError } from '../../../lib/errors'
 import { newClientMessageId } from '../../../lib/uuid'
+import { useAuthStore } from '../../auth/store/authStore'
+import { describeKeyFailure } from '../../encryption/keyFailures'
 import { HISTORY_PAGE_SIZE } from '../history'
+import { mentionedUserIds } from '../mentions'
 import { useChatStore } from '../store/chatStore'
 import { waitForConnection } from '../store/waitForConnection'
-import type { Conversation, ConversationUpdate, Member, Message, PendingAttachment, UserSummary } from '../types'
+import type {
+  Conversation,
+  ConversationUpdate,
+  ConversationWire,
+  Member,
+  Message,
+  MessageWire,
+  PendingAttachment,
+  UserSummary,
+} from '../types'
+import { conversationOf, openMessage as openWireMessage, openMessages, ownMessage } from './openWire'
+import { openPreviews } from './previews'
 import { fetchAttachmentLink } from './uploadsApi'
 
 // Every REST call the chat makes. Plain functions, so they can be tested without React; the hooks
@@ -26,10 +40,13 @@ const chat = () => useChatStore.getState()
 export async function fetchConversations(signal?: AbortSignal): Promise<Conversation[]> {
   await waitForConnection(signal)
 
-  const { data } = await api.get<Conversation[]>('/conversations', { signal })
-  chat().seedConversations(data)
-  return data
+  const { data } = await api.get<ConversationWire[]>('/conversations', { signal })
+  const conversations = data.map(conversationOf)
+  chat().seedConversations(conversations)
+  void openPreviews(conversations)
+  return conversations
 }
+
 
 // One page of a conversation's history, oldest message first: the latest page, or with `before` the
 // page just older than that message id (what the reader scrolls back to), or with `after` the page
@@ -59,15 +76,15 @@ export async function requestMessages(
 ): Promise<Message[]> {
   await waitForConnection(signal)
 
-  const { data } = await api.get<Message[]>(`/conversations/${conversationId}/messages`, {
+  const { data } = await api.get<MessageWire[]>(`/conversations/${conversationId}/messages`, {
     params: { before, after, around },
     signal,
   })
-  return data
+  return openMessages(data)
 }
 
 // ##### Reading a window of the history #####
-// A search result or a notification can name a message far back. The conversation then shows a window of its history
+// A notification can name a message far back. The conversation then shows a window of its history
 // around that message (chatStore.showWindow), read in both directions from there until it reaches the newest message and is
 // live again. These three requests are that: they put the window up, and extend it upwards and downwards.
 
@@ -141,7 +158,7 @@ export async function createDirect(otherUserId: string): Promise<Conversation> {
     const prepared = await keys.prepareNewConversation(deps, [otherUserId])
 
     try {
-      const { data } = await api.post<Conversation>('/conversations/direct', {
+      const { data } = await api.post<ConversationWire>('/conversations/direct', {
         id: prepared.conversationId,
         otherUserId,
         epoch: prepared.body,
@@ -154,8 +171,10 @@ export async function createDirect(otherUserId: string): Promise<Conversation> {
     }
   })
 
-  chat().addConversation(data)
-  return data
+  const conversation = conversationOf(data)
+  chat().addConversation(conversation)
+  void openPreviews([conversation])
+  return conversation
 }
 
 export async function createGroup(name: string, memberIds: string[]): Promise<Conversation> {
@@ -166,7 +185,7 @@ export async function createGroup(name: string, memberIds: string[]): Promise<Co
     const prepared = await keys.prepareNewConversation(deps, memberIds)
 
     try {
-      const { data } = await api.post<Conversation>('/conversations/group', {
+      const { data } = await api.post<ConversationWire>('/conversations/group', {
         id: prepared.conversationId,
         name,
         memberIds,
@@ -179,8 +198,9 @@ export async function createGroup(name: string, memberIds: string[]): Promise<Co
     }
   })
 
-  chat().addConversation(data)
-  return data
+  const conversation = conversationOf(data)
+  chat().addConversation(conversation)
+  return conversation
 }
 
 // ##### Reading #####
@@ -198,25 +218,72 @@ export async function markRead(conversationId: string, messageId: string, selfId
 
 // ##### Changing a sent message #####
 
-// Replaces the text of one of the signed-in user's own messages. The server answers with the message as it is now
-// and pushes the same to everyone in the conversation, this tab included; whichever arrives first is applied, and the
-// other changes nothing. A refusal (the window has closed, the message was deleted) is the caller's to show.
+// What a failure to send or edit says, to show where the message is. The failures that have to do with keys say it in their own words
+// (someone has not set up encryption, the keys were being made too often); anything else is the server's own answer.
+function sentenceFor(error: unknown, conversationId: string): string {
+  const members = chat().members[conversationId]
+  const nameOf = (userId: string) => members?.find((m) => m.userId === userId)?.displayName ?? 'Someone'
+
+  return describeKeyFailure(error, nameOf) ?? getApiError(error)
+}
+
+// What this tab knows of the keys of a conversation, to start from: a conversation whose key it holds costs the server nothing.
+function keyStateOf(conversationId: string) {
+  const conversation = chat().conversations[conversationId]
+  return { keyEpoch: conversation?.keyEpoch ?? 0, keyRotationRequired: conversation?.keyRotationRequired ?? false }
+}
+
+// Replaces the text of one of the signed-in user's own messages. The new text is sealed for the next edit count, and the server settles
+// the rest: it answers with the message as it is now and pushes the same to everyone in the conversation, this tab included; whichever
+// arrives first is applied, and the other changes nothing. A refusal (the window has closed, the message was deleted, it was edited
+// somewhere else first) is the caller's to show, in the words of the error.
 export async function editMessage(
   conversationId: string,
   messageId: string,
   content: string,
   selfId: string,
 ): Promise<Message> {
-  const { data } = await api.patch<Message>(`/conversations/${conversationId}/messages/${messageId}`, { content })
-  chat().replaceMessage(data, selfId)
-  return data
+  const held = chat().messages[conversationId]?.find((m) => m.id === messageId)
+  if (!held || held.clientMessageId === null) throw new Error('This message is not loaded, so it cannot be edited.')
+
+  const text = content.trim()
+  const editCount = held.editCount + 1
+  const mentioned = mentionedUserIds(text, chat().members[conversationId], selfId)
+  const keys = await loadKeys()
+
+  try {
+    const data = await keys.sealAndSend(
+      conversationId,
+      keyStateOf(conversationId),
+      { clientMessageId: held.clientMessageId, editCount, text },
+      async (sealed) => {
+        try {
+          const { data } = await api.patch<MessageWire>(`/conversations/${conversationId}/messages/${messageId}`, {
+            ciphertext: sealed.ciphertext,
+            editCount,
+            mentionedUserIds: mentioned,
+          })
+          return data
+        } catch (failure) {
+          throw keys.refusalOf(failure)
+        }
+      },
+    )
+
+    const message = ownMessage(data, text)
+    chat().replaceMessage(message, selfId)
+    return message
+  } catch (failure) {
+    throw new Error(sentenceFor(failure, conversationId), { cause: failure })
+  }
 }
 
 // Deletes a message: the signed-in user's own, or anyone's in a group they own or administer.
 export async function deleteMessage(conversationId: string, messageId: string, selfId: string): Promise<Message> {
-  const { data } = await api.delete<Message>(`/conversations/${conversationId}/messages/${messageId}`)
-  chat().replaceMessage(data, selfId)
-  return data
+  const { data } = await api.delete<MessageWire>(`/conversations/${conversationId}/messages/${messageId}`)
+  const message = await openWireMessage(data)
+  chat().replaceMessage(message, selfId)
+  return message
 }
 
 // ##### Muting #####
@@ -336,24 +403,42 @@ async function post(
   attachments: PendingAttachment[],
 ): Promise<void> {
   try {
-    const { data } = await api.post<Message>(
-      `/conversations/${conversationId}/messages`,
-      {
-        content,
-        clientMessageId,
-        // Left out when there are none, so a message of only text is the request it always was.
-        ...(attachments.length > 0 && {
-          attachments: attachments.map(({ uploadKey, fileName }) => ({ uploadKey, fileName })),
-        }),
+    const keys = await loadKeys()
+    const mentioned = mentionedUserIds(content, chat().members[conversationId], useAuthStore.getState().user?.userId)
+
+    // Sealed under the epoch the conversation is in, which is looked at again if the server says it was the wrong one.
+    const data = await keys.sealAndSend(
+      conversationId,
+      keyStateOf(conversationId),
+      { clientMessageId, editCount: 0, text: content },
+      async (sealed) => {
+        try {
+          const { data } = await api.post<MessageWire>(
+            `/conversations/${conversationId}/messages`,
+            {
+              ciphertext: sealed.ciphertext,
+              clientMessageId,
+              mentionedUserIds: mentioned,
+              // Left out when there are none, so a message of only text is the request it always was.
+              ...(attachments.length > 0 && {
+                attachments: attachments.map(({ uploadKey, fileName }) => ({ uploadKey, fileName })),
+              }),
+            },
+            { timeout: SEND_TIMEOUT_MS },
+          )
+          return data
+        } catch (failure) {
+          throw keys.refusalOf(failure)
+        }
       },
-      { timeout: SEND_TIMEOUT_MS },
     )
-    // The response to a send is the sender's own message, so its sender is the signed-in user.
-    chat().receiveMessage(data, data.senderId)
+
+    // The response to a send is the sender's own message, so its sender is the signed-in user, and its text is the text that was sealed.
+    chat().receiveMessage(ownMessage(data, content), data.senderId)
   } catch (error) {
     // A message the push already confirmed is no longer unconfirmed, and failing an unknown id
     // does nothing, so a lost response cannot turn a delivered message into a failed one.
-    chat().failPending(conversationId, clientMessageId, getApiError(error))
+    chat().failPending(conversationId, clientMessageId, sentenceFor(error, conversationId))
   }
 }
 

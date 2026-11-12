@@ -187,9 +187,10 @@ public static class ConversationApi
             {
                 ConversationId = conversationId,
                 SenderId = senderId,
-                Content = content,
+                Ciphertext = deleted ? null : FakeMessage.Blob(1, content),
+                KeyEpoch = 1,
                 CreatedAt = createdAt,
-                ClientMessageId = clientMessageId,
+                ClientMessageId = clientMessageId ?? Guid.NewGuid(),
                 IsDeleted = deleted,
                 DeletedAt = deleted ? createdAt : null,
                 DeletedById = deleted ? senderId : null,
@@ -216,7 +217,9 @@ public static class ConversationApi
             {
                 ConversationId = conversationId,
                 SenderId = senderId,
-                Content = $"{prefix} {i}",
+                Ciphertext = FakeMessage.Blob(1, $"{prefix} {i}"),
+                KeyEpoch = 1,
+                ClientMessageId = Guid.NewGuid(),
                 CreatedAt = firstAt + i * step,
             }));
             await db.SaveChangesAsync();

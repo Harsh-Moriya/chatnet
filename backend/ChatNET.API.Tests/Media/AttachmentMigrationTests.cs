@@ -67,7 +67,7 @@ public class AttachmentMigrationTests
         {
             Id = Guid.NewGuid(), Type = ConversationType.Group, Name = "Files", CreatedAt = now, UpdatedAt = now, CreatedById = user.Id,
         };
-        var message = new Message { Id = Guid.NewGuid(), ConversationId = conversation.Id, SenderId = user.Id, Content = "", CreatedAt = now };
+        var message = new Message { Id = Guid.NewGuid(), ConversationId = conversation.Id, SenderId = user.Id, Ciphertext = FakeMessage.Blob(1, ""), KeyEpoch = 1, ClientMessageId = Guid.NewGuid(), CreatedAt = now };
         await scratch.AddAsync(conversation, message);
 
         var attachmentId = Guid.NewGuid();

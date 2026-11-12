@@ -8,7 +8,7 @@ An edit can race a delete, or arrive at the end of the edit window. A limit on e
 
 ## Decision
 
-Only the sender edits, within `Messaging:EditWindow` (15 minutes), on a message that is not deleted. The decision is one `UPDATE ... WHERE NOT IsDeleted AND CreatedAt > cutoff` that also counts the edit. The handler checks the same things first only to give the right 403, 404 or 409. The sender deletes at any time and a group owner or admin deletes anyone's. A delete keeps the row and removes the files after the commit; removing the files is an outbox job (`MessageFilesRemoved`) repeated until the bucket accepts it, which treats an already-missing file as removed and checks that the message really is deleted first.
+Only the sender edits, within `Messaging:EditWindow` (15 minutes), on a message that is not deleted. The decision is one `UPDATE ... WHERE NOT IsDeleted AND CreatedAt > cutoff` that also counts the edit. The handler checks the same things first only to give the right 403, 404 or 409. The sender deletes at any time and a group owner or admin deletes anyone's. An edit also states the edit count the sealed message was made for, and the `UPDATE` requires the stored count to be one less, so two edits made from one version store one. A delete keeps the row, clears the sealed text and removes the files after the commit; removing the files is an outbox job (`MessageFilesRemoved`) repeated until the bucket accepts it, which treats an already-missing file as removed and checks that the message really is deleted first.
 
 ## Alternatives considered
 
@@ -24,3 +24,4 @@ Only the sender edits, within `Messaging:EditWindow` (15 minutes), on a message 
 ## Related
 
 - [Editing and deleting](../features/edit-and-delete.md)
+- [Messages are sealed in the browser, and the server stores a blob it checks only for shape and epoch](0038-messages-stored-as-ciphertext.md)

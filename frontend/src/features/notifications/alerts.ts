@@ -62,7 +62,16 @@ export function messageAlertText(message: Message, conversation: Conversation | 
 
   return {
     title: inGroup ? `${message.senderDisplayName} in ${conversation.name}` : message.senderDisplayName,
-    body: message.content ? preview(message.content) : files > 0 ? (files === 1 ? 'Sent a file' : `Sent ${files} files`) : '',
+    // A message that could not be opened says only that there is one.
+    body: message.content
+      ? preview(message.content)
+      : files > 0
+        ? files === 1
+          ? 'Sent a file'
+          : `Sent ${files} files`
+        : message.unreadable
+          ? 'New message'
+          : '',
     tag: conversationTag(message.conversationId),
   }
 }

@@ -68,11 +68,11 @@ public class NotificationEndpointTests
     }
 
     [Fact]
-    public async Task A_mention_arrives_with_the_name_of_who_mentioned_you_and_a_preview_of_the_message()
+    public async Task A_mention_arrives_with_the_name_of_who_mentioned_you_and_the_message_as_it_was_sealed()
     {
         var (me, other, group) = await SetUpEmptyAsync();
         using var otherClient = _factory.CreateClientFor(other);
-        var message = await otherClient.SendMessageAsync(group, $"@{me.UserName} can you look at this?");
+        var message = await otherClient.SendMessageAsync(group, $"@{me.UserName} can you look at this?", mentions: [me.Id]);
         using var client = _factory.CreateClientFor(me);
 
         var item = Assert.Single((await client.GetNotificationsAsync()).ItemsOf());
@@ -82,7 +82,12 @@ public class NotificationEndpointTests
         Assert.Equal(other.Id, item.GetProperty("actorId").GetGuid());
         Assert.Equal(other.DisplayName, item.GetProperty("actorDisplayName").GetString());
         Assert.Equal(message.MessageIdOf(), item.GetProperty("messageId").GetGuid());
-        Assert.Equal($"@{me.UserName} can you look at this?", item.GetProperty("messagePreview").GetString());
+        Assert.Equal(message.GetProperty("ciphertext").GetString(), item.GetProperty("message").GetProperty("ciphertext").GetString());
+        Assert.Equal($"@{me.UserName} can you look at this?", FakeMessage.TextOf(item.GetProperty("message").GetProperty("ciphertext").GetString()));
+        Assert.Equal(1, item.GetProperty("message").GetProperty("keyEpoch").GetInt32());
+        Assert.Equal(message.GetProperty("clientMessageId").GetGuid(), item.GetProperty("message").GetProperty("clientMessageId").GetGuid());
+        Assert.Equal(0, item.GetProperty("message").GetProperty("editCount").GetInt32());
+        Assert.False(item.TryGetProperty("messagePreview", out _));
         Assert.False(item.GetProperty("isRead").GetBoolean());
         Assert.True(item.TryGetProperty("createdAt", out _));
     }
@@ -102,37 +107,38 @@ public class NotificationEndpointTests
         Assert.Equal(group, item.GetProperty("conversationId").GetGuid());
         Assert.Equal(other.DisplayName, item.GetProperty("actorDisplayName").GetString());
         Assert.Equal(JsonValueKind.Null, item.GetProperty("messageId").ValueKind);
-        Assert.Equal(JsonValueKind.Null, item.GetProperty("messagePreview").ValueKind);
+        Assert.Equal(JsonValueKind.Null, item.GetProperty("message").ValueKind);
     }
 
+    // The server cuts nothing: it cannot read the text, so what is shown of it is for the browser to decide.
     [Fact]
-    public async Task The_preview_is_cut_at_one_hundred_characters()
+    public async Task The_message_comes_whole_and_is_never_cut()
     {
         var (me, other, group) = await SetUpEmptyAsync();
         using var otherClient = _factory.CreateClientFor(other);
         var text = $"@{me.UserName} " + new string('y', 200);
-        await otherClient.SendMessageAsync(group, text);
+        await otherClient.SendMessageAsync(group, text, mentions: [me.Id]);
         using var client = _factory.CreateClientFor(me);
 
         var item = Assert.Single((await client.GetNotificationsAsync()).ItemsOf());
 
-        Assert.Equal(text[..100], item.GetProperty("messagePreview").GetString());
+        Assert.Equal(text, FakeMessage.TextOf(item.GetProperty("message").GetProperty("ciphertext").GetString()));
     }
 
     [Fact]
-    public async Task A_deleted_message_leaves_the_notification_with_no_preview()
+    public async Task A_deleted_message_leaves_the_notification_with_no_message()
     {
         var (me, other, group) = await SetUpEmptyAsync();
         using var otherClient = _factory.CreateClientFor(other);
-        var message = await otherClient.SendMessageAsync(group, $"@{me.UserName} secret");
+        var message = await otherClient.SendMessageAsync(group, $"@{me.UserName} secret", mentions: [me.Id]);
         await _factory.ExecuteDbAsync(db => db.Messages
             .Where(m => m.Id == message.MessageIdOf())
-            .ExecuteUpdateAsync(s => s.SetProperty(m => m.IsDeleted, true)));
+            .ExecuteUpdateAsync(s => s.SetProperty(m => m.IsDeleted, true).SetProperty(m => m.Ciphertext, (byte[]?)null)));
         using var client = _factory.CreateClientFor(me);
 
         var item = Assert.Single((await client.GetNotificationsAsync()).ItemsOf());
 
-        Assert.Equal(JsonValueKind.Null, item.GetProperty("messagePreview").ValueKind);
+        Assert.Equal(JsonValueKind.Null, item.GetProperty("message").ValueKind);
         Assert.Equal(message.MessageIdOf(), item.GetProperty("messageId").GetGuid());
     }
 

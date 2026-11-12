@@ -6,10 +6,14 @@ import { useChatStore } from '../store/chatStore'
 import type { Conversation, Message } from '../types'
 import { catchUpAll } from './catchUp'
 import { loadNewerInWindow, loadOlderInWindow, openMessage, sendMessage } from './chatApi'
+import { asServerSends, resetKeysDouble, wire } from './keysDouble'
+
+// The keys of a conversation need a signed-in person and this browser's stores; see keysDouble.ts for what stands in for them.
+vi.mock('../../encryption/conversationKeys', async () => (await import('./keysDouble')).keysModule)
 
 const store = () => useChatStore.getState()
 
-const respond = <T>(data: T) => ({ data }) as AxiosResponse<T>
+const respond = <T>(data: T) => ({ data: asServerSends(data) }) as AxiosResponse<T>
 
 // Messages numbered in time: "m5" is the fifth minute of the hour, so a page is easy to state.
 function message(n: number, overrides: Partial<Message> = {}): Message {
@@ -44,6 +48,7 @@ beforeEach(() => {
   store().reset()
   store().setConnection('connected')
   store().seedConversations([conversation()])
+  resetKeysDouble()
 })
 
 afterEach(() => {
@@ -175,7 +180,7 @@ describe('reading on from a window', () => {
 describe('sending from a window', () => {
   it('goes back to the newest messages first, so the message appears where the conversation is', async () => {
     store().showWindow('c1', range(100, 120), { hasOlder: true, reachesNewest: false })
-    vi.spyOn(api, 'post').mockResolvedValue(respond(message(999, { senderId: 'me' })))
+    vi.spyOn(api, 'post').mockResolvedValue(respond(wire(message(999, { senderId: 'me' }))))
 
     await sendMessage('c1', 'hello')
 
@@ -185,7 +190,7 @@ describe('sending from a window', () => {
 
   it('keeps what is held when the conversation is live, even if it was reached through a window', async () => {
     store().showWindow('c1', range(100, 120), { hasOlder: true, reachesNewest: true })
-    vi.spyOn(api, 'post').mockResolvedValue(respond(message(999, { senderId: 'me' })))
+    vi.spyOn(api, 'post').mockResolvedValue(respond(wire(message(999, { senderId: 'me' }))))
 
     await sendMessage('c1', 'hello')
 

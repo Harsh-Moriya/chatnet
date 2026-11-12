@@ -17,7 +17,7 @@ public sealed class ThrowingMessageRepository : IMessageRepository
         _inner = inner;
     }
 
-    public Task<bool> TryAddAsync(
+    public Task<AddOutcome> TryAddAsync(
         Message message, IReadOnlyList<Notification> notifications, IReadOnlyList<OutboxMessage> outbox,
         CancellationToken cancellationToken)
         => throw new InvalidOperationException("The database refused the message.");
@@ -29,11 +29,13 @@ public sealed class ThrowingMessageRepository : IMessageRepository
         Guid conversationId, Guid messageId, DateTime since, CancellationToken cancellationToken)
         => _inner.FindForChangeAsync(conversationId, messageId, since, cancellationToken);
 
-    public Task<bool> TryEditAsync(
-        Guid messageId, string content, DateTime editedAt, DateTime notBefore,
-        IReadOnlyList<Notification> notifications, IReadOnlyList<OutboxMessage> outbox,
+    public Task<EditOutcome> TryEditAsync(
+        Guid conversationId, Guid messageId, byte[] ciphertext, int keyEpoch, int editCount, DateTime editedAt, DateTime notBefore,
+        IReadOnlyList<Guid> mentionedUserIds, IReadOnlyList<Notification> notifications, IReadOnlyList<OutboxMessage> outbox,
         CancellationToken cancellationToken)
-        => _inner.TryEditAsync(messageId, content, editedAt, notBefore, notifications, outbox, cancellationToken);
+        => _inner.TryEditAsync(
+            conversationId, messageId, ciphertext, keyEpoch, editCount, editedAt, notBefore, mentionedUserIds, notifications, outbox,
+            cancellationToken);
 
     public Task<bool> TryDeleteAsync(
         Guid messageId, Guid deletedById, DateTime deletedAt, IReadOnlyList<OutboxMessage> outbox,

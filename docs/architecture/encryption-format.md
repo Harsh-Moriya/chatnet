@@ -185,6 +185,12 @@ Readers accept any JSON of this shape, with fields they do not know ignored.
 
 **Padding:** the JSON bytes, then `80`, then zero bytes up to the next multiple of 256. There is always at least one padding byte. A reader removes trailing zeros and then the `80`, and rejects the payload if the `80` is missing. All messages whose JSON is shorter than 256 bytes therefore have the same length.
 
+A message whose files are stored as uploaded carries an empty `files` list.
+
+### What the server checks
+
+The server stores the blob as it was sent and checks only its shape: the version byte and the suite byte are `01`, the length is 98 to 32768 bytes, and the epoch in the header is at least 1. The epoch in the header is the one the message is stored under, and it must be the epoch the conversation is in. The server cannot decrypt, and it does not verify the signature; every reader does.
+
 ## File
 
 An attachment is stored encrypted in fixed-size chunks, so a client can fetch and decrypt any chunk by its byte range.

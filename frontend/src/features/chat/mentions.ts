@@ -1,8 +1,8 @@
 import type { Member } from './types'
 
-// Mentioning someone is writing "@userName" in a message. The server reads the same text with the same rule
-// (MentionParser) to decide who is notified, so this file and that one must agree: a name is 3 to 50 letters,
-// digits or underscores, and the "@" must not be glued to a word before it (so an email address is not a mention).
+// Mentioning someone is writing "@userName" in a message. The server cannot read the text, so the sender's browser finds the names with
+// this rule and tells the server which people they are, as ids, next to the message. A name is 3 to 50 letters, digits or
+// underscores, and the "@" must not be glued to a word before it (so an email address is not a mention).
 const NAME_CHARS = '[A-Za-z0-9_]'
 const MENTION = new RegExp(`(?<!${NAME_CHARS})@(${NAME_CHARS}{3,50})(?!${NAME_CHARS})`, 'g')
 
@@ -43,6 +43,25 @@ export function splitMentions(content: string, members: readonly Member[] | unde
 }
 
 // ##### Writing mentions #####
+
+// The most names of one message that count: the ones after the twentieth are plain text, so a message cannot be used to notify a whole
+// conversation at once.
+export const MAX_MENTIONS = 20
+
+// The people a message names, as the ids the server is told next to the message (it cannot read the text): the members whose
+// "@userName" is in it, each once, in the order they are first named, never the sender. Only the first MAX_MENTIONS different names are
+// looked at, whether or not they belong to a member.
+export function mentionedUserIds(content: string, members: readonly Member[] | undefined, selfId: string | undefined): string[] {
+  if (!members || members.length === 0) return []
+
+  const names = [...new Set([...content.matchAll(MENTION)].map((match) => match[1].toLowerCase()))].slice(0, MAX_MENTIONS)
+  const byName = new Map(members.map((member) => [member.userName.toLowerCase(), member.userId]))
+
+  return names.flatMap((name) => {
+    const userId = byName.get(name)
+    return userId === undefined || userId === selfId ? [] : [userId]
+  })
+}
 
 // The "@name" being typed: where its "@" is, and the letters after it so far. Null when the cursor is not at the
 // end of one.

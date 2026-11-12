@@ -77,7 +77,7 @@ public class GroupInvitationNotificationTests
             Assert.Equal(alice.Id, pushed.GetProperty("actorId").GetGuid());
             Assert.Equal(alice.DisplayName, pushed.GetProperty("actorDisplayName").GetString());
             Assert.Equal(System.Text.Json.JsonValueKind.Null, pushed.GetProperty("messageId").ValueKind);
-            Assert.Equal(System.Text.Json.JsonValueKind.Null, pushed.GetProperty("messagePreview").ValueKind);
+            Assert.Equal(System.Text.Json.JsonValueKind.Null, pushed.GetProperty("message").ValueKind);
         }
 
         Assert.False(await alicesTab.ReceivedNotificationAsync(_ => true));

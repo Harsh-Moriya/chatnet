@@ -27,8 +27,8 @@ public sealed class AttachmentLoader
 
     public async Task<List<MessageDto>> AttachToAsync(List<MessageDto> messages, CancellationToken cancellationToken)
     {
-        // A deleted message (its content is null) shows no files.
-        var ids = messages.Where(m => m.Content is not null).Select(m => m.Id).ToList();
+        // A deleted message shows no files.
+        var ids = messages.Where(m => !m.IsDeleted).Select(m => m.Id).ToList();
         if (ids.Count == 0) return messages;
 
         var found = await _attachments.GetForMessagesAsync(ids, cancellationToken);

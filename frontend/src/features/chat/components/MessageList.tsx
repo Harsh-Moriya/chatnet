@@ -336,6 +336,7 @@ export function MessageList({ conversation, isLoading, errorMessage, onRetry, ol
             continuing={item.continuing}
             senderName={item.showSender ? item.message.senderDisplayName : undefined}
             content={item.message.content}
+            unreadable={item.message.unreadable}
             attachments={
               item.message.attachments.length > 0 ? (
                 <AttachmentGrid

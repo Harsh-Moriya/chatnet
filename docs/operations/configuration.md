@@ -76,7 +76,6 @@ Time values are `hh:mm:ss` (or `d.hh:mm:ss`) strings, for example `Messaging__Ed
 | `Send` | 30 per 10 s |
 | `Uploads` | 60 per 3600 s |
 | `Edit` | 20 per 60 s |
-| `Search` | 30 per 10 s |
 | `Avatars` | 600 per 60 s |
 | `Push` | 20 per 60 s |
 | `Keys` | 60 per 60 s |

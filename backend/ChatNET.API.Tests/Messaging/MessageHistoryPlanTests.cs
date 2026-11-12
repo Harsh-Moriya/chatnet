@@ -95,7 +95,7 @@ public class MessageHistoryPlanTests
             client.DefaultRequestHeaders.Authorization =
                 new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", alice.Token);
             var anchor = await _factory.QueryDbAsync(db => db.Messages
-                .Where(m => m.ConversationId == conversation && m.Content == "bulk 3000")
+                .Where(m => m.ConversationId == conversation && m.Ciphertext == FakeMessage.Blob(1, "bulk 3000"))
                 .Select(m => m.Id)
                 .SingleAsync());
             recorder.Clear();
@@ -146,7 +146,7 @@ public class MessageHistoryPlanTests
             client.DefaultRequestHeaders.Authorization =
                 new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", alice.Token);
             var anchor = await _factory.QueryDbAsync(db => db.Messages
-                .Where(m => m.ConversationId == conversation && m.Content == "bulk 3000")
+                .Where(m => m.ConversationId == conversation && m.Ciphertext == FakeMessage.Blob(1, "bulk 3000"))
                 .Select(m => m.Id)
                 .SingleAsync());
             recorder.Clear();
@@ -180,8 +180,8 @@ public class MessageHistoryPlanTests
         _factory.ExecuteDbAsync(async db =>
         {
             await db.Database.ExecuteSqlInterpolatedAsync($@"
-                INSERT INTO ""Messages"" (""Id"", ""ConversationId"", ""SenderId"", ""Content"", ""CreatedAt"")
-                SELECT gen_random_uuid(), {conversationId}, {senderId}, 'bulk ' || (s - 1)::text,
+                INSERT INTO ""Messages"" (""Id"", ""ConversationId"", ""SenderId"", ""Ciphertext"", ""KeyEpoch"", ""ClientMessageId"", ""CreatedAt"")
+                SELECT gen_random_uuid(), {conversationId}, {senderId}, decode('0101' || '00000001' || repeat('00', 12), 'hex') || convert_to('bulk ' || (s - 1)::text, 'UTF8') || decode(repeat('00', 80), 'hex'), 1, gen_random_uuid(),
                        now() - (s * interval '1 second')
                 FROM generate_series(1, {MessagesInTheConversation}) s");
 
@@ -191,8 +191,8 @@ public class MessageHistoryPlanTests
                 FROM generate_series(1, {NoiseConversations}) g");
 
             await db.Database.ExecuteSqlInterpolatedAsync($@"
-                INSERT INTO ""Messages"" (""Id"", ""ConversationId"", ""SenderId"", ""Content"", ""CreatedAt"")
-                SELECT gen_random_uuid(), c.""Id"", {senderId}, 'noise', now() - (random() * interval '30 days')
+                INSERT INTO ""Messages"" (""Id"", ""ConversationId"", ""SenderId"", ""Ciphertext"", ""KeyEpoch"", ""ClientMessageId"", ""CreatedAt"")
+                SELECT gen_random_uuid(), c.""Id"", {senderId}, decode('0101' || '00000001' || repeat('00', 12), 'hex') || convert_to('noise', 'UTF8') || decode(repeat('00', 80), 'hex'), 1, gen_random_uuid(), now() - (random() * interval '30 days')
                 FROM ""Conversations"" c
                 CROSS JOIN generate_series(1, {MessagesPerNoiseConversation}) s
                 WHERE c.""Name"" LIKE {tag + "%"}");

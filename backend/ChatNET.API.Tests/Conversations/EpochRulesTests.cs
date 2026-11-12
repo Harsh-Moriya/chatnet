@@ -116,6 +116,7 @@ public class EpochRulesTests
     [InlineData(KeyEpochCodes.MembersChanged, "epoch-members-changed")]
     [InlineData(KeyEpochCodes.MemberHasNoKeys, "member-has-no-keys")]
     [InlineData(KeyEpochCodes.TooSoon, "epoch-too-soon")]
+    [InlineData(KeyEpochCodes.Due, "epoch-due")]
     public void Each_refusal_is_known_by_the_word_clients_look_for(string code, string word)
     {
         Assert.Equal(word, code);

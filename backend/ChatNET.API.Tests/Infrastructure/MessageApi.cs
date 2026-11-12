@@ -7,14 +7,60 @@ namespace ChatNET.API.Tests.Infrastructure;
 // intent and assert on the JSON a client receives.
 public static class MessageApi
 {
-    public static Task<HttpResponseMessage> PostMessageAsync(
-        this HttpClient client, Guid conversationId, string? content, Guid? clientMessageId = null) =>
-        client.PostAsJsonAsync($"/api/conversations/{conversationId}/messages", new { content, clientMessageId });
+    // The epoch a conversation is in now, which is what a message must be sealed under. 1 for a conversation the caller cannot read
+    // (the send is then refused for another reason) and for one that has no epoch yet (it is refused as out of date).
+    public static async Task<int> CurrentEpochAsync(this HttpClient client, Guid conversationId)
+    {
+        var response = await client.GetAsync($"/api/conversations/{conversationId}");
+        if (!response.IsSuccessStatusCode)
+            return 1;
+
+        return Math.Max(1, (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("keyEpoch").GetInt32());
+    }
+
+    // What a browser does when a removal or a leave marked the epoch as due, before it says anything more: stores the next epoch,
+    // made for the people who are in the conversation now. Answers the epoch it stored.
+    public static async Task<int> StoreNextEpochAsync(this HttpClient client, Guid conversationId)
+    {
+        var members = (await client.GetMembersAsync(conversationId)).Select(m => m.GetProperty("userId").GetGuid()).ToArray();
+        var conversation = await client.GetFromJsonAsync<JsonElement>($"/api/conversations/{conversationId}");
+        var next = conversation.GetProperty("keyEpoch").GetInt32() + 1;
+
+        await client.StoreEpochAsync(conversationId, EpochBody.For(next, members));
+        return next;
+    }
+
+    // How many times the message has been edited, as the history shows it. The next edit is the one after. 0 when the message cannot
+    // be found by this caller, and the edit is then refused for that reason.
+    public static async Task<int> EditCountOfAsync(this HttpClient client, Guid conversationId, Guid messageId)
+    {
+        var response = await client.GetHistoryResponseAsync(conversationId, around: messageId);
+        if (!response.IsSuccessStatusCode)
+            return 0;
+
+        var page = (await response.Content.ReadFromJsonAsync<JsonElement>()).EnumerateArray().ToList();
+        var found = page.Where(m => m.MessageIdOf() == messageId).ToList();
+        return found.Count == 0 ? 0 : found[0].GetProperty("editCount").GetInt32();
+    }
+
+    // The text is sealed as a blob of the shape the server accepts (see FakeMessage), under the epoch the conversation is in unless the
+    // test names one. A null text sends no message at all, for the tests of what is refused. The client id is the one given, or a new one.
+    public static async Task<HttpResponseMessage> PostMessageAsync(
+        this HttpClient client, Guid conversationId, string? content, Guid? clientMessageId = null,
+        int? epoch = null, IEnumerable<Guid>? mentions = null)
+    {
+        var ciphertext = content is null ? null : FakeMessage.Ciphertext(epoch ?? await client.CurrentEpochAsync(conversationId), content);
+
+        return await client.PostAsJsonAsync(
+            $"/api/conversations/{conversationId}/messages",
+            new { ciphertext, clientMessageId = clientMessageId ?? Guid.NewGuid(), mentionedUserIds = mentions?.ToArray() });
+    }
 
     public static async Task<JsonElement> SendMessageAsync(
-        this HttpClient client, Guid conversationId, string content, Guid? clientMessageId = null)
+        this HttpClient client, Guid conversationId, string content, Guid? clientMessageId = null,
+        int? epoch = null, IEnumerable<Guid>? mentions = null)
     {
-        var response = await client.PostMessageAsync(conversationId, content, clientMessageId);
+        var response = await client.PostMessageAsync(conversationId, content, clientMessageId, epoch, mentions);
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<JsonElement>();
     }
@@ -42,14 +88,25 @@ public static class MessageApi
         return history.EnumerateArray().ToList();
     }
 
-    public static Task<HttpResponseMessage> PatchMessageAsync(
-        this HttpClient client, Guid conversationId, Guid messageId, string? content) =>
-        client.PatchAsJsonAsync($"/api/conversations/{conversationId}/messages/{messageId}", new { content });
+    // The edit is the next one after the message's own count unless the test says which, and is sealed under the epoch the
+    // conversation is in unless the test names one.
+    public static async Task<HttpResponseMessage> PatchMessageAsync(
+        this HttpClient client, Guid conversationId, Guid messageId, string? content,
+        int? editCount = null, int? epoch = null, IEnumerable<Guid>? mentions = null)
+    {
+        var ciphertext = content is null ? null : FakeMessage.Ciphertext(epoch ?? await client.CurrentEpochAsync(conversationId), content);
+        var count = editCount ?? await client.EditCountOfAsync(conversationId, messageId) + 1;
+
+        return await client.PatchAsJsonAsync(
+            $"/api/conversations/{conversationId}/messages/{messageId}",
+            new { ciphertext, editCount = count, mentionedUserIds = mentions?.ToArray() });
+    }
 
     public static async Task<JsonElement> EditMessageAsync(
-        this HttpClient client, Guid conversationId, Guid messageId, string content)
+        this HttpClient client, Guid conversationId, Guid messageId, string content,
+        int? editCount = null, int? epoch = null, IEnumerable<Guid>? mentions = null)
     {
-        var response = await client.PatchMessageAsync(conversationId, messageId, content);
+        var response = await client.PatchMessageAsync(conversationId, messageId, content, editCount, epoch, mentions);
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<JsonElement>();
     }
@@ -67,8 +124,8 @@ public static class MessageApi
 
     public static Guid MessageIdOf(this JsonElement message) => message.GetProperty("id").GetGuid();
 
+    // The text of a message, or of the last message of a conversation, as the tests' blobs carry it (see FakeMessage). Null when it is
+    // deleted. The server hands on the blob and cannot read it, so this is the test reading what it put in.
     public static string? ContentOf(this JsonElement message) =>
-        message.GetProperty("content").ValueKind == JsonValueKind.Null
-            ? null
-            : message.GetProperty("content").GetString();
+        FakeMessage.TextOf(message.GetProperty("ciphertext").GetString());
 }

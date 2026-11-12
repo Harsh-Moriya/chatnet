@@ -24,7 +24,7 @@ flowchart LR
 
 ## The two channels
 
-- **REST** loads data (conversations, history, search) and performs every change that must be confirmed (sign in, send a message, edit, add a member).
+- **REST** loads data (conversations, history) and performs every change that must be confirmed (sign in, send a message, edit, add a member).
 - **SignalR** only pushes events to connected clients. Clients never send messages or fetch history through the hub. The hub accepts three calls (join a conversation, start and stop typing).
 
 The browser follows the same split: TanStack Query owns REST data, and hub events patch the Zustand store directly. A hub event never triggers a refetch.
@@ -39,7 +39,7 @@ The browser follows the same split: TanStack Query owns REST data, and hub event
 | Redis 7 | The SignalR backplane, who is online, the rate-limit counters, and a channel that evicts connections. Nothing in Redis is the only copy of anything that matters. |
 | Object storage | Attachments and pictures. Designed for Cloudflare R2 (the S3 API is the contract); RustFS locally and in tests. The browser uploads straight to it with presigned links. |
 | Outbox and relay | A push that follows a change is recorded in the same transaction as the change, so it is delivered even if the request fails after the commit. See [real-time design](real-time.md). |
-| Encryption keys | Made in the browser (X25519, Ed25519 and AES-256-GCM on WebCrypto). The server stores public bundles, an encrypted backup, devices and the sealed key of each epoch of each conversation, and opens none of it. Message text and files are not yet protected by them. See [conversation keys](../features/conversation-keys.md). |
+| Encryption keys | Made in the browser (X25519, Ed25519 and AES-256-GCM on WebCrypto). The server stores public bundles, an encrypted backup, devices and the sealed key of each epoch of each conversation, and opens none of it. The text of every message is sealed with them in the sender's browser and opened only in the members' browsers; files are stored as uploaded. See [conversation keys](../features/conversation-keys.md) and [messaging](../features/messaging.md). |
 | Web Push | Alerts for people with no live connection, encrypted to the browser (RFC 8291) and signed with VAPID (RFC 8292). Optional: off unless the server is given keys. |
 | Email | Password reset links are sent through an SMTP relay (MailKit): a mail catcher locally, a provider in production. The relay job sends them, so a request never waits for a mail server. Optional: off unless `Email:Smtp:Host` is set. |
 
@@ -56,7 +56,6 @@ backend/ChatNET.API/
   Keys/            public key bundles, encrypted backups, the lookup of other people's keys
   Devices/         the devices that hold a person's keys, and linking a new one
   Messaging/       sending, history, edit, delete, the SignalR hub
-  Search/          message search
   Media/           upload tickets, attachments, pictures, object storage
   Notifications/   mentions and invitations, the list behind the bell
   Presence/        who is online, connection registry and eviction
@@ -65,7 +64,7 @@ backend/ChatNET.API/
   RateLimiting/    the Redis sliding-window limiter and its policies
   Common/          behaviours, exceptions, health, hosting, logging, observability
 frontend/src/
-  features/        auth, chat, encryption, notifications, presence, profile, push, search (one folder each)
+  features/        auth, chat, encryption, notifications, presence, profile, push (one folder each)
   components/ui/   shared primitives (Button, Input, FormField, Menu)
   lib/             API client, query client, the encryption formats (lib/crypto)
 ```

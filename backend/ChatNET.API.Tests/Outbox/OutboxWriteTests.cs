@@ -114,7 +114,7 @@ public class OutboxWriteTests
         using var client = _factory.CreateClientFor(alice);
         var group = (await client.CreateGroupAsync("Mentions", bob.Id)).IdOf();
 
-        var sent = await client.SendMessageAsync(group, $"look, @{bob.UserName}");
+        var sent = await client.SendMessageAsync(group, $"look, @{bob.UserName}", mentions: [bob.Id]);
 
         var notification = await _factory.QueryDbAsync(db => db.Notifications
             .SingleAsync(n => n.MessageId == sent.MessageIdOf()));
@@ -208,7 +208,9 @@ public class OutboxWriteTests
             Id = Guid.CreateVersion7(),
             ConversationId = conversation,
             SenderId = alice.Id,
-            Content = "atomic",
+            Ciphertext = FakeMessage.Blob(1, "atomic"),
+            KeyEpoch = 1,
+            ClientMessageId = Guid.NewGuid(),
             CreatedAt = DateTime.UtcNow,
         };
         var good = publisher.Create(new MessageCreated(message.Id, conversation));

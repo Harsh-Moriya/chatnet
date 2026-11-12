@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Json;
 using System.Text.Json;
 using ChatNET.API.Conversations.Models;
 using ChatNET.API.Messaging.EditMessage;
@@ -54,7 +55,7 @@ public class EditMessageTests
         var (sent, conversation, alice, _) = await SentInDirectChatAsync();
         using var client = _factory.CreateClientFor(alice);
 
-        var response = await client.PatchMessageAsync(conversation, sent.MessageIdOf(), "  second draft  ");
+        var response = await client.PatchMessageAsync(conversation, sent.MessageIdOf(), "second draft");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var edited = await response.ReadJsonAsync();
@@ -132,23 +133,6 @@ public class EditMessageTests
     }
 
     [Fact]
-    public async Task Saving_the_text_that_is_already_there_changes_nothing_and_tells_nobody()
-    {
-        var (sent, conversation, alice, bob) = await SentInDirectChatAsync("as it is");
-        using var client = _factory.CreateClientFor(alice);
-        await using var bobTab = await HubClient.ConnectAsync(_factory, bob);
-
-        var response = await client.PatchMessageAsync(conversation, sent.MessageIdOf(), "  as it is ");
-
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var answer = await response.ReadJsonAsync();
-        Assert.Equal(0, answer.GetProperty("editCount").GetInt32());
-        Assert.False(await bobTab.ReceivedUpdateAsync(sent.MessageIdOf()));
-        Assert.DoesNotContain(
-            await _factory.OutboxRowsAboutAsync("messageId", sent.MessageIdOf()), r => r.Kind == MessageUpdated.Name);
-    }
-
-    [Fact]
     public async Task An_edit_does_not_move_the_conversation_in_the_sidebar()
     {
         var (alice, bob, conversation) = await _factory.DirectChatAsync();
@@ -161,7 +145,7 @@ public class EditMessageTests
 
         var after = (await client.ListConversationsAsync()).Single(c => c.IdOf() == conversation);
         Assert.Equal(before, after.GetProperty("updatedAt").GetDateTime());
-        Assert.Equal("old news, corrected", after.GetProperty("lastMessage").GetProperty("content").GetString());
+        Assert.Equal("old news, corrected", after.GetProperty("lastMessage").ContentOf());
     }
 
     // ##### Who may, and until when #####
@@ -175,7 +159,7 @@ public class EditMessageTests
         var response = await bobClient.PatchMessageAsync(conversation, sent.MessageIdOf(), "hijacked");
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
-        Assert.Equal("first draft", (await StoredAsync(sent)).Content);
+        Assert.Equal("first draft", (await StoredAsync(sent)).Text());
     }
 
     [Fact]
@@ -191,7 +175,7 @@ public class EditMessageTests
         var response = await aliceClient.PatchMessageAsync(group, sent.MessageIdOf(), "alice's words");
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
-        Assert.Equal("bob's words", (await StoredAsync(sent)).Content);
+        Assert.Equal("bob's words", (await StoredAsync(sent)).Text());
     }
 
     [Fact]
@@ -233,7 +217,7 @@ public class EditMessageTests
 
         Assert.Equal(HttpStatusCode.NotFound, unknown.StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, otherConversation.StatusCode);
-        Assert.Equal("first draft", (await StoredAsync(sent)).Content);
+        Assert.Equal("first draft", (await StoredAsync(sent)).Text());
         _ = bob;
     }
 
@@ -300,7 +284,7 @@ public class EditMessageTests
         Assert.Equal(HttpStatusCode.OK, inTime.StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, late.StatusCode);
         Assert.Equal(EditMessageHandler.TooLate, (await late.ReadJsonAsync()).GetProperty("detail").GetString());
-        Assert.Equal("still in time", (await StoredAsync(sent)).Content);
+        Assert.Equal("still in time", (await StoredAsync(sent)).Text());
     }
 
     [Fact]
@@ -329,27 +313,54 @@ public class EditMessageTests
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
         Assert.Equal(EditMessageHandler.Deleted, (await response.ReadJsonAsync()).GetProperty("detail").GetString());
-        Assert.Null((await StoredAsync(sent)).Content);
+        Assert.Null((await StoredAsync(sent)).Text());
     }
 
     // ##### The new text #####
 
     [Fact]
-    public async Task The_new_text_follows_the_rules_of_sending()
+    public async Task The_new_text_must_be_a_message_of_a_shape_the_server_accepts()
+    {
+        var (sent, conversation, alice, _) = await SentInDirectChatAsync();
+        using var client = _factory.CreateClientFor(alice);
+        var id = sent.MessageIdOf();
+        var good = FakeMessage.Blob(1, "fine");
+
+        async Task<HttpStatusCode> PatchAsync(string? ciphertext, int? editCount = 1) =>
+            (await client.PatchAsJsonAsync($"/api/conversations/{conversation}/messages/{id}", new { ciphertext, editCount })).StatusCode;
+
+        string Encoded(Action<byte[]> spoil)
+        {
+            var blob = (byte[])good.Clone();
+            spoil(blob);
+            return ChatNET.API.Keys.KeyFormats.Encode(blob);
+        }
+
+        Assert.Equal(HttpStatusCode.BadRequest, await PatchAsync(null));
+        Assert.Equal(HttpStatusCode.BadRequest, await PatchAsync(""));
+        Assert.Equal(HttpStatusCode.BadRequest, await PatchAsync("not base64url!"));
+        Assert.Equal(HttpStatusCode.BadRequest, await PatchAsync(ChatNET.API.Keys.KeyFormats.Encode(good[..97])));
+        Assert.Equal(HttpStatusCode.BadRequest, await PatchAsync(Encoded(b => b[0] = 2)));
+        Assert.Equal(HttpStatusCode.BadRequest, await PatchAsync(Encoded(b => b[1] = 2)));
+        Assert.Equal(HttpStatusCode.BadRequest, await PatchAsync(ChatNET.API.Keys.KeyFormats.Encode(FakeMessage.Blob(1, new string('x', 32768)))));
+        Assert.Equal(HttpStatusCode.BadRequest, await PatchAsync(ChatNET.API.Keys.KeyFormats.Encode(FakeMessage.Blob(0, "no epoch"))));
+        Assert.Equal(HttpStatusCode.OK, await PatchAsync(ChatNET.API.Keys.KeyFormats.Encode(FakeMessage.Blob(1, new string('y', 32768 - 18 - 80)))));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public async Task An_edit_must_name_an_edit_count_of_one_or_more(int? editCount)
     {
         var (sent, conversation, alice, _) = await SentInDirectChatAsync();
         using var client = _factory.CreateClientFor(alice);
 
-        var blank = await client.PatchMessageAsync(conversation, sent.MessageIdOf(), "   ");
-        var tooLong = await client.PatchMessageAsync(conversation, sent.MessageIdOf(), new string('x', 4001));
-        var missing = await client.PatchMessageAsync(conversation, sent.MessageIdOf(), null);
-        var longest = await client.PatchMessageAsync(conversation, sent.MessageIdOf(), new string('y', 4000));
+        var response = await client.PatchAsJsonAsync(
+            $"/api/conversations/{conversation}/messages/{sent.MessageIdOf()}",
+            new { ciphertext = FakeMessage.Ciphertext(1, "x"), editCount });
 
-        Assert.Equal(HttpStatusCode.BadRequest, blank.StatusCode);
-        Assert.Contains(EditMessageHandler.NothingToSay, await blank.Content.ReadAsStringAsync());
-        Assert.Equal(HttpStatusCode.BadRequest, tooLong.StatusCode);
-        Assert.Equal(HttpStatusCode.BadRequest, missing.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, longest.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     [Fact]
@@ -361,7 +372,7 @@ public class EditMessageTests
         var key = await client.UploadFileAsync(conversation, "hello"u8.ToArray(), "text/plain", "note.txt");
         var sent = await client.SendMessageWithFilesAsync(conversation, "see file", (key, "note.txt"));
 
-        var edited = await client.EditMessageAsync(conversation, sent.MessageIdOf(), "   ");
+        var edited = await client.EditMessageAsync(conversation, sent.MessageIdOf(), "");
 
         Assert.Equal("", edited.ContentOf());
         var file = Assert.Single(edited.AttachmentsOf());
@@ -380,11 +391,11 @@ public class EditMessageTests
         var carol = await _factory.RegisterUserAsync("carol");
         using var client = _factory.CreateClientFor(alice);
         var group = (await client.CreateGroupAsync("Mentions", bob.Id, carol.Id)).IdOf();
-        var sent = await client.SendMessageAsync(group, $"hello @{bob.UserName}");
+        var sent = await client.SendMessageAsync(group, $"hello @{bob.UserName}", mentions: [bob.Id]);
         await using var bobTab = await HubClient.ConnectAsync(_factory, bob);
         await using var carolTab = await HubClient.ConnectAsync(_factory, carol);
 
-        await client.EditMessageAsync(group, sent.MessageIdOf(), $"hello @{bob.UserName} and @{carol.UserName}");
+        await client.EditMessageAsync(group, sent.MessageIdOf(), $"hello @{bob.UserName} and @{carol.UserName}", mentions: [bob.Id, carol.Id]);
 
         var notification = await carolTab.WaitForNotificationAsync(n => MessageIdOf(n) == sent.MessageIdOf());
         Assert.Equal("Mention", notification.GetProperty("type").GetString());
@@ -402,7 +413,7 @@ public class EditMessageTests
         var bob = await _factory.RegisterUserAsync("bob");
         using var client = _factory.CreateClientFor(alice);
         var group = (await client.CreateGroupAsync("Mentions", bob.Id)).IdOf();
-        var sent = await client.SendMessageAsync(group, $"hello @{bob.UserName}");
+        var sent = await client.SendMessageAsync(group, $"hello @{bob.UserName}", mentions: [bob.Id]);
 
         await client.EditMessageAsync(group, sent.MessageIdOf(), "hello nobody");
 
@@ -420,7 +431,7 @@ public class EditMessageTests
         var group = (await client.CreateGroupAsync("Mentions", bob.Id)).IdOf();
         var sent = await client.SendMessageAsync(group, "no names yet");
 
-        await client.EditMessageAsync(group, sent.MessageIdOf(), $"@{alice.UserName} @{outsider.UserName}");
+        await client.EditMessageAsync(group, sent.MessageIdOf(), $"@{alice.UserName} @{outsider.UserName}", mentions: [alice.Id, outsider.Id]);
 
         Assert.Equal(0, await _factory.QueryDbAsync(db => db.Notifications.CountAsync(n => n.MessageId == sent.MessageIdOf())));
     }
@@ -452,10 +463,11 @@ public class EditMessageTests
         var repository = scope.ServiceProvider.GetRequiredService<IMessageRepository>();
 
         await Assert.ThrowsAsync<DbUpdateException>(() => repository.TryEditAsync(
-            sent.MessageIdOf(), "second draft", DateTime.UtcNow, DateTime.UtcNow.AddHours(-1), [], [row], CancellationToken.None));
+            conversation, sent.MessageIdOf(), FakeMessage.Blob(1, "second draft"), 1, 1, DateTime.UtcNow, DateTime.UtcNow.AddHours(-1),
+            [], [], [row], CancellationToken.None));
 
         var stored = await StoredAsync(sent);
-        Assert.Equal("first draft", stored.Content);
+        Assert.Equal("first draft", stored.Text());
         Assert.Equal(0, stored.EditCount);
         Assert.Null(stored.EditedAt);
     }
@@ -478,11 +490,11 @@ public class EditMessageTests
         };
 
         var edited = await scope.ServiceProvider.GetRequiredService<IMessageRepository>().TryEditAsync(
-            sent.MessageIdOf(), "too late", DateTime.UtcNow, DateTime.UtcNow.AddHours(-1), [notification], [row],
-            CancellationToken.None);
+            conversation, sent.MessageIdOf(), FakeMessage.Blob(1, "too late"), 1, 1, DateTime.UtcNow, DateTime.UtcNow.AddHours(-1),
+            [], [notification], [row], CancellationToken.None);
 
-        Assert.False(edited);
-        Assert.Null((await StoredAsync(sent)).Content);
+        Assert.Equal(EditOutcome.Deleted, edited);
+        Assert.Null((await StoredAsync(sent)).Text());
         Assert.Equal(0, await _factory.QueryDbAsync(db => db.OutboxMessages.CountAsync(o => o.Id == row.Id)));
         Assert.Equal(0, await _factory.QueryDbAsync(db => db.Notifications.CountAsync(n => n.Id == notification.Id)));
     }
@@ -495,9 +507,10 @@ public class EditMessageTests
         var row = scope.ServiceProvider.GetRequiredService<OutboxPublisher>().Create(new MessageUpdated(sent.MessageIdOf(), conversation));
 
         var edited = await scope.ServiceProvider.GetRequiredService<IMessageRepository>().TryEditAsync(
-            sent.MessageIdOf(), "too late", DateTime.UtcNow, DateTime.UtcNow.AddHours(1), [], [row], CancellationToken.None);
+            conversation, sent.MessageIdOf(), FakeMessage.Blob(1, "too late"), 1, 1, DateTime.UtcNow, DateTime.UtcNow.AddHours(1),
+            [], [], [row], CancellationToken.None);
 
-        Assert.False(edited);
+        Assert.Equal(EditOutcome.TooLate, edited);
         Assert.Equal(0, (await StoredAsync(sent)).EditCount);
     }
 

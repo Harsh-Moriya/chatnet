@@ -159,7 +159,26 @@ describe('what an alert says', () => {
   })
 
   it('has an empty body for a deleted message', () => {
-    expect(messageAlertText(message({ content: null }), conversation()).body).toBe('')
+    expect(messageAlertText(message({ content: null, isDeleted: true }), conversation()).body).toBe('')
+  })
+
+  it('says only that there is a message when it could not be opened, and never what was sealed', () => {
+    const unopened = message({ content: null, unreadable: 'noKey', ciphertext: 'sealed-text-that-must-not-show' })
+
+    const text = messageAlertText(unopened, conversation())
+
+    expect(text.body).toBe('New message')
+    expect(JSON.stringify(text)).not.toContain('sealed-text-that-must-not-show')
+  })
+
+  it('names the files of a message that could not be opened, as it does for one that could', () => {
+    const unopened = message({
+      content: null,
+      unreadable: 'noKey',
+      attachments: [{ id: 'a1', type: 'File', fileName: 'f', contentType: 'text/plain', sizeBytes: 1, url: 'u' }],
+    })
+
+    expect(messageAlertText(unopened, conversation()).body).toBe('Sent a file')
   })
 
   it('gives a message and a mention in the same conversation the same tag, so one replaces the other', () => {

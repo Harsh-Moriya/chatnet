@@ -142,7 +142,7 @@ public class MessageHistoryPagingTests
         Assert.Equal(["oldest", null], page.Select(m => m.ContentOf()));
         Assert.DoesNotContain("secret that was deleted", JsonSerializer.Serialize(page));
         Assert.Equivalent(
-            new[] { "id", "conversationId", "senderId", "senderDisplayName", "content", "createdAt", "clientMessageId" },
+            new[] { "id", "conversationId", "senderId", "senderDisplayName", "ciphertext", "keyEpoch", "createdAt", "clientMessageId" },
             page[0].EnumerateObject().Select(p => p.Name));
     }
 

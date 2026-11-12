@@ -75,6 +75,7 @@ public class ConnectionEvictionTests
 
         await owner.RemoveMemberResponseAsync(team.Group, team.Member.Id);
         await WaitForEvictionAsync(_factory, before);
+        await owner.StoreNextEpochAsync(team.Group);
         await owner.SendMessageAsync(team.Group, "said after the removal");
         await friend.SendMessageAsync(team.Other, "said in the other group");
 
@@ -115,6 +116,7 @@ public class ConnectionEvictionTests
 
         await member.LeaveResponseAsync(team.Group);
         await WaitForEvictionAsync(_factory, before);
+        await owner.StoreNextEpochAsync(team.Group);
         await owner.SendMessageAsync(team.Group, "said after they left");
 
         Assert.False(await memberTab.ReceivedMessageAsync(team.Group));
@@ -131,6 +133,7 @@ public class ConnectionEvictionTests
 
         await owner.RemoveMemberResponseAsync(team.Group, team.Member.Id);
         await WaitForEvictionAsync(_factory, before);
+        await owner.StoreNextEpochAsync(team.Group);
         var sent = await owner.SendMessageAsync(team.Group, "for the ones who are still here");
 
         await friendTab.WaitForMessageAsync(team.Group, sent.MessageIdOf());
@@ -151,6 +154,7 @@ public class ConnectionEvictionTests
 
         await owner.RemoveMemberResponseAsync(team.Group, team.Member.Id);
         await WaitForEvictionAsync(otherInstance, before);
+        await owner.StoreNextEpochAsync(team.Group);
         await owner.SendMessageAsync(team.Group, "said after the removal");
 
         Assert.False(await memberTab.ReceivedMessageAsync(team.Group));
@@ -209,6 +213,7 @@ public class ConnectionEvictionTests
         await using var memberTab = await HubClient.ConnectAsync(host, team.Member);
 
         await Assert.ThrowsAsync<HubException>(() => memberTab.JoinConversationAsync(team.Group));
+        await owner.StoreNextEpochAsync(team.Group);
         await owner.SendMessageAsync(team.Group, "said after the removal");
 
         Assert.Empty(checks);
@@ -229,6 +234,7 @@ public class ConnectionEvictionTests
         await using var memberTab = await HubClient.ConnectAsync(host, team.Member);
         using var friend = _factory.CreateClientFor(team.Friend);
 
+        await owner.StoreNextEpochAsync(team.Group);
         await owner.SendMessageAsync(team.Group, "said after the removal");
         await friend.SendMessageAsync(team.Other, "said in the other group");
 
@@ -278,6 +284,7 @@ public class ConnectionEvictionTests
 
         await owner.RemoveMemberResponseAsync(team.Group, team.Member.Id);
         await WaitForEvictionAsync(_factory, before);
+        await owner.StoreNextEpochAsync(team.Group);
         await owner.SendMessageAsync(team.Group, "said after the removal");
 
         Assert.False(await memberTab.ReceivedMessageAsync(team.Group));

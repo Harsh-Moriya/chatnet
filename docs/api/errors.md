@@ -138,17 +138,19 @@ A conversation that does not exist and one the caller is not in give this same a
   "title": "Conflict",
   "status": 409,
   "detail": "This message was deleted.",
-  "traceId": "00-cdf8242a2f977ee221b867e8c4961ac5-1887e2d3f6130a6e-01"
+  "traceId": "00-abec0e232255fe2cdcc156a4cd97e505-e82bb42e8182b6d4-01"
 }
 ```
 
 ### Conflict codes
 
-A conflict about the keys of a conversation carries a `code`. For the first two the client should look at the conversation again and make the epoch anew.
+A conflict about the keys of a conversation or the version of a message carries a `code`. For `epoch-stale`, `epoch-members-changed` and `epoch-due` the client should look at the conversation again and make or read the epoch anew; for `edit-count-stale` it should read the message again.
 
 | `code` | Meaning |
 |---|---|
-| `epoch-stale` | Another epoch was stored first, so the one offered is not the next number. |
+| `epoch-stale` | Another epoch was stored first, so the one offered is not the next number. For a message or an edit: the conversation is not in the epoch it was sealed under. |
+| `epoch-due` | A message or an edit was sealed under the epoch in force, but a removal or a leave marked that epoch for replacement, so nothing more is stored under it until a new one is made. |
+| `edit-count-stale` | The edit was made from an older version of the message: another edit was stored first. |
 | `epoch-members-changed` | The people in the conversation, or the key generation of one of them, are not what the epoch was made for. |
 | `member-has-no-keys` | Someone in the conversation has not set up encryption, so no key can be sealed for them. |
 | `epoch-too-soon` | The keys of the conversation were replaced less than a day ago and nothing asks for them to be replaced again (a removal or a leave does). Looking again does not help. |
@@ -161,6 +163,77 @@ A conflict about the keys of a conversation carries a `code`. For the first two 
   "detail": "The people in this conversation, or their keys, are not the ones this epoch was made for.",
   "code": "epoch-members-changed",
   "traceId": "00-d960ab7c98fbeb767b77dccbc7645486-88e8fa4caa01efa4-01"
+}
+```
+
+A message under an epoch that is not the one the conversation is in:
+
+```json
+{
+  "type": "https://tools.ietf.org/html/rfc9110#section-15.5.10",
+  "title": "Conflict",
+  "status": 409,
+  "detail": "The keys of this conversation changed. Look at the conversation again.",
+  "code": "epoch-stale",
+  "traceId": "00-2deadcf3704d1bcc881cbded84857ea2-934ea6e1c0fc6c51-01"
+}
+```
+
+A message under an epoch that a removal marked for replacement:
+
+```json
+{
+  "type": "https://tools.ietf.org/html/rfc9110#section-15.5.10",
+  "title": "Conflict",
+  "status": 409,
+  "detail": "The keys of this conversation must be replaced before anything more is said.",
+  "code": "epoch-due",
+  "traceId": "00-d686e02464172c28cc8ec7ae11c34e13-07348f1fbae0328f-01"
+}
+```
+
+An edit made from an older version of the message:
+
+```json
+{
+  "type": "https://tools.ietf.org/html/rfc9110#section-15.5.10",
+  "title": "Conflict",
+  "status": 409,
+  "detail": "This message was edited somewhere else first. Look at its latest version.",
+  "code": "edit-count-stale",
+  "traceId": "00-703f23bab9aa841d1794ef6b6b7986ca-dcb0a0dd08883941-01"
+}
+```
+
+A message that is not a well formed sealed message, and a send with no client message id:
+
+```json
+{
+  "type": "https://tools.ietf.org/html/rfc9110#section-15.5.1",
+  "title": "Validation Failed",
+  "status": 400,
+  "detail": "The message is not a well formed encrypted message.",
+  "errors": {
+    "Ciphertext": [
+      "The message is not a well formed encrypted message."
+    ]
+  },
+  "traceId": "00-86b445dfd83f5e10e667a3ea33a9f29a-fdaf5efdafa5b677-01"
+}
+```
+
+```json
+{
+  "type": "https://tools.ietf.org/html/rfc9110#section-15.5.1",
+  "title": "Validation Failed",
+  "status": 400,
+  "detail": "'Client Message Id' must not be empty.",
+  "errors": {
+    "ClientMessageId": [
+      "'Client Message Id' must not be empty."
+    ]
+  },
+  "traceId": "00-b38095ff2014ca5ec3112f7f0fecc6e2-a0cebde644801f77-01"
 }
 ```
 
