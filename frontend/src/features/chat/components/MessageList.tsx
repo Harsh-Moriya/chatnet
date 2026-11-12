@@ -341,7 +341,7 @@ export function MessageList({ conversation, isLoading, errorMessage, onRetry, ol
               item.message.attachments.length > 0 ? (
                 <AttachmentGrid
                   attachments={item.message.attachments}
-                  own={item.own}
+                  own={item.own && editingId !== item.message.id}
                   conversationId={item.message.conversationId}
                   messageId={item.message.id}
                 />
