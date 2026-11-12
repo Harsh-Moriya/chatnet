@@ -463,7 +463,7 @@ public class DeleteMessageTests
         removal.Kind = new string('x', 65);
 
         await Assert.ThrowsAsync<DbUpdateException>(() => scope.ServiceProvider.GetRequiredService<IMessageRepository>()
-            .TryDeleteAsync(sent.MessageIdOf(), alice.Id, DateTime.UtcNow, [update, removal], CancellationToken.None));
+            .TryDeleteAsync(conversation, sent.MessageIdOf(), alice.Id, DateTime.UtcNow, [update, removal], CancellationToken.None));
 
         Assert.False((await StoredAsync(sent)).IsDeleted);
         Assert.True(await _factory.ObjectExistsAsync(file.StorageKey));
@@ -539,7 +539,7 @@ public class DeleteMessageTests
             .Create(new MessageUpdated(sent.MessageIdOf(), conversation));
 
         var deleted = await scope.ServiceProvider.GetRequiredService<IMessageRepository>()
-            .TryDeleteAsync(sent.MessageIdOf(), alice.Id, DateTime.UtcNow.AddMinutes(5), [row], CancellationToken.None);
+            .TryDeleteAsync(conversation, sent.MessageIdOf(), alice.Id, DateTime.UtcNow.AddMinutes(5), [row], CancellationToken.None);
 
         Assert.False(deleted);
         Assert.Equal(first.DeletedAt, (await StoredAsync(sent)).DeletedAt);
@@ -557,7 +557,7 @@ public class DeleteMessageTests
         row.Kind = new string('x', 65);
 
         await Assert.ThrowsAsync<DbUpdateException>(() => scope.ServiceProvider.GetRequiredService<IMessageRepository>()
-            .TryDeleteAsync(sent.MessageIdOf(), alice.Id, DateTime.UtcNow, [row], CancellationToken.None));
+            .TryDeleteAsync(conversation, sent.MessageIdOf(), alice.Id, DateTime.UtcNow, [row], CancellationToken.None));
 
         var stored = await StoredAsync(sent);
         Assert.False(stored.IsDeleted);

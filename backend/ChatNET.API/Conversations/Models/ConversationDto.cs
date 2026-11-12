@@ -8,7 +8,9 @@ namespace ChatNET.API.Conversations.Models;
 // conversation shows to its other members does not change. LeftAt is when the viewer stopped being a member of a group
 // (they left, or were removed), or null while they are one: a conversation they left stays in their list, read-only,
 // showing what was said up to that moment. KeyEpoch is the newest key period of the conversation (0 while it has none) and
-// KeyRotationRequired says someone left since it was made, so the next one must be made before anything more is said.
+// KeyRotationRequired says someone left since it was made, so the next one must be made before anything more is said. ChangeSeq is the
+// number of the latest change to any message of the conversation: a client that keeps the messages compares it with the cursor it
+// holds, and asks the changes feed only for the conversations that moved.
 public record ConversationDto(
     Guid Id,
     ConversationType Type,
@@ -21,7 +23,8 @@ public record ConversationDto(
     bool IsMuted,
     DateTime? LeftAt,
     int KeyEpoch,
-    bool KeyRotationRequired
+    bool KeyRotationRequired,
+    long ChangeSeq
 );
 
 // The last message as the list shows it, sealed as it was sent: the server cannot read it, so the browser opens it with the key of

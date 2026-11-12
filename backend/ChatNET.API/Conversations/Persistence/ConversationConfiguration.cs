@@ -55,6 +55,9 @@ public class ConversationConfiguration : IEntityTypeConfiguration<Conversation>
         builder.Property(c => c.KeyEpoch).HasDefaultValue(0);
         builder.Property(c => c.KeyRotationRequired).HasDefaultValue(false);
 
+        // Nothing has been said in a new conversation, so no change has been numbered.
+        builder.Property(c => c.ChangeSeq).HasDefaultValue(0L);
+
         builder.HasOne(c => c.CreatedBy)
             .WithMany()
             .HasForeignKey(c => c.CreatedById)

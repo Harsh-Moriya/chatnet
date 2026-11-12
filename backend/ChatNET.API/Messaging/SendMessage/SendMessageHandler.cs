@@ -190,7 +190,7 @@ public class SendMessageHandler : IRequestHandler<SendMessageCommand, SendMessag
             message.Id, message.ConversationId, message.SenderId, sender.DisplayName,
             KeyFormats.Encode(blob), message.KeyEpoch, message.CreatedAt, message.ClientMessageId,
             message.Attachments.Select(_attachmentLoader.ToDto).ToList(),
-            EditedAt: null, EditCount: 0, IsDeleted: false);
+            EditedAt: null, EditCount: 0, IsDeleted: false, ChangeSeq: message.ChangeSeq);
 
         await _outbox.DeliverAsync(messageRow, () => PushOrThrowAsync(dto), cancellationToken);
 

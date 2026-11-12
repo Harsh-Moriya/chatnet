@@ -285,9 +285,11 @@ public class PastMemberTests
         const int later = 6000;
         var s = await LeftGroupAsync(before: 60, after: 0);
         await _factory.ExecuteDbAsync(db => db.Database.ExecuteSqlInterpolatedAsync($@"
-            INSERT INTO ""Messages"" (""Id"", ""ConversationId"", ""SenderId"", ""Ciphertext"", ""KeyEpoch"", ""ClientMessageId"", ""CreatedAt"")
-            SELECT gen_random_uuid(), {s.Group}, {s.Alice.Id}, decode('0101' || '00000001' || repeat('00', 12), 'hex') || convert_to('later', 'UTF8') || decode(repeat('00', 80), 'hex'), 1, gen_random_uuid(), {s.LeftAt} + (g * interval '1 second')
+            INSERT INTO ""Messages"" (""Id"", ""ConversationId"", ""SenderId"", ""Ciphertext"", ""KeyEpoch"", ""ClientMessageId"", ""CreatedAt"", ""ChangeSeq"")
+            SELECT gen_random_uuid(), {s.Group}, {s.Alice.Id}, decode('0101' || '00000001' || repeat('00', 12), 'hex') || convert_to('later', 'UTF8') || decode(repeat('00', 80), 'hex'), 1, gen_random_uuid(), {s.LeftAt} + (g * interval '1 second'),
+                   (SELECT ""ChangeSeq"" FROM ""Conversations"" WHERE ""Id"" = {s.Group}) + g
             FROM generate_series(1, {later}) AS g"));
+        await _factory.ExecuteDbAsync(db => db.Database.ExecuteSqlInterpolatedAsync($@"UPDATE ""Conversations"" SET ""ChangeSeq"" = ""ChangeSeq"" + {later} WHERE ""Id"" = {s.Group}"));
         await _factory.ExecuteDbAsync(db => db.Database.ExecuteSqlRawAsync(@"ANALYZE ""Messages"""));
 
         var recorder = new CommandRecorder();

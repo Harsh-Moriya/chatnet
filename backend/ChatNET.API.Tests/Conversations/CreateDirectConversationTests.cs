@@ -189,7 +189,7 @@ public class CreateDirectConversationTests
 
         var fields = created.EnumerateObject().Select(p => p.Name).Order().ToArray();
         Assert.Equal(
-            new[] { "avatarUrl", "id", "isMuted", "keyEpoch", "keyRotationRequired", "lastMessage", "leftAt", "name", "otherUserId", "type", "unreadCount", "updatedAt" },
+            new[] { "avatarUrl", "changeSeq", "id", "isMuted", "keyEpoch", "keyRotationRequired", "lastMessage", "leftAt", "name", "otherUserId", "type", "unreadCount", "updatedAt" },
             fields);
         Assert.Equal(JsonValueKind.Null, created.GetProperty("lastMessage").ValueKind);
         Assert.Equal(JsonValueKind.Null, created.GetProperty("leftAt").ValueKind);
