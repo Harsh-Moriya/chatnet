@@ -271,6 +271,38 @@ public class ChangeSequenceTests
         Assert.Equal(2L, deleted.ChangeSeqOf());
     }
 
+    // ##### Where the number is shown #####
+
+    [Fact]
+    public async Task The_list_of_conversations_says_the_number_of_the_latest_change_of_each()
+    {
+        var (alice, bob, busy) = await ChatAsync();
+        using var client = _factory.CreateClientFor(alice);
+        var quiet = (await client.CreateGroupAsync("Quiet", bob.Id)).IdOf();
+        var first = await client.SendMessageAsync(busy, "one");
+        await client.SendMessageAsync(busy, "two");
+        await client.EditMessageAsync(busy, first.MessageIdOf(), "one, edited");
+
+        var list = await client.ListConversationsAsync();
+
+        Assert.Equal(3L, list.Single(c => c.IdOf() == busy).GetProperty("changeSeq").GetInt64());
+        Assert.Equal(0L, list.Single(c => c.IdOf() == quiet).GetProperty("changeSeq").GetInt64());
+    }
+
+    [Fact]
+    public async Task The_history_carries_the_number_of_each_message()
+    {
+        var (alice, _, conversation) = await ChatAsync();
+        using var client = _factory.CreateClientFor(alice);
+        var first = await client.SendMessageAsync(conversation, "one");
+        await client.SendMessageAsync(conversation, "two");
+        await client.EditMessageAsync(conversation, first.MessageIdOf(), "one, edited");
+
+        var history = await client.GetHistoryAsync(conversation);
+
+        Assert.Equal([3L, 2L], history.Select(m => m.ChangeSeqOf()).ToArray());
+    }
+
     // ##### Together #####
 
     [Fact]
