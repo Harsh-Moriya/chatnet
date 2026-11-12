@@ -167,7 +167,7 @@ public class MessageHistoryTests
         var message = Assert.Single(await client.GetHistoryAsync(conversation));
 
         Assert.Equivalent(
-            new[] { "id", "conversationId", "senderId", "senderDisplayName", "content", "createdAt", "clientMessageId" },
+            new[] { "id", "conversationId", "senderId", "senderDisplayName", "ciphertext", "keyEpoch", "createdAt", "clientMessageId" },
             message.EnumerateObject().Select(p => p.Name));
     }
 

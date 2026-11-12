@@ -15,9 +15,20 @@ public class MessageConfiguration : IEntityTypeConfiguration<Message>
         builder.HasKey(m => m.Id);
         builder.Property(m => m.Id).HasDefaultValueSql("gen_random_uuid()");
 
-        // Content is nullable by design: on soft-delete the content is cleared but the
-        // row is kept so the message timeline has no gaps.
-        builder.Property(m => m.Content).HasColumnType("text");
+        // Null exactly when the message is deleted: the text is removed and the row is kept so the message timeline has no gaps.
+        // A message that is not deleted holds a blob of a size the formats allow (see MessageBlob), whatever is inside it.
+        builder.Property(m => m.Ciphertext).HasColumnType("bytea");
+        builder.Property(m => m.KeyEpoch).IsRequired();
+        builder.Property(m => m.ClientMessageId).IsRequired();
+        builder.Property(m => m.MentionedUserIds).HasColumnType("uuid[]").IsRequired().HasDefaultValueSql("'{}'");
+
+        builder.ToTable(table =>
+        {
+            table.HasCheckConstraint(
+                "CK_Messages_Ciphertext",
+                $"(\"IsDeleted\" AND \"Ciphertext\" IS NULL) OR (NOT \"IsDeleted\" AND \"Ciphertext\" IS NOT NULL AND length(\"Ciphertext\") BETWEEN {MessageBlob.MinBytes} AND {MessageBlob.MaxBytes})");
+            table.HasCheckConstraint("CK_Messages_KeyEpoch", "\"KeyEpoch\" >= 1");
+        });
 
         builder.Property(m => m.CreatedAt)
             .HasColumnType("timestamp with time zone")
@@ -46,13 +57,9 @@ public class MessageConfiguration : IEntityTypeConfiguration<Message>
         // One message per (conversation, sender, client id). A send that arrives twice, because the client
         // retried after a timeout whose first attempt had in fact succeeded, finds the first message through
         // this index instead of storing a second. The database is the arbiter: two copies of the same send
-        // arriving at the same moment cannot both be inserted. Partial so that messages sent without a client
-        // id (every older message, and any client that sends none) are not in the index at all. Postgres
-        // already lets any number of nulls through a unique index, so the filter changes no behaviour; it
-        // keeps the index small.
+        // arriving at the same moment cannot both be inserted.
         builder.HasIndex(m => new { m.ConversationId, m.SenderId, m.ClientMessageId })
             .IsUnique()
-            .HasFilter("\"ClientMessageId\" IS NOT NULL")
             .HasDatabaseName(ClientMessageIndexName);
 
         builder.HasOne(m => m.Conversation)

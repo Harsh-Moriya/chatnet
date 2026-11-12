@@ -50,7 +50,7 @@ public class GetConversationTests
         var listed = (await client.ListConversationsAsync()).Single(c => c.IdOf() == id);
 
         Assert.Equal(listed.GetRawText(), single.GetRawText());
-        Assert.Equal("Latest", single.GetProperty("lastMessage").GetProperty("content").GetString());
+        Assert.Equal("Latest", single.GetProperty("lastMessage").ContentOf());
     }
 
     [Fact]

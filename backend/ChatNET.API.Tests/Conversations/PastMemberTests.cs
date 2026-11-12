@@ -55,8 +55,9 @@ public class PastMemberTests
     private async Task<Guid> AddAsync(Guid group, TestUser sender, string content, DateTime at)
     {
         await _factory.AddMessageAsync(group, sender.Id, content, at);
+        var blob = FakeMessage.Blob(1, content);
         return (await _factory.QueryDbAsync(db => db.Messages
-            .Where(m => m.ConversationId == group && m.Content == content).Select(m => m.Id).SingleAsync()));
+            .Where(m => m.ConversationId == group && m.Ciphertext == blob).Select(m => m.Id).SingleAsync()));
     }
 
     private static List<string?> Contents(IEnumerable<JsonElement> messages) => messages.Select(m => m.ContentOf()).ToList();
@@ -72,7 +73,7 @@ public class PastMemberTests
         var view = Assert.Single(await bob.ListConversationsAsync());
 
         Assert.Equal(s.Group, view.IdOf());
-        Assert.Equal("before 3", view.GetProperty("lastMessage").GetProperty("content").GetString());
+        Assert.Equal("before 3", view.GetProperty("lastMessage").ContentOf());
         Assert.Equal(0, view.UnreadOf());
         Assert.Equal(s.LeftAt, view.GetProperty("leftAt").GetDateTime());
     }
@@ -97,7 +98,7 @@ public class PastMemberTests
         var view = Assert.Single(await alice.ListConversationsAsync());
 
         Assert.Equal(JsonValueKind.Null, view.GetProperty("leftAt").ValueKind);
-        Assert.Equal("after 3", view.GetProperty("lastMessage").GetProperty("content").GetString());
+        Assert.Equal("after 3", view.GetProperty("lastMessage").ContentOf());
     }
 
     [Fact]
@@ -181,7 +182,7 @@ public class PastMemberTests
 
         Assert.Equal(["before 1", "at the moment"], Contents(await bob.GetHistoryAsync(s.Group)));
         var view = Assert.Single(await bob.ListConversationsAsync());
-        Assert.Equal("at the moment", view.GetProperty("lastMessage").GetProperty("content").GetString());
+        Assert.Equal("at the moment", view.GetProperty("lastMessage").ContentOf());
     }
 
     [Fact]
@@ -214,14 +215,14 @@ public class PastMemberTests
     {
         var s = await LeftGroupAsync();
         await _factory.ExecuteDbAsync(db => db.Messages.Where(m => m.Id == s.Before[1]).ExecuteUpdateAsync(m =>
-            m.SetProperty(x => x.IsDeleted, true).SetProperty(x => x.Content, (string?)null)));
+            m.SetProperty(x => x.IsDeleted, true).SetProperty(x => x.Ciphertext, (byte[]?)null)));
         using var bob = _factory.CreateClientFor(s.Bob);
 
         var history = await bob.GetHistoryAsync(s.Group);
 
         Assert.Equal(3, history.Count);
         Assert.True(history[1].GetProperty("isDeleted").GetBoolean());
-        Assert.Equal(JsonValueKind.Null, history[1].GetProperty("content").ValueKind);
+        Assert.Equal(JsonValueKind.Null, history[1].GetProperty("ciphertext").ValueKind);
     }
 
     [Fact]
@@ -284,8 +285,8 @@ public class PastMemberTests
         const int later = 6000;
         var s = await LeftGroupAsync(before: 60, after: 0);
         await _factory.ExecuteDbAsync(db => db.Database.ExecuteSqlInterpolatedAsync($@"
-            INSERT INTO ""Messages"" (""Id"", ""ConversationId"", ""SenderId"", ""Content"", ""CreatedAt"")
-            SELECT gen_random_uuid(), {s.Group}, {s.Alice.Id}, 'later', {s.LeftAt} + (g * interval '1 second')
+            INSERT INTO ""Messages"" (""Id"", ""ConversationId"", ""SenderId"", ""Ciphertext"", ""KeyEpoch"", ""ClientMessageId"", ""CreatedAt"")
+            SELECT gen_random_uuid(), {s.Group}, {s.Alice.Id}, decode('0101' || '00000001' || repeat('00', 12), 'hex') || convert_to('later', 'UTF8') || decode(repeat('00', 80), 'hex'), 1, gen_random_uuid(), {s.LeftAt} + (g * interval '1 second')
             FROM generate_series(1, {later}) AS g"));
         await _factory.ExecuteDbAsync(db => db.Database.ExecuteSqlRawAsync(@"ANALYZE ""Messages"""));
 

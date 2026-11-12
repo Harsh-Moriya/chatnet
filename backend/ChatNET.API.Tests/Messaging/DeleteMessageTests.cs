@@ -79,7 +79,7 @@ public class DeleteMessageTests
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var deleted = await response.ReadJsonAsync();
         Assert.Equal(sent.MessageIdOf(), deleted.MessageIdOf());
-        Assert.Equal(JsonValueKind.Null, deleted.GetProperty("content").ValueKind);
+        Assert.Equal(JsonValueKind.Null, deleted.GetProperty("ciphertext").ValueKind);
         Assert.True(deleted.GetProperty("isDeleted").GetBoolean());
         Assert.Empty(deleted.AttachmentsOf());
         Assert.Equal(sent.GetProperty("createdAt").GetDateTime(), deleted.GetProperty("createdAt").GetDateTime());
@@ -96,7 +96,7 @@ public class DeleteMessageTests
 
         var stored = await StoredAsync(sent);
         Assert.True(stored.IsDeleted);
-        Assert.Null(stored.Content);
+        Assert.Null(stored.Text());
         Assert.Equal(alice.Id, stored.DeletedById);
         Assert.InRange(stored.DeletedAt!.Value, before, DateTime.UtcNow.AddSeconds(1));
     }
@@ -133,7 +133,7 @@ public class DeleteMessageTests
         {
             var pushed = await tab.WaitForUpdateAsync(sent.MessageIdOf());
             Assert.True(pushed.GetProperty("isDeleted").GetBoolean());
-            Assert.Equal(JsonValueKind.Null, pushed.GetProperty("content").ValueKind);
+            Assert.Equal(JsonValueKind.Null, pushed.GetProperty("ciphertext").ValueKind);
             Assert.DoesNotContain("this will be gone", pushed.GetRawText());
         }
     }
@@ -484,7 +484,7 @@ public class DeleteMessageTests
 
         Assert.Equal(1, await bobClient.UnreadInListAsync(conversation));
         var last = (await bobClient.ListConversationsAsync()).Single(c => c.IdOf() == conversation).GetProperty("lastMessage");
-        Assert.Equal(JsonValueKind.Null, last.GetProperty("content").ValueKind);
+        Assert.Equal(JsonValueKind.Null, last.GetProperty("ciphertext").ValueKind);
         _ = first;
     }
 
@@ -494,14 +494,14 @@ public class DeleteMessageTests
         var (group, alice, bob, _) = await GroupAsync();
         using var aliceClient = _factory.CreateClientFor(alice);
         using var bobClient = _factory.CreateClientFor(bob);
-        var sent = await aliceClient.SendMessageAsync(group, $"secret for @{bob.UserName}");
+        var sent = await aliceClient.SendMessageAsync(group, $"secret for @{bob.UserName}", mentions: [bob.Id]);
 
         await aliceClient.DeleteMessageAsync(group, sent.MessageIdOf());
 
         var item = (await bobClient.GetNotificationsAsync()).ItemsOf()
             .Single(n => n.TryGetProperty("messageId", out var id) && id.ValueKind == JsonValueKind.String
                          && id.GetGuid() == sent.MessageIdOf());
-        Assert.Equal(JsonValueKind.Null, item.GetProperty("messagePreview").ValueKind);
+        Assert.Equal(JsonValueKind.Null, item.GetProperty("message").ValueKind);
     }
 
     // ##### Saved together, pushed reliably #####
@@ -561,7 +561,7 @@ public class DeleteMessageTests
 
         var stored = await StoredAsync(sent);
         Assert.False(stored.IsDeleted);
-        Assert.Equal("still here", stored.Content);
+        Assert.Equal("still here", stored.Text());
     }
 
     [Fact]

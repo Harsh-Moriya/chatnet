@@ -18,6 +18,9 @@ public sealed class AttachmentRemover
         _logger = logger;
     }
 
+    // One object by its key. An object that is already gone counts as removed, and a failure is thrown for the relay to try again.
+    public Task RemoveKeyAsync(string key, CancellationToken cancellationToken) => _storage.DeleteAsync(key, cancellationToken);
+
     public async Task RemoveAsync(IReadOnlyCollection<MessageAttachment> files, CancellationToken cancellationToken)
     {
         List<Exception> failures = [];

@@ -6,8 +6,6 @@ namespace ChatNET.API.Messaging.SendMessage;
 
 public class SendMessageCommandValidator : AbstractValidator<SendMessageCommand>
 {
-    public const int MaxContentLength = 4000;
-
     // The longest key an upload ticket can produce is far shorter; this only bounds what a client may send.
     private const int MaxUploadKeyLength = 200;
 
@@ -15,19 +13,23 @@ public class SendMessageCommandValidator : AbstractValidator<SendMessageCommand>
     {
         var maxFiles = options.Value.MaxFilesPerMessage;
 
-        // A message needs something to say or a file to show. NotEmpty also rejects a string of only
-        // whitespace, so a blank message cannot be sent. Length counts UTF-16 code units, which is how .NET and
-        // JavaScript both count a string.
-        RuleFor(x => x.Content)
+        // The server cannot read the text, so it cannot tell a blank message from a long one: the browser keeps both within
+        // limits before it seals, and the server insists only that what arrives is a message of a size and shape the formats allow.
+        RuleFor(x => x.Ciphertext)
             .NotEmpty()
-            .When(x => x.Attachments is not { Count: > 0 });
+            .Must(ciphertext => MessageBlob.Decode(ciphertext) is not null)
+            .WithMessage("The message is not a well formed encrypted message.");
 
-        RuleFor(x => x.Content)
-            .MaximumLength(MaxContentLength);
-
+        // The id is part of what the sender signed, so a message without one could not be opened by anyone.
         RuleFor(x => x.ClientMessageId)
-            .NotEqual(Guid.Empty)
-            .When(x => x.ClientMessageId.HasValue);
+            .NotNull()
+            .NotEqual(Guid.Empty);
+
+        RuleFor(x => x.MentionedUserIds)
+            .Must(ids => ids is null || ids.Count <= MentionLimits.Max)
+            .WithMessage($"A message can name at most {MentionLimits.Max} people.");
+
+        RuleForEach(x => x.MentionedUserIds).NotEqual(Guid.Empty);
 
         RuleFor(x => x.Attachments)
             .Must(files => files is null || files.Count <= maxFiles)

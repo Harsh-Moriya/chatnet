@@ -147,7 +147,7 @@ public class MessageDeliveryTests
         var conversation = (await aliceApi.CreateDirectAsync(bob.Id)).IdOf();
         await using var bobClient = await HubClient.ConnectAsync(_factory, bob);
 
-        var invalid = await aliceApi.PostMessageAsync(conversation, "   ");
+        var invalid = await aliceApi.PostMessageAsync(conversation, null);
         var forbidden = await intruderApi.PostMessageAsync(conversation, "I should not be here");
 
         Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
@@ -207,7 +207,7 @@ public class MessageDeliveryTests
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         var sent = await response.Content.ReadFromJsonAsync<JsonElement>();
         var stored = await _factory.QueryDbAsync(db => db.Messages.SingleAsync(m => m.Id == sent.MessageIdOf()));
-        Assert.Equal(secret, stored.Content);
+        Assert.Equal(secret, stored.Text());
         // The warning names the outbox row that stands for the push, which the relay will retry.
         var row = Assert.Single(await _factory.OutboxRowsAboutAsync("messageId", sent.MessageIdOf()));
         var warning = Assert.Single(capture.Entries, e => e.StartsWith("[Warning]") && e.Contains(row.Id.ToString()));

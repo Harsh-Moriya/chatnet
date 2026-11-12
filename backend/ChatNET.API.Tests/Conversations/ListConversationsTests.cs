@@ -83,16 +83,16 @@ public class ListConversationsTests
         var list = await client.ListConversationsAsync();
 
         var bobPreview = list.Single(c => c.IdOf() == withBob).GetProperty("lastMessage");
-        Assert.Equal("bob: latest", bobPreview.GetProperty("content").GetString());
+        Assert.Equal("bob: latest", bobPreview.ContentOf());
         Assert.Equal(bob.Id, bobPreview.GetProperty("senderId").GetGuid());
         Assert.EndsWith("Z", bobPreview.GetProperty("createdAt").GetString());
 
         var carolPreview = list.Single(c => c.IdOf() == withCarol).GetProperty("lastMessage");
-        Assert.Equal("carol: only", carolPreview.GetProperty("content").GetString());
+        Assert.Equal("carol: only", carolPreview.ContentOf());
     }
 
     [Fact]
-    public async Task A_long_preview_is_cut_to_one_hundred_characters()
+    public async Task A_long_last_message_is_carried_whole_because_the_server_cannot_cut_what_it_cannot_read()
     {
         var alice = await _factory.RegisterUserAsync("alice");
         var bob = await _factory.RegisterUserAsync("bob");
@@ -102,11 +102,11 @@ public class ListConversationsTests
 
         var preview = (await client.ListConversationsAsync()).Single().GetProperty("lastMessage");
 
-        Assert.Equal(100, preview.GetProperty("content").GetString()!.Length);
+        Assert.Equal(new string('x', 250), preview.ContentOf());
     }
 
     [Fact]
-    public async Task A_deleted_last_message_never_shows_its_text_even_if_the_text_is_still_stored()
+    public async Task A_deleted_last_message_has_no_blob_and_the_preview_still_exists()
     {
         var alice = await _factory.RegisterUserAsync("alice");
         var bob = await _factory.RegisterUserAsync("bob");
@@ -116,9 +116,8 @@ public class ListConversationsTests
 
         var preview = (await client.ListConversationsAsync()).Single().GetProperty("lastMessage");
 
-        // Deletion normally clears the text, but the preview must not depend on that: a row flagged
-        // as deleted never reveals its content. The row itself survives, so the preview still exists.
-        Assert.Equal(JsonValueKind.Null, preview.GetProperty("content").ValueKind);
+        // Deleting removes the blob; the row survives, so the preview still exists and says who sent it.
+        Assert.Equal(JsonValueKind.Null, preview.GetProperty("ciphertext").ValueKind);
         Assert.Equal(bob.Id, preview.GetProperty("senderId").GetGuid());
     }
 
@@ -177,11 +176,11 @@ public class ListConversationsTests
 
         Assert.Equal(JsonValueKind.Null, forCarol.Single(c => c.IdOf() == onlyBefore).GetProperty("lastMessage").ValueKind);
         Assert.Equal("said after carol joined",
-            forCarol.Single(c => c.IdOf() == both).GetProperty("lastMessage").GetProperty("content").GetString());
+            forCarol.Single(c => c.IdOf() == both).GetProperty("lastMessage").ContentOf());
         Assert.Equal(JsonValueKind.Null, single.GetProperty("lastMessage").ValueKind);
         // The member who was there from the start still sees the latest message of each.
         Assert.Equal("said before carol joined",
-            forAlice.Single(c => c.IdOf() == onlyBefore).GetProperty("lastMessage").GetProperty("content").GetString());
+            forAlice.Single(c => c.IdOf() == onlyBefore).GetProperty("lastMessage").ContentOf());
     }
 
     [Fact]

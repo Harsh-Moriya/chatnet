@@ -121,14 +121,14 @@ public class IdempotentSendTests
         var sent = await client.SendMessageAsync(conversation, "Regretted", clientMessageId);
         await _factory.ExecuteDbAsync(db => db.Messages
             .Where(m => m.Id == sent.MessageIdOf())
-            .ExecuteUpdateAsync(s => s.SetProperty(m => m.IsDeleted, true).SetProperty(m => m.Content, (string?)null)));
+            .ExecuteUpdateAsync(s => s.SetProperty(m => m.IsDeleted, true).SetProperty(m => m.Ciphertext, (byte[]?)null)));
 
         var retry = await client.PostMessageAsync(conversation, "Regretted", clientMessageId);
 
         Assert.Equal(HttpStatusCode.OK, retry.StatusCode);
         var body = await retry.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal(sent.MessageIdOf(), body.MessageIdOf());
-        Assert.Equal(JsonValueKind.Null, body.GetProperty("content").ValueKind);
+        Assert.Equal(JsonValueKind.Null, body.GetProperty("ciphertext").ValueKind);
     }
 
     // ##### What is not a retry #####

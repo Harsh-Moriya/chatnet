@@ -38,9 +38,9 @@ public class NotificationReadByConversationTests
         var (me, other, group) = await SetUpAsync();
         using var otherClient = _factory.CreateClientFor(other);
         using var client = _factory.CreateClientFor(me);
-        var first = await otherClient.SendMessageAsync(group, $"@{me.UserName} one");
+        var first = await otherClient.SendMessageAsync(group, $"@{me.UserName} one", mentions: [me.Id]);
         var second = await otherClient.SendMessageAsync(group, "plain");
-        await otherClient.SendMessageAsync(group, $"@{me.UserName} three");
+        await otherClient.SendMessageAsync(group, $"@{me.UserName} three", mentions: [me.Id]);
 
         await client.MarkReadAsync(group, second.MessageIdOf());
 
@@ -55,8 +55,8 @@ public class NotificationReadByConversationTests
         var (me, other, group) = await SetUpAsync();
         using var otherClient = _factory.CreateClientFor(other);
         using var client = _factory.CreateClientFor(me);
-        await otherClient.SendMessageAsync(group, $"@{me.UserName} one");
-        var last = await otherClient.SendMessageAsync(group, $"@{me.UserName} two");
+        await otherClient.SendMessageAsync(group, $"@{me.UserName} one", mentions: [me.Id]);
+        var last = await otherClient.SendMessageAsync(group, $"@{me.UserName} two", mentions: [me.Id]);
 
         await client.MarkReadAsync(group, last.MessageIdOf());
 
@@ -70,8 +70,8 @@ public class NotificationReadByConversationTests
         using var otherClient = _factory.CreateClientFor(other);
         using var client = _factory.CreateClientFor(me);
         var elsewhere = (await otherClient.CreateGroupAsync("Elsewhere", me.Id)).IdOf();
-        await otherClient.SendMessageAsync(elsewhere, $"@{me.UserName} over here");
-        var here = await otherClient.SendMessageAsync(group, $"@{me.UserName} over there");
+        await otherClient.SendMessageAsync(elsewhere, $"@{me.UserName} over here", mentions: [me.Id]);
+        var here = await otherClient.SendMessageAsync(group, $"@{me.UserName} over there", mentions: [me.Id]);
 
         await client.MarkReadAsync(group, here.MessageIdOf());
 
@@ -116,8 +116,8 @@ public class NotificationReadByConversationTests
         var (me, other, group) = await SetUpAsync();
         using var otherClient = _factory.CreateClientFor(other);
         using var client = _factory.CreateClientFor(me);
-        await otherClient.SendMessageAsync(group, $"@{me.UserName} hi");
-        await client.SendMessageAsync(group, $"@{other.UserName} hello back");
+        await otherClient.SendMessageAsync(group, $"@{me.UserName} hi", mentions: [me.Id]);
+        await client.SendMessageAsync(group, $"@{other.UserName} hello back", mentions: [other.Id]);
         var last = await otherClient.SendMessageAsync(group, "anyone there");
 
         await client.MarkReadAsync(group, last.MessageIdOf());
@@ -131,8 +131,8 @@ public class NotificationReadByConversationTests
         var (me, other, group) = await SetUpAsync();
         using var otherClient = _factory.CreateClientFor(other);
         using var client = _factory.CreateClientFor(me);
-        await otherClient.SendMessageAsync(group, $"@{me.UserName} one");
-        var last = await otherClient.SendMessageAsync(group, $"@{me.UserName} two");
+        await otherClient.SendMessageAsync(group, $"@{me.UserName} one", mentions: [me.Id]);
+        var last = await otherClient.SendMessageAsync(group, $"@{me.UserName} two", mentions: [me.Id]);
         var expected = (await MentionsOfAsync(me.Id, group)).Select(n => n.Id).ToArray();
         await using var thisTab = await HubClient.ConnectAsync(_factory, me);
         await using var otherTab = await HubClient.ConnectAsync(_factory, me);
@@ -167,7 +167,7 @@ public class NotificationReadByConversationTests
         var (me, other, group) = await SetUpAsync();
         using var otherClient = _factory.CreateClientFor(other);
         using var client = _factory.CreateClientFor(me);
-        var message = await otherClient.SendMessageAsync(group, $"@{me.UserName} one");
+        var message = await otherClient.SendMessageAsync(group, $"@{me.UserName} one", mentions: [me.Id]);
         await client.MarkReadAsync(group, message.MessageIdOf());
         await using var tab = await HubClient.ConnectAsync(_factory, me);
 

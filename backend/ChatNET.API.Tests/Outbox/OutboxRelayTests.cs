@@ -199,7 +199,7 @@ public class OutboxRelayTests : IAsyncLifetime
         using var relayHost = _factory.WithClock(clock);
         using var broken = BrokenHub();
         using var client = Authorized(broken, alice);
-        var sent = await (await client.PostMessageAsync(group, $"ping @{bob.UserName}")).ReadJsonAsync();
+        var sent = await (await client.PostMessageAsync(group, $"ping @{bob.UserName}", mentions: [bob.Id])).ReadJsonAsync();
         Assert.False(await bobTab.ReceivedNotificationAsync(n => MessageIdOf(n) == sent.MessageIdOf()));
 
         clock.Advance(TimeSpan.FromMinutes(3));
@@ -623,6 +623,73 @@ public class OutboxRelayTests : IAsyncLifetime
         Assert.Null(done.LastError);
     }
 
+    // The row the encryption cutover makes for each file of a message it deleted: the object is removed by its key, whatever else is
+    // in the database.
+    [Fact]
+    public async Task A_row_for_a_stored_file_removes_that_object_and_only_that_one()
+    {
+        var (alice, _, conversation) = await _factory.DirectChatAsync();
+        var (_, _, doomed) = await MessageWithFileAsync(alice, conversation);
+        var (_, _, kept) = await MessageWithFileAsync(alice, conversation);
+        var clock = new ManualTimeProvider();
+        using var relayHost = _factory.WithClock(clock);
+        var now = clock.GetUtcNow().UtcDateTime;
+        var row = await InsertAsync(new StoredFileRemoved(doomed.StorageKey), now.AddMinutes(-1), now.AddMinutes(-1));
+
+        await RunAsync(relayHost);
+
+        Assert.False(await _factory.ObjectExistsAsync(doomed.StorageKey));
+        Assert.True(await _factory.ObjectExistsAsync(kept.StorageKey));
+        var done = await _factory.OutboxRowAsync(row.Id);
+        Assert.NotNull(done.DispatchedAt);
+        Assert.Null(done.LastError);
+    }
+
+    [Fact]
+    public async Task A_row_for_a_stored_file_that_is_already_gone_counts_as_removed()
+    {
+        var clock = new ManualTimeProvider();
+        using var relayHost = _factory.WithClock(clock);
+        var now = clock.GetUtcNow().UtcDateTime;
+        var row = await InsertAsync(new StoredFileRemoved($"messages/{Guid.NewGuid()}/never-existed"), now.AddMinutes(-1), now.AddMinutes(-1));
+
+        await RunAsync(relayHost);
+
+        var done = await _factory.OutboxRowAsync(row.Id);
+        Assert.NotNull(done.DispatchedAt);
+        Assert.Null(done.LastError);
+    }
+
+    [Fact]
+    public async Task A_row_for_a_stored_file_is_tried_again_when_the_storage_fails_and_removes_it_when_it_works()
+    {
+        var (alice, _, conversation) = await _factory.DirectChatAsync();
+        var (_, _, file) = await MessageWithFileAsync(alice, conversation);
+        var clock = new ManualTimeProvider();
+        using var failing = _factory.WithClock(clock).WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+        {
+            services.RemoveAll<IBlobStorage>();
+            services.AddSingleton<IBlobStorage>(provider =>
+                new UndeletableBlobStorage(ActivatorUtilities.CreateInstance<S3BlobStorage>(provider)));
+        }));
+        using var working = _factory.WithClock(clock);
+        var now = clock.GetUtcNow().UtcDateTime;
+        var row = await InsertAsync(new StoredFileRemoved(file.StorageKey), now.AddMinutes(-1), now.AddMinutes(-1));
+
+        await RunAsync(failing);
+
+        var first = await _factory.OutboxRowAsync(row.Id);
+        Assert.Equal(1, first.Attempts);
+        Assert.Null(first.DispatchedAt);
+        Assert.True(await _factory.ObjectExistsAsync(file.StorageKey));
+
+        clock.Advance(TimeSpan.FromSeconds(6));
+        await RunAsync(working);
+
+        Assert.NotNull((await _factory.OutboxRowAsync(row.Id)).DispatchedAt);
+        Assert.False(await _factory.ObjectExistsAsync(file.StorageKey));
+    }
+
     // A call to the storage that times out can surface as a cancellation. That is a failed removal, to be tried again,
     // and not an exception that ends the pass and with it the process.
     [Fact]
@@ -631,7 +698,7 @@ public class OutboxRelayTests : IAsyncLifetime
         var (alice, _, conversation) = await _factory.DirectChatAsync();
         var (_, messageId, file) = await MessageWithFileAsync(alice, conversation);
         await _factory.ExecuteDbAsync(db => db.Messages.Where(m => m.Id == messageId)
-            .ExecuteUpdateAsync(s => s.SetProperty(m => m.IsDeleted, true).SetProperty(m => m.Content, (string?)null)));
+            .ExecuteUpdateAsync(s => s.SetProperty(m => m.IsDeleted, true).SetProperty(m => m.Ciphertext, (byte[]?)null)));
         var clock = new ManualTimeProvider();
         using var relayHost = _factory.WithClock(clock).WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
         {
@@ -657,7 +724,7 @@ public class OutboxRelayTests : IAsyncLifetime
         var (alice, _, conversation) = await _factory.DirectChatAsync();
         var (_, messageId, file) = await MessageWithFileAsync(alice, conversation);
         await _factory.ExecuteDbAsync(db => db.Messages.Where(m => m.Id == messageId)
-            .ExecuteUpdateAsync(s => s.SetProperty(m => m.IsDeleted, true).SetProperty(m => m.Content, (string?)null)));
+            .ExecuteUpdateAsync(s => s.SetProperty(m => m.IsDeleted, true).SetProperty(m => m.Ciphertext, (byte[]?)null)));
         var clock = new ManualTimeProvider();
         using var failing = _factory.WithClock(clock).WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
         {

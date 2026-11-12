@@ -204,6 +204,7 @@ public class GroupManagementTests
         using var member = As(team.Member);
         await owner.SendMessageAsync(team.Id, "from before they left");
         await member.LeaveResponseAsync(team.Id);
+        await owner.StoreNextEpochAsync(team.Id);
         await owner.SendMessageAsync(team.Id, "while they were away");
         var before = (await RowAsync(team.Id, team.Member)).JoinedAt;
 

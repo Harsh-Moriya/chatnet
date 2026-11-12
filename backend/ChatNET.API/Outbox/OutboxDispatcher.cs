@@ -95,6 +95,10 @@ public class OutboxDispatcher
                 await RemoveFilesAsync(removed, row, cancellationToken);
                 return;
 
+            case StoredFileRemoved file:
+                await _remover.RemoveKeyAsync(file.Key, cancellationToken);
+                return;
+
             case NotificationCreated notification:
                 var dto = await _notifications.FindByIdAsync(notification.NotificationId, cancellationToken);
                 if (dto is null)

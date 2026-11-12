@@ -4,12 +4,11 @@ namespace ChatNET.API.Notifications.Persistence;
 
 public interface INotificationRepository
 {
-    // The active members of the conversation, other than the sender, whose user name is among those named. A member
-    // who left, an account that was deactivated and a name that nobody in the conversation has are all left out,
-    // so a mention reveals nothing about who exists elsewhere. The names are in the form Identity stores them.
-    Task<List<Guid>> FindMentionedMembersAsync(
-        Guid conversationId, Guid senderId, IReadOnlyCollection<string> normalizedUserNames,
-        CancellationToken cancellationToken);
+    // The active members of the conversation, other than the sender, among the people a message says it names, in the
+    // order named. A member who left, an account that was deactivated and an id that nobody in the conversation has are all
+    // left out, so a mention reveals nothing about who exists elsewhere.
+    Task<List<Guid>> FindMentionableMemberIdsAsync(
+        Guid conversationId, Guid senderId, IReadOnlyCollection<Guid> userIds, CancellationToken cancellationToken);
 
     // The position of one of this person's own notifications, or null when there is no such notification of theirs.
     // Someone else's notification is "no such notification", so a cursor reveals nothing about other people's.

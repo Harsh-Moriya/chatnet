@@ -24,12 +24,16 @@ public record ConversationDto(
     bool KeyRotationRequired
 );
 
-// Content is null when the last message was deleted. It is truncated to a preview length, and empty when the
-// message is only files, which AttachmentCount is for: it says how many files the message carries (0 for a
-// deleted message).
+// The last message as the list shows it, sealed as it was sent: the server cannot read it, so the browser opens it with the key of
+// KeyEpoch to draw the preview, with the sender and the client message id and edit count it was signed for. Ciphertext is null when
+// the last message was deleted. AttachmentCount says how many files the message carries (0 for a deleted message), so a message of
+// only files can still be previewed.
 public record LastMessageDto(
     Guid SenderId,
-    string? Content,
+    string? Ciphertext,
+    int KeyEpoch,
+    Guid ClientMessageId,
+    int EditCount,
     DateTime CreatedAt,
     int AttachmentCount
 );

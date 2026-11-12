@@ -1,4 +1,5 @@
 using ChatNET.API.Common.Persistence;
+using ChatNET.API.Keys;
 using ChatNET.API.Messaging;
 using ChatNET.API.Notifications.Models;
 using Microsoft.EntityFrameworkCore;
@@ -17,18 +18,23 @@ public class NotificationRepository : INotificationRepository
         _db = db;
     }
 
-    public Task<List<Guid>> FindMentionedMembersAsync(
-        Guid conversationId, Guid senderId, IReadOnlyCollection<string> normalizedUserNames,
-        CancellationToken cancellationToken)
-        => _db.ConversationMembers
+    public async Task<List<Guid>> FindMentionableMemberIdsAsync(
+        Guid conversationId, Guid senderId, IReadOnlyCollection<Guid> userIds, CancellationToken cancellationToken)
+    {
+        var named = userIds.Distinct().Take(MentionLimits.Max).ToList();
+
+        var members = await _db.ConversationMembers
             .AsNoTracking()
             .Where(m => m.ConversationId == conversationId
                         && m.LeftAt == null
                         && m.UserId != senderId
                         && !m.User.IsDeactivated
-                        && normalizedUserNames.Contains(m.User.NormalizedUserName!))
+                        && named.Contains(m.UserId))
             .Select(m => m.UserId)
             .ToListAsync(cancellationToken);
+
+        return named.Where(members.Contains).ToList();
+    }
 
     public async Task<NotificationCursor?> FindCursorAsync(
         Guid userId, Guid notificationId, CancellationToken cancellationToken)
@@ -64,7 +70,7 @@ public class NotificationRepository : INotificationRepository
     public async Task<NotificationDto?> FindByIdAsync(Guid notificationId, CancellationToken cancellationToken)
         => (await LoadAsync([notificationId], cancellationToken)).FirstOrDefault();
 
-    // The notifications with these ids, newest first, with the actor's name and the start of the message's text.
+    // The notifications with these ids, newest first, with the actor's name and, for a mention, the message as it was sealed.
     private async Task<List<NotificationDto>> LoadAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken)
     {
         var rows = await _db.Notifications
@@ -78,7 +84,10 @@ public class NotificationRepository : INotificationRepository
                 n.ActorId,
                 ActorDisplayName = n.Actor.DisplayName,
                 n.MessageId,
-                Content = n.Message == null || n.Message.IsDeleted ? null : n.Message.Content,
+                Ciphertext = n.Message == null || n.Message.IsDeleted ? null : n.Message.Ciphertext,
+                KeyEpoch = n.Message == null ? 0 : n.Message.KeyEpoch,
+                ClientMessageId = n.Message == null ? Guid.Empty : n.Message.ClientMessageId,
+                EditCount = n.Message == null ? 0 : n.Message.EditCount,
                 n.IsRead,
                 n.CreatedAt,
             })
@@ -88,7 +97,8 @@ public class NotificationRepository : INotificationRepository
             .OrderByDescending(n => n.CreatedAt).ThenByDescending(n => n.Id)
             .Select(n => new NotificationDto(
                 n.Id, n.Type, n.ConversationId, n.ActorId, n.ActorDisplayName, n.MessageId,
-                MessagePreview.Of(n.Content), n.IsRead, n.CreatedAt))
+                n.Ciphertext is null ? null : new NotificationMessageDto(KeyFormats.Encode(n.Ciphertext), n.KeyEpoch, n.ClientMessageId, n.EditCount),
+                n.IsRead, n.CreatedAt))
             .ToList();
     }
 

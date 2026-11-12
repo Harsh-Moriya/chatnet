@@ -5,13 +5,41 @@ using ChatNET.API.Outbox.Models;
 
 namespace ChatNET.API.Messaging.Persistence;
 
+// How storing a message went. Nothing is saved unless it is Added.
+public enum AddOutcome
+{
+    Added,
+
+    // This sender already used the client id in this conversation: another request sent it first.
+    Repeat,
+
+    // The conversation is not in the epoch the message was sealed in (another was stored, or it has none).
+    EpochStale,
+
+    // The conversation is in that epoch, and a removal or a leave marked it for replacement.
+    EpochDue,
+}
+
+// How an edit went. Nothing is saved unless it is Edited.
+public enum EditOutcome
+{
+    Edited,
+    EpochStale,
+    EpochDue,
+    Deleted,
+    TooLate,
+
+    // The message was edited somewhere else first, so the edit count the new text was signed for is not the next one.
+    EditCountStale,
+}
+
 public interface IMessageRepository
 {
     // Saves the message, the notifications it causes, the outbox rows for their pushes and its conversation's
     // UpdatedAt (moved to the message's CreatedAt), as one atomic write: either all of it happens or none of it
-    // does. Returns false, saving nothing, when the message carries a client id that this sender already used in
-    // this conversation: another request sent it first.
-    Task<bool> TryAddAsync(
+    // does. The conversation must be in the epoch the message was sealed in and not marked for replacement, which one
+    // conditional UPDATE decides together with whoever changes the conversation's keys.
+    Task<AddOutcome> TryAddAsync(
         Message message, IReadOnlyList<Notification> notifications, IReadOnlyList<OutboxMessage> outbox,
         CancellationToken cancellationToken);
 
@@ -24,15 +52,17 @@ public interface IMessageRepository
     Task<MessageForChange?> FindForChangeAsync(
         Guid conversationId, Guid messageId, DateTime since, CancellationToken cancellationToken);
 
-    // Replaces the text of a message that is not deleted and was sent after notBefore, counts the edit, and saves the
-    // notifications and outbox rows that come with it, in one transaction. One conditional UPDATE decides, so an edit
-    // that loses to a delete (or arrives after the window closed) changes nothing and returns false.
-    Task<bool> TryEditAsync(
-        Guid messageId, string content, DateTime editedAt, DateTime notBefore,
-        IReadOnlyList<Notification> notifications, IReadOnlyList<OutboxMessage> outbox,
+    // Replaces the text of a message that is not deleted and was sent after notBefore, which was last edited editCount - 1 times,
+    // counts the edit, and saves the notifications and outbox rows that come with it, in one transaction. The conversation must be
+    // in the epoch the new text was sealed in and not marked for replacement. One conditional UPDATE decides, so an edit that
+    // loses to a delete or to another edit (or arrives after the window closed) changes nothing and says why.
+    Task<EditOutcome> TryEditAsync(
+        Guid conversationId, Guid messageId, byte[] ciphertext, int keyEpoch, int editCount, DateTime editedAt, DateTime notBefore,
+        IReadOnlyList<Guid> mentionedUserIds, IReadOnlyList<Notification> notifications, IReadOnlyList<OutboxMessage> outbox,
         CancellationToken cancellationToken);
 
-    // Marks a message that is not deleted as deleted, removes its text, and saves the outbox rows, in one transaction.
+    // Marks a message that is not deleted as deleted, removes its text (the key period it was sealed in is kept), and saves the
+    // outbox rows, in one transaction.
     // False, with nothing saved, when it already was deleted.
     Task<bool> TryDeleteAsync(
         Guid messageId, Guid deletedById, DateTime deletedAt, IReadOnlyList<OutboxMessage> outbox,

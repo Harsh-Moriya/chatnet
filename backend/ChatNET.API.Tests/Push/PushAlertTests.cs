@@ -135,7 +135,7 @@ public class PushAlertTests : IAsyncLifetime
         using var rig = NewRig();
         using var client = rig.ClientFor(alice);
 
-        var message = await client.SendMessageAsync(team, $"hello @{bob.UserName}");
+        var message = await client.SendMessageAsync(team, $"hello @{bob.UserName}", mentions: [bob.Id]);
 
         var notification = await _factory.QueryDbAsync(db =>
             db.Notifications.AsNoTracking().SingleAsync(n => n.MessageId == message.MessageIdOf()));
@@ -146,7 +146,7 @@ public class PushAlertTests : IAsyncLifetime
     // ##### Who is alerted for a message #####
 
     [Fact]
-    public async Task A_member_who_is_away_is_alerted_with_the_words_of_the_message_and_nobody_else_is()
+    public async Task A_member_who_is_away_is_alerted_that_there_is_a_message_and_nobody_else_is()
     {
         var (alice, bob, carol, team) = await TeamAsync();
         var bobsBrowser = await SubscribeAsync(bob);
@@ -162,7 +162,8 @@ public class PushAlertTests : IAsyncLifetime
         Assert.Equal(bobsBrowser.Endpoint, push.Uri.ToString());
         var alert = push.AlertFor(bobsBrowser);
         Assert.Equal($"{alice.DisplayName} in Team", alert.GetProperty("title").GetString());
-        Assert.Equal("hello team", alert.GetProperty("body").GetString());
+        Assert.Equal("New message", alert.GetProperty("body").GetString());
+        Assert.DoesNotContain("hello team", alert.ToString());
         Assert.Equal("message", alert.GetProperty("type").GetString());
         Assert.Equal($"conversation-{team}", alert.GetProperty("tag").GetString());
         Assert.Equal(team, alert.GetProperty("conversationId").GetGuid());
@@ -216,7 +217,7 @@ public class PushAlertTests : IAsyncLifetime
 
         var alert = Assert.Single(rig.Service.Received).AlertFor(bobsBrowser);
         Assert.Equal(alice.DisplayName, alert.GetProperty("title").GetString());
-        Assert.Equal("are you there?", alert.GetProperty("body").GetString());
+        Assert.Equal("New message", alert.GetProperty("body").GetString());
     }
 
     [Fact]
@@ -237,7 +238,7 @@ public class PushAlertTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task A_long_message_is_cut_for_the_alert()
+    public async Task A_long_message_says_no_more_than_a_short_one_in_the_alert()
     {
         var (alice, bob, _, team) = await TeamAsync();
         var bobsBrowser = await SubscribeAsync(bob);
@@ -247,8 +248,9 @@ public class PushAlertTests : IAsyncLifetime
 
         await rig.RunRelayAsync();
 
-        var body = Assert.Single(rig.Service.Received).AlertFor(bobsBrowser).GetProperty("body").GetString()!;
-        Assert.Equal(new string('x', 100) + "…", body);
+        var alert = Assert.Single(rig.Service.Received).AlertFor(bobsBrowser);
+        Assert.Equal("New message", alert.GetProperty("body").GetString());
+        Assert.DoesNotContain("xxxx", alert.ToString());
     }
 
     [Fact]
@@ -478,14 +480,15 @@ public class PushAlertTests : IAsyncLifetime
         var carolsBrowser = await SubscribeAsync(carol);
         using var rig = NewRig();
         using var client = rig.ClientFor(alice);
-        var message = await client.SendMessageAsync(team, $"@{bob.UserName} are you coming?");
+        var message = await client.SendMessageAsync(team, $"@{bob.UserName} are you coming?", mentions: [bob.Id]);
 
         await rig.RunRelayAsync();
 
         var forBob = Assert.Single(rig.Service.ReceivedBy(bobsBrowser)).AlertFor(bobsBrowser);
         Assert.Equal("mention", forBob.GetProperty("type").GetString());
         Assert.Equal($"{alice.DisplayName} mentioned you in Team", forBob.GetProperty("title").GetString());
-        Assert.Equal($"@{bob.UserName} are you coming?", forBob.GetProperty("body").GetString());
+        Assert.Equal(string.Empty, forBob.GetProperty("body").GetString());
+        Assert.DoesNotContain("are you coming", forBob.ToString());
         Assert.Equal(message.MessageIdOf(), forBob.GetProperty("messageId").GetGuid());
 
         // The others get the message as before.
@@ -503,7 +506,7 @@ public class PushAlertTests : IAsyncLifetime
         using var rig = NewRig();
         using var client = rig.ClientFor(alice);
         await client.SendMessageAsync(team, "just talking");
-        await client.SendMessageAsync(team, $"@{bob.UserName} you in?");
+        await client.SendMessageAsync(team, $"@{bob.UserName} you in?", mentions: [bob.Id]);
 
         await rig.RunRelayAsync();
 
@@ -522,7 +525,7 @@ public class PushAlertTests : IAsyncLifetime
         await rig.RunRelayAsync();
         var before = rig.Service.Received.Count;
 
-        await client.EditMessageAsync(team, message.MessageIdOf(), $"hello @{bob.UserName}");
+        await client.EditMessageAsync(team, message.MessageIdOf(), $"hello @{bob.UserName}", mentions: [bob.Id]);
         await rig.RunRelayAsync();
 
         var pushes = rig.Service.ReceivedBy(bobsBrowser);
@@ -537,7 +540,7 @@ public class PushAlertTests : IAsyncLifetime
         await SubscribeAsync(bob);
         using var rig = NewRig();
         using var client = rig.ClientFor(alice);
-        await client.SendMessageAsync(team, $"@{bob.UserName} you in?");
+        await client.SendMessageAsync(team, $"@{bob.UserName} you in?", mentions: [bob.Id]);
         using (var bobClient = _factory.CreateClientFor(bob))
             (await bobClient.MarkNotificationsReadResponseAsync()).EnsureSuccessStatusCode();
 
@@ -553,7 +556,7 @@ public class PushAlertTests : IAsyncLifetime
         await SubscribeAsync(bob);
         using var rig = NewRig();
         using var client = rig.ClientFor(alice);
-        var message = await client.SendMessageAsync(team, $"@{bob.UserName} you in?");
+        var message = await client.SendMessageAsync(team, $"@{bob.UserName} you in?", mentions: [bob.Id]);
         var notification = await _factory.QueryDbAsync(db =>
             db.Notifications.AsNoTracking().SingleAsync(n => n.MessageId == message.MessageIdOf()));
         using (var bobClient = _factory.CreateClientFor(bob))

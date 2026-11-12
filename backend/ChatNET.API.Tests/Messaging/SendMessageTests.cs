@@ -43,7 +43,8 @@ public class SendMessageTests
         Assert.Equal(alice.DisplayName, message.GetProperty("senderDisplayName").GetString());
         Assert.Equal("Hello Bob", message.ContentOf());
         Assert.InRange(message.GetProperty("createdAt").GetDateTime(), before.AddSeconds(-1), DateTime.UtcNow.AddSeconds(1));
-        Assert.Equal(JsonValueKind.Null, message.GetProperty("clientMessageId").ValueKind);
+        Assert.NotEqual(Guid.Empty, message.GetProperty("clientMessageId").GetGuid());
+        Assert.Equal(1, message.GetProperty("keyEpoch").GetInt32());
     }
 
     [Fact]
@@ -59,7 +60,7 @@ public class SendMessageTests
         var stored = await _factory.QueryDbAsync(db => db.Messages.SingleAsync(m => m.Id == sent.MessageIdOf()));
         Assert.Equal(conversation, stored.ConversationId);
         Assert.Equal(alice.Id, stored.SenderId);
-        Assert.Equal("Remember me", stored.Content);
+        Assert.Equal("Remember me", stored.Text());
         Assert.False(stored.IsDeleted);
         Assert.Equal(0, stored.EditCount);
         Assert.Equal(sent.GetProperty("createdAt").GetDateTime(), stored.CreatedAt);
@@ -81,19 +82,6 @@ public class SendMessageTests
     }
 
     [Fact]
-    public async Task Surrounding_whitespace_is_removed_but_inner_whitespace_is_kept()
-    {
-        var alice = await _factory.RegisterUserAsync("alice");
-        var bob = await _factory.RegisterUserAsync("bob");
-        using var client = _factory.CreateClientFor(alice);
-        var conversation = (await client.CreateDirectAsync(bob.Id)).IdOf();
-
-        var sent = await client.SendMessageAsync(conversation, "  line one\n\nline  three \t\n");
-
-        Assert.Equal("line one\n\nline  three", sent.ContentOf());
-    }
-
-    [Fact]
     public async Task Unicode_and_markup_survive_unchanged()
     {
         var alice = await _factory.RegisterUserAsync("alice");
@@ -106,7 +94,7 @@ public class SendMessageTests
 
         Assert.Equal(content, sent.ContentOf());
         var stored = await _factory.QueryDbAsync(db => db.Messages.SingleAsync(m => m.Id == sent.MessageIdOf()));
-        Assert.Equal(content, stored.Content);
+        Assert.Equal(content, stored.Text());
     }
 
     [Fact]
@@ -147,7 +135,7 @@ public class SendMessageTests
         {
             var first = (await client.ListConversationsAsync()).First();
             Assert.Equal(older, first.IdOf());
-            Assert.Equal("Bump", first.GetProperty("lastMessage").GetProperty("content").GetString());
+            Assert.Equal("Bump", first.GetProperty("lastMessage").ContentOf());
         }
 
         var updatedAt = await _factory.QueryDbAsync(db =>
@@ -270,7 +258,7 @@ public class SendMessageTests
         var conversation = (await client.CreateDirectAsync(bob.Id)).IdOf();
 
         var response = await client.PostAsJsonAsync($"/api/conversations/{conversation}/messages",
-            new { content = "Forged", senderId = bob.Id });
+            new { ciphertext = FakeMessage.Ciphertext(1, "Forged"), clientMessageId = Guid.NewGuid(), senderId = bob.Id });
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         var sent = await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -279,22 +267,18 @@ public class SendMessageTests
 
     // ##### Validation #####
 
-    [Theory]
-    [InlineData(null)]
-    [InlineData("")]
-    [InlineData("   ")]
-    [InlineData("\n\t \r\n")]
-    public async Task Content_that_is_missing_or_blank_is_rejected(string? content)
+    [Fact]
+    public async Task A_message_with_no_blob_is_rejected()
     {
         using var chat = await ConversationForAliceAsync();
         var (client, conversation) = (chat.Client, chat.ConversationId);
 
-        var response = await client.PostMessageAsync(conversation, content);
+        var response = await client.PostMessageAsync(conversation, null);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         var problem = await response.ReadProblemAsync();
         Assert.Equal("Validation Failed", problem.Title);
-        Assert.True(problem.Errors!.Value.GetProperty("Content").GetArrayLength() > 0);
+        Assert.True(problem.Errors!.Value.GetProperty("Ciphertext").GetArrayLength() > 0);
         Assert.Empty(await _factory.QueryDbAsync(db => db.Messages.Where(m => m.ConversationId == conversation).ToListAsync()));
     }
 
@@ -307,20 +291,6 @@ public class SendMessageTests
         var sent = await client.SendMessageAsync(conversation, new string('a', 4000));
 
         Assert.Equal(4000, sent.ContentOf()!.Length);
-    }
-
-    [Fact]
-    public async Task Content_over_4000_characters_is_rejected()
-    {
-        using var chat = await ConversationForAliceAsync();
-        var (client, conversation) = (chat.Client, chat.ConversationId);
-
-        var response = await client.PostMessageAsync(conversation, new string('a', 4001));
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        var problem = await response.ReadProblemAsync();
-        Assert.Contains("4000", problem.Detail);
-        Assert.Empty(await _factory.QueryDbAsync(db => db.Messages.Where(m => m.ConversationId == conversation).ToListAsync()));
     }
 
     [Fact]
@@ -362,8 +332,9 @@ public class SendMessageTests
 
     // ##### Cost and concurrency #####
 
-    // Membership check, sender lookup, and one write (message insert plus conversation update in a
-    // single round trip). The count must not depend on how many people are in the conversation.
+    // Membership check, sender lookup, the lookup for a send that was made before, the claim on the conversation (the one statement
+    // that decides whether the epoch is the right one), and one write (the message and the sender's read position in a single round
+    // trip). The count must not depend on how many people are in the conversation.
     [Fact]
     public async Task Sending_uses_a_fixed_number_of_queries_however_large_the_group_is()
     {
@@ -381,10 +352,10 @@ public class SendMessageTests
         client.DefaultRequestHeaders.Authorization =
             new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", alice.Token);
         counter.Reset();
-        var response = await client.PostMessageAsync(group, "Count me");
+        var response = await client.PostMessageAsync(group, "Count me", epoch: 1);
         response.EnsureSuccessStatusCode();
 
-        Assert.True(counter.Count <= 3, $"Sending ran {counter.Count} queries; expected at most 3.");
+        Assert.True(counter.Count <= 5, $"Sending ran {counter.Count} queries; expected at most 5.");
     }
 
     // Everyone in a busy conversation updates the same conversation row. The writes queue up on that

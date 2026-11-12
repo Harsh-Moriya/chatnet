@@ -127,7 +127,7 @@ public class AttachmentReadTests
         var last = LastMessageOf(await client.ListConversationsAsync(), conversation);
 
         Assert.Equal(3, last.GetProperty("attachmentCount").GetInt32());
-        Assert.Equal("", last.GetProperty("content").GetString());
+        Assert.Equal("", last.ContentOf());
     }
 
     [Fact]
@@ -140,7 +140,7 @@ public class AttachmentReadTests
 
         var last = LastMessageOf(await client.ListConversationsAsync(), conversation);
 
-        Assert.Equal("look at this", last.GetProperty("content").GetString());
+        Assert.Equal("look at this", last.ContentOf());
         Assert.Equal(1, last.GetProperty("attachmentCount").GetInt32());
     }
 
@@ -156,7 +156,7 @@ public class AttachmentReadTests
 
         var last = LastMessageOf(await client.ListConversationsAsync(), conversation);
 
-        Assert.Equal("just words", last.GetProperty("content").GetString());
+        Assert.Equal("just words", last.ContentOf());
         Assert.Equal(0, last.GetProperty("attachmentCount").GetInt32());
     }
 
@@ -170,7 +170,7 @@ public class AttachmentReadTests
 
         var last = LastMessageOf(await client.ListConversationsAsync(), conversation);
 
-        Assert.Equal(System.Text.Json.JsonValueKind.Null, last.GetProperty("content").ValueKind);
+        Assert.Equal(System.Text.Json.JsonValueKind.Null, last.GetProperty("ciphertext").ValueKind);
         Assert.Equal(0, last.GetProperty("attachmentCount").GetInt32());
     }
 

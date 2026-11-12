@@ -25,9 +25,11 @@ public class MessageHistoryAroundTests
         await _factory.BackdateJoinAsync(conversation);
         await _factory.AddMessagesAsync(conversation, bob.Id, count, DateTime.UtcNow.AddHours(-5), TimeSpan.FromSeconds(1), prefix: "m");
 
-        var ids = await _factory.QueryDbAsync(db => db.Messages
-            .Where(m => m.ConversationId == conversation)
-            .ToDictionaryAsync(m => int.Parse(m.Content!.Split(' ')[1]), m => m.Id));
+        var ids = (await _factory.QueryDbAsync(db => db.Messages
+                .Where(m => m.ConversationId == conversation)
+                .Select(m => new { m.Id, m.Ciphertext })
+                .ToListAsync()))
+            .ToDictionary(m => int.Parse(FakeMessage.TextOfBlob(m.Ciphertext)!.Split(' ')[1]), m => m.Id);
 
         return (alice, bob, conversation, ids);
     }
@@ -127,7 +129,7 @@ public class MessageHistoryAroundTests
         // Sent a day before the join time the conversation was given.
         await _factory.AddMessageAsync(conversation, alice.Id, "m 99", DateTime.UtcNow.AddHours(-30));
         var beforeJoining = await _factory.QueryDbAsync(db => db.Messages
-            .Where(m => m.ConversationId == conversation && m.Content == "m 99").Select(m => m.Id).SingleAsync());
+            .Where(m => m.ConversationId == conversation && m.Ciphertext == FakeMessage.Blob(1, "m 99")).Select(m => m.Id).SingleAsync());
 
         var unknown = await client.GetHistoryResponseAsync(conversation, around: Guid.NewGuid());
         var foreign = await client.GetHistoryResponseAsync(conversation, around: otherIds[2]);
@@ -181,6 +183,7 @@ public class MessageHistoryAroundTests
         var inside = (await ownerClient.SendMessageAsync(group, "inside 1")).MessageIdOf();
         await ownerClient.SendMessageAsync(group, "inside 2");
         (await leaverClient.LeaveResponseAsync(group)).EnsureSuccessStatusCode();
+        await ownerClient.StoreNextEpochAsync(group);
         var after = (await ownerClient.SendMessageAsync(group, "after")).MessageIdOf();
 
         var around = await leaverClient.GetHistoryAsync(group, around: inside);

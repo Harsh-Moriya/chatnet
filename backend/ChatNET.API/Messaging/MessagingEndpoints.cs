@@ -11,9 +11,10 @@ using MediatR;
 
 namespace ChatNET.API.Messaging;
 
-public record SendMessageRequest(string? Content, Guid? ClientMessageId, List<AttachmentInput>? Attachments);
+public record SendMessageRequest(
+    string? Ciphertext, Guid? ClientMessageId, List<Guid>? MentionedUserIds, List<AttachmentInput>? Attachments);
 
-public record EditMessageRequest(string? Content);
+public record EditMessageRequest(string? Ciphertext, int? EditCount, List<Guid>? MentionedUserIds);
 
 public static class MessagingEndpoints
 {
@@ -27,12 +28,14 @@ public static class MessagingEndpoints
         // at a route that answers 404. The body carries the new message's ID.
         //
         // 201 for a message this request created; 200 with the stored message when the same send (same
-        // client message id from the same sender) had already been stored, which is what makes a retry safe.
+        // client message id from the same sender) had already been stored, which is what makes a retry safe. 409 with the
+        // code epoch-stale or epoch-due when the conversation is not in the epoch the message was sealed in, or must have
+        // its keys replaced first: the browser looks at the keys again and seals the message anew.
         messages.MapPost("/", async (
             Guid conversationId, SendMessageRequest body, HttpContext http, IMediator mediator) =>
         {
             var result = await mediator.Send(new SendMessageCommand(
-                conversationId, http.User.GetUserId(), body.Content, body.ClientMessageId, body.Attachments));
+                conversationId, http.User.GetUserId(), body.Ciphertext, body.ClientMessageId, body.MentionedUserIds, body.Attachments));
 
             return Results.Json(
                 result.Message,
@@ -45,13 +48,14 @@ public static class MessagingEndpoints
         .Produces<MessageDto>(StatusCodes.Status200OK);
 
         // Replaces the text of the caller's own message, within Messaging:EditWindow of sending it. 200 with the message as it
-        // is now (also when the text was already that, which changes nothing); 409 for a message that was deleted or is
-        // past the window.
+        // is now; 409 for a message that was deleted or is past the window, for an edit made from a version that is no longer the
+        // newest (edit-count-stale), and, as for a send, for a conversation whose keys moved on (epoch-stale, epoch-due).
         messages.MapPatch("/{messageId:guid}", async (
             Guid conversationId, Guid messageId, EditMessageRequest body, HttpContext http, IMediator mediator) =>
         {
             var result = await mediator.Send(
-                new EditMessageCommand(conversationId, messageId, http.User.GetUserId(), body.Content));
+                new EditMessageCommand(
+                    conversationId, messageId, http.User.GetUserId(), body.Ciphertext, body.EditCount, body.MentionedUserIds));
             return Results.Ok(result);
         })
         .RequireRateLimiting(RateLimitPolicies.Edit)

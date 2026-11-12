@@ -48,14 +48,15 @@ public static class MediaApi
         return ticket.GetProperty("uploadKey").GetString()!;
     }
 
-    public static Task<HttpResponseMessage> PostMessageWithFilesAsync(
+    // A message of only files has an empty text, which is still a blob.
+    public static async Task<HttpResponseMessage> PostMessageWithFilesAsync(
         this HttpClient client, Guid conversationId, string? content, IEnumerable<(string Key, string Name)> files, Guid? clientMessageId = null) =>
-        client.PostAsJsonAsync(
+        await client.PostAsJsonAsync(
             $"/api/conversations/{conversationId}/messages",
             new
             {
-                content,
-                clientMessageId,
+                ciphertext = FakeMessage.Ciphertext(await client.CurrentEpochAsync(conversationId), content ?? string.Empty),
+                clientMessageId = clientMessageId ?? Guid.NewGuid(),
                 attachments = files.Select(f => new { uploadKey = f.Key, fileName = f.Name }).ToArray(),
             });
 
@@ -113,7 +114,9 @@ public static class MediaApi
         {
             ConversationId = conversationId,
             SenderId = senderId,
-            Content = content,
+            Ciphertext = deleted ? null : FakeMessage.Blob(1, content),
+            KeyEpoch = 1,
+            ClientMessageId = Guid.NewGuid(),
             CreatedAt = createdAt,
             IsDeleted = deleted,
             DeletedAt = deleted ? createdAt : null,
