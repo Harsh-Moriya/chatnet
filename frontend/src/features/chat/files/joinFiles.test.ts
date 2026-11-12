@@ -42,6 +42,13 @@ describe('pairing the files of a message with the sealed entries', () => {
     expect(joined.file).toBeNull()
   })
 
+  // The length of an encrypted file depends on how it was cut, so an entry is checked against the cut it names, not the usual one.
+  it('vouches for a file cut in pieces of another size when the stored size is the one that cut gives', () => {
+    const [joined] = joinFiles([stored('a', 200, 64)], [entry('one.png', 200, 64)])
+
+    expect(joined.file?.name).toBe('one.png')
+  })
+
   it('does not vouch for an attachment whose entry says another chunk size when the sizes would differ', () => {
     // 200 bytes in chunks of 64 are four chunks, and in chunks of 128 two.
     const [joined] = joinFiles([stored('a', 200, 64)], [entry('one.png', 200, 128)])

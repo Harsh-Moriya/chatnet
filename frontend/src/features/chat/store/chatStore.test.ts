@@ -1083,6 +1083,17 @@ describe('applyOpened', () => {
     expect(store().messages.c1[0].attachments[0].file).toEqual(entry)
   })
 
+  it('says what the files are when the message has more of them than were held, or fewer', () => {
+    const entry = { name: 'one.png', type: 'image/png', size: 10, key: 'k'.repeat(43), chunkSize: 65536 }
+    store().seedMessages('c1', [message({ id: 'm1', content: 'same', unreadable: null, attachments: [attachment('a1', { file: entry })] })])
+
+    store().applyOpened('c1', 'm1', 0, { content: 'same', unreadable: null, attachments: [attachment('a1', { file: entry }), attachment('a2')] })
+    expect(store().messages.c1[0].attachments.map((a) => a.id)).toEqual(['a1', 'a2'])
+
+    store().applyOpened('c1', 'm1', 0, { content: 'same', unreadable: null, attachments: [attachment('a1', { file: entry })] })
+    expect(store().messages.c1[0].attachments.map((a) => a.id)).toEqual(['a1'])
+  })
+
   it('leaves the files as they are when the opening says nothing of them', () => {
     const entry = { name: 'one.png', type: 'image/png', size: 10, key: 'k'.repeat(43), chunkSize: 65536 }
     store().seedMessages('c1', [message({ id: 'm1', content: null, unreadable: 'noKey', attachments: [attachment('a1', { file: entry })] })])

@@ -58,7 +58,7 @@ describe('what a type lets a file be shown as', () => {
     expect(kindOf({ type })).toBe('Video')
   })
 
-  it.each(['video/x-msvideo', 'audio/mpeg', 'image/png', ''])('does not play %j as a video', (type) => {
+  it.each(['video/x-msvideo', 'video/quicktime', 'video/ogg', 'video/x-matroska', 'audio/mpeg', 'image/png', ''])('does not play %j as a video', (type) => {
     expect(videoTypeOf(type)).toBeNull()
   })
 
