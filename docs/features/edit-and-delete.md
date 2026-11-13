@@ -13,7 +13,7 @@
 - **New names** in `mentionedUserIds` are notified. The server remembers who the latest version named, so people already notified are not notified again, a name taken out is not un-notified, and a name put back by a later edit is notified again. Only active members other than the sender count.
 - An edit never moves the conversation in the sidebar.
 
-The change is one conditional `UPDATE` that checks the window, the not-deleted state and the edit count, and writes the new blob, epoch, count and names together, so an edit racing a delete or another edit is settled by Postgres: a delete that arrives first wins. The conversation's keys are read first with a shared row lock, which keeps a removal from marking the epoch for replacement between the check and the commit.
+The change is one conditional `UPDATE` that checks the window, the not-deleted state and the edit count, and writes the new blob, epoch, count and names together, so an edit racing a delete or another edit is settled by Postgres: a delete that arrives first wins. The statement is preceded by one on the conversation's row that takes the conversation's next change number and checks the epoch rules, and holds the row's lock until the commit, which keeps a removal from marking the epoch for replacement between the check and the commit. Edits and deletes of one conversation therefore take their turn, and each change is numbered for the [changes feed](message-search.md#the-changes-feed): a stale edit, a repeated delete and a refused epoch take no number.
 
 ## Deleting
 

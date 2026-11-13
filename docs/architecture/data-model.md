@@ -69,6 +69,7 @@ One table for both kinds.
 | `CreatedById` | uuid | foreign key to the creator |
 | `KeyEpoch` | integer | the newest key epoch, 0 for a conversation that has none. Starts at 1 for every conversation made now |
 | `KeyRotationRequired` | boolean | someone left since the epoch in force was made, so it is due for replacement. Set with the removal, cleared when the next epoch is stored |
+| `ChangeSeq` | bigint | the number of the latest change to any message of the conversation (a send, an edit or a delete), 0 for a conversation with no messages. Bumped by the statement that makes each change, which holds the row's lock until the transaction ends, so numbers are consecutive and in commit order |
 
 Indexes and constraints: a **unique partial index** on `DirectKey` where it is not null (at most one direct chat per pair of users, whatever the interleaving of requests); a check that a direct conversation has a `DirectKey`; a check that `KeyEpoch` is not negative; `IX_Conversations_UpdatedAt` descending. The id of a conversation is chosen by the browser that creates it, so that the first epoch can be made for it.
 
@@ -99,11 +100,13 @@ Someone added again after leaving reuses their row: `JoinedAt` is reset, `LeftAt
 | `EditCount`, `EditedAt` | integer, timestamptz null | |
 | `IsDeleted`, `DeletedAt`, `DeletedById` | boolean, timestamptz null, uuid null | who deleted it: the sender, or a group owner or admin |
 | `ClientMessageId` | uuid | the id the browser made up for the send, for idempotency; bound into the sealed message |
+| `ChangeSeq` | bigint | the number the conversation gave to the latest change of this message: its send, its latest edit or its delete. Unique within the conversation; what the [changes feed](../features/message-search.md#the-changes-feed) is ordered by |
 
 Indexes:
 
 - `IX_Messages_ConversationId_CreatedAt` on `(ConversationId, CreatedAt DESC)`: every history query walks this index from a cursor and stops after 50 rows.
 - `IX_Messages_ConversationId_SenderId_ClientMessageId`: **unique**. Concurrent copies of one send are settled by this index.
+- `IX_Messages_ConversationId_ChangeSeq`: **unique** on `(ConversationId, ChangeSeq)`. The changes feed reads the messages after a number in order from this index, and a change path that forgot to take a number would fail on it.
 - Two check constraints: `CK_Messages_Ciphertext` (a deleted message has no blob and every other message has one of 98 to 32,768 bytes) and `CK_Messages_KeyEpoch` (at least 1).
 - Indexes on `SenderId` and `DeletedById` for the foreign keys.
 

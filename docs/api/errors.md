@@ -138,7 +138,7 @@ A conversation that does not exist and one the caller is not in give this same a
   "title": "Conflict",
   "status": 409,
   "detail": "This message was deleted.",
-  "traceId": "00-c328eb8fda589d54bb1ec80d737eb506-ee275a07a97cfc51-01"
+  "traceId": "00-8b1ca14972f3cb71a39193079b909f61-de19de37e0f38715-01"
 }
 ```
 
@@ -151,6 +151,7 @@ A conflict about the keys of a conversation or the version of a message carries 
 | `epoch-stale` | Another epoch was stored first, so the one offered is not the next number. For a message or an edit: the conversation is not in the epoch it was sealed under. |
 | `epoch-due` | A message or an edit was sealed under the epoch in force, but a removal or a leave marked that epoch for replacement, so nothing more is stored under it until a new one is made. |
 | `edit-count-stale` | The edit was made from an older version of the message: another edit was stored first. |
+| `changes-cursor-ahead` | The point asked from is past the newest change the server has, which means the server holds an older state than the client last saw. The client reads the conversation again from the start. |
 | `epoch-members-changed` | The people in the conversation, or the key generation of one of them, are not what the epoch was made for. |
 | `member-has-no-keys` | Someone in the conversation has not set up encryption, so no key can be sealed for them. |
 | `epoch-too-soon` | The keys of the conversation were replaced less than a day ago and nothing asks for them to be replaced again (a removal or a leave does). Looking again does not help. |
@@ -175,7 +176,7 @@ A message under an epoch that is not the one the conversation is in:
   "status": 409,
   "detail": "The keys of this conversation changed. Look at the conversation again.",
   "code": "epoch-stale",
-  "traceId": "00-58b06082d83cba74634e053243c570c0-9cc1f7026784fc26-01"
+  "traceId": "00-9a93dabd2779d97dee210cdb27076041-26f083445ef72ebb-01"
 }
 ```
 
@@ -188,7 +189,7 @@ A message under an epoch that a removal marked for replacement:
   "status": 409,
   "detail": "The keys of this conversation must be replaced before anything more is said.",
   "code": "epoch-due",
-  "traceId": "00-ece60c2c205fac86d86f18720e152c45-e3d5f3f44763926a-01"
+  "traceId": "00-37ede7440e0cded87493ba0eee171042-9c1ef5bbf5fc5757-01"
 }
 ```
 
@@ -201,7 +202,7 @@ An edit made from an older version of the message:
   "status": 409,
   "detail": "This message was edited somewhere else first. Look at its latest version.",
   "code": "edit-count-stale",
-  "traceId": "00-cd7e4f8aeb63c0b21d228efc71f95794-40915cae3aa621c2-01"
+  "traceId": "00-5673700c7a86629ce346dd8d56bf70e3-9810890cf31b3203-01"
 }
 ```
 
@@ -218,7 +219,7 @@ A message that is not a well formed sealed message, and a send with no client me
       "The message is not a well formed encrypted message."
     ]
   },
-  "traceId": "00-6ced7758dbe24a3af265a3586ba3e6a2-c446748374b1f63a-01"
+  "traceId": "00-0c7f8c8c036e3369b97dfe762dd9b9f3-4879749a1c3cf4a7-01"
 }
 ```
 
@@ -233,7 +234,7 @@ A message that is not a well formed sealed message, and a send with no client me
       "'Client Message Id' must not be empty."
     ]
   },
-  "traceId": "00-5b67d39bf608b1462db0c888b4651a64-202c7c8834e5eec6-01"
+  "traceId": "00-5a2a5b5372d38da4af1f5a583a36577e-1d3f74ffffd20459-01"
 }
 ```
 
