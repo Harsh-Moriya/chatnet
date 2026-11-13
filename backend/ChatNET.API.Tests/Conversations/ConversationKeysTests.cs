@@ -753,11 +753,16 @@ public class ConversationKeysTests
         var team = await GroupAsync();
         await using var memberTab = await HubClient.ConnectAsync(_factory, team.Member);
         using var owner = As(team.Owner);
-        var madeAt = (await EpochsAsync(team.Id)).Single().CreatedAt;
+        using var member = As(team.Member);
+        var firstMadeAt = (await EpochsAsync(team.Id)).Single().CreatedAt;
 
         await owner.RemoveMemberResponseAsync(team.Id, team.Other.Id);
+        var due = await memberTab.WaitForKeyChangedAsync(team.Id, s => s.GetProperty("keyRotationRequired").GetBoolean());
+        Assert.Equal(firstMadeAt, due.GetProperty("keyEpochAt").GetDateTime().ToUniversalTime());
 
-        var state = await memberTab.WaitForKeyChangedAsync(team.Id, s => s.GetProperty("keyRotationRequired").GetBoolean());
-        Assert.Equal(madeAt, state.GetProperty("keyEpochAt").GetDateTime().ToUniversalTime());
+        await member.StoreEpochAsync(team.Id, EpochBody.For(2, team.Owner.Id, team.Member.Id));
+        var next = await memberTab.WaitForKeyChangedAsync(team.Id, s => s.GetProperty("keyEpoch").GetInt32() == 2);
+        var secondMadeAt = (await EpochsAsync(team.Id)).Single(e => e.Epoch == 2).CreatedAt;
+        Assert.Equal(secondMadeAt, next.GetProperty("keyEpochAt").GetDateTime().ToUniversalTime());
     }
 }

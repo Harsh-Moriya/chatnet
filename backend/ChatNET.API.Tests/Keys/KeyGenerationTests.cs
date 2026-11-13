@@ -1,6 +1,10 @@
 using System.Net;
 using System.Net.Http.Json;
+using ChatNET.API.Common.Exceptions;
 using ChatNET.API.Common.Persistence;
+using ChatNET.API.Conversations.KeyEpochs;
+using ChatNET.API.Conversations.Models;
+using ChatNET.API.Conversations.Persistence;
 using ChatNET.API.Keys.Persistence;
 using ChatNET.API.Tests.Infrastructure;
 using Microsoft.AspNetCore.Hosting;
@@ -429,6 +433,71 @@ public class KeyGenerationTests
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
         Assert.Equal("epoch-members-changed", await CodeOfAsync(response));
         Assert.Empty(await client.ListConversationsAsync());
+    }
+
+    // The repository that saves a new conversation checks the generations again under the lock, for what the handler's own check cannot
+    // see: a generation stored after it. These call it directly with a conversation made for keys that are not the current ones.
+
+    private static (ConversationRepository Repository, Conversation Made) MadeFor(IServiceScope scope, TestUser creator, params (Guid UserId, int Generation)[] sealedFor)
+    {
+        var repository = new ConversationRepository(scope.ServiceProvider.GetRequiredService<AppDbContext>());
+        var id = Guid.NewGuid();
+        var body = EpochBody.For(1, sealedFor);
+        var submission = EpochSubmission.From(new EpochRequest(
+            body.Epoch, body.Commitment, body.Signature,
+            body.Envelopes!.Select(e => new EnvelopeRequest(e.UserId, e.Generation, e.Envelope)).ToList()));
+        var now = DateTime.UtcNow;
+        var conversation = new Conversation
+        {
+            Id = id, Type = ConversationType.Group, Name = "Direct", CreatedAt = now, UpdatedAt = now, CreatedById = creator.Id,
+            KeyEpoch = 1,
+            KeyEpochs = [submission.ToEntity(id, creator.Id, KeyEpochReason.Created, now)],
+            Members = sealedFor.Select(s => new ConversationMember { UserId = s.UserId, Role = MemberRole.Member, JoinedAt = now }).ToList(),
+        };
+        return (repository, conversation);
+    }
+
+    [Fact]
+    public async Task A_conversation_made_for_a_generation_that_has_been_replaced_is_refused_by_the_repository_and_not_saved()
+    {
+        var alice = await _factory.RegisterUserAsync("alice");
+        var bob = await PersonAsync("bob");
+        using var bobClient = _factory.CreateClientFor(bob);
+        await bobClient.AddKeyGenerationAsync(2, 1);
+        using var scope = _factory.Services.CreateScope();
+        var (repository, made) = MadeFor(scope, alice, (alice.Id, 1), (bob.Id, 1));
+
+        var failure = await Assert.ThrowsAsync<ConflictException>(() => repository.AddAsync(made, [], [], CancellationToken.None));
+
+        Assert.Equal("epoch-members-changed", failure.Code);
+        Assert.Equal(0, await _factory.QueryDbAsync(db => db.Conversations.CountAsync(c => c.Id == made.Id)));
+    }
+
+    [Fact]
+    public async Task A_conversation_made_for_a_person_with_no_keys_is_refused_by_the_repository_and_not_saved()
+    {
+        var alice = await _factory.RegisterUserAsync("alice");
+        var nobody = await _factory.RegisterUserWithoutKeysAsync("nokeys");
+        using var scope = _factory.Services.CreateScope();
+        var (repository, made) = MadeFor(scope, alice, (alice.Id, 1), (nobody.Id, 1));
+
+        var failure = await Assert.ThrowsAsync<ConflictException>(() => repository.AddAsync(made, [], [], CancellationToken.None));
+
+        Assert.Equal("epoch-members-changed", failure.Code);
+        Assert.Equal(0, await _factory.QueryDbAsync(db => db.Conversations.CountAsync(c => c.Id == made.Id)));
+    }
+
+    [Fact]
+    public async Task A_conversation_made_for_the_current_generations_is_saved_by_the_repository()
+    {
+        var alice = await _factory.RegisterUserAsync("alice");
+        var bob = await _factory.RegisterUserAsync("bob");
+        using var scope = _factory.Services.CreateScope();
+        var (repository, made) = MadeFor(scope, alice, (alice.Id, 1), (bob.Id, 1));
+
+        await repository.AddAsync(made, [], [], CancellationToken.None);
+
+        Assert.Equal(1, await _factory.QueryDbAsync(db => db.Conversations.CountAsync(c => c.Id == made.Id)));
     }
 
     [Fact]

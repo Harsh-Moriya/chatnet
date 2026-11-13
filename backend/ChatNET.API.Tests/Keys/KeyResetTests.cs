@@ -1,8 +1,11 @@
 using System.Net;
 using System.Net.Http.Json;
+using ChatNET.API.Common.Persistence;
+using ChatNET.API.Keys.Persistence;
 using ChatNET.API.Tests.Infrastructure;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace ChatNET.API.Tests.Keys;
@@ -221,6 +224,25 @@ public class KeyResetTests
         Assert.Equal(HttpStatusCode.Conflict, old.StatusCode);
         Assert.Equal("epoch-members-changed", await CodeOfAsync(old));
         Assert.Equal(HttpStatusCode.NoContent, next.StatusCode);
+    }
+
+    // ##### Taking turns with the key periods #####
+
+    [Fact]
+    public async Task A_reset_waits_for_a_key_period_that_is_being_sealed_to_the_old_keys()
+    {
+        var (user, client) = await _factory.UserWithKeysAsync();
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        await using var sealing = await db.Database.BeginTransactionAsync();
+        await KeyGenerationLock.HoldSharedAsync(db, [user.Id], CancellationToken.None);
+
+        var request = client.ResetKeysAsync(user.Password);
+        await Task.Delay(1500);
+        Assert.False(request.IsCompleted);
+        await sealing.CommitAsync();
+
+        Assert.Equal(HttpStatusCode.OK, (await request).StatusCode);
     }
 
     // ##### What is refused #####
