@@ -152,6 +152,11 @@ export async function resetKeys(passphrase: string, password: string): Promise<v
   await tieSessionToDevice()
 }
 
+// Removes a device that is only not wanted any more: it is signed out, and the keys stay as they are.
+export async function removeDevice(deviceId: string): Promise<void> {
+  await keysApi.removeDevice(deviceId)
+}
+
 export function listDevices() {
   return keysApi.listDevices()
 }
