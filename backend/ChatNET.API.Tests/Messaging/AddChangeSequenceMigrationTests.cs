@@ -55,20 +55,22 @@ public class AddChangeSequenceMigrationTests
         var sameMoment = now.AddMinutes(-3);
         var ids = new[]
         {
-            Guid.Parse("00000000-0000-0000-0000-0000000000a1"),
+            Guid.Parse("00000000-0000-0000-0000-0000000000a4"),
             Guid.Parse("00000000-0000-0000-0000-0000000000a2"),
             Guid.Parse("00000000-0000-0000-0000-0000000000a3"),
-            Guid.Parse("00000000-0000-0000-0000-0000000000a4"),
+            Guid.Parse("00000000-0000-0000-0000-0000000000a1"),
         };
 
-        // Inserted out of order on purpose, so the numbers cannot come from the order of insertion.
+        // Inserted out of order on purpose, so the numbers cannot come from the order of insertion, and with ids that run against the
+        // times, so they cannot come from the ids alone. The two stamped alike are stored the larger id first.
         await Insert(scratch, conversations[0].Id, user.Id, ids[3], now.AddMinutes(-1), deleted: false);
-        await Insert(scratch, conversations[0].Id, user.Id, ids[1], sameMoment, deleted: false);
-        await Insert(scratch, conversations[0].Id, user.Id, ids[0], now.AddMinutes(-5), deleted: true);
         await Insert(scratch, conversations[0].Id, user.Id, ids[2], sameMoment, deleted: false);
+        await Insert(scratch, conversations[0].Id, user.Id, ids[0], now.AddMinutes(-5), deleted: true);
+        await Insert(scratch, conversations[0].Id, user.Id, ids[1], sameMoment, deleted: false);
         await Insert(scratch, conversations[1].Id, user.Id, Guid.NewGuid(), now.AddMinutes(-2), deleted: false);
 
-        // ids[0] is the oldest, ids[1] and ids[2] share a time and the smaller id comes first, ids[3] is the newest.
+        // ids[0] is the oldest and has the largest id, ids[1] and ids[2] share a time and the smaller id comes first, ids[3] is the newest
+        // and has the smallest id.
         return new Arranged(conversations[0].Id, conversations[1].Id, conversations[2].Id, ids);
     }
 
