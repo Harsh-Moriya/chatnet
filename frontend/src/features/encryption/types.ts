@@ -159,6 +159,8 @@ export interface EpochPageWire {
 export interface ConversationKeyState {
   keyEpoch: number
   keyRotationRequired: boolean
+  // When the newest epoch was made, or null while there is none.
+  keyEpochAt?: string | null
 }
 
 // Everything the conversation keys ask of the server. The real one is epochApi.ts; the tests use a fake server behind the same interface.

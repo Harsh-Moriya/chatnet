@@ -1,5 +1,5 @@
 import { CryptoError, type FileRef, fromBase64Url, openMessage, readMessageEpoch, sealMessage, toBase64Url } from '../../lib/crypto'
-import { type EpochDeps, type KnownKeyState, MissingKeysError, ensureEpoch, loadEpochKeys, resolvePeers, withEpochRetries } from './epochs'
+import { type EpochDeps, type KnownKeyState, MissingKeysError, ensureEpoch, keysAreDue, loadEpochKeys, resolvePeers, withEpochRetries } from './epochs'
 import { IdentityChangedError } from './pins'
 
 // Messages: sealing the text a person writes and opening what others wrote. A message is one blob that the server stores and hands
@@ -105,14 +105,24 @@ export async function underCurrentEpoch<T>(
   let firstAttempt = true
 
   return withEpochRetries(async () => {
-    const usable =
+    const held =
       firstAttempt &&
       known.keyEpoch >= 1 &&
       !known.keyRotationRequired &&
       (await deps.keys.load(deps.self.userId, conversationId, known.keyEpoch)) !== null
     firstAttempt = false
 
-    const epoch = usable ? known.keyEpoch : (await ensureEpoch(deps, conversationId)).epoch
+    // A week-old epoch is replaced by whoever sends first, but a message is not refused for want of a replacement: it goes under the epoch
+    // that is held, which the server still accepts, and the replacement is tried again the next time.
+    if (held && keysAreDue(known, deps.now?.() ?? Date.now())) {
+      const replaced = await ensureEpoch(deps, conversationId).then(
+        (result) => result.epoch,
+        () => known.keyEpoch,
+      )
+      return work(replaced)
+    }
+
+    const epoch = held ? known.keyEpoch : (await ensureEpoch(deps, conversationId)).epoch
     return work(epoch)
   })
 }

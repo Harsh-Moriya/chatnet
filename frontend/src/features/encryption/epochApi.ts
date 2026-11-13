@@ -21,7 +21,7 @@ export const epochApi: EpochApi = {
 
   getKeyState: async (conversationId) => {
     const { data } = await api.get<ConversationKeyState>(`/conversations/${conversationId}`)
-    return { keyEpoch: data.keyEpoch, keyRotationRequired: data.keyRotationRequired }
+    return { keyEpoch: data.keyEpoch, keyRotationRequired: data.keyRotationRequired, keyEpochAt: data.keyEpochAt ?? null }
   },
 
   getMemberIds: async (conversationId) =>

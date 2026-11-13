@@ -57,7 +57,7 @@ public class JsonContractTests
     {
         var hubOptions = _factory.Services.GetRequiredService<IOptions<JsonHubProtocolOptions>>().Value;
         var dto = new ConversationDto(
-            Guid.NewGuid(), ConversationType.Group, "Team", null, DateTime.UtcNow, null, 0, null, false, null, 0, false, 0);
+            Guid.NewGuid(), ConversationType.Group, "Team", null, DateTime.UtcNow, null, 0, null, false, null, 0, false, null, 0);
 
         var json = JsonSerializer.Serialize(dto, hubOptions.PayloadSerializerOptions);
 

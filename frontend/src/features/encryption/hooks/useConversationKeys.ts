@@ -10,13 +10,14 @@ export function useConversationKeys(conversationId: string) {
   const active = useChatStore((state) => state.conversations[conversationId]?.leftAt === null)
   const keyEpoch = useChatStore((state) => state.conversations[conversationId]?.keyEpoch ?? 0)
   const keyRotationRequired = useChatStore((state) => state.conversations[conversationId]?.keyRotationRequired ?? false)
+  const keyEpochAt = useChatStore((state) => state.conversations[conversationId]?.keyEpochAt ?? null)
 
   useEffect(() => {
     if (!active) return
 
     // Once the keys are here, what was held of the conversation that could not be opened is opened.
     void import('../conversationKeys')
-      .then((keys) => keys.readyConversation(conversationId, { keyEpoch, keyRotationRequired }))
+      .then((keys) => keys.readyConversation(conversationId, { keyEpoch, keyRotationRequired, keyEpochAt }))
       .then((ready) => (ready ? reopenConversation(conversationId) : undefined))
-  }, [active, conversationId, keyEpoch, keyRotationRequired])
+  }, [active, conversationId, keyEpoch, keyRotationRequired, keyEpochAt])
 }

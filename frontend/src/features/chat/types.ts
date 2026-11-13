@@ -33,6 +33,8 @@ export interface Conversation {
   // must be made before anything more is said.
   keyEpoch: number
   keyRotationRequired: boolean
+  // When the newest epoch was made, or null while there is none: a browser replaces an epoch that is a week old (see keysAreDue).
+  keyEpochAt?: string | null
   // The number of the latest change to any message of the conversation. A device that keeps the messages it has read compares it with
   // the point it has read up to, and asks the changes feed only for the conversations that moved.
   changeSeq: number
@@ -43,6 +45,7 @@ export interface ConversationKeyChange {
   conversationId: string
   keyEpoch: number
   keyRotationRequired: boolean
+  keyEpochAt?: string | null
 }
 
 // The last message of a conversation as the server sends it: sealed.

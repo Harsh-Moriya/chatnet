@@ -220,7 +220,12 @@ public class ConversationRepository : IConversationRepository
         => _db.Conversations
             .AsNoTracking()
             .Where(c => c.Id == conversationId)
-            .Select(c => new ConversationKeyStateDto(c.Id, c.KeyEpoch, c.KeyRotationRequired))
+            .Select(c => new ConversationKeyStateDto(
+                c.Id, c.KeyEpoch, c.KeyRotationRequired,
+                _db.ConversationKeyEpochs
+                    .Where(e => e.ConversationId == c.Id && e.Epoch == c.KeyEpoch)
+                    .Select(e => (DateTime?)e.CreatedAt)
+                    .FirstOrDefault()))
             .FirstOrDefaultAsync(cancellationToken);
 
     public Task<ConversationUpdateDto?> GetUpdateAsync(Guid conversationId, CancellationToken cancellationToken)
@@ -313,6 +318,9 @@ public class ConversationRepository : IConversationRepository
                mine."LeftAt" AS "LeftAt",
                c."KeyEpoch" AS "KeyEpoch",
                c."KeyRotationRequired" AS "KeyRotationRequired",
+               (SELECT ke."CreatedAt"
+                FROM "ConversationKeyEpochs" ke
+                WHERE ke."ConversationId" = c."Id" AND ke."Epoch" = c."KeyEpoch") AS "KeyEpochAt",
                c."ChangeSeq" AS "ChangeSeq"
         FROM "Conversations" c
         JOIN "ConversationMembers" mine
@@ -364,7 +372,7 @@ public class ConversationRepository : IConversationRepository
 
         return new ConversationDto(
             row.Id, Enum.Parse<ConversationType>(row.Type), row.Name ?? "Unknown", AvatarKeys.PublicUrl(row.AvatarKey), row.UpdatedAt, last,
-            row.UnreadCount, row.OtherUserId, row.IsMuted, row.LeftAt, row.KeyEpoch, row.KeyRotationRequired, row.ChangeSeq);
+            row.UnreadCount, row.OtherUserId, row.IsMuted, row.LeftAt, row.KeyEpoch, row.KeyRotationRequired, row.KeyEpochAt, row.ChangeSeq);
     }
 
     // One row of the queries above. Property names match the column aliases in the SQL, which is how
@@ -389,6 +397,7 @@ public class ConversationRepository : IConversationRepository
         public DateTime? LeftAt { get; set; }
         public int KeyEpoch { get; set; }
         public bool KeyRotationRequired { get; set; }
+        public DateTime? KeyEpochAt { get; set; }
         public long ChangeSeq { get; set; }
     }
 }

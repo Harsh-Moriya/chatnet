@@ -231,7 +231,11 @@ function sentenceFor(error: unknown, conversationId: string): string {
 // What this tab knows of the keys of a conversation, to start from: a conversation whose key it holds costs the server nothing.
 function keyStateOf(conversationId: string) {
   const conversation = chat().conversations[conversationId]
-  return { keyEpoch: conversation?.keyEpoch ?? 0, keyRotationRequired: conversation?.keyRotationRequired ?? false }
+  return {
+    keyEpoch: conversation?.keyEpoch ?? 0,
+    keyRotationRequired: conversation?.keyRotationRequired ?? false,
+    keyEpochAt: conversation?.keyEpochAt ?? null,
+  }
 }
 
 // Replaces the text of one of the signed-in user's own messages. The new text is sealed for the next edit count, and the server settles

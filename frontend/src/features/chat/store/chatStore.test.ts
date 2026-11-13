@@ -940,6 +940,24 @@ describe('the keys of a conversation', () => {
     expect(store().conversations.c1).toMatchObject({ keyEpoch: 3, keyRotationRequired: false })
   })
 
+  it('take the time the newest epoch was made with the epoch, and keep it for the same epoch', () => {
+    store().seedConversations([conversation({ id: 'c1', keyEpoch: 1, keyEpochAt: '2026-11-01T10:00:00Z' })])
+
+    store().applyKeyChange({ conversationId: 'c1', keyEpoch: 1, keyRotationRequired: true, keyEpochAt: null })
+    expect(store().conversations.c1.keyEpochAt).toBe('2026-11-01T10:00:00Z')
+
+    store().applyKeyChange({ conversationId: 'c1', keyEpoch: 2, keyRotationRequired: false, keyEpochAt: '2026-11-09T10:00:00Z' })
+    expect(store().conversations.c1).toMatchObject({ keyEpoch: 2, keyEpochAt: '2026-11-09T10:00:00Z' })
+  })
+
+  it('do not take the time of an epoch older than the one held', () => {
+    store().seedConversations([conversation({ id: 'c1', keyEpoch: 3, keyEpochAt: '2026-11-09T10:00:00Z' })])
+
+    store().applyKeyChange({ conversationId: 'c1', keyEpoch: 2, keyRotationRequired: false, keyEpochAt: '2026-11-01T10:00:00Z' })
+
+    expect(store().conversations.c1.keyEpochAt).toBe('2026-11-09T10:00:00Z')
+  })
+
   it('take a newer epoch that already needs replacing', () => {
     store().seedConversations([conversation({ id: 'c1', keyEpoch: 2 })])
 

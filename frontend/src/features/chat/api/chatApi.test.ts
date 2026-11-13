@@ -409,7 +409,7 @@ describe('sending a message', () => {
 
     expect(keysDouble.sealAndSend).toHaveBeenCalledWith(
       'c1',
-      { keyEpoch: 0, keyRotationRequired: false },
+      { keyEpoch: 0, keyRotationRequired: false, keyEpochAt: null },
       { clientMessageId: expect.stringMatching(/^[0-9a-f-]{36}$/), editCount: 0, text: 'Hello', files: [] },
       expect.any(Function),
     )
