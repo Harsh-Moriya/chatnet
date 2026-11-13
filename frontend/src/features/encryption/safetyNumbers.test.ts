@@ -118,7 +118,11 @@ describe('the safety number', () => {
     const ana = await person(ANA)
     const ben = await person(BEN)
     const pins = new MemoryPinStore()
-    pins.load = async () => {
+    const load = pins.load.bind(pins)
+    let failed = false
+    pins.load = async (...args) => {
+      if (failed) return load(...args)
+      failed = true
       throw new Error('the store is gone')
     }
 
