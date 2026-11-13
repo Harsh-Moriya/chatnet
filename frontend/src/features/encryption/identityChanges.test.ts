@@ -1,11 +1,30 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { useIdentityChanges } from './identityChanges'
+import { shownAsVerified, useIdentityChanges } from './identityChanges'
 
 beforeEach(() => {
   useIdentityChanges.getState().reset()
 })
 
 const state = () => useIdentityChanges.getState()
+
+describe('the mark of a verified person', () => {
+  it('is shown for a person who was verified and whose key did not change', () => {
+    expect(shownAsVerified(true, {}, 'ben')).toBe(true)
+  })
+
+  it('is not shown for a person who was not verified', () => {
+    expect(shownAsVerified(false, {}, 'ben')).toBe(false)
+  })
+
+  it('is not shown while the key of the person has changed and the change is not accepted', () => {
+    expect(shownAsVerified(true, { ben: Uint8Array.of(1) }, 'ben')).toBe(false)
+    expect(shownAsVerified(true, { cy: Uint8Array.of(1) }, 'ben')).toBe(true)
+  })
+
+  it('is not shown for nobody', () => {
+    expect(shownAsVerified(true, {}, null)).toBe(false)
+  })
+})
 
 describe('the people whose key changed', () => {
   it('starts with nobody', () => {

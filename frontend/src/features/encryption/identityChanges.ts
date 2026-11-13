@@ -14,6 +14,12 @@ interface IdentityChangesState {
   reset: () => void
 }
 
+// Whether the mark of a verified person is shown: it is about the key that was remembered, so it is not shown while that person's key has
+// changed and the change has not been accepted.
+export function shownAsVerified(verified: boolean, changed: Record<string, Uint8Array>, contactId: string | null): boolean {
+  return verified && contactId !== null && !(contactId in changed)
+}
+
 export const useIdentityChanges = create<IdentityChangesState>()((set) => ({
   changed: {},
   marks: 0,

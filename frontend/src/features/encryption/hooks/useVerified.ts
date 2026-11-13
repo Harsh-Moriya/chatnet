@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react'
 import { useAuthStore } from '../../auth/store/authStore'
-import { useIdentityChanges } from '../identityChanges'
+import { shownAsVerified, useIdentityChanges } from '../identityChanges'
 import { indexedDbPinStore } from '../pinStore'
 
 // Whether the signed-in person marked this person as verified, for the mark beside a name. Reads the remembered key from this browser,
-// and again whenever a mark is set or taken away or a changed key is accepted. A person who was never seen is not verified.
+// and again whenever a mark is set or taken away or a changed key is accepted. A person who was never seen is not verified, and one whose
+// key changed is not shown as verified until the change is accepted.
 export function useVerified(contactId: string | null): boolean {
   const selfId = useAuthStore((state) => state.user?.userId)
   const marks = useIdentityChanges((state) => state.marks)
+  const changed = useIdentityChanges((state) => state.changed)
   const [verified, setVerified] = useState(false)
 
   useEffect(() => {
@@ -25,5 +27,5 @@ export function useVerified(contactId: string | null): boolean {
     }
   }, [contactId, selfId, marks])
 
-  return contactId !== null && verified
+  return shownAsVerified(verified, changed, contactId)
 }
