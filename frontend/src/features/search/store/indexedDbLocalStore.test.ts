@@ -247,10 +247,17 @@ describe('how far each conversation has been read', () => {
 
   it('moves the cursor forward and never back', async () => {
     await store.apply(ANA, 'c1', [], { cursor: 10 })
-    await store.apply(ANA, 'c1', [], { cursor: 4 })
     await store.apply(ANA, 'c1', [], { cursor: 15 })
+    await store.apply(ANA, 'c1', [], { cursor: 4 })
 
     expect((await store.readPoint(ANA, 'c1'))?.cursor).toBe(15)
+  })
+
+  it('keeps the first starting number, and a history that was read stays read, whatever a slower writer says after', async () => {
+    await store.apply(ANA, 'c1', [], { startSeq: 12, oldestId: 'a', historyRead: true, cursor: 12 })
+    await store.apply(ANA, 'c1', [], { startSeq: 30, oldestId: 'b', historyRead: false, cursor: null })
+
+    expect(await store.readPoint(ANA, 'c1')).toMatchObject({ startSeq: 12, historyRead: true, cursor: 12, oldestId: 'b' })
   })
 
   it('moves the point without messages, as when a page of changes holds nothing the person can read', async () => {

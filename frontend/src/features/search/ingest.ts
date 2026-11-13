@@ -1,7 +1,6 @@
 import { cleanFileName } from '../chat/files/fileNames'
 import type { Message } from '../chat/types'
 import { wordsOf } from './query/normalize'
-import { newestOfEach } from './store/rules'
 import type { LocalStore, StoredMessage } from './store/types'
 
 // What a message becomes in the local store, and the queue that writes the messages the app opens as it opens them.
@@ -79,7 +78,8 @@ export function createIngest({ store, userId, onError, schedule = (work) => void
     if (batch.length === 0) return writing
 
     const byConversation = new Map<string, StoredMessage[]>()
-    for (const message of newestOfEach(batch)) {
+    // The store keeps the newest copy of a message that is in a write more than once.
+    for (const message of batch) {
       const list = byConversation.get(message.conversationId) ?? []
       list.push(message)
       byConversation.set(message.conversationId, list)

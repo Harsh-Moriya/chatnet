@@ -74,6 +74,33 @@ describe('reading a conversation for the first time', () => {
     expect(await store.readPoint(ANA, 'c1')).toMatchObject({ historyRead: true, startSeq: 10, cursor: 10 })
   })
 
+  it('asks the feed from the number the history began at, not from the start', async () => {
+    const { server, deps } = setUp()
+    say(server, 10)
+
+    await syncAll(deps(), server.listed('c1'))
+
+    expect(server.changesCalls.map((call) => call.since)).toEqual([10])
+  })
+
+  it('reads two conversations at a time, and no more', async () => {
+    const { server, deps } = setUp()
+    for (const id of ['a', 'b', 'c', 'd', 'e']) say(server, 1, id)
+    const history = server.history
+    let active = 0
+    let most = 0
+    const slow: SyncDeps['history'] = async (id, before) => {
+      most = Math.max(most, ++active)
+      for (let i = 0; i < 5; i++) await Promise.resolve()
+      active--
+      return history(id, before)
+    }
+
+    await syncAll(deps({ history: slow }), server.listed('a', 'b', 'c', 'd', 'e'))
+
+    expect(most).toBe(2)
+  })
+
   it('reads an empty conversation, which has no history and no changes', async () => {
     const { server, store, deps } = setUp()
 
@@ -372,6 +399,19 @@ describe('when something goes wrong', () => {
 
     expect(pending[0]).toBe(3)
     expect(pending.at(-1)).toBe(1)
+  })
+
+  it('counts only the conversations whose history is still to be read, not those that only need the feed', async () => {
+    const { server, pending, deps } = setUp()
+    say(server, 1, 'a')
+    await syncAll(deps(), server.listed('a'))
+    pending.length = 0
+    say(server, 1, 'a')
+    say(server, 1, 'b')
+
+    await syncAll(deps(), server.listed('a', 'b'))
+
+    expect(pending[0]).toBe(1)
   })
 
   it('reports nothing pending when everything has its history', async () => {

@@ -97,6 +97,14 @@ describe('either of two', () => {
     expect(terms(parseQuery('cat or -dog'))).toEqual([['cat', '-dog']])
   })
 
+  it('does not take a word to keep out for "or" when the word is "or"', () => {
+    expect(terms(parseQuery('cat -or'))).toEqual([['cat'], ['-or']])
+  })
+
+  it('joins only the word right after "or", and the next one stands alone', () => {
+    expect(terms(parseQuery('cat or dog bird'))).toEqual([['cat', 'dog'], ['bird*']])
+  })
+
   it('ignores an "or" with nothing before it', () => {
     expect(terms(parseQuery('or orange'))).toEqual([['orange*']])
   })

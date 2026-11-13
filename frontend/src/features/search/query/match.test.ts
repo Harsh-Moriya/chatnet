@@ -6,6 +6,14 @@ import { parseQuery } from './parse'
 // The query typed, against the text of a message, the way a search tests each message.
 const finds = (query: string, text: string): boolean => queryHolds(wordsOf(text), parseQuery(query)!)
 
+describe('the words of a term that stand together', () => {
+  it('lets only the last of them be the start of a longer word', () => {
+    // "e-mail" is the words e and mail, standing together, and mail may be unfinished: an "ex" in front of it is not an "e".
+    expect(finds('e-mail', 'an ex mailbox')).toBe(false)
+    expect(finds('e-mail', 'an e mailbox')).toBe(true)
+  })
+})
+
 describe('one word', () => {
   it('is found anywhere in the text, in any case', () => {
     expect(finds('budget', 'The Budget is ready')).toBe(true)

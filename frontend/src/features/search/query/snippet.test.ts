@@ -101,6 +101,43 @@ describe('how much of the text is shown', () => {
   })
 })
 
+describe('exactly how much is shown', () => {
+  // A match that begins at the 100th character of the text, so there is room to cut on both sides.
+  const text = `${'a'.repeat(99)} needle ${'b'.repeat(300)}`
+  const [start, before, hit, after, end] = parts(text, 'needle')
+
+  it('shows 40 characters before the match, after a mark that the start was cut', () => {
+    expect(start).toEqual({ text: '…', match: false })
+    expect(before.text).toBe(`${'a'.repeat(39)} `)
+  })
+
+  it('shows the match and what follows it up to 120 characters from where it begins, and says the end was cut', () => {
+    expect(hit).toEqual({ text: 'needle', match: true })
+    expect(hit.text.length + after.text.length).toBe(120)
+    expect(end).toEqual({ text: '…', match: false })
+  })
+
+  it('picks out only what is shown of a word that runs past the end of it', () => {
+    const run = `needle ${'q'.repeat(300)}`
+
+    const shownText = parts(run, 'needle q')
+      .map((part) => part.text)
+      .join('')
+
+    expect(shownText).toBe(`needle ${'q'.repeat(113)}…`)
+  })
+})
+
+describe('which words are picked out', () => {
+  it('picks out only the last word of a term as the start of a longer one', () => {
+    expect(shown('an ex e mailbox', 'e-mail')).toBe('an ex [e] [mailbox]')
+  })
+
+  it('picks out only a whole word for a word that is not the last typed', () => {
+    expect(shown('category dog dogs', 'cat dog')).toBe('category [dog] [dogs]')
+  })
+})
+
 describe('what is drawn', () => {
   it('turns every kind of white space into a space, so the text stays on its lines', () => {
     expect(shown('a\n\n  b\tneedle', 'needle')).toBe('a b [needle]')
