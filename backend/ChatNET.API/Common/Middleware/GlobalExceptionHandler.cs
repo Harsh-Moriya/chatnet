@@ -98,6 +98,8 @@ public class GlobalExceptionHandler : IExceptionHandler
 
         if (exception is ConflictException { Code: { } code })
             problem.Extensions["code"] = code;
+        else if (exception is ForbiddenException { Code: { } forbiddenCode })
+            problem.Extensions["code"] = forbiddenCode;
 
         // Validation errors include per-field detail so the frontend can highlight fields.
         if (exception is ValidationException ve)

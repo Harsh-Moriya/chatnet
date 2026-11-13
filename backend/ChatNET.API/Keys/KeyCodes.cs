@@ -9,4 +9,8 @@ public static class KeyCodes
 
     // The backup was replaced from another device since the version this change was made from. The browser reads it again.
     public const string BackupVersionStale = "backup-version-stale";
+
+    // The password given to confirm resetting the keys is not the account's. A 403 and not a 401, so the browser does not take it
+    // for an expired session and try to renew or end it.
+    public const string WrongPassword = "wrong-password";
 }

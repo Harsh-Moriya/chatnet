@@ -29,4 +29,18 @@ public static class DeviceRemoval
 
         return true;
     }
+
+    // Every device of the person that is not removed, with the sessions signed in on each. How many were removed.
+    public static async Task<int> RemoveAllAsync(AppDbContext db, Guid userId, DateTime now, CancellationToken cancellationToken)
+    {
+        var deviceIds = await db.Devices
+            .Where(d => d.UserId == userId && d.RemovedAt == null)
+            .Select(d => d.Id)
+            .ToListAsync(cancellationToken);
+
+        foreach (var deviceId in deviceIds)
+            await TryRemoveAsync(db, userId, deviceId, now, cancellationToken);
+
+        return deviceIds.Count;
+    }
 }

@@ -80,6 +80,16 @@ public static class EncryptionApi
             removeDeviceId,
         });
 
+    // New keys for someone who lost the old ones, confirmed with the account password.
+    public static Task<HttpResponseMessage> ResetKeysAsync(
+        this HttpClient client, string? password, int generation = 2, byte[]? bundle = null, byte[]? backup = null) =>
+        client.PostAsJsonAsync("/api/keys/me/reset", new
+        {
+            bundle = B64(bundle ?? Bundle(generation)),
+            backup = B64(backup ?? Backup()),
+            password,
+        });
+
     public static Task<HttpResponseMessage> LookupKeysAsync(this HttpClient client, IReadOnlyCollection<Guid> userIds) =>
         client.PostAsJsonAsync("/api/keys/lookup", new { userIds });
 

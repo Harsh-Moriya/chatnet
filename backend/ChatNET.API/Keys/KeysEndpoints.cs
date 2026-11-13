@@ -6,6 +6,7 @@ using ChatNET.API.Keys.GetKeyStatus;
 using ChatNET.API.Keys.LookupKeys;
 using ChatNET.API.Keys.Models;
 using ChatNET.API.Keys.ReplaceKeyBackup;
+using ChatNET.API.Keys.ResetKeys;
 using ChatNET.API.Keys.SetUpKeys;
 using ChatNET.API.RateLimiting;
 using MediatR;
@@ -17,6 +18,8 @@ public record SetUpKeysRequest(string? Bundle, string? Backup);
 public record ReplaceKeyBackupRequest(string? Blob, int? ExpectedVersion);
 
 public record AddKeyGenerationRequest(string? Bundle, string? Backup, int? ExpectedBackupVersion, Guid? RemoveDeviceId);
+
+public record ResetKeysRequest(string? Bundle, string? Backup, string? Password);
 
 public record LookupKeysRequest(List<Guid>? UserIds);
 
@@ -69,6 +72,15 @@ public static class KeysEndpoints
         .Returns<KeyStatusDto>(
             StatusCodes.Status200OK, StatusCodes.Status400BadRequest, StatusCodes.Status401Unauthorized, StatusCodes.Status404NotFound,
             StatusCodes.Status409Conflict, StatusCodes.Status429TooManyRequests);
+
+        // Starts the keys over for a person who has neither a device nor the passphrase: the next generation from new keys and a new
+        // backup, every device removed and the conversations marked for a new key period. The account password is asked again: 403 with
+        // the code wrong-password when it is not right, 429 while the account is locked.
+        keys.MapPost("/reset", async (ResetKeysRequest body, HttpContext http, IMediator mediator) =>
+            Results.Ok(await mediator.Send(new ResetKeysCommand(http.User.GetUserId(), body.Bundle, body.Backup, body.Password))))
+        .Returns<KeyStatusDto>(
+            StatusCodes.Status200OK, StatusCodes.Status400BadRequest, StatusCodes.Status401Unauthorized, StatusCodes.Status403Forbidden,
+            StatusCodes.Status404NotFound, StatusCodes.Status409Conflict, StatusCodes.Status429TooManyRequests);
 
         // The public keys of other people, which a browser seals a conversation key to. Only keys that are made to be shared.
         var lookup = app.MapGroup("/api/keys")

@@ -122,8 +122,58 @@ public class KeyRepository : IKeyRepository
         if (removeDeviceId is { } deviceId && !await DeviceRemoval.TryRemoveAsync(_db, userId, deviceId, now, cancellationToken))
             return GenerationResult.Refused(GenerationOutcome.DeviceNotFound);
 
-        // Conversations the person is in now. The ones they left are not theirs to read any more, and a person who joins later is
-        // sealed the newest generation.
+        var announced = await MarkConversationsAsync(userId, outboxFor, cancellationToken);
+
+        await transaction.CommitAsync(cancellationToken);
+        return new GenerationResult(GenerationOutcome.Added, version.Value, announced);
+    }
+
+    public async Task<GenerationResult> TryResetAsync(
+        Guid userId, int generation, byte[] bundle, byte[] backup, Func<Guid, OutboxMessage> outboxFor, DateTime now,
+        CancellationToken cancellationToken)
+    {
+        await using var transaction = await _db.Database.BeginTransactionAsync(cancellationToken);
+
+        await KeyGenerationLock.HoldExclusiveAsync(_db, userId, cancellationToken);
+
+        var newest = await _db.AccountKeyBundles
+            .Where(b => b.UserId == userId)
+            .MaxAsync(b => (int?)b.Generation, cancellationToken);
+
+        if (newest is null)
+            return GenerationResult.Refused(GenerationOutcome.NoKeys);
+
+        if (generation != newest + 1)
+            return GenerationResult.Refused(GenerationOutcome.GenerationStale);
+
+        await _db.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO "AccountKeyBundles" ("UserId", "Generation", "Bundle", "CreatedAt")
+            VALUES ({userId}, {generation}, {bundle}, {now})
+            """, cancellationToken);
+
+        // Not conditional on a version: the backup it replaces is one nobody can open any more, which is why the keys are being reset.
+        var versions = await _db.Database.SqlQuery<int>($"""
+            INSERT INTO "KeyBackups" ("UserId", "Blob", "Version", "UpdatedAt")
+            VALUES ({userId}, {backup}, 1, {now})
+            ON CONFLICT ("UserId") DO UPDATE
+            SET "Blob" = EXCLUDED."Blob", "Version" = "KeyBackups"."Version" + 1, "UpdatedAt" = EXCLUDED."UpdatedAt"
+            RETURNING "Version" AS "Value"
+            """).ToListAsync(cancellationToken);
+
+        // Every device held the old keys, so none of them is the person's any more, and nobody can tell which of them was lost.
+        await DeviceRemoval.RemoveAllAsync(_db, userId, now, cancellationToken);
+
+        var announced = await MarkConversationsAsync(userId, outboxFor, cancellationToken);
+
+        await transaction.CommitAsync(cancellationToken);
+        return new GenerationResult(GenerationOutcome.Added, versions.Single(), announced);
+    }
+
+    // Conversations the person is in now. The ones they left are not theirs to read any more, and a person who joins later is sealed
+    // the newest generation. Saved with the row that announces each, in the transaction the caller has open.
+    private async Task<List<(Guid ConversationId, OutboxMessage Row)>> MarkConversationsAsync(
+        Guid userId, Func<Guid, OutboxMessage> outboxFor, CancellationToken cancellationToken)
+    {
         var conversationIds = await _db.Database.SqlQuery<Guid>($"""
             UPDATE "Conversations" AS c
             SET "KeyRotationRequired" = TRUE
@@ -135,8 +185,6 @@ public class KeyRepository : IKeyRepository
         var announced = conversationIds.Select(id => (ConversationId: id, Row: outboxFor(id))).ToList();
         _db.OutboxMessages.AddRange(announced.Select(a => a.Row));
         await _db.SaveChangesAsync(cancellationToken);
-
-        await transaction.CommitAsync(cancellationToken);
-        return new GenerationResult(GenerationOutcome.Added, version.Value, announced);
+        return announced;
     }
 }

@@ -65,4 +65,11 @@ public interface IKeyRepository
     Task<GenerationResult> TryAddGenerationAsync(
         Guid userId, int generation, byte[] bundle, byte[] backup, int expectedBackupVersion, Guid? removeDeviceId,
         Func<Guid, OutboxMessage> outboxFor, DateTime now, CancellationToken cancellationToken);
+
+    // Starts the keys of a person over: the next generation, made from new keys, and a new backup that replaces the old one whatever
+    // version it is at. Every device of the person is removed with its sessions and every conversation they are in is marked for a new
+    // key period, in one transaction under the same lock. The outcomes are those of TryAddGenerationAsync that can apply.
+    Task<GenerationResult> TryResetAsync(
+        Guid userId, int generation, byte[] bundle, byte[] backup, Func<Guid, OutboxMessage> outboxFor, DateTime now,
+        CancellationToken cancellationToken);
 }
