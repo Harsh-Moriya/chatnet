@@ -1,4 +1,4 @@
-import type { FileRef } from '../../lib/crypto'
+import type { AccountSecrets, FileRef } from '../../lib/crypto'
 import { useAuthStore } from '../auth/store/authStore'
 import { epochApi } from './epochApi'
 import { indexedDbEpochKeyStore } from './epochKeyStore'
@@ -71,12 +71,16 @@ export async function readyConversation(conversationId: string, known: KnownKeyS
 
 // ##### Messages #####
 
-// The opener for the signed-in person, which keeps what it learned of keys and senders for as long as the same person is signed in.
-let opener: { userId: string; opener: MessageOpener } | null = null
+// The opener for the signed-in person, which keeps what it learned of keys and senders for as long as the same person is signed in with
+// the same keys. It is made with the keys held then, so a person whose keys changed (a new generation, or starting over) gets a new one:
+// the old one would go on opening with keys that are no longer the person's, and fail to open what is sealed to the new ones.
+let opener: { userId: string; secrets: AccountSecrets; opener: MessageOpener } | null = null
 
 export function messageOpener(): MessageOpener {
   const deps = epochDeps()
-  if (opener?.userId !== deps.self.userId) opener = { userId: deps.self.userId, opener: createMessageOpener(deps) }
+  if (opener?.userId !== deps.self.userId || opener.secrets !== deps.self.secrets) {
+    opener = { userId: deps.self.userId, secrets: deps.self.secrets, opener: createMessageOpener(deps) }
+  }
 
   return opener.opener
 }
