@@ -30,6 +30,14 @@ describe('what the screens know about the keys', () => {
     expect(state()).toMatchObject({ status: phase, deviceId: null, secrets: null })
   })
 
+  it('reads outdated as that, keeping the device the browser is and holding no keys', async () => {
+    state().applyReady({ deviceId: 'd1', secrets: await createAccountSecrets() })
+
+    state().applyLoaded({ state: { phase: 'outdated', deviceId: 'd1' }, removedElsewhere: false })
+
+    expect(state()).toMatchObject({ status: 'outdated', deviceId: 'd1', secrets: null })
+  })
+
   it('remembers that this browser was removed, until it is dismissed', () => {
     state().applyLoaded({ state: { phase: 'locked' }, removedElsewhere: true })
     expect(state().removedElsewhere).toBe(true)

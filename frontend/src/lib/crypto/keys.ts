@@ -27,6 +27,12 @@ export async function rotateAccountKey(secrets: AccountSecrets): Promise<Account
   return { identity: secrets.identity, accounts: [...secrets.accounts, { generation: next, ...(await newX25519()) }] }
 }
 
+// The keys of a person who starts over because the old ones can no longer be opened: a new identity key and one account key, as the
+// generation after the newest the server holds. Nothing of the old keys is in it, so nothing sealed to them can be opened with it.
+export async function startOverAccountSecrets(generation: number): Promise<AccountSecrets> {
+  return { identity: await newEd25519(), accounts: [{ generation, ...(await newX25519()) }] }
+}
+
 export function currentAccountKey(secrets: AccountSecrets): AccountKey {
   return secrets.accounts[secrets.accounts.length - 1]
 }

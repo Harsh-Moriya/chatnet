@@ -2,7 +2,9 @@ import type { FileRef } from '../../lib/crypto'
 import { useAuthStore } from '../auth/store/authStore'
 import { epochApi } from './epochApi'
 import { indexedDbEpochKeyStore } from './epochKeyStore'
+import { loadEncryption } from './controller'
 import { type EpochDeps, type KnownKeyState, MissingKeysError, readyConversationWith } from './epochs'
+import { KeysMismatchError } from './flows'
 import { useKeyStatusStore } from './keyStatus'
 import { indexedDbPinStore } from './pinStore'
 import { type MessageOpener, type Sealed, createMessageOpener, sealText, underCurrentEpoch } from './sealedMessages'
@@ -50,6 +52,10 @@ export async function readyConversation(conversationId: string, known: KnownKeyS
     return true
   } catch (failure) {
     if (failure instanceof MissingKeysError) useKeyStatusStore.getState().setWaitingFor(conversationId, failure.userIds)
+
+    // The keys this browser holds are not the person's current ones: another device may have started a new generation. Asking again
+    // puts a browser that is behind on the screen that brings the newer keys.
+    if (failure instanceof KeysMismatchError) void loadEncryption()
     return false
   } finally {
     inFlight.delete(conversationId)

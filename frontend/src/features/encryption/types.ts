@@ -56,6 +56,10 @@ export interface KeysApi {
   setUp(body: { bundle: string; backup: string }): Promise<KeyStatus>
   getBackup(): Promise<BackupBlob>
   replaceBackup(body: { blob: string; expectedVersion: number }): Promise<{ version: number }>
+  // The next generation of the account key with the backup that holds it, and the lost device that goes with it, if there is one.
+  addGeneration(body: { bundle: string; backup: string; expectedBackupVersion: number; removeDeviceId?: string }): Promise<KeyStatus>
+  // New keys for a person with neither a device nor the passphrase, confirmed with the account password.
+  resetKeys(body: { bundle: string; backup: string; password: string }): Promise<KeyStatus>
   registerDevice(body: { kind: DeviceKind; name: string }): Promise<DeviceInfo>
   listDevices(): Promise<DeviceInfo[]>
   removeDevice(id: string): Promise<void>
