@@ -48,14 +48,14 @@ Arguments are positional. The examples are real payloads as the JavaScript clien
 ```json
 [
   {
-    "id": "01a1d27f-e749-7524-b845-a2df6e4f0d57",
-    "conversationId": "08cc1473-2a78-4b87-94f2-d91cf45faf46",
-    "senderId": "01a1d27f-d8f6-7323-ba7b-bac494843e36",
+    "id": "01a1d58f-fd67-77cd-ae48-0784b8f63da6",
+    "conversationId": "b098b57a-4cf7-4658-938b-d7d4b75bbeff",
+    "senderId": "01a1d58f-f9ae-7505-8f26-2f2a0325526c",
     "senderDisplayName": "Ana Example",
-    "ciphertext": "AQEAAAABYhPqsDWjQ1vsQPFz...",
+    "ciphertext": "AQEAAAABELjVgN1rSV9S7-lt...",
     "keyEpoch": 1,
-    "createdAt": "2026-11-13T01:22:40.073062Z",
-    "clientMessageId": "de995e7e-be17-4db7-90f9-5c79ac8cf3d0",
+    "createdAt": "2026-11-13T15:39:05.95916Z",
+    "clientMessageId": "a12219b1-d6f4-4537-9b78-52fb21a2c625",
     "attachments": [],
     "editedAt": null,
     "editCount": 0,
@@ -143,9 +143,10 @@ Arguments are positional. The examples are real payloads as the JavaScript clien
 ```json
 [
   {
-    "conversationId": "72a746ba-805e-44bc-8700-2d48626bda5a",
+    "conversationId": "c7d65802-a54e-42b7-a149-351740a6e84e",
     "keyEpoch": 2,
-    "keyRotationRequired": false
+    "keyRotationRequired": false,
+    "keyEpochAt": "2026-11-13T15:39:03.622366Z"
   }
 ]
 ```
@@ -153,9 +154,10 @@ Arguments are positional. The examples are real payloads as the JavaScript clien
 ```json
 [
   {
-    "conversationId": "72a746ba-805e-44bc-8700-2d48626bda5a",
+    "conversationId": "c7d65802-a54e-42b7-a149-351740a6e84e",
     "keyEpoch": 2,
-    "keyRotationRequired": true
+    "keyRotationRequired": true,
+    "keyEpochAt": "2026-11-13T15:39:03.622366Z"
   }
 ]
 ```
@@ -212,20 +214,20 @@ Arguments are positional. The examples are real payloads as the JavaScript clien
 ```json
 [
   {
-    "id": "01a1d27f-e87c-7b29-9585-302a2c61bda6",
+    "id": "01a1d58f-fdfb-7f75-9c50-232f3f49ce4d",
     "type": "Mention",
-    "conversationId": "08cc1473-2a78-4b87-94f2-d91cf45faf46",
-    "actorId": "01a1d27f-dc12-70dd-8293-ef403f288b55",
+    "conversationId": "b098b57a-4cf7-4658-938b-d7d4b75bbeff",
+    "actorId": "01a1d58f-fa1b-7fe1-85bb-cc70ee20a8ae",
     "actorDisplayName": "Ben Example",
-    "messageId": "01a1d27f-e867-7bd6-8bfa-875b8a022d52",
+    "messageId": "01a1d58f-fdf1-7a6a-a903-bd7a1cfa384b",
     "message": {
-      "ciphertext": "AQEAAAABRFj3T4TBpgX8Gq3O...",
+      "ciphertext": "AQEAAAABlLGZfMzoR5jd_OvD...",
       "keyEpoch": 1,
-      "clientMessageId": "78e54f64-89d8-4152-ae27-890b611196a4",
+      "clientMessageId": "b6626b06-0cd4-41c6-923b-be4e969b2b12",
       "editCount": 0
     },
     "isRead": false,
-    "createdAt": "2026-11-13T01:22:40.35935Z"
+    "createdAt": "2026-11-13T15:39:06.09731Z"
   }
 ]
 ```

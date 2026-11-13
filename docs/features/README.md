@@ -18,7 +18,8 @@ One page per feature: what it does, the endpoints and hub events it uses, and it
 | [Profiles and pictures](profiles-and-pictures.md) | Display name, pictures for people and groups |
 | [Rate limits](rate-limits.md) | Limits per address and per person, shared across instances |
 | [Web Push](web-push.md) | Alerts while the app is closed |
-| [Encryption keys and devices](encryption-keys.md) | Keys made in the browser, the passphrase backup, linking a new device, signing out |
+| [Safety numbers](safety-numbers.md) | Comparing the number that shows nobody is between two people, the verified mark, accepting a changed key |
+| [Encryption keys and devices](encryption-keys.md) | Keys made in the browser, the passphrase backup, linking a new device, a lost device, starting over, signing out |
 | [Conversation keys](conversation-keys.md) | The key of each period of a conversation, sealed for each member; what the server and the browser check |
 
 For the contract these features use, see the [API reference](../api/endpoints.md). For how they are built, see the [architecture pages](../architecture/overview.md).
