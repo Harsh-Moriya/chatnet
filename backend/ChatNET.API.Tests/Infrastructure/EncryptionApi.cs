@@ -68,6 +68,28 @@ public static class EncryptionApi
     public static Task<HttpResponseMessage> ReplaceBackupAsync(this HttpClient client, byte[] blob, int? expectedVersion) =>
         client.PutAsJsonAsync("/api/keys/me/backup", new { blob = B64(blob), expectedVersion });
 
+    // The next generation of the account key with the backup that holds it. Every part can be changed to make a request wrong in one way.
+    public static Task<HttpResponseMessage> AddKeyGenerationAsync(
+        this HttpClient client, int generation = 2, int? expectedBackupVersion = 1, Guid? removeDeviceId = null,
+        byte[]? bundle = null, byte[]? backup = null) =>
+        client.PostAsJsonAsync("/api/keys/me/generations", new
+        {
+            bundle = B64(bundle ?? Bundle(generation)),
+            backup = B64(backup ?? Backup()),
+            expectedBackupVersion,
+            removeDeviceId,
+        });
+
+    // New keys for someone who lost the old ones, confirmed with the account password.
+    public static Task<HttpResponseMessage> ResetKeysAsync(
+        this HttpClient client, string? password, int generation = 2, byte[]? bundle = null, byte[]? backup = null) =>
+        client.PostAsJsonAsync("/api/keys/me/reset", new
+        {
+            bundle = B64(bundle ?? Bundle(generation)),
+            backup = B64(backup ?? Backup()),
+            password,
+        });
+
     public static Task<HttpResponseMessage> LookupKeysAsync(this HttpClient client, IReadOnlyCollection<Guid> userIds) =>
         client.PostAsJsonAsync("/api/keys/lookup", new { userIds });
 

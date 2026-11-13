@@ -1,5 +1,6 @@
 import { type ReactNode, useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
+import { useIdentityChanges } from '../../encryption/identityChanges'
 import { useKeyStatusStore } from '../../encryption/keyStatus'
 import { useNotificationStore } from '../../notifications/store/notificationStore'
 import { useLocalSearchSync } from '../../search/hooks/useLocalSearchSync'
@@ -28,6 +29,7 @@ export function ChatConnectionProvider({ children }: { children: ReactNode }) {
     () => () => {
       useChatStore.getState().reset()
       useKeyStatusStore.getState().reset()
+      useIdentityChanges.getState().reset()
       useNotificationStore.getState().reset()
       usePresenceStore.getState().reset()
       queryClient.clear()

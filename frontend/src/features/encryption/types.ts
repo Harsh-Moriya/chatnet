@@ -56,6 +56,10 @@ export interface KeysApi {
   setUp(body: { bundle: string; backup: string }): Promise<KeyStatus>
   getBackup(): Promise<BackupBlob>
   replaceBackup(body: { blob: string; expectedVersion: number }): Promise<{ version: number }>
+  // The next generation of the account key with the backup that holds it, and the lost device that goes with it, if there is one.
+  addGeneration(body: { bundle: string; backup: string; expectedBackupVersion: number; removeDeviceId?: string }): Promise<KeyStatus>
+  // New keys for a person with neither a device nor the passphrase, confirmed with the account password.
+  resetKeys(body: { bundle: string; backup: string; password: string }): Promise<KeyStatus>
   registerDevice(body: { kind: DeviceKind; name: string }): Promise<DeviceInfo>
   listDevices(): Promise<DeviceInfo[]>
   removeDevice(id: string): Promise<void>
@@ -95,11 +99,14 @@ export interface EpochKeyStore {
 }
 
 // The identity key a person had the first time they were seen. A later key that differs is a change the person must accept.
+// "verifiedAt" is set when the person looking compared the safety number with them and said it matched; it belongs to this key, so
+// accepting a different one starts without it.
 export interface Pin {
   ownerId: string
   contactId: string
   identityPublic: Uint8Array
   firstSeenAt: string
+  verifiedAt?: string
 }
 
 export interface PinStore {
@@ -152,6 +159,8 @@ export interface EpochPageWire {
 export interface ConversationKeyState {
   keyEpoch: number
   keyRotationRequired: boolean
+  // When the newest epoch was made, or null while there is none.
+  keyEpochAt?: string | null
 }
 
 // Everything the conversation keys ask of the server. The real one is epochApi.ts; the tests use a fake server behind the same interface.

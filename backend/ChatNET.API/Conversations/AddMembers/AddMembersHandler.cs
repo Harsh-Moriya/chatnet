@@ -85,7 +85,8 @@ public class AddMembersHandler : IRequestHandler<AddMembersCommand, List<MemberD
             // People who join must not be able to read what was said before, so the group gets a new key period, made for
             // everyone who will be in it, saved with their joining. An epoch for anyone else is refused, and so is a person who
             // was added and has no keys, and nothing is saved.
-            var generations = await _keys.GetCurrentGenerationsAsync(change.Members.ActiveIds, cancellationToken);
+            // Held until the commit: a new generation of a member's key cannot be stored between reading it and saving the epoch.
+            var generations = await _keys.HoldCurrentGenerationsAsync(change.Members.ActiveIds, cancellationToken);
             change.StageEpoch(request.ActorId, EpochSubmission.From(request.Epoch), KeyEpochReason.MemberAdded, generations, now);
             keyChanged = _outbox.Create(new ConversationKeyChanged(request.ConversationId));
 

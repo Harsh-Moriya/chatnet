@@ -5,6 +5,7 @@ import { AlertCircle, LoaderCircle } from 'lucide-react'
 import { getApiError } from '../../../lib/errors'
 import { formatClock, formatDayLabel } from '../../../lib/format'
 import { focusedMessageId } from '../../notifications/navigation'
+import { KeyChangedBanner } from '../../encryption/components/KeyChangedBanner'
 import { useConversationKeys } from '../../encryption/hooks/useConversationKeys'
 import { openMessage } from '../api/chatApi'
 import { useConversations } from '../api/useConversations'
@@ -125,6 +126,7 @@ function ConversationPane({ conversation }: { conversation: Conversation }) {
   return (
     <>
       <ChatHeader conversation={conversation} />
+      <KeyChangedBanner conversationId={conversation.id} />
       {focusError && (
         <div role="alert" className="flex shrink-0 items-start gap-2 border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-600">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />

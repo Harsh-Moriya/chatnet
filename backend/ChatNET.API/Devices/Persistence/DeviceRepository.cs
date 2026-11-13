@@ -42,20 +42,8 @@ public class DeviceRepository : IDeviceRepository
     {
         await using var transaction = await _db.Database.BeginTransactionAsync(cancellationToken);
 
-        // Conditional on the owner and on not being removed already: of two requests removing the same device exactly one does.
-        var removed = await _db.Devices
-            .Where(d => d.Id == deviceId && d.UserId == userId && d.RemovedAt == null)
-            .ExecuteUpdateAsync(s => s.SetProperty(d => d.RemovedAt, now), cancellationToken);
-
-        if (removed == 0)
+        if (!await DeviceRemoval.TryRemoveAsync(_db, userId, deviceId, now, cancellationToken))
             return false;
-
-        // Every token of a session that is tied to the device carries it, and a renewal retires the token it replaces, so the one token
-        // of each session that still works is found by the device. A renewal that is under way loses its conditional update against
-        // the revoked token and the session does not come back.
-        await _db.RefreshTokens
-            .Where(t => t.DeviceId == deviceId && t.RevokedAt == null)
-            .ExecuteUpdateAsync(s => s.SetProperty(t => t.RevokedAt, now), cancellationToken);
 
         await transaction.CommitAsync(cancellationToken);
         return true;

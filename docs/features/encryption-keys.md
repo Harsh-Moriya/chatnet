@@ -16,6 +16,10 @@ This page covers the keys and the devices that hold them. The keys of conversati
 - **Signing out.** Signing out of a browser that holds the keys asks first, because it deletes them from that browser, and says when this is the only device. The browser then removes itself from the server (`DELETE /api/devices/{id}`) and deletes its copy. A session that merely expires keeps the keys, so signing in again finds them.
 - **Sessions and devices.** A browser that holds the keys sends the id of its device in the `X-Device-Id` header when it signs in and when it renews its session. The server ties the session to the device if it is one of the person's that has not been removed, and ignores the header otherwise. Removing a device ends every session tied to it and no other, and a session tied to a removed device cannot be renewed.
 - **Removed elsewhere.** A browser whose device was removed from another device finds out the next time the profile is opened, deletes its keys and shows the unlock screen, saying so.
+- **Removing a device.** Each other device in the list has a Remove button. Removing signs the device out and leaves the keys as they are, which is enough for a device that is only not wanted any more.
+- **When a device was lost.** The person says the device was lost or stolen and enters the recovery passphrase, which proves it is them and opens the current backup. The browser makes the next generation of the account key, keeps the identity key, puts the new generation into the backup under the same passphrase and sends `POST /api/keys/me/generations` with the new bundle, the backup, the version of the backup it read and the device. In one transaction the server stores the bundle (it must be the generation after the newest, otherwise `409` with `generation-stale`), replaces the backup (`409` with `backup-version-stale` when it changed since), removes the device and ends its sessions (`404` for a device that is not the person's), and marks every conversation the person is in as due for a new key period. The next key of each of those conversations is sealed to the new generation, so the lost device cannot open anything sent after that.
+- **A browser that is behind.** The other devices hold the older generations only: the private half of the new one is only in the backup. A browser that finds the server has a newer generation than it holds (when it loads its state, or when sealing a key finds its own account key is not the current one) shows a screen asking for the recovery passphrase. Opening the backup brings the newer keys, which the browser checks against the signed bundles and keeps as the device it already is, with no new registration.
+- **Starting over.** A person with neither another device nor the passphrase can reset their encryption from the unlock screen. The browser makes a new identity key and a new account key as the generation after the newest, under a new passphrase, and sends `POST /api/keys/me/reset` with the bundle, the backup and the account password. The server asks for the password again (`403` with `wrong-password`, and the same lock after repeated failures as signing in), then in one transaction stores the bundle, replaces the backup whatever version it is at, removes every device with its sessions and marks every conversation the person is in as due. Old messages cannot be opened by anyone, on any device, and the people who know the person are shown a new identity key to accept (see [safety numbers](safety-numbers.md)).
 
 ## How a device is linked
 
@@ -46,7 +50,7 @@ sequenceDiagram
 
 | Stored | What it is | What the server can do with it |
 |---|---|---|
-| Public bundles | The public keys of each generation of a person's account key, signed by their identity key | Hand them to the person's own devices, and the newest to anyone who is about to seal a conversation key to the person. It checks the size and version, and that the first generation is generation 1 |
+| Public bundles | The public keys of each generation of a person's account key, signed by their identity key | Hand them to the person's own devices, and the newest to anyone who is about to seal a conversation key to the person. It checks the size and version, that the first generation is generation 1 and that a later one is the next |
 | Key backup | The private keys encrypted under the passphrase, with a version | Return it to its owner. It cannot open it |
 | Devices | A name, a kind (Web, Ios or Android), when added and last used, and whether removed | List them and tie sessions to them |
 | Link requests | A one-time public key, a code, the name of the asking device and, for a moment, the sealed secrets | Relay the sealed secrets once. It cannot open them |
@@ -61,6 +65,8 @@ The tables are in the [data model](../architecture/data-model.md).
 | `POST /api/keys/me` | First set-up: the bundle of generation 1 and the first backup |
 | `GET /api/keys/me/backup` | The encrypted backup |
 | `PUT /api/keys/me/backup` | Replace the backup from a known version |
+| `POST /api/keys/me/generations` | The next generation of the account key with the backup that holds it, and the lost device to remove |
+| `POST /api/keys/me/reset` | Start over with new keys, confirmed with the account password |
 | `POST /api/keys/lookup` | The current public bundles of other people, for sealing a conversation key to them. Open to any signed-in person, like a user search |
 | `POST /api/devices`, `GET /api/devices`, `DELETE /api/devices/{id}` | Add, list and remove devices |
 | `POST /api/devices/link-requests` | A new device asks to be linked |
@@ -75,6 +81,7 @@ Every route except the lookup is the caller's own: the id comes from the token a
 - The backup can be attacked offline by whoever obtains it, by trying passphrases. The key is stretched with 600,000 rounds of PBKDF2, which slows each guess but does not stop a weak passphrase from being found. It is returned only to its owner, and a long passphrase is the protection that matters. Nobody can recover a forgotten passphrase.
 - The private keys on a device are kept in the browser's IndexedDB in a form that can be exported, because the backup and linking need them. A script injected into the page could read them while the page is open. Signing out deletes them.
 - The server cannot check the signature of a bundle; the clients do, against the identity key they remember.
-- Removing a device ends its sessions but does not change the keys: a device that kept a copy still holds them.
+- Removing a device ends its sessions but does not change the keys: a device that kept a copy still holds them. Removing it as lost makes a new generation, so it cannot open what is sealed from then on. It can still read what it already holds, since the older generations stay, and it keeps the identity key, so it could still sign as the person if it also had a session. A reset is what changes the identity.
+- The other devices need the recovery passphrase once after a generation was added, because the new private key is only in the backup.
 - Up to 10 devices per person (`Encryption:MaxDevicesPerUser`), 5 link requests waiting at once (`Encryption:MaxPendingLinkRequests`), a backup of up to 64 KiB (`Encryption:MaxBackupBytes`). These endpoints share one limit of 60 requests per minute per person; a waiting new device uses 20 of them.
-- Setting up cannot be done a second time, and there is no way to start over with new keys.
+- Setting up cannot be done a second time. Starting over is a reset, which loses the old history for good.

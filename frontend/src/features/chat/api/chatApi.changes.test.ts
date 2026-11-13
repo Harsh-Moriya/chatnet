@@ -91,7 +91,7 @@ describe('editMessage', () => {
 
     expect(keysDouble.sealAndSend).toHaveBeenCalledWith(
       'c1',
-      { keyEpoch: 0, keyRotationRequired: false },
+      { keyEpoch: 0, keyRotationRequired: false, keyEpochAt: null },
       { clientMessageId: 'cid-1', editCount: 3, text: 'third draft', files: [] },
       expect.any(Function),
     )
@@ -138,7 +138,7 @@ describe('editMessage', () => {
 
     await editMessage('c1', 'm1', 'x', 'me')
 
-    expect(keysDouble.sealAndSend.mock.calls[0][1]).toEqual({ keyEpoch: 4, keyRotationRequired: true })
+    expect(keysDouble.sealAndSend.mock.calls[0][1]).toEqual({ keyEpoch: 4, keyRotationRequired: true, keyEpochAt: null })
   })
 
   it('says who the new text names, as ids, for the members of the conversation', async () => {

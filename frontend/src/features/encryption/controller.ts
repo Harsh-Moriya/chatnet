@@ -6,10 +6,13 @@ import { describeBrowser } from './deviceName'
 import {
   type FlowDeps,
   type LinkAttempt,
+  addGeneration,
   approveLinkRequest,
+  catchUp,
   changePassphrase as changePassphraseFlow,
   findLinkRequest,
   loadState,
+  resetEncryption,
   setUp,
   startLink,
   unlock,
@@ -124,6 +127,34 @@ export async function changePassphrase(passphrase: string): Promise<void> {
   const { secrets } = useEncryptionStore.getState()
   if (secrets === null) throw new Error('This browser does not hold the keys.')
   await changePassphraseFlow(deps(), currentUserId(), secrets, passphrase)
+}
+
+// Removes a device that was lost: a new generation of the account key, the backup that holds it and the removal, in one step. The keys in
+// memory are the new ones afterwards.
+export async function removeLostDevice(passphrase: string, deviceId: string): Promise<void> {
+  const { deviceId: own, secrets } = useEncryptionStore.getState()
+  if (own === null || secrets === null) throw new Error('This browser does not hold the keys.')
+
+  useEncryptionStore.getState().applyReady(await addGeneration(deps(), currentUserId(), { deviceId: own, secrets }, passphrase, deviceId))
+}
+
+// For a browser that is behind the newest generation of the keys: the passphrase brings the newer ones.
+export async function catchUpWithPassphrase(passphrase: string): Promise<void> {
+  const { deviceId } = useEncryptionStore.getState()
+  if (deviceId === null) throw new Error('This browser is not a device of the person.')
+
+  useEncryptionStore.getState().applyReady(await catchUp(deps(), currentUserId(), deviceId, passphrase))
+}
+
+// New keys under a new passphrase, for a person who has neither a device nor the old passphrase.
+export async function resetKeys(passphrase: string, password: string): Promise<void> {
+  useEncryptionStore.getState().applyReady(await resetEncryption(deps(), currentUserId(), passphrase, password))
+  await tieSessionToDevice()
+}
+
+// Removes a device that is only not wanted any more: it is signed out, and the keys stay as they are.
+export async function removeDevice(deviceId: string): Promise<void> {
+  await keysApi.removeDevice(deviceId)
 }
 
 export function listDevices() {

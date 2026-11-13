@@ -16,9 +16,11 @@ import {
   openBackup,
   openBundle,
   openLinkSecrets,
+  rotateAccountKey,
   sealBackup,
   sealLinkSecrets,
   signBundle,
+  startOverAccountSecrets,
   toBase64Url,
 } from '../../lib/crypto'
 import type { BundleEntry, DeviceKind, DeviceStore, KeysApi, LinkRequestInfo } from './types'
@@ -44,7 +46,14 @@ export interface Ready {
   secrets: AccountSecrets
 }
 
-export type EncryptionState = { phase: 'notSetUp' } | { phase: 'locked' } | ({ phase: 'ready' } & Ready)
+// 'outdated': this browser is a device of the person and holds keys, but the account key has a newer generation (a device was removed as
+// lost from another device, and the newer private half is only in the backup). The keys here are not used until the passphrase brings
+// the newer ones, so nothing is sealed to or opened with a generation that is no longer the current one.
+export type EncryptionState =
+  | { phase: 'notSetUp' }
+  | { phase: 'locked' }
+  | { phase: 'outdated'; deviceId: string }
+  | ({ phase: 'ready' } & Ready)
 
 export interface LoadedState {
   state: EncryptionState
@@ -111,7 +120,11 @@ export async function loadState(deps: FlowDeps, userId: string): Promise<LoadedS
   if (stored) {
     const devices = await deps.api.listDevices()
     if (devices.some((device) => device.id === stored.deviceId)) {
-      return { state: { phase: 'ready', deviceId: stored.deviceId, secrets: decodeSecrets(stored.secrets) }, removedElsewhere }
+      const secrets = decodeSecrets(stored.secrets)
+      const newest = Math.max(0, ...(await deps.api.getStatus()).bundles.map((entry) => entry.generation))
+
+      if (newest > currentAccountKey(secrets).generation) return { state: { phase: 'outdated', deviceId: stored.deviceId }, removedElsewhere }
+      return { state: { phase: 'ready', deviceId: stored.deviceId, secrets }, removedElsewhere }
     }
 
     await deps.store.remove(userId)
@@ -138,13 +151,19 @@ async function becomeDevice(deps: FlowDeps, userId: string, secrets: AccountSecr
   return { deviceId: device.id, secrets }
 }
 
-// What was made or opened must be what the server holds the public half of, for every generation, signed by the identity key.
+// What was made or opened must be what the server holds the public half of, for every generation these keys hold, signed by the identity
+// key. Generations below the lowest these keys hold are not checked: after a reset the keys start at a later generation, and the
+// bundles of the generations before it belong to keys that were thrown away.
 async function checkAgainstServer(userId: string, secrets: AccountSecrets, bundles: BundleEntry[]): Promise<void> {
   // Nothing to check against is not a pass: a server that listed no bundle must not get keys accepted unchecked. A bundle for a
-  // generation these keys do not have (the backup is older than the keys) fails in the loop.
+  // generation these keys do not have and are not below them (the backup is older than the keys) fails in the loop.
   if (bundles.length === 0) throw new KeysMismatchError()
 
+  const lowest = secrets.accounts[0].generation
+
   for (const entry of bundles) {
+    if (entry.generation < lowest) continue
+
     const opened = await openBundle(userId, fromBase64Url(entry.bundle))
     const account = findAccountKey(secrets, entry.generation)
 
@@ -200,6 +219,78 @@ export async function changePassphrase(deps: FlowDeps, userId: string, secrets: 
   const blob = await sealBackup(userId, passphrase, secrets)
 
   await deps.api.replaceBackup({ blob: toBase64Url(blob), expectedVersion: current.version })
+}
+
+// ##### A lost device #####
+
+// Makes the next generation of the account key, so a device that kept the private half of the older ones cannot open what is sealed
+// from now on, and publishes it with the backup that holds it. Asks for the passphrase, which proves it is the person and not a browser
+// someone left open, and puts the new generation in the backup under the same one. A device that is named is removed in the same step
+// on the server (see the endpoint), and is the one that was lost. The identity key stays, so the people who know the person see
+// nothing change.
+//
+// A failure leaves what this browser holds as it was. If the server took the change and this browser could not keep it, the next
+// load finds the keys behind the server's and asks for the passphrase again, which brings them.
+export async function addGeneration(
+  deps: FlowDeps,
+  userId: string,
+  ready: Ready,
+  passphrase: string,
+  removeDeviceId?: string,
+): Promise<Ready> {
+  const current = await deps.api.getBackup()
+  await openBackup(userId, passphrase, fromBase64Url(current.blob))
+
+  // Made from keys that are the newest the server holds: a device that is behind would otherwise publish a generation made without the
+  // private half of the one before it, and put a backup that lacks it in its place.
+  await checkAgainstServer(userId, ready.secrets, (await deps.api.getStatus()).bundles)
+
+  const secrets = await rotateAccountKey(ready.secrets)
+  const bundle = await signBundle(userId, secrets.identity, currentAccountKey(secrets))
+  const backup = await sealBackup(userId, passphrase, secrets)
+
+  await deps.api.addGeneration({
+    bundle: toBase64Url(bundle),
+    backup: toBase64Url(backup),
+    expectedBackupVersion: current.version,
+    removeDeviceId,
+  })
+
+  await deps.store.save({ userId, deviceId: ready.deviceId, secrets: encodeSecrets(secrets) })
+  return { deviceId: ready.deviceId, secrets }
+}
+
+// A device that is behind the server's newest generation opens the backup, which holds every generation, and keeps what it finds under
+// the device it already is. A wrong passphrase and a damaged backup come out as a CryptoError with the code 'authentication'.
+export async function catchUp(deps: FlowDeps, userId: string, deviceId: string, passphrase: string): Promise<Ready> {
+  const backup = await deps.api.getBackup()
+  const secrets = await openBackup(userId, passphrase, fromBase64Url(backup.blob))
+
+  await checkAgainstServer(userId, secrets, (await deps.api.getStatus()).bundles)
+  await deps.store.save({ userId, deviceId, secrets: encodeSecrets(secrets) })
+  return { deviceId, secrets }
+}
+
+// ##### Starting over #####
+
+// For a person with no device and no passphrase: new keys, as the generation after the newest the server has, under a new passphrase,
+// confirmed with the account password. The server removes every device the person had. What was sealed to the old keys cannot be opened
+// again by anyone, and the people who know the person are shown a new identity to accept.
+export async function resetEncryption(deps: FlowDeps, userId: string, passphrase: string, password: string): Promise<Ready> {
+  const status = await deps.api.getStatus()
+  const newest = Math.max(0, ...status.bundles.map((entry) => entry.generation))
+
+  const secrets = await startOverAccountSecrets(newest + 1)
+  const bundle = await signBundle(userId, secrets.identity, currentAccountKey(secrets))
+  const backup = await sealBackup(userId, passphrase, secrets)
+
+  await deps.api.resetKeys({ bundle: toBase64Url(bundle), backup: toBase64Url(backup), password })
+
+  try {
+    return await becomeDevice(deps, userId, secrets)
+  } catch (failure) {
+    throw new SetUpIncompleteError({ cause: failure })
+  }
 }
 
 // ##### Linking: the new device #####

@@ -29,10 +29,28 @@ export interface EpochDeps {
   keys: EpochKeyStore
   pins: PinStore
   self: { userId: string; secrets: AccountSecrets }
+  // The time, in milliseconds. Tests move it; the app leaves it out.
+  now?: () => number
+  // Told when a person's identity key is not the one that was remembered, wherever that is found out, so the screen can offer to compare
+  // and accept it. The failure is raised as before.
+  onIdentityChanged?: (change: IdentityChangedError) => void
 }
 
 // How many times a key period is made again when the conversation changed under it, before the person is told to try again.
 export const MAX_ATTEMPTS = 3
+
+// How long a key period stands before a browser replaces it although nothing asks for it: a week. The key of an epoch opens every message
+// of the epoch, so one that leaks opens at most a week. The server allows a replacement after a day, so this never needs its leave.
+export const ROTATION_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000
+
+// Whether the newest epoch should be replaced: someone left since it was made, or it is a week old.
+export function keysAreDue(state: { keyRotationRequired: boolean; keyEpochAt?: string | null }, now: number): boolean {
+  if (state.keyRotationRequired) return true
+
+  // No time, or one that is not a time, says nothing about the age.
+  const madeAt = Date.parse(state.keyEpochAt ?? '')
+  return !Number.isNaN(madeAt) && now - madeAt >= ROTATION_INTERVAL_MS
+}
 
 // ##### What the screens explain #####
 
@@ -110,7 +128,12 @@ export async function resolvePeers(deps: EpochDeps, userIds: string[]): Promise<
   if (missing.length > 0) throw new MissingKeysError(missing)
 
   for (const [userId, bundle] of bundles) {
-    await pinIdentity(deps.pins, deps.self.userId, userId, bundle.identityPublic)
+    try {
+      await pinIdentity(deps.pins, deps.self.userId, userId, bundle.identityPublic)
+    } catch (failure) {
+      if (failure instanceof IdentityChangedError) deps.onIdentityChanged?.(failure)
+      throw failure
+    }
   }
 
   const own = bundles.get(deps.self.userId)
@@ -223,7 +246,7 @@ export async function ensureEpoch(deps: EpochDeps, conversationId: string): Prom
   return withEpochRetries(async () => {
     const [state, memberIds] = await Promise.all([deps.api.getKeyState(conversationId), deps.api.getMemberIds(conversationId)])
 
-    if (state.keyEpoch >= 1 && !state.keyRotationRequired) {
+    if (state.keyEpoch >= 1 && !keysAreDue(state, deps.now?.() ?? Date.now())) {
       await loadEpochKeys(deps, conversationId, { newest: { epoch: state.keyEpoch, userIds: memberIds } })
 
       if ((await deps.keys.load(deps.self.userId, conversationId, state.keyEpoch)) !== null) {
@@ -248,10 +271,17 @@ export async function ensureEpoch(deps: EpochDeps, conversationId: string): Prom
 export interface KnownKeyState {
   keyEpoch: number
   keyRotationRequired: boolean
+  keyEpochAt?: string | null
 }
 
 export async function readyConversationWith(deps: EpochDeps, conversationId: string, known: KnownKeyState): Promise<void> {
-  if (known.keyEpoch >= 1 && !known.keyRotationRequired && (await deps.keys.load(deps.self.userId, conversationId, known.keyEpoch)) !== null) return
+  if (
+    known.keyEpoch >= 1 &&
+    !keysAreDue(known, deps.now?.() ?? Date.now()) &&
+    (await deps.keys.load(deps.self.userId, conversationId, known.keyEpoch)) !== null
+  ) {
+    return
+  }
 
   await ensureEpoch(deps, conversationId)
 }

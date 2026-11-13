@@ -53,7 +53,8 @@ public class CreateKeyEpochHandler : IRequestHandler<CreateKeyEpochCommand, Unit
         {
             change.Members.RequireMember(request.UserId);
 
-            var generations = await _keys.GetCurrentGenerationsAsync(change.Members.ActiveIds, cancellationToken);
+            // Held until the commit: a new generation of a member's key cannot be stored between reading it and saving the epoch.
+            var generations = await _keys.HoldCurrentGenerationsAsync(change.Members.ActiveIds, cancellationToken);
             var newestEpochAt = await _epochs.GetCreatedAtAsync(request.ConversationId, change.Conversation.KeyEpoch, cancellationToken);
             change.StageReplacement(request.UserId, submission, generations, newestEpochAt, now);
 

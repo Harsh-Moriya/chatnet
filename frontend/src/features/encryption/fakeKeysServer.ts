@@ -1,3 +1,4 @@
+import { fromBase64Url } from '../../lib/crypto'
 import type {
   BackupBlob,
   BundleEntry,
@@ -33,6 +34,9 @@ interface LinkRecord {
   payload: string | null
 }
 
+// The generation a bundle is for, as the server reads it: four bytes after the version and the suite.
+const generationOf = (bundle: string): number => new DataView(fromBase64Url(bundle).buffer).getUint32(2)
+
 let counter = 0
 const nextId = () => `00000000-0000-4000-8000-${String(++counter).padStart(12, '0')}`
 
@@ -41,6 +45,8 @@ export class FakeKeysServer implements KeysApi {
   backup: { blob: string; version: number } | null = null
   devices: DeviceInfo[] = []
   links = new Map<string, LinkRecord>()
+  // The password of the account, which a reset must give.
+  password = 'the account password'
 
   // Set to make the next call of that name fail.
   failNext = new Map<keyof KeysApi, Error>()
@@ -80,6 +86,33 @@ export class FakeKeysServer implements KeysApi {
     if (this.backup.version !== body.expectedVersion) throw new ServerRefused(409)
     this.backup = { blob: body.blob, version: this.backup.version + 1 }
     return { version: this.backup.version }
+  }
+
+  // The rules of the real endpoint: a person with keys, the next generation, the backup from the version that was read, and a device that is
+  // the person's. All or nothing.
+  async addGeneration(body: { bundle: string; backup: string; expectedBackupVersion: number; removeDeviceId?: string }): Promise<KeyStatus> {
+    this.enter('addGeneration')
+    if (this.bundles.length === 0 || !this.backup) throw new ServerRefused(404)
+    if (generationOf(body.bundle) !== Math.max(...this.bundles.map((entry) => entry.generation)) + 1) throw new ServerRefused(409)
+    if (this.backup.version !== body.expectedBackupVersion) throw new ServerRefused(409)
+    if (body.removeDeviceId !== undefined && !this.devices.some((device) => device.id === body.removeDeviceId)) throw new ServerRefused(404)
+
+    this.bundles.push({ generation: generationOf(body.bundle), bundle: body.bundle })
+    this.backup = { blob: body.backup, version: this.backup.version + 1 }
+    this.devices = this.devices.filter((device) => device.id !== body.removeDeviceId)
+    return this.getStatus()
+  }
+
+  async resetKeys(body: { bundle: string; backup: string; password: string }): Promise<KeyStatus> {
+    this.enter('resetKeys')
+    if (body.password !== this.password) throw new ServerRefused(403)
+    if (this.bundles.length === 0) throw new ServerRefused(404)
+    if (generationOf(body.bundle) !== Math.max(...this.bundles.map((entry) => entry.generation)) + 1) throw new ServerRefused(409)
+
+    this.bundles.push({ generation: generationOf(body.bundle), bundle: body.bundle })
+    this.backup = { blob: body.backup, version: (this.backup?.version ?? 0) + 1 }
+    this.devices = []
+    return this.getStatus()
   }
 
   async registerDevice(body: { kind: DeviceKind; name: string }): Promise<DeviceInfo> {

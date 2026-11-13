@@ -8,6 +8,7 @@ import { type GateScreen, gateScreen } from '../gate'
 import { useEncryptionSync } from '../hooks/useEncryptionSync'
 import { useEncryptionStore } from '../store'
 import { LockedPanel } from './LockedPanel'
+import { OutdatedPanel } from './OutdatedPanel'
 import { SetUpPanel } from './SetUpPanel'
 
 // Between signing in and the chat: a person whose browser does not hold their keys sets them up, restores them or links this browser
@@ -93,6 +94,15 @@ function GateContent({ screen }: { screen: Exclude<GateScreen, 'chat' | 'loading
           </div>
         )}
         <LockedPanel />
+      </>
+    )
+  }
+
+  if (screen === 'outdated') {
+    return (
+      <>
+        <Heading>Your keys were renewed</Heading>
+        <OutdatedPanel />
       </>
     )
   }

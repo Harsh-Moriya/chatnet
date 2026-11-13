@@ -20,5 +20,6 @@ public record KeyEpochDto(
 
 public record KeyEpochPageDto(List<KeyEpochDto> Epochs, bool HasMore);
 
-// What a conversation's members hold about its keys, pushed when it changes: the newest epoch, and whether it must be replaced.
-public record ConversationKeyStateDto(Guid ConversationId, int KeyEpoch, bool KeyRotationRequired);
+// What a conversation's members hold about its keys, pushed when it changes: the newest epoch, whether it must be replaced and when it
+// was made (null while there is none), so a browser can replace it when it is a week old.
+public record ConversationKeyStateDto(Guid ConversationId, int KeyEpoch, bool KeyRotationRequired, DateTime? KeyEpochAt);

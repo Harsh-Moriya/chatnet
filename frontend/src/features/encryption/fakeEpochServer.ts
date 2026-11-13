@@ -176,7 +176,12 @@ export class FakeEpochServer {
         this.calls.push('getKeyState')
         const conversation = this.conversation(id)
         if (!conversation.memberIds.has(callerId)) throw new ServerRefused(403)
-        return { keyEpoch: conversation.keyEpoch, keyRotationRequired: conversation.keyRotationRequired }
+        const newest = conversation.epochs[conversation.epochs.length - 1]
+        return {
+          keyEpoch: conversation.keyEpoch,
+          keyRotationRequired: conversation.keyRotationRequired,
+          keyEpochAt: newest === undefined ? null : new Date(newest.madeAt).toISOString(),
+        }
       },
 
       getMemberIds: async (id): Promise<string[]> => {

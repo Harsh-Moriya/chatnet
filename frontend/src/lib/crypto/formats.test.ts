@@ -18,7 +18,17 @@ import { DEFAULT_ITERATIONS, openBackup, passphraseLength, sealBackup } from './
 import { epochCommitment, newEpochKey, openEnvelope, sealEnvelope, signEpoch, verifyEpoch, epochSignatureInput } from './epoch'
 import { decryptChunk, decryptFile, encryptFile, encryptedFileLength, newFileKey, readFileHeader } from './file'
 import { LABELS } from './formats'
-import { createAccountSecrets, currentAccountKey, decodeSecrets, encodeSecrets, findAccountKey, openBundle, rotateAccountKey, signBundle } from './keys'
+import {
+  createAccountSecrets,
+  currentAccountKey,
+  decodeSecrets,
+  encodeSecrets,
+  findAccountKey,
+  openBundle,
+  rotateAccountKey,
+  signBundle,
+  startOverAccountSecrets,
+} from './keys'
 import { linkUri, normalizeLinkCode, openLinkSecrets, parseLinkUri, sealLinkSecrets } from './link'
 import {
   MAX_MESSAGE_BLOB_BYTES,
@@ -596,6 +606,16 @@ describe('account keys', () => {
     expect(findAccountKey(second, 5)).toBeUndefined()
     expect(second.identity).toBe(first.identity)
     expect(toHex(second.accounts[0].privateKey)).not.toBe(toHex(second.accounts[1].privateKey))
+  })
+
+  it('starting over makes a new identity and one account key at the generation given, with nothing of the old keys', async () => {
+    const old = await rotateAccountKey(await createAccountSecrets())
+    const fresh = await startOverAccountSecrets(3)
+
+    expect(fresh.accounts.map((key) => key.generation)).toEqual([3])
+    expect(toHex(fresh.identity.publicKey)).not.toBe(toHex(old.identity.publicKey))
+    expect(old.accounts.map((key) => toHex(key.publicKey))).not.toContain(toHex(fresh.accounts[0].publicKey))
+    expect(toHex(encodeSecrets(decodeSecrets(encodeSecrets(fresh))))).toBe(toHex(encodeSecrets(fresh)))
   })
 
   it('encode and decode', async () => {

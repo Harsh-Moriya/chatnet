@@ -38,7 +38,9 @@ export const useEncryptionStore = create<EncryptionStore>()((set) => ({
     set(
       state.phase === 'ready'
         ? { status: 'ready', deviceId: state.deviceId, secrets: state.secrets, removedElsewhere }
-        : { status: state.phase, deviceId: null, secrets: null, removedElsewhere },
+        : // An outdated browser is still a device, so it keeps the id it was given, and its keys are left out of memory until the
+          // passphrase brings the newer ones.
+          { status: state.phase, deviceId: state.phase === 'outdated' ? state.deviceId : null, secrets: null, removedElsewhere },
     ),
   applyReady: (ready) => set({ status: 'ready', deviceId: ready.deviceId, secrets: ready.secrets, removedElsewhere: false }),
   acknowledgeRemoval: () => set({ removedElsewhere: false }),

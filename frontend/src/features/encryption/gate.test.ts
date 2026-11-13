@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { gateScreen } from './gate'
 import type { EncryptionStatus } from './store'
 
-const everyStatus: EncryptionStatus[] = ['idle', 'loading', 'unavailable', 'error', 'notSetUp', 'locked', 'ready']
+const everyStatus: EncryptionStatus[] = ['idle', 'loading', 'unavailable', 'error', 'notSetUp', 'locked', 'outdated', 'ready']
 
 describe('what stands between signing in and the chat', () => {
   it('lets a browser that holds the keys through, whatever the state of checking them is', () => {
@@ -20,6 +20,10 @@ describe('what stands between signing in and the chat', () => {
 
   it('asks a person whose keys are not on this browser to restore them', () => {
     expect(gateScreen('locked', false)).toBe('locked')
+  })
+
+  it('asks a browser that holds older keys than the account now has for the passphrase that brings the new ones', () => {
+    expect(gateScreen('outdated', false)).toBe('outdated')
   })
 
   it('says so when this browser cannot keep keys, and when it could not find out', () => {

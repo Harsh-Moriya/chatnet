@@ -711,4 +711,58 @@ public class ConversationKeysTests
         Assert.Equal(0, old.GetProperty("keyEpoch").GetInt32());
         Assert.False(old.GetProperty("keyRotationRequired").GetBoolean());
     }
+
+    // ##### When the newest epoch was made #####
+
+    [Fact]
+    public async Task The_list_and_the_detail_say_when_the_newest_epoch_was_made_and_a_conversation_with_none_has_no_time()
+    {
+        var team = await GroupAsync();
+        var legacy = await _factory.AddLegacyGroupAsync(team.Owner.Id, "Old", team.Member.Id);
+        using var owner = As(team.Owner);
+        var madeAt = (await EpochsAsync(team.Id)).Single().CreatedAt;
+
+        var list = await owner.ListConversationsAsync();
+        var detail = await (await owner.GetAsync($"/api/conversations/{team.Id}")).ReadJsonAsync();
+
+        Assert.Equal(madeAt, list.Single(c => c.IdOf() == team.Id).GetProperty("keyEpochAt").GetDateTime().ToUniversalTime());
+        Assert.Equal(madeAt, detail.GetProperty("keyEpochAt").GetDateTime().ToUniversalTime());
+        Assert.Equal(JsonValueKind.Null, list.Single(c => c.IdOf() == legacy).GetProperty("keyEpochAt").ValueKind);
+    }
+
+    [Fact]
+    public async Task The_time_follows_the_newest_epoch_and_not_the_first()
+    {
+        var team = await GroupAsync();
+        using var owner = As(team.Owner);
+        using var member = As(team.Member);
+        await owner.RemoveMemberResponseAsync(team.Id, team.Other.Id);
+        await member.StoreEpochAsync(team.Id, EpochBody.For(2, team.Owner.Id, team.Member.Id));
+
+        var epochs = await EpochsAsync(team.Id);
+        var list = await owner.ListConversationsAsync();
+
+        Assert.Equal(2, epochs.Count);
+        Assert.True(epochs[1].CreatedAt > epochs[0].CreatedAt);
+        Assert.Equal(epochs[1].CreatedAt, list.Single(c => c.IdOf() == team.Id).GetProperty("keyEpochAt").GetDateTime().ToUniversalTime());
+    }
+
+    [Fact]
+    public async Task The_push_about_a_conversation_s_keys_carries_when_its_newest_epoch_was_made()
+    {
+        var team = await GroupAsync();
+        await using var memberTab = await HubClient.ConnectAsync(_factory, team.Member);
+        using var owner = As(team.Owner);
+        using var member = As(team.Member);
+        var firstMadeAt = (await EpochsAsync(team.Id)).Single().CreatedAt;
+
+        await owner.RemoveMemberResponseAsync(team.Id, team.Other.Id);
+        var due = await memberTab.WaitForKeyChangedAsync(team.Id, s => s.GetProperty("keyRotationRequired").GetBoolean());
+        Assert.Equal(firstMadeAt, due.GetProperty("keyEpochAt").GetDateTime().ToUniversalTime());
+
+        await member.StoreEpochAsync(team.Id, EpochBody.For(2, team.Owner.Id, team.Member.Id));
+        var next = await memberTab.WaitForKeyChangedAsync(team.Id, s => s.GetProperty("keyEpoch").GetInt32() == 2);
+        var secondMadeAt = (await EpochsAsync(team.Id)).Single(e => e.Epoch == 2).CreatedAt;
+        Assert.Equal(secondMadeAt, next.GetProperty("keyEpochAt").GetDateTime().ToUniversalTime());
+    }
 }

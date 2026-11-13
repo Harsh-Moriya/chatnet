@@ -1,6 +1,6 @@
 # Endpoints
 
-The HTTP API. In Development the running API also serves its OpenAPI document at `/openapi/v1.json` and an interactive reference at `/scalar/v1`; every operation there declares its success body and each error it can return. The tables below list every route (58 operations) with its authentication, its rate-limit policy and what it does. Request and response bodies in the examples were copied from a running API.
+The HTTP API. In Development the running API also serves its OpenAPI document at `/openapi/v1.json` and an interactive reference at `/scalar/v1`; every operation there declares its success body and each error it can return. The tables below list every route (60 operations) with its authentication, its rate-limit policy and what it does. Request and response bodies in the examples were copied from a running API.
 
 ## Conventions
 
@@ -131,6 +131,8 @@ Authentication column: **Bearer** needs an access token; **Refresh cookie** need
 | `POST /api/keys/me` | Bearer | keys | 201, 400, 401, 409, 429 | First set-up: the bundle of generation 1 and the first backup (`bundle`, `backup`), stored together. 201 with the state. 409 when the caller already has keys. |
 | `GET /api/keys/me/backup` | Bearer | keys | 200, 401, 404, 429 | The caller's encrypted backup (`blob`, `version`). Never another person's: the route takes no id. 404 before set-up. |
 | `POST /api/keys/lookup` | Bearer | keys | 200, 400, 401, 429 | The current public bundle of each person named (`userIds`, 1 to 101) who has set up encryption. People without keys are left out of the answer. |
+| `POST /api/keys/me/generations` | Bearer | keys | 200, 400, 401, 404, 409, 429 | The next generation of the account key with the backup that holds it (`bundle`, `backup`, `expectedBackupVersion`) and, when a device was lost, the device to remove (`removeDeviceId`), in one step: the device is removed with its sessions and every conversation the caller is in is marked for a new key period. 200 with the state. 409 with `generation-stale` when the bundle is not the next generation and `backup-version-stale` when the backup was changed since that version; 404 for a device that is not the caller's and before set-up. See [encryption keys](../features/encryption-keys.md). |
+| `POST /api/keys/me/reset` | Bearer | keys | 200, 400, 401, 403, 404, 409, 429 | Starts the keys over for a person with neither a device nor the passphrase: the next generation from new keys and a new backup (`bundle`, `backup`), confirmed with the account password (`password`). Every device is removed and every conversation the caller is in is marked for a new key period. 200 with the state. 403 with `wrong-password`, 429 while the account is locked, 409 with `generation-stale`. See [encryption keys](../features/encryption-keys.md). |
 | `PUT /api/keys/me/backup` | Bearer | keys | 200, 400, 401, 404, 409, 429 | Replaces the backup (`blob`, `expectedVersion`), for a new passphrase. 409 when the backup was changed since that version, 404 before set-up. |
 
 ## Devices
@@ -184,18 +186,20 @@ The refresh token is in the `Set-Cookie` header, not the body: `chatnet_refresh=
 
 ```json
 {
-  "id": "a617e4e5-46ff-45a4-bf4d-1cece7222efa",
+  "id": "333a4966-982e-4646-b3bd-7ec5c758bf6e",
   "type": "Direct",
   "name": "Ben Example",
   "avatarUrl": null,
-  "updatedAt": "2026-11-09T15:57:47.050386Z",
+  "updatedAt": "2026-11-13T15:39:02.755968Z",
   "lastMessage": null,
   "unreadCount": 0,
-  "otherUserId": "01a1c107-a1d9-7ad5-ac3b-3a65513bb1ca",
+  "otherUserId": "01a1d58f-ec13-7060-b95b-e4e6ecb6ffb6",
   "isMuted": false,
   "leftAt": null,
   "keyEpoch": 1,
-  "keyRotationRequired": false
+  "keyRotationRequired": false,
+  "keyEpochAt": "2026-11-13T15:39:02.755968Z",
+  "changeSeq": 0
 }
 ```
 
@@ -205,12 +209,12 @@ For a direct chat `name` is the other person's display name and `otherUserId` is
 
 ```json
 {
-  "senderId": "01a1d27f-d8f6-7323-ba7b-bac494843e36",
-  "ciphertext": "AQEAAAABvk3TiuxiSIRzP49x...",
+  "senderId": "01a1d58f-f9ae-7505-8f26-2f2a0325526c",
+  "ciphertext": "AQEAAAABfZdsobwiprSHICnY...",
   "keyEpoch": 1,
-  "clientMessageId": "efc7cb15-cf23-406b-a027-7fa8a9714d31",
+  "clientMessageId": "a21e7202-49c1-4f0e-bc62-2d9181316fb0",
   "editCount": 0,
-  "createdAt": "2026-11-13T01:22:40.521121Z",
+  "createdAt": "2026-11-13T15:39:06.210517Z",
   "attachmentCount": 0
 }
 ```
@@ -221,14 +225,14 @@ For a direct chat `name` is the other person's display name and `otherUserId` is
 
 ```json
 {
-  "id": "01a1d27f-e749-7524-b845-a2df6e4f0d57",
-  "conversationId": "08cc1473-2a78-4b87-94f2-d91cf45faf46",
-  "senderId": "01a1d27f-d8f6-7323-ba7b-bac494843e36",
+  "id": "01a1d58f-fd67-77cd-ae48-0784b8f63da6",
+  "conversationId": "b098b57a-4cf7-4658-938b-d7d4b75bbeff",
+  "senderId": "01a1d58f-f9ae-7505-8f26-2f2a0325526c",
   "senderDisplayName": "Ana Example",
-  "ciphertext": "AQEAAAABYhPqsDWjQ1vsQPFz...",
+  "ciphertext": "AQEAAAABELjVgN1rSV9S7-lt...",
   "keyEpoch": 1,
-  "createdAt": "2026-11-13T01:22:40.073062Z",
-  "clientMessageId": "de995e7e-be17-4db7-90f9-5c79ac8cf3d0",
+  "createdAt": "2026-11-13T15:39:05.95916Z",
+  "clientMessageId": "a12219b1-d6f4-4537-9b78-52fb21a2c625",
   "attachments": [],
   "editedAt": null,
   "editCount": 0,
@@ -241,9 +245,9 @@ A message with a file carries its attachments, each an id, the stored size (the 
 
 ```json
 {
-  "id": "01a1d27f-edb5-74c0-9b6e-30d311aca1bd",
+  "id": "01a1d590-0147-744d-9681-2ed3a94f2d1d",
   "sizeBytes": 2077,
-  "url": "http://localhost:9000/chatnet/attachments/08cc1473-2a78-4b87-94f2-d91cf45faf46/01a1d27f-edb5-74c0-9b6e-30d311aca1bd?<signature parameters>"
+  "url": "http://localhost:9000/chatnet/attachments/b098b57a-4cf7-4658-938b-d7d4b75bbeff/01a1d590-0147-744d-9681-2ed3a94f2d1d?<signature parameters>"
 }
 ```
 
@@ -259,19 +263,19 @@ A deleted message has `ciphertext: null`, `isDeleted: true` and no attachments.
 {
   "changes": [
     {
-      "id": "01a1d27f-ee11-7142-8aa7-a49e4863e796",
-      "conversationId": "08cc1473-2a78-4b87-94f2-d91cf45faf46",
-      "senderId": "01a1d27f-d8f6-7323-ba7b-bac494843e36",
+      "id": "01a1d590-0172-793b-96b9-23d9ea997dbe",
+      "conversationId": "b098b57a-4cf7-4658-938b-d7d4b75bbeff",
+      "senderId": "01a1d58f-f9ae-7505-8f26-2f2a0325526c",
       "senderDisplayName": "Ana Example",
-      "ciphertext": "AQEAAAABDn7-8u1H74vf0CJx...",
+      "ciphertext": "AQEAAAAB7uyjQKt7dymUuZU7...",
       "keyEpoch": 1,
-      "createdAt": "2026-11-13T01:22:41.514499Z",
-      "clientMessageId": "84ed7404-a805-4bd2-9b7f-9c15f51fb3c2",
+      "createdAt": "2026-11-13T15:39:06.827598Z",
+      "clientMessageId": "cab949e3-418e-4b4e-ab0b-a98e4973f50c",
       "attachments": [
         {
-          "id": "01a1d27f-edb5-74c0-9b6e-30d311aca1bd",
+          "id": "01a1d590-0147-744d-9681-2ed3a94f2d1d",
           "sizeBytes": 2077,
-          "url": "http://localhost:9000/chatnet/attachments/08cc1473-2a78-4b87-94f2-d91cf45faf46/01a1d27f-edb5-74c0-9b6e-30d311aca1bd?<signature parameters>"
+          "url": "http://localhost:9000/chatnet/attachments/b098b57a-4cf7-4658-938b-d7d4b75bbeff/01a1d590-0147-744d-9681-2ed3a94f2d1d?<signature parameters>"
         }
       ],
       "editedAt": null,
@@ -280,16 +284,16 @@ A deleted message has `ciphertext: null`, `isDeleted: true` and no attachments.
       "changeSeq": 7
     },
     {
-      "id": "01a1d27f-e749-7524-b845-a2df6e4f0d57",
-      "conversationId": "08cc1473-2a78-4b87-94f2-d91cf45faf46",
-      "senderId": "01a1d27f-d8f6-7323-ba7b-bac494843e36",
+      "id": "01a1d58f-fd67-77cd-ae48-0784b8f63da6",
+      "conversationId": "b098b57a-4cf7-4658-938b-d7d4b75bbeff",
+      "senderId": "01a1d58f-f9ae-7505-8f26-2f2a0325526c",
       "senderDisplayName": "Ana Example",
       "ciphertext": null,
       "keyEpoch": 1,
-      "createdAt": "2026-11-13T01:22:40.073062Z",
-      "clientMessageId": "de995e7e-be17-4db7-90f9-5c79ac8cf3d0",
+      "createdAt": "2026-11-13T15:39:05.95916Z",
+      "clientMessageId": "a12219b1-d6f4-4537-9b78-52fb21a2c625",
       "attachments": [],
-      "editedAt": "2026-11-13T01:22:41.047563Z",
+      "editedAt": "2026-11-13T15:39:06.529556Z",
       "editCount": 1,
       "isDeleted": true,
       "changeSeq": 8
@@ -345,9 +349,9 @@ A deleted message has `ciphertext: null`, `isDeleted: true` and no attachments.
 
 ```json
 {
-  "uploadKey": "pending/08cc1473-2a78-4b87-94f2-d91cf45faf46/01a1d27f-d8f6-7323-ba7b-bac494843e36/790cec6f-9d7e-4f9a-a377-b38c532fee92",
-  "url": "http://localhost:9000/chatnet/pending/08cc1473-2a78-4b87-94f2-d91cf45faf46/01a1d27f-d8f6-7323-ba7b-bac494843e36/790cec6f-9d7e-4f9a-a377-b38c532fee92?<signature parameters>",
-  "expiresAt": "2026-11-13T01:32:41Z"
+  "uploadKey": "pending/b098b57a-4cf7-4658-938b-d7d4b75bbeff/01a1d58f-f9ae-7505-8f26-2f2a0325526c/398af653-e979-436d-b036-8d72da00fabc",
+  "url": "http://localhost:9000/chatnet/pending/b098b57a-4cf7-4658-938b-d7d4b75bbeff/01a1d58f-f9ae-7505-8f26-2f2a0325526c/398af653-e979-436d-b036-8d72da00fabc?<signature parameters>",
+  "expiresAt": "2026-11-13T15:49:06Z"
 }
 ```
 
@@ -359,8 +363,8 @@ A deleted message has `ciphertext: null`, `isDeleted: true` and no attachments.
 
 ```json
 {
-  "url": "http://localhost:9000/chatnet/attachments/08cc1473-2a78-4b87-94f2-d91cf45faf46/01a1d27f-edb5-74c0-9b6e-30d311aca1bd?<signature parameters>",
-  "expiresAt": "2026-11-13T02:22:42Z"
+  "url": "http://localhost:9000/chatnet/attachments/b098b57a-4cf7-4658-938b-d7d4b75bbeff/01a1d590-0147-744d-9681-2ed3a94f2d1d?<signature parameters>",
+  "expiresAt": "2026-11-13T16:39:07Z"
 }
 ```
 
@@ -374,20 +378,20 @@ A mention carries the message it is about as `message`, sealed as it was sent (n
 {
   "items": [
     {
-      "id": "01a1d27f-e87c-7b29-9585-302a2c61bda6",
+      "id": "01a1d58f-fdfb-7f75-9c50-232f3f49ce4d",
       "type": "Mention",
-      "conversationId": "08cc1473-2a78-4b87-94f2-d91cf45faf46",
-      "actorId": "01a1d27f-dc12-70dd-8293-ef403f288b55",
+      "conversationId": "b098b57a-4cf7-4658-938b-d7d4b75bbeff",
+      "actorId": "01a1d58f-fa1b-7fe1-85bb-cc70ee20a8ae",
       "actorDisplayName": "Ben Example",
-      "messageId": "01a1d27f-e867-7bd6-8bfa-875b8a022d52",
+      "messageId": "01a1d58f-fdf1-7a6a-a903-bd7a1cfa384b",
       "message": {
-        "ciphertext": "AQEAAAABRFj3T4TBpgX8Gq3O...",
+        "ciphertext": "AQEAAAABlLGZfMzoR5jd_OvD...",
         "keyEpoch": 1,
-        "clientMessageId": "78e54f64-89d8-4152-ae27-890b611196a4",
+        "clientMessageId": "b6626b06-0cd4-41c6-923b-be4e969b2b12",
         "editCount": 0
       },
       "isRead": false,
-      "createdAt": "2026-11-13T01:22:40.35935Z"
+      "createdAt": "2026-11-13T15:39:06.09731Z"
     }
   ],
   "unreadCount": 2
@@ -446,8 +450,8 @@ Bytes are base64url without padding. Long values are shortened here. `GET /api/k
 
 ```json
 {
-  "bundle": "AQEAAAABaUBlLcQF5H8UWIAG...",
-  "backup": "AQEBYVfw9rdeXP98nxRe66KM..."
+  "bundle": "AQEAAAABjYFGydQxokbA6jgz...",
+  "backup": "AQEBVZMrvHbbkByXaRv2TN6U..."
 }
 ```
 
@@ -456,12 +460,12 @@ Bytes are base64url without padding. Long values are shortened here. `GET /api/k
   "bundles": [
     {
       "generation": 1,
-      "bundle": "AQEAAAABaUBlLcQF5H8UWIAG..."
+      "bundle": "AQEAAAABjYFGydQxokbA6jgz..."
     }
   ],
   "backup": {
     "version": 1,
-    "updatedAt": "2026-11-08T09:52:43.958118Z"
+    "updatedAt": "2026-11-13T15:39:00.197642Z"
   }
 }
 ```
@@ -470,9 +474,9 @@ Bytes are base64url without padding. Long values are shortened here. `GET /api/k
 
 ```json
 {
-  "blob": "AQEBYVfw9rdeXP98nxRe66KM...",
+  "blob": "AQEBVZMrvHbbkByXaRv2TN6U...",
   "version": 1,
-  "updatedAt": "2026-11-08T09:52:43.958118Z"
+  "updatedAt": "2026-11-13T15:39:00.197642Z"
 }
 ```
 
@@ -481,7 +485,70 @@ Bytes are base64url without padding. Long values are shortened here. `GET /api/k
 ```json
 {
   "version": 2,
-  "updatedAt": "2026-11-08T09:52:44.043163Z"
+  "updatedAt": "2026-11-13T15:39:00.287724Z"
+}
+```
+
+`POST /api/keys/me/generations` takes the next generation, the backup that holds it, the version of the backup it was made from and the device that was lost, and answers with the state:
+
+```json
+{
+  "bundle": "AQEAAAAC86jfsA4IrP8GLCbb...",
+  "backup": "AQEBxlGAxgQrRArTKbelvDjs...",
+  "expectedBackupVersion": 2,
+  "removeDeviceId": "01a1d58f-e8d7-79de-87dc-a86fb6351e13"
+}
+```
+
+```json
+{
+  "bundles": [
+    {
+      "generation": 1,
+      "bundle": "AQEAAAABjYFGydQxokbA6jgz..."
+    },
+    {
+      "generation": 2,
+      "bundle": "AQEAAAAC86jfsA4IrP8GLCbb..."
+    }
+  ],
+  "backup": {
+    "version": 3,
+    "updatedAt": "2026-11-13T15:39:00.725033Z"
+  }
+}
+```
+
+`POST /api/keys/me/reset` takes new keys and the account password and answers with the state:
+
+```json
+{
+  "bundle": "AQEAAAADx0YOo6uCg2Zah3zj...",
+  "backup": "AQEBVED8QSIEZipS1Y1B9xVh...",
+  "password": "<account password>"
+}
+```
+
+```json
+{
+  "bundles": [
+    {
+      "generation": 1,
+      "bundle": "AQEAAAABjYFGydQxokbA6jgz..."
+    },
+    {
+      "generation": 2,
+      "bundle": "AQEAAAAC86jfsA4IrP8GLCbb..."
+    },
+    {
+      "generation": 3,
+      "bundle": "AQEAAAADx0YOo6uCg2Zah3zj..."
+    }
+  ],
+  "backup": {
+    "version": 4,
+    "updatedAt": "2026-11-13T15:39:01.073233Z"
+  }
 }
 ```
 
@@ -492,8 +559,8 @@ Bytes are base64url without padding. Long values are shortened here. `GET /api/k
 ```json
 {
   "userIds": [
-    "01a1c107-a1d9-7ad5-ac3b-3a65513bb1ca",
-    "01a1c107-a266-710f-ad06-eee304924eed"
+    "01a1d58f-ec13-7060-b95b-e4e6ecb6ffb6",
+    "01a1d58f-ec79-7b00-9375-ad23ef080e9d"
   ]
 }
 ```
@@ -502,14 +569,14 @@ Bytes are base64url without padding. Long values are shortened here. `GET /api/k
 {
   "bundles": [
     {
-      "userId": "01a1c107-a1d9-7ad5-ac3b-3a65513bb1ca",
+      "userId": "01a1d58f-ec13-7060-b95b-e4e6ecb6ffb6",
       "generation": 1,
-      "bundle": "AQEAAAAB0dnpCFHALx9ljnMV..."
+      "bundle": "AQEAAAAB3Dhcf1wXtsoPcx5K..."
     },
     {
-      "userId": "01a1c107-a266-710f-ad06-eee304924eed",
+      "userId": "01a1d58f-ec79-7b00-9375-ad23ef080e9d",
       "generation": 1,
-      "bundle": "AQEAAAABkQhX6QPC8z0mkHFf..."
+      "bundle": "AQEAAAABFai-jHwaU-zEV26-..."
     }
   ]
 }
@@ -519,22 +586,22 @@ A new conversation, and a group that people are added to, carry the epoch. `POST
 
 ```json
 {
-  "id": "a617e4e5-46ff-45a4-bf4d-1cece7222efa",
-  "otherUserId": "01a1c107-a1d9-7ad5-ac3b-3a65513bb1ca",
+  "id": "333a4966-982e-4646-b3bd-7ec5c758bf6e",
+  "otherUserId": "01a1d58f-ec13-7060-b95b-e4e6ecb6ffb6",
   "epoch": {
     "epoch": 1,
-    "commitment": "IFnsiYy6ZOjI6AmZVURI214ATzLDPp_qz17FQIjtaV8",
-    "signature": "KMLehAYgiuWWdVsaKvwvux2_...",
+    "commitment": "NMo-B19JVwDkogbY8a4J0cPTFY0qVGk4T5zpB2yNPGg",
+    "signature": "lbRGVHuzSNufCbSCSZQeNLgN...",
     "envelopes": [
       {
-        "userId": "01a1c107-9ec9-7670-bb96-63f6608eccf7",
+        "userId": "01a1d58f-eb99-7255-97e3-9cdcf80ca854",
         "generation": 1,
-        "envelope": "AQGjVbuSE3g4Mk_0hx4dVyRr..."
+        "envelope": "AQGCwkVMp5-w3IeHovd-kZ4K..."
       },
       {
-        "userId": "01a1c107-a1d9-7ad5-ac3b-3a65513bb1ca",
+        "userId": "01a1d58f-ec13-7060-b95b-e4e6ecb6ffb6",
         "generation": 1,
-        "envelope": "AQEwEWDGjJqLO3NZDp0Bv8lk..."
+        "envelope": "AQFpkFvfK6xriTLCQsoMY9Wa..."
       }
     ]
   }
@@ -548,27 +615,27 @@ A new conversation, and a group that people are added to, carry the epoch. `POST
   "epochs": [
     {
       "epoch": 1,
-      "creatorId": "01a1c107-9ec9-7670-bb96-63f6608eccf7",
+      "creatorId": "01a1d58f-eb99-7255-97e3-9cdcf80ca854",
       "reason": "Created",
-      "createdAt": "2026-11-09T15:57:47.527425Z",
-      "commitment": "qGf-KAUO6PR1ueSDCqI08f9w66YobaO4BESkn6ikuGU",
-      "signature": "laUQNlBUOmHxfccWr_-aN4FY...",
+      "createdAt": "2026-11-13T15:39:03.203984Z",
+      "commitment": "I5XT5FcYmtjcVitOdMZulzz36BSfQ9MzLSwoS_VsXpA",
+      "signature": "wzOl7hBAhGsqWqU2WxM5p957...",
       "members": [
         {
-          "userId": "01a1c107-9ec9-7670-bb96-63f6608eccf7",
+          "userId": "01a1d58f-eb99-7255-97e3-9cdcf80ca854",
           "generation": 1
         },
         {
-          "userId": "01a1c107-a1d9-7ad5-ac3b-3a65513bb1ca",
+          "userId": "01a1d58f-ec13-7060-b95b-e4e6ecb6ffb6",
           "generation": 1
         },
         {
-          "userId": "01a1c107-a266-710f-ad06-eee304924eed",
+          "userId": "01a1d58f-ec79-7b00-9375-ad23ef080e9d",
           "generation": 1
         }
       ],
       "generation": 1,
-      "envelope": "AQF_PCaYIheiDtM8LNJ6Fh1n..."
+      "envelope": "AQEN5U1I_q6eP9X49jUevhOQ..."
     }
   ],
   "hasMore": false
@@ -584,7 +651,7 @@ A new conversation, and a group that people are added to, carry the epoch. `POST
   "status": 409,
   "detail": "Another epoch was stored first. Look at the conversation again.",
   "code": "epoch-stale",
-  "traceId": "00-a666037f626612332e625dc100196494-a16f18bff67b28b8-01"
+  "traceId": "00-c506033d07df6724c95551e46182d975-698223fccae5d690-01"
 }
 ```
 
@@ -594,11 +661,11 @@ A new conversation, and a group that people are added to, carry the epoch. `POST
 
 ```json
 {
-  "id": "01a1ba93-1665-7c52-9f20-392c3a44e4ad",
+  "id": "01a1d58f-e792-7f31-8a9f-f51ea69deb00",
   "kind": "Web",
   "name": "Chrome on Windows",
-  "createdAt": "2026-11-08T09:52:44.133765Z",
-  "lastActiveAt": "2026-11-08T09:52:44.133765Z"
+  "createdAt": "2026-11-13T15:39:00.370907Z",
+  "lastActiveAt": "2026-11-13T15:39:00.370907Z"
 }
 ```
 
@@ -608,8 +675,8 @@ A new conversation, and a group that people are added to, carry the epoch. `POST
 
 ```json
 {
-  "temporaryPublicKey": "GJwEZa-wgX24cNhTOJhC_-msl16964_Qdq2Xjlh_Ip8",
-  "code": "GJ6P3JDJF0",
+  "temporaryPublicKey": "NRaRbLtybUZvvyHPhg_lBPKNenTQPfzGSlVK6k9q98E",
+  "code": "KJNJBQKRAZ",
   "kind": "Web",
   "name": "Safari on macOS"
 }
@@ -619,8 +686,8 @@ It answers 201:
 
 ```json
 {
-  "id": "01a1ba93-16db-7e14-8a35-1c14c2ba5a9f",
-  "expiresAt": "2026-11-08T10:02:44Z"
+  "id": "01a1d58f-e813-7878-bd2e-a443a74e2c46",
+  "expiresAt": "2026-11-13T15:49:00Z"
 }
 ```
 
@@ -628,12 +695,12 @@ It answers 201:
 
 ```json
 {
-  "id": "01a1ba93-16db-7e14-8a35-1c14c2ba5a9f",
-  "temporaryPublicKey": "GJwEZa-wgX24cNhTOJhC_-msl16964_Qdq2Xjlh_Ip8",
+  "id": "01a1d58f-e813-7878-bd2e-a443a74e2c46",
+  "temporaryPublicKey": "NRaRbLtybUZvvyHPhg_lBPKNenTQPfzGSlVK6k9q98E",
   "kind": "Web",
   "name": "Safari on macOS",
-  "createdAt": "2026-11-08T09:52:44.251658Z",
-  "expiresAt": "2026-11-08T10:02:44Z"
+  "createdAt": "2026-11-13T15:39:00.499529Z",
+  "expiresAt": "2026-11-13T15:49:00Z"
 }
 ```
 
@@ -643,15 +710,15 @@ It answers 201:
 {
   "state": "Pending",
   "payload": null,
-  "expiresAt": "2026-11-08T10:02:44Z"
+  "expiresAt": "2026-11-13T15:49:00Z"
 }
 ```
 
 ```json
 {
   "state": "Approved",
-  "payload": "AQG9lwUNCG8UxglA2cNxdeXl...",
-  "expiresAt": "2026-11-08T10:02:44Z"
+  "payload": "AQHt5A9lS3s8jMP3lBfHqkxG...",
+  "expiresAt": "2026-11-13T15:49:00Z"
 }
 ```
 
@@ -659,7 +726,7 @@ It answers 201:
 {
   "state": "Collected",
   "payload": null,
-  "expiresAt": "2026-11-08T10:02:44Z"
+  "expiresAt": "2026-11-13T15:49:00Z"
 }
 ```
 

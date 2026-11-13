@@ -72,7 +72,9 @@ The server stores what the browsers encrypt and relays what they seal for each o
 | Setting up and devices | Setting up stores the bundle and the backup in one transaction and a second set-up is a `409`. Adding a device counts and inserts under a per-person lock, so devices added together never exceed the limit | |
 | Linking a device | The one-time public key and a 50-bit code derived from it are stored. The signed-in device checks the key the server returned against the code the person typed. The sealed secrets are handed over once by a statement that also clears them, expire with the request (10 minutes) and are returned only to the same person | A request is not bound to a physical device: whoever the person approves gets the keys |
 | Sessions and devices | A session is tied to a device by the `X-Device-Id` header on sign-in and renewal, only if the device is the person's and not removed. Removing a device revokes the refresh tokens tied to it, and renewing a session tied to a removed device ends it, so a renewal that overlapped the removal does not keep the session alive | Removing a device does not change the keys it held |
-| Logs | Ids and sizes only: never a key, a bundle, a backup, a sealed payload, a code or a device name | |
+| A lost device | A new generation of the account key, stored with its backup, the removal of the device and the marking of the person's conversations, in one transaction under a lock on the person's keys. Every path that seals a conversation key to someone reads their generation under the shared side of that lock in the transaction that saves the epoch | The device keeps the identity key and what it already read. The other devices need the passphrase once to get the new private key |
+| Starting over | A new identity and generation, a new backup, every device removed and every conversation marked, after the account password is asked again with the lock rules of signing in. A wrong password is a `403`, never a `401`, so the browser does not take it for an expired session | Everything sealed so far is lost to the person, and everyone who knows them must accept a new identity key. Whoever has the password and an unattended browser can do this, which is why the password is asked |
+| Logs | Ids and sizes only: never a key, a bundle, a backup, a sealed payload, a code, a password or a device name | |
 
 ### Keys of conversations
 
@@ -87,6 +89,8 @@ The key of each period of a conversation is made in a member's browser and seale
 | Joining | A person who joins is given an envelope for the epoch made at their joining and none for earlier ones | |
 | Who can make a key | Any current member. Others, and people who left, are refused with the same `403` as any conversation they are not in | A member can replace the key, as can one who is unhappy with it, but at most once a day unless a removal or a leave marked it as due |
 | Stale and concurrent epochs | The next number is required, and the primary key of the table decides any tie. The later request gets a `409` with a code the client acts on | |
+| Replacing on a timer | A browser replaces an epoch that is seven days old, whoever opens or sends first; a message is never refused for want of a replacement | The server does not enforce the week, so a client that never replaces keys is not stopped |
+| Changed identity | A person whose identity key is not the remembered one is refused until the person looking compares the safety number and accepts. The mark that a person was verified belongs to one key and is gone when another is accepted | The first sight of a person's identity key is trusted, and the marks are kept in one browser |
 | Logs | Ids and sizes only: never an envelope, a commitment or a signature | |
 
 ### Messages

@@ -107,6 +107,19 @@ A conversation that does not exist and one the caller is not in give this same a
 }
 ```
 
+Asking again for the account password to reset the encryption keys, with a password that is not right, is a 403 with a `code` the browser acts on. It is a 403 and not a 401 so the browser does not take it for an expired session. Repeated wrong passwords lock the account as signing in does (429):
+
+```json
+{
+  "type": "https://tools.ietf.org/html/rfc9110#section-15.5.4",
+  "title": "Forbidden",
+  "status": 403,
+  "detail": "The password is not right.",
+  "code": "wrong-password",
+  "traceId": "00-9cf7669ed913d5d6c3cc60b878a0ebe8-8aa53a784c846b27-01"
+}
+```
+
 ### 404 not found
 
 ```json
@@ -138,7 +151,7 @@ A conversation that does not exist and one the caller is not in give this same a
   "title": "Conflict",
   "status": 409,
   "detail": "This message was deleted.",
-  "traceId": "00-8b1ca14972f3cb71a39193079b909f61-de19de37e0f38715-01"
+  "traceId": "00-dc82704402dd0afbefc92fd0cb0431b8-fe0dd9297c75f4ce-01"
 }
 ```
 
@@ -151,6 +164,8 @@ A conflict about the keys of a conversation or the version of a message carries 
 | `epoch-stale` | Another epoch was stored first, so the one offered is not the next number. For a message or an edit: the conversation is not in the epoch it was sealed under. |
 | `epoch-due` | A message or an edit was sealed under the epoch in force, but a removal or a leave marked that epoch for replacement, so nothing more is stored under it until a new one is made. |
 | `edit-count-stale` | The edit was made from an older version of the message: another edit was stored first. |
+| `generation-stale` | The bundle is not the next generation of the account key: another device stored one first. The browser reads its keys again. |
+| `backup-version-stale` | The backup was replaced from another device since the version a new generation was made from. The browser reads it again. |
 | `changes-cursor-ahead` | The point asked from is past the newest change the server has, which means the server holds an older state than the client last saw. The client reads the conversation again from the start. |
 | `epoch-members-changed` | The people in the conversation, or the key generation of one of them, are not what the epoch was made for. |
 | `member-has-no-keys` | Someone in the conversation has not set up encryption, so no key can be sealed for them. |
@@ -163,7 +178,7 @@ A conflict about the keys of a conversation or the version of a message carries 
   "status": 409,
   "detail": "The people in this conversation, or their keys, are not the ones this epoch was made for.",
   "code": "epoch-members-changed",
-  "traceId": "00-d960ab7c98fbeb767b77dccbc7645486-88e8fa4caa01efa4-01"
+  "traceId": "00-8fbb2e4917543416697f8f5f2f2afece-f80eb2b719a991bd-01"
 }
 ```
 
@@ -176,7 +191,7 @@ A message under an epoch that is not the one the conversation is in:
   "status": 409,
   "detail": "The keys of this conversation changed. Look at the conversation again.",
   "code": "epoch-stale",
-  "traceId": "00-9a93dabd2779d97dee210cdb27076041-26f083445ef72ebb-01"
+  "traceId": "00-81c1fd3c5cbb94578706ee0eb7d4e29b-392549f6581f9ed4-01"
 }
 ```
 
@@ -189,7 +204,7 @@ A message under an epoch that a removal marked for replacement:
   "status": 409,
   "detail": "The keys of this conversation must be replaced before anything more is said.",
   "code": "epoch-due",
-  "traceId": "00-37ede7440e0cded87493ba0eee171042-9c1ef5bbf5fc5757-01"
+  "traceId": "00-ddd9871cee1f51c831a0b7ad7a84c109-d777eeff3dc0b321-01"
 }
 ```
 
@@ -202,7 +217,7 @@ An edit made from an older version of the message:
   "status": 409,
   "detail": "This message was edited somewhere else first. Look at its latest version.",
   "code": "edit-count-stale",
-  "traceId": "00-5673700c7a86629ce346dd8d56bf70e3-9810890cf31b3203-01"
+  "traceId": "00-024c90f9f4936872fd5a01e45bc900a0-276b2ffe56deb837-01"
 }
 ```
 
@@ -219,7 +234,7 @@ A message that is not a well formed sealed message, and a send with no client me
       "The message is not a well formed encrypted message."
     ]
   },
-  "traceId": "00-0c7f8c8c036e3369b97dfe762dd9b9f3-4879749a1c3cf4a7-01"
+  "traceId": "00-90daecba6c1c623d3b2c9d60b8755f04-a0a804b9a50b2c43-01"
 }
 ```
 
@@ -234,7 +249,7 @@ A message that is not a well formed sealed message, and a send with no client me
       "'Client Message Id' must not be empty."
     ]
   },
-  "traceId": "00-5a2a5b5372d38da4af1f5a583a36577e-1d3f74ffffd20459-01"
+  "traceId": "00-c2fb81067e1687d3a2a32958d5f8d03e-c817f39b4335dd22-01"
 }
 ```
 

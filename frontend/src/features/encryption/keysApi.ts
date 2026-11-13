@@ -11,6 +11,10 @@ export const keysApi: KeysApi = {
 
   replaceBackup: async (body) => (await api.put<{ version: number }>('/keys/me/backup', body)).data,
 
+  addGeneration: async (body) => (await api.post<KeyStatus>('/keys/me/generations', body)).data,
+
+  resetKeys: async (body) => (await api.post<KeyStatus>('/keys/me/reset', body)).data,
+
   registerDevice: async (body) => (await api.post<DeviceInfo>('/devices', body)).data,
 
   listDevices: async () => (await api.get<DeviceInfo[]>('/devices')).data,

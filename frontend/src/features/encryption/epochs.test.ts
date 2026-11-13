@@ -12,6 +12,7 @@ import {
   signBundle,
   signEpoch,
   toBase64Url,
+  toHex,
 } from '../../lib/crypto'
 import {
   EpochContestedError,
@@ -716,6 +717,35 @@ describe('the keys of other people', () => {
     server.registerBundle(ben.id, 1, await bundleOf(ben.id, await createAccountSecrets()))
 
     await expect(resolvePeers(ana.deps, [ben.id])).rejects.toBeInstanceOf(IdentityChangedError)
+  })
+
+  it('tell the caller which person changed, and still refuse', async () => {
+    const server = new FakeEpochServer()
+    const [ana, ben] = [await newPerson(server), await newPerson(server)]
+    await resolvePeers(ana.deps, [ben.id])
+    const reset = await createAccountSecrets()
+    server.registerBundle(ben.id, 1, await bundleOf(ben.id, reset))
+    const told: { userId: string; seen: Uint8Array }[] = []
+
+    await expect(resolvePeers({ ...ana.deps, onIdentityChanged: (change) => told.push(change) }, [ben.id])).rejects.toBeInstanceOf(
+      IdentityChangedError,
+    )
+
+    expect(told).toHaveLength(1)
+    expect(told[0].userId).toBe(ben.id)
+    expect(toHex(told[0].seen)).toBe(toHex(reset.identity.publicKey))
+  })
+
+  it('do not tell anyone when nobody changed', async () => {
+    const server = new FakeEpochServer()
+    const [ana, ben] = [await newPerson(server), await newPerson(server)]
+    const told: unknown[] = []
+    const deps = { ...ana.deps, onIdentityChanged: (change: unknown) => told.push(change) }
+
+    await resolvePeers(deps, [ben.id])
+    await resolvePeers(deps, [ben.id])
+
+    expect(told).toEqual([])
   })
 
   it('are kept apart per person, so one person\'s pins say nothing about another\'s', async () => {
