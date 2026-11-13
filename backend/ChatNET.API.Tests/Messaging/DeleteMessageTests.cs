@@ -546,6 +546,27 @@ public class DeleteMessageTests
         Assert.Equal(0, await _factory.QueryDbAsync(db => db.OutboxMessages.CountAsync(o => o.Id == row.Id)));
     }
 
+    // The statement names the conversation as well as the message, so a message is never deleted, or numbered among the changes,
+    // under another conversation's claim.
+    [Fact]
+    public async Task A_message_is_not_deleted_by_naming_another_conversation()
+    {
+        var (sent, conversation, alice, _) = await SentInDirectChatAsync("stays put");
+        var (_, _, elsewhere) = await _factory.DirectChatAsync();
+        using var scope = _factory.Services.CreateScope();
+        var row = scope.ServiceProvider.GetRequiredService<OutboxPublisher>()
+            .Create(new MessageUpdated(sent.MessageIdOf(), conversation));
+
+        var deleted = await scope.ServiceProvider.GetRequiredService<IMessageRepository>()
+            .TryDeleteAsync(elsewhere, sent.MessageIdOf(), alice.Id, DateTime.UtcNow, [row], CancellationToken.None);
+
+        Assert.False(deleted);
+        var stored = await StoredAsync(sent);
+        Assert.False(stored.IsDeleted);
+        Assert.Equal("stays put", stored.Text());
+        Assert.Equal(0, await _factory.QueryDbAsync(db => db.OutboxMessages.CountAsync(o => o.Id == row.Id)));
+    }
+
     // A row Postgres refuses takes the deletion down with it: a message is never deleted without its announcement.
     [Fact]
     public async Task A_message_is_not_deleted_when_its_row_cannot_be_stored()
