@@ -1,5 +1,8 @@
+using ChatNET.API.Common.Exceptions;
 using ChatNET.API.Common.Persistence;
 using ChatNET.API.Keys;
+using ChatNET.API.Keys.Persistence;
+using ChatNET.API.Conversations.KeyEpochs;
 using ChatNET.API.Conversations.Models;
 using ChatNET.API.Media;
 using ChatNET.API.Notifications.Models;
@@ -28,12 +31,17 @@ public class ConversationRepository : IConversationRepository
     public async Task<bool> TryAddDirectAsync(
         Conversation conversation, IReadOnlyList<OutboxMessage> outbox, CancellationToken cancellationToken)
     {
+        // Ending the transaction without a commit rolls it back, which is what a lost race needs.
+        await using var transaction = await _db.Database.BeginTransactionAsync(cancellationToken);
+        await RequireCurrentGenerationsAsync(conversation, cancellationToken);
+
         _db.Conversations.Add(conversation);
         _db.OutboxMessages.AddRange(outbox);
 
         try
         {
             await _db.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
             return true;
         }
         catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
@@ -49,10 +57,38 @@ public class ConversationRepository : IConversationRepository
         Conversation conversation, IReadOnlyList<Notification> notifications, IReadOnlyList<OutboxMessage> outbox,
         CancellationToken cancellationToken)
     {
+        await using var transaction = await _db.Database.BeginTransactionAsync(cancellationToken);
+        await RequireCurrentGenerationsAsync(conversation, cancellationToken);
+
         _db.Conversations.Add(conversation);
         _db.Notifications.AddRange(notifications);
         _db.OutboxMessages.AddRange(outbox);
         await _db.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+    }
+
+    // The first key period of a new conversation was made for the generations people had when the browser asked. Reading them again
+    // under the shared lock on each person's keys, in the transaction that saves the conversation, means a new generation stored in
+    // between is seen here and the conversation is refused, instead of being saved sealed to a key that has just been replaced.
+    private async Task RequireCurrentGenerationsAsync(Conversation conversation, CancellationToken cancellationToken)
+    {
+        var epoch = conversation.KeyEpochs.SingleOrDefault();
+        if (epoch is null)
+            return;
+
+        var userIds = epoch.Envelopes.Select(e => e.UserId).ToList();
+        await KeyGenerationLock.HoldSharedAsync(_db, userIds, cancellationToken);
+
+        var current = await _db.AccountKeyBundles
+            .AsNoTracking()
+            .Where(b => userIds.Contains(b.UserId))
+            .GroupBy(b => b.UserId)
+            .Select(g => new { UserId = g.Key, Generation = g.Max(b => b.Generation) })
+            .ToDictionaryAsync(x => x.UserId, x => x.Generation, cancellationToken);
+
+        if (epoch.Envelopes.Any(e => !current.TryGetValue(e.UserId, out var generation) || generation != e.AccountKeyGeneration))
+            throw new ConflictException(
+                "The people in this conversation, or their keys, are not the ones this epoch was made for.", KeyEpochCodes.MembersChanged);
     }
 
     public async Task<ConversationDto?> GetForViewerAsync(

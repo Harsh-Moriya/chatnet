@@ -1,5 +1,6 @@
 using ChatNET.API.Common.Auth;
 using ChatNET.API.Common.OpenApi;
+using ChatNET.API.Keys.AddKeyGeneration;
 using ChatNET.API.Keys.GetKeyBackup;
 using ChatNET.API.Keys.GetKeyStatus;
 using ChatNET.API.Keys.LookupKeys;
@@ -14,6 +15,8 @@ namespace ChatNET.API.Keys;
 public record SetUpKeysRequest(string? Bundle, string? Backup);
 
 public record ReplaceKeyBackupRequest(string? Blob, int? ExpectedVersion);
+
+public record AddKeyGenerationRequest(string? Bundle, string? Backup, int? ExpectedBackupVersion, Guid? RemoveDeviceId);
 
 public record LookupKeysRequest(List<Guid>? UserIds);
 
@@ -54,6 +57,16 @@ public static class KeysEndpoints
         keys.MapPut("/backup", async (ReplaceKeyBackupRequest body, HttpContext http, IMediator mediator) =>
             Results.Ok(await mediator.Send(new ReplaceKeyBackupCommand(http.User.GetUserId(), body.Blob, body.ExpectedVersion))))
         .Returns<BackupInfoDto>(
+            StatusCodes.Status200OK, StatusCodes.Status400BadRequest, StatusCodes.Status401Unauthorized, StatusCodes.Status404NotFound,
+            StatusCodes.Status409Conflict, StatusCodes.Status429TooManyRequests);
+
+        // The next generation of the account key with the backup that holds it, and the device that was lost, if that is why: the
+        // keys change, the device goes and the conversations are marked for a new key period in one step. 404 for a device that is
+        // not the caller's. 409 with a code when the generation is not the next one or the backup moved on.
+        keys.MapPost("/generations", async (AddKeyGenerationRequest body, HttpContext http, IMediator mediator) =>
+            Results.Ok(await mediator.Send(new AddKeyGenerationCommand(
+                http.User.GetUserId(), body.Bundle, body.Backup, body.ExpectedBackupVersion, body.RemoveDeviceId))))
+        .Returns<KeyStatusDto>(
             StatusCodes.Status200OK, StatusCodes.Status400BadRequest, StatusCodes.Status401Unauthorized, StatusCodes.Status404NotFound,
             StatusCodes.Status409Conflict, StatusCodes.Status429TooManyRequests);
 
