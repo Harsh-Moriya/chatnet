@@ -187,6 +187,14 @@ describe('a device that is behind', () => {
     expect(decodeSecrets((await second.store.load(USER))!.secrets).accounts).toHaveLength(1)
   })
 
+  it('refuses keys whose oldest generation is not the one the server holds the public half of', async () => {
+    const { server, first, second, a, b } = await twoDevices()
+    await addGeneration(first.deps, USER, a, PASSPHRASE)
+    server.bundles[0] = { generation: 1, bundle: server.bundles[1].bundle }
+
+    expect(await rejection(catchUp(second.deps, USER, b.deviceId, PASSPHRASE))).toBeInstanceOf(KeysMismatchError)
+  })
+
   it('refuses a backup whose keys are not the ones the server holds the public halves of', async () => {
     const { server, first, second, a, b } = await twoDevices()
     await addGeneration(first.deps, USER, a, PASSPHRASE)
@@ -228,6 +236,14 @@ describe('starting over', () => {
     const other = await unlock(browser(server, 'Another browser').deps, USER, NEW_PASSPHRASE)
 
     expect(toHex(encodeSecrets(other.secrets))).toBe(toHex(encodeSecrets(reset.secrets)))
+  })
+
+  it('refuses keys made by a reset whose first generation is not the one the server holds the public half of', async () => {
+    const { server } = await twoDevices()
+    await resetEncryption(browser(server).deps, USER, NEW_PASSPHRASE, server.password)
+    server.bundles[1] = { generation: 2, bundle: server.bundles[0].bundle }
+
+    expect(await rejection(unlock(browser(server, 'Another browser').deps, USER, NEW_PASSPHRASE))).toBeInstanceOf(KeysMismatchError)
   })
 
   it('does not accept the old backup after it: the keys that open it are not the ones the server holds', async () => {

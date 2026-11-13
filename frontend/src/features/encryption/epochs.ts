@@ -46,9 +46,9 @@ export const ROTATION_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000
 // Whether the newest epoch should be replaced: someone left since it was made, or it is a week old.
 export function keysAreDue(state: { keyRotationRequired: boolean; keyEpochAt?: string | null }, now: number): boolean {
   if (state.keyRotationRequired) return true
-  if (state.keyEpochAt === undefined || state.keyEpochAt === null) return false
 
-  const madeAt = Date.parse(state.keyEpochAt)
+  // No time, or one that is not a time, says nothing about the age.
+  const madeAt = Date.parse(state.keyEpochAt ?? '')
   return !Number.isNaN(madeAt) && now - madeAt >= ROTATION_INTERVAL_MS
 }
 

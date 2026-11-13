@@ -101,6 +101,30 @@ describe('the safety number', () => {
     await expect(loadSafetyView(depsFor(ana, server().api), BEN)).rejects.toBeInstanceOf(MissingKeysError)
   })
 
+  it('takes the keys of the person asked about when the server answers with others as well', async () => {
+    const ana = await person(ANA)
+    const ben = await person(BEN)
+    const cy = await person('00000000-0000-4000-8000-0000000000c1')
+    const answers = [await wireOf(cy.userId, cy.secrets), await wireOf(BEN, ben.secrets)]
+    const api = { lookupKeys: async () => answers }
+
+    const view = await loadSafetyView(depsFor(ana, api), BEN)
+
+    const expected = await loadSafetyView(depsFor(ana, server(await wireOf(BEN, ben.secrets)).api), BEN)
+    expect(view.number).toBe(expected.number)
+  })
+
+  it('does not take a failure of the store for a change of key', async () => {
+    const ana = await person(ANA)
+    const ben = await person(BEN)
+    const pins = new MemoryPinStore()
+    pins.load = async () => {
+      throw new Error('the store is gone')
+    }
+
+    await expect(loadSafetyView(depsFor(ana, server(await wireOf(BEN, ben.secrets)).api, pins), BEN)).rejects.toThrow('the store is gone')
+  })
+
   it('refuses a bundle that was made for another person', async () => {
     const ana = await person(ANA)
     const ben = await person(BEN)
@@ -152,7 +176,7 @@ describe('verifying', () => {
   it('has nothing to mark for a person who was never seen', async () => {
     const ana = await person(ANA)
 
-    await expect(setVerified(depsFor(ana, server().api), BEN, true)).rejects.toThrow()
+    await expect(setVerified(depsFor(ana, server().api), BEN, true)).rejects.toThrow('has not been seen yet')
   })
 
   it('does not mark a person for one of two people: it is the pair of this owner and this contact', async () => {
