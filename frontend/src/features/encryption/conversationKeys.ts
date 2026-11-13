@@ -8,6 +8,7 @@ import { KeysMismatchError } from './flows'
 import { useKeyStatusStore } from './keyStatus'
 import { indexedDbPinStore } from './pinStore'
 import { type MessageOpener, type Sealed, createMessageOpener, sealText, underCurrentEpoch } from './sealedMessages'
+import { useIdentityChanges } from './identityChanges'
 import { useEncryptionStore } from './store'
 
 // The conversation keys joined to the real server, this browser's stores and the signed-in person. The rules are in epochs.ts. The chat
@@ -31,7 +32,13 @@ export function epochDeps(): EpochDeps {
   const secrets = useEncryptionStore.getState().secrets
   if (userId === undefined || secrets === null) throw new EncryptionNotReadyError()
 
-  return { api: epochApi, keys: indexedDbEpochKeyStore, pins: indexedDbPinStore, self: { userId, secrets } }
+  return {
+    api: epochApi,
+    keys: indexedDbEpochKeyStore,
+    pins: indexedDbPinStore,
+    self: { userId, secrets },
+    onIdentityChanged: (change) => useIdentityChanges.getState().note(change.userId, change.seen),
+  }
 }
 
 // Conversations being made ready right now, so opening one twice (or two tabs of the same page in one browser reacting to the same push)

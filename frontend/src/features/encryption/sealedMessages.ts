@@ -215,6 +215,8 @@ export function createMessageOpener(deps: EpochDeps): MessageOpener {
     },
 
     forget(conversationId) {
+      // What was learned of senders goes too: a sender whose key was refused as changed may have been accepted since.
+      senders.clear()
       for (const marker of [...missing]) if (marker.startsWith(`${conversationId}:`)) missing.delete(marker)
     },
   }

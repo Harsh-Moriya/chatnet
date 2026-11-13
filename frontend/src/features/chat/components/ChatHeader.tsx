@@ -1,12 +1,14 @@
 import { Suspense, lazy, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Bell, BellOff, Users } from 'lucide-react'
+import { ArrowLeft, Bell, BellOff, Fingerprint, ShieldCheck, Users } from 'lucide-react'
 import { Avatar } from '../../../components/ui/Avatar'
 import { Button } from '../../../components/ui/Button'
 import { cn } from '../../../lib/cn'
 import { getApiError } from '../../../lib/errors'
 import { useNow } from '../../../lib/useNow'
 import { useAuth } from '../../auth/hooks/useAuth'
+import { LazySafetyNumberDialog } from '../../encryption/components/LazySafetyNumberDialog'
+import { useVerified } from '../../encryption/hooks/useVerified'
 import { countOnline, directStatus, groupStatus } from '../../presence/presenceLabel'
 import { usePresenceStore } from '../../presence/store/presenceStore'
 import { setMuted } from '../api/chatApi'
@@ -28,6 +30,10 @@ export function ChatHeader({ conversation }: { conversation: Conversation }) {
   const [infoOpen, setInfoOpen] = useState(false)
   // Mounted from the first click on, so closing it returns focus to the button as the browser's dialog does.
   const [infoMounted, setInfoMounted] = useState(false)
+  // The number two people compare to be sure nobody is between them, for a direct chat. Mounted from the first click on, as the group info is.
+  const [safetyOpen, setSafetyOpen] = useState(false)
+  const [safetyMounted, setSafetyMounted] = useState(false)
+  const verified = useVerified(isGroup ? null : conversation.otherUserId)
 
   // The people other than the signed-in user, for counting who is online in a group. Their presence is
   // read through a selector that returns a number, so the header re-renders when the count changes
@@ -91,6 +97,21 @@ export function ChatHeader({ conversation }: { conversation: Conversation }) {
 
       {!left && (
         <div className="ml-auto flex items-center gap-1">
+          {!isGroup && conversation.otherUserId !== null && (
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label={verified ? 'Safety number, verified' : 'Safety number'}
+              title={verified ? 'Verified: you compared the safety number' : 'Compare the safety number to be sure nobody is between you'}
+              onClick={() => {
+                setSafetyMounted(true)
+                setSafetyOpen(true)
+              }}
+            >
+              {verified ? <ShieldCheck className="h-5 w-5 text-blue-600" /> : <Fingerprint className="h-5 w-5" />}
+            </Button>
+          )}
+
           {isGroup && (
             <Button
               variant="ghost"
@@ -118,6 +139,15 @@ export function ChatHeader({ conversation }: { conversation: Conversation }) {
             {conversation.isMuted ? <BellOff className="h-5 w-5" /> : <Bell className="h-5 w-5" />}
           </Button>
         </div>
+      )}
+
+      {!isGroup && !left && safetyMounted && conversation.otherUserId !== null && (
+        <LazySafetyNumberDialog
+          contactId={conversation.otherUserId}
+          contactName={conversation.name}
+          open={safetyOpen}
+          onClose={() => setSafetyOpen(false)}
+        />
       )}
 
       {isGroup && !left && infoMounted && (

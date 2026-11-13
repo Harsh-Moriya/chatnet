@@ -1,5 +1,5 @@
 import { type FormEvent, useState } from 'react'
-import { AlertCircle, Crown, LogOut, ShieldCheck, User, UserMinus, UserPlus, X } from 'lucide-react'
+import { AlertCircle, Crown, Fingerprint, LogOut, ShieldCheck, User, UserMinus, UserPlus, X } from 'lucide-react'
 import { Avatar } from '../../../components/ui/Avatar'
 import { AvatarPicker } from '../../../components/ui/AvatarPicker'
 import { Button } from '../../../components/ui/Button'
@@ -7,6 +7,7 @@ import { Dialog } from '../../../components/ui/Dialog'
 import { Input } from '../../../components/ui/Input'
 import { Menu, type MenuItem } from '../../../components/ui/Menu'
 import { getApiError } from '../../../lib/errors'
+import { LazySafetyNumberDialog } from '../../encryption/components/LazySafetyNumberDialog'
 import { describeKeyFailure } from '../../encryption/keyFailures'
 import { useAuth } from '../../auth/hooks/useAuth'
 import { removePicture, setPicture } from '../../profile/api/profileApi'
@@ -46,6 +47,8 @@ function GroupInfo({ conversation, onDone }: { conversation: Conversation; onDon
   const [adding, setAdding] = useState(false)
   const [chosen, setChosen] = useState<UserSummary[]>([])
   const [confirming, setConfirming] = useState<Confirmation | null>(null)
+  // The person whose safety number is being compared, if any.
+  const [comparing, setComparing] = useState<Member | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -77,6 +80,15 @@ function GroupInfo({ conversation, onDone }: { conversation: Conversation; onDon
   }
 
   function itemsFor(target: Member): MenuItem[] {
+    const compare: MenuItem[] =
+      target.userId === selfId
+        ? []
+        : [{ label: 'Safety number', icon: <Fingerprint className="h-4 w-4" />, onSelect: () => setComparing(target) }]
+
+    return [...compare, ...actionsFor(target)]
+  }
+
+  function actionsFor(target: Member): MenuItem[] {
     return memberActions(role, target, selfId).map((action): MenuItem => {
       switch (action) {
         case 'makeAdmin':
@@ -264,6 +276,10 @@ function GroupInfo({ conversation, onDone }: { conversation: Conversation; onDon
             </Button>
           </div>
         </section>
+      )}
+
+      {comparing && (
+        <LazySafetyNumberDialog contactId={comparing.userId} contactName={comparing.displayName} open onClose={() => setComparing(null)} />
       )}
 
       {confirming && (

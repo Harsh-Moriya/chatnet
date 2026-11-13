@@ -29,6 +29,9 @@ export interface EpochDeps {
   keys: EpochKeyStore
   pins: PinStore
   self: { userId: string; secrets: AccountSecrets }
+  // Told when a person's identity key is not the one that was remembered, wherever that is found out, so the screen can offer to compare
+  // and accept it. The failure is raised as before.
+  onIdentityChanged?: (change: IdentityChangedError) => void
 }
 
 // How many times a key period is made again when the conversation changed under it, before the person is told to try again.
@@ -110,7 +113,12 @@ export async function resolvePeers(deps: EpochDeps, userIds: string[]): Promise<
   if (missing.length > 0) throw new MissingKeysError(missing)
 
   for (const [userId, bundle] of bundles) {
-    await pinIdentity(deps.pins, deps.self.userId, userId, bundle.identityPublic)
+    try {
+      await pinIdentity(deps.pins, deps.self.userId, userId, bundle.identityPublic)
+    } catch (failure) {
+      if (failure instanceof IdentityChangedError) deps.onIdentityChanged?.(failure)
+      throw failure
+    }
   }
 
   const own = bundles.get(deps.self.userId)

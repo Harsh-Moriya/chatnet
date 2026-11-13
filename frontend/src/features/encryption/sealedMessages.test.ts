@@ -375,6 +375,24 @@ describe('a message that cannot be shown', () => {
   })
 })
 
+describe('a sender whose key changed and was accepted', () => {
+  it('is read again after the opener is told to forget, and not before', async () => {
+    const { everyone: [ana, ben], id } = await conversationOf(2)
+    const message = await messageFrom(ana, id, 'after the change')
+    await loadEpochKeys(ben.deps, id)
+    const kept = await ben.pins.load(ben.id, ana.id)
+    await ben.pins.save({ ownerId: ben.id, contactId: ana.id, identityPublic: (await newEd25519()).publicKey, firstSeenAt: new Date().toISOString() })
+    const opener = createMessageOpener(ben.deps)
+    expect(await opener.open(message)).toEqual({ readable: false, reason: 'senderChanged' })
+
+    await ben.pins.save(kept!)
+
+    expect(await opener.open(message)).toEqual({ readable: false, reason: 'senderChanged' })
+    opener.forget(id)
+    expect(await opener.open(message)).toEqual({ readable: true, text: 'after the change', files: [] })
+  })
+})
+
 describe('sealing a text', () => {
   it('seals under the key of the epoch it is given and keeps the epoch in the blob', async () => {
     const { everyone: [ana], id } = await conversationOf(1)
