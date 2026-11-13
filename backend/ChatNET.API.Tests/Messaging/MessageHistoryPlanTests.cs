@@ -180,10 +180,12 @@ public class MessageHistoryPlanTests
         _factory.ExecuteDbAsync(async db =>
         {
             await db.Database.ExecuteSqlInterpolatedAsync($@"
-                INSERT INTO ""Messages"" (""Id"", ""ConversationId"", ""SenderId"", ""Ciphertext"", ""KeyEpoch"", ""ClientMessageId"", ""CreatedAt"")
+                INSERT INTO ""Messages"" (""Id"", ""ConversationId"", ""SenderId"", ""Ciphertext"", ""KeyEpoch"", ""ClientMessageId"", ""CreatedAt"", ""ChangeSeq"")
                 SELECT gen_random_uuid(), {conversationId}, {senderId}, decode('0101' || '00000001' || repeat('00', 12), 'hex') || convert_to('bulk ' || (s - 1)::text, 'UTF8') || decode(repeat('00', 80), 'hex'), 1, gen_random_uuid(),
-                       now() - (s * interval '1 second')
+                       now() - (s * interval '1 second'), {MessagesInTheConversation} + 1 - s
                 FROM generate_series(1, {MessagesInTheConversation}) s");
+
+            await db.Database.ExecuteSqlInterpolatedAsync($@"UPDATE ""Conversations"" SET ""ChangeSeq"" = {MessagesInTheConversation} WHERE ""Id"" = {conversationId}");
 
             await db.Database.ExecuteSqlInterpolatedAsync($@"
                 INSERT INTO ""Conversations"" (""Id"", ""Type"", ""Name"", ""CreatedAt"", ""UpdatedAt"", ""CreatedById"")
@@ -191,11 +193,13 @@ public class MessageHistoryPlanTests
                 FROM generate_series(1, {NoiseConversations}) g");
 
             await db.Database.ExecuteSqlInterpolatedAsync($@"
-                INSERT INTO ""Messages"" (""Id"", ""ConversationId"", ""SenderId"", ""Ciphertext"", ""KeyEpoch"", ""ClientMessageId"", ""CreatedAt"")
-                SELECT gen_random_uuid(), c.""Id"", {senderId}, decode('0101' || '00000001' || repeat('00', 12), 'hex') || convert_to('noise', 'UTF8') || decode(repeat('00', 80), 'hex'), 1, gen_random_uuid(), now() - (random() * interval '30 days')
+                INSERT INTO ""Messages"" (""Id"", ""ConversationId"", ""SenderId"", ""Ciphertext"", ""KeyEpoch"", ""ClientMessageId"", ""CreatedAt"", ""ChangeSeq"")
+                SELECT gen_random_uuid(), c.""Id"", {senderId}, decode('0101' || '00000001' || repeat('00', 12), 'hex') || convert_to('noise', 'UTF8') || decode(repeat('00', 80), 'hex'), 1, gen_random_uuid(), now() - (random() * interval '30 days'), s
                 FROM ""Conversations"" c
                 CROSS JOIN generate_series(1, {MessagesPerNoiseConversation}) s
                 WHERE c.""Name"" LIKE {tag + "%"}");
+
+            await db.Database.ExecuteSqlInterpolatedAsync($@"UPDATE ""Conversations"" SET ""ChangeSeq"" = {MessagesPerNoiseConversation} WHERE ""Name"" LIKE {tag + "%"}");
 
             await db.Database.ExecuteSqlRawAsync(@"ANALYZE ""Messages""");
         });

@@ -131,6 +131,7 @@ public static class MediaApi
 
         await factory.ExecuteDbAsync(async db =>
         {
+            message.ChangeSeq = await db.TakeChangeNumbersAsync(conversationId, 1);
             db.Messages.Add(message);
             await db.SaveChangesAsync();
         });

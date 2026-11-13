@@ -124,6 +124,41 @@ public static class MessageApi
 
     public static Guid MessageIdOf(this JsonElement message) => message.GetProperty("id").GetGuid();
 
+    // The number of the latest change to a message in its conversation, as the server hands it out.
+    public static long ChangeSeqOf(this JsonElement message) => message.GetProperty("changeSeq").GetInt64();
+
+    // One page of the changes feed: the messages that changed after the number "since" (0 for all of them). A null "since" asks without it.
+    public sealed record ChangesPage(List<JsonElement> Changes, long Cursor, bool More);
+
+    public static Task<HttpResponseMessage> GetChangesResponseAsync(this HttpClient client, Guid conversationId, long? since) =>
+        client.GetAsync($"/api/conversations/{conversationId}/changes" + (since is { } s ? $"?since={s}" : ""));
+
+    public static async Task<ChangesPage> GetChangesAsync(this HttpClient client, Guid conversationId, long since)
+    {
+        var response = await client.GetChangesResponseAsync(conversationId, since);
+        response.EnsureSuccessStatusCode();
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        return new ChangesPage(
+            body.GetProperty("changes").EnumerateArray().ToList(), body.GetProperty("cursor").GetInt64(), body.GetProperty("more").GetBoolean());
+    }
+
+    // What the conversation holds, from the start, by following the feed page by page: the current state of every message.
+    public static async Task<List<JsonElement>> ReadAllChangesAsync(this HttpClient client, Guid conversationId, long since = 0)
+    {
+        var all = new List<JsonElement>();
+        ChangesPage page;
+        do
+        {
+            page = await client.GetChangesAsync(conversationId, since);
+            all.AddRange(page.Changes);
+            since = page.Cursor;
+        }
+        while (page.More);
+
+        return all;
+    }
+
     // The text of a message, or of the last message of a conversation, as the tests' blobs carry it (see FakeMessage). Null when it is
     // deleted. The server hands on the blob and cannot read it, so this is the test reading what it put in.
     public static string? ContentOf(this JsonElement message) =>

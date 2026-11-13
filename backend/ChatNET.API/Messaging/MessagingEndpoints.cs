@@ -3,6 +3,7 @@ using ChatNET.API.Common.OpenApi;
 using ChatNET.API.Media;
 using ChatNET.API.Messaging.DeleteMessage;
 using ChatNET.API.Messaging.EditMessage;
+using ChatNET.API.Messaging.GetMessageChanges;
 using ChatNET.API.Messaging.GetMessageHistory;
 using ChatNET.API.Messaging.Models;
 using ChatNET.API.Messaging.SendMessage;
@@ -91,6 +92,22 @@ public static class MessagingEndpoints
         .Returns<List<MessageDto>>(
             StatusCodes.Status200OK, StatusCodes.Status400BadRequest, StatusCodes.Status401Unauthorized,
             StatusCodes.Status403Forbidden);
+
+        // What changed in the conversation after the change numbered "since" (0 to read from the start): the messages created, edited
+        // or deleted, in the order of their latest change, at most 100, each as it is now. "cursor" is the number to ask from next and
+        // "more" says there is another page. For a client that keeps the messages it has read, such as a local store. 409 with the code
+        // changes-cursor-ahead when "since" is past the newest change the server has (it was restored from an older state).
+        app.MapGet("/api/conversations/{conversationId:guid}/changes", async (
+            Guid conversationId, long? since, HttpContext http, IMediator mediator) =>
+        {
+            var result = await mediator.Send(new GetMessageChangesQuery(conversationId, http.User.GetUserId(), since));
+            return Results.Ok(result);
+        })
+        .WithTags("Messages")
+        .RequireAuthorization()
+        .Returns<MessageChangesDto>(
+            StatusCodes.Status200OK, StatusCodes.Status400BadRequest, StatusCodes.Status401Unauthorized,
+            StatusCodes.Status403Forbidden, StatusCodes.Status409Conflict);
 
         return app;
     }

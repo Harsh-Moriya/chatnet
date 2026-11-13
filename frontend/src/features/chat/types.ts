@@ -33,6 +33,9 @@ export interface Conversation {
   // must be made before anything more is said.
   keyEpoch: number
   keyRotationRequired: boolean
+  // The number of the latest change to any message of the conversation. A device that keeps the messages it has read compares it with
+  // the point it has read up to, and asks the changes feed only for the conversations that moved.
+  changeSeq: number
 }
 
 // What the server pushes when the keys of a conversation change.
@@ -109,6 +112,8 @@ export interface MessageWire {
   editedAt: string | null
   editCount: number
   isDeleted: boolean
+  // The number of the latest change to this message in its conversation: a copy with the higher number is the newer.
+  changeSeq: number
 }
 
 export interface Message {
@@ -134,6 +139,8 @@ export interface Message {
   editedAt: string | null
   editCount: number
   isDeleted: boolean
+  // See MessageWire. Absent for a message made here before the server confirmed it.
+  changeSeq?: number
 }
 
 // A file that finished uploading and is attached to a message that has not been confirmed yet. `uploadKey` is

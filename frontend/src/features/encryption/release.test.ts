@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import { MemoryLocalStore } from '../search/store/memoryLocalStore'
+import { stored } from '../search/testKit'
 import { MemoryEpochKeyStore, MemoryPinStore } from './fakeEpochServer'
 import { FakeKeysServer, MemoryDeviceStore } from './fakeKeysServer'
 import { type FlowDeps, loadState, setUp, unlock } from './flows'
@@ -11,14 +13,15 @@ function browser(server: FakeKeysServer) {
   const store = new MemoryDeviceStore()
   const epochKeys = new MemoryEpochKeyStore()
   const pins = new MemoryPinStore()
+  const messages = new MemoryLocalStore()
   const deps: FlowDeps = {
     api: server,
     store,
     device: { kind: 'Web', name: 'Chrome on Windows' },
     wait: async () => undefined,
-    forgetConversationKeys: (userId) => forgetKept({ epochKeys, pins }, userId),
+    forgetConversationKeys: (userId) => forgetKept({ epochKeys, pins, messages }, userId),
   }
-  return { deps, store, epochKeys, pins, leaving: { api: server, store, epochKeys, pins } }
+  return { deps, store, epochKeys, pins, messages, leaving: { api: server, store, epochKeys, pins, messages } }
 }
 
 describe('signing out', () => {
@@ -85,6 +88,29 @@ describe('signing out', () => {
     expect(await a.pins.load(USER, OTHER)).toBeNull()
     expect(await a.epochKeys.load(OTHER, 'conversation', 1)).not.toBeNull()
     expect(await a.pins.load(OTHER, USER)).not.toBeNull()
+  })
+
+  it('forgets the messages the person read, opened, and leaves those of another person on the browser', async () => {
+    const a = browser(new FakeKeysServer())
+    const OTHER = '9d8c7b6a-5e4f-4a3b-8c2d-1e0f9a8b7c6d'
+    const kept = (userId: string) => ({ ...stored({ userId, id: `m-${userId}` }) })
+    await a.messages.apply(USER, 'c1', [kept(USER)], { cursor: 4 })
+    await a.messages.apply(OTHER, 'c1', [kept(OTHER)], { cursor: 7 })
+
+    await release(a.leaving, USER)
+
+    expect(await a.messages.readPoints(USER)).toEqual([])
+    expect([...a.messages.messages.values()].map((m) => m.userId)).toEqual([OTHER])
+    expect(await a.messages.readPoints(OTHER)).toHaveLength(1)
+  })
+
+  it('forgets the messages even when this browser holds no keys of the person', async () => {
+    const a = browser(new FakeKeysServer())
+    await a.messages.apply(USER, 'c1', [stored({ userId: USER })], { cursor: 4 })
+
+    await release(a.leaving, USER)
+
+    expect(a.messages.messages.size).toBe(0)
   })
 
   it('forgets them even when this browser holds no keys of the person', async () => {

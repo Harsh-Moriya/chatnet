@@ -102,6 +102,8 @@ The text of a message is sealed in the sender's browser under the key of the con
 | Editing | The new blob is for the next edit count, and the server requires exactly that, so a stale edit is a `409` (`edit-count-stale`) | |
 | Mentions | The sender's browser says which people the text names, as ids. The server keeps the active members other than the sender | A sender can name a member the text does not mention; it notifies them |
 | Alerts | Web Push carries who and where, never text. A page that is open shows the text it opened | |
+| Changes feed | `GET /api/conversations/{id}/changes` applies the history's rules: only a member, and only messages created inside the member's window; anyone else is a `403`. A point above the conversation's number is a `409`, so a client is never told it is up to date by a server that is older than it | The feed returns sealed blobs and numbers, so it shows the server's own metadata and nothing more |
+| Search | Runs in the browser over a copy of the messages the device opened, kept in IndexedDB under the person's user id and removed when they sign out. Nothing about a search reaches the server | The copy is plain text, in the same database as the keys of the device: whoever can read the browser profile, or a script in the page, can read it. A session that only expires keeps it, as it keeps the keys |
 | What stays visible | Who writes to whom and when, the size of a blob (padded to 256 bytes), the number of files, and the size of each file (a little more than the file) | |
 
 ## Rate limiting

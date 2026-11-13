@@ -1,6 +1,6 @@
 # Endpoints
 
-The HTTP API. In Development the running API also serves its OpenAPI document at `/openapi/v1.json` and an interactive reference at `/scalar/v1`; every operation there declares its success body and each error it can return. The tables below list every route (57 operations) with its authentication, its rate-limit policy and what it does. Request and response bodies in the examples were copied from a running API.
+The HTTP API. In Development the running API also serves its OpenAPI document at `/openapi/v1.json` and an interactive reference at `/scalar/v1`; every operation there declares its success body and each error it can return. The tables below list every route (58 operations) with its authentication, its rate-limit policy and what it does. Request and response bodies in the examples were copied from a running API.
 
 ## Conventions
 
@@ -90,6 +90,7 @@ Authentication column: **Bearer** needs an access token; **Refresh cookie** need
 |---|---|---|---|---|
 | `POST /api/conversations/{conversationId}/messages` | Bearer | send | 200, 201, 400, 401, 403, 429 | Sends a message sealed in the browser (`clientMessageId`, `ciphertext`, `mentionedUserIds`, and `attachments`, each only `{ uploadKey }`: what a file is called and is lies inside `ciphertext`). 201 for a new message, 200 with the stored message when this `clientMessageId` was already sent. 409 with `epoch-stale` or `epoch-due` when the conversation is not in the epoch the message was sealed under, or that epoch is marked for replacement. |
 | `GET /api/conversations/{conversationId}/messages` | Bearer |  | 200, 400, 401, 403 | History, at most 50, oldest first. At most one of `before`, `after`, `around` (a message id). |
+| `GET /api/conversations/{conversationId}/changes` | Bearer |  | 200, 400, 401, 403, 409 | The messages changed after a point (`since`, the number of the last change the client has seen, 0 for none; required), in the order the changes were made, at most 100, with `cursor` to continue from and `more`. A message appears once, in its current state; a deleted one comes with `ciphertext: null`. The member window of the history applies. 409 `changes-cursor-ahead` when `since` is past the newest change the server has. See [searching messages](../features/message-search.md#the-changes-feed). |
 | `PATCH /api/conversations/{conversationId}/messages/{messageId}` | Bearer | edit | 200, 400, 401, 403, 404, 409, 429 | Edits the caller's own message within the edit window, with a new sealed text (`ciphertext`, `editCount`, `mentionedUserIds`). `editCount` must be one more than the message has now, otherwise 409 `edit-count-stale`; the epoch rules of a send apply. |
 | `DELETE /api/conversations/{conversationId}/messages/{messageId}` | Bearer |  | 200, 401, 403, 404 | Deletes a message. The sender at any time; a group owner or admin for anyone's. |
 
@@ -204,12 +205,12 @@ For a direct chat `name` is the other person's display name and `otherUserId` is
 
 ```json
 {
-  "senderId": "01a1d03b-2a2b-7542-ba59-8cc08bef7fd5",
-  "ciphertext": "AQEAAAABJzbMWKdBPmCoEFXz...",
+  "senderId": "01a1d27f-d8f6-7323-ba7b-bac494843e36",
+  "ciphertext": "AQEAAAABvk3TiuxiSIRzP49x...",
   "keyEpoch": 1,
-  "clientMessageId": "4a273f68-a4c6-495f-8925-ec85941794d9",
+  "clientMessageId": "efc7cb15-cf23-406b-a027-7fa8a9714d31",
   "editCount": 0,
-  "createdAt": "2026-11-12T14:48:25.434739Z",
+  "createdAt": "2026-11-13T01:22:40.521121Z",
   "attachmentCount": 0
 }
 ```
@@ -220,18 +221,19 @@ For a direct chat `name` is the other person's display name and `otherUserId` is
 
 ```json
 {
-  "id": "01a1d03b-3a2e-70f2-8ed2-e7bf5a915040",
-  "conversationId": "833b6b39-1545-46b1-8dd5-0b767196501b",
-  "senderId": "01a1d03b-2a2b-7542-ba59-8cc08bef7fd5",
+  "id": "01a1d27f-e749-7524-b845-a2df6e4f0d57",
+  "conversationId": "08cc1473-2a78-4b87-94f2-d91cf45faf46",
+  "senderId": "01a1d27f-d8f6-7323-ba7b-bac494843e36",
   "senderDisplayName": "Ana Example",
-  "ciphertext": "AQEAAAABWdIbbic22qqLYI0Y...",
+  "ciphertext": "AQEAAAABYhPqsDWjQ1vsQPFz...",
   "keyEpoch": 1,
-  "createdAt": "2026-11-12T14:48:24.878495Z",
-  "clientMessageId": "3969dd9c-857d-40d7-ac28-a2f875d64c06",
+  "createdAt": "2026-11-13T01:22:40.073062Z",
+  "clientMessageId": "de995e7e-be17-4db7-90f9-5c79ac8cf3d0",
   "attachments": [],
   "editedAt": null,
   "editCount": 0,
-  "isDeleted": false
+  "isDeleted": false,
+  "changeSeq": 1
 }
 ```
 
@@ -239,13 +241,66 @@ A message with a file carries its attachments, each an id, the stored size (the 
 
 ```json
 {
-  "id": "01a1d03b-402a-7bc2-a2f9-6e5e97e2c1d7",
+  "id": "01a1d27f-edb5-74c0-9b6e-30d311aca1bd",
   "sizeBytes": 2077,
-  "url": "http://localhost:9000/chatnet/attachments/833b6b39-1545-46b1-8dd5-0b767196501b/01a1d03b-402a-7bc2-a2f9-6e5e97e2c1d7?<signature parameters>"
+  "url": "http://localhost:9000/chatnet/attachments/08cc1473-2a78-4b87-94f2-d91cf45faf46/01a1d27f-edb5-74c0-9b6e-30d311aca1bd?<signature parameters>"
 }
 ```
 
 A deleted message has `ciphertext: null`, `isDeleted: true` and no attachments.
+
+`changeSeq` is the number the conversation gave to the latest change of the message (its send, its latest edit or its delete). It is unique within the conversation, and a conversation in the list carries the number of its latest change as `changeSeq`.
+
+### Changes
+
+`GET /api/conversations/{id}/changes?since=5`, after an edit and a delete (the edited message was then deleted, so it appears once, at the number of its delete):
+
+```json
+{
+  "changes": [
+    {
+      "id": "01a1d27f-ee11-7142-8aa7-a49e4863e796",
+      "conversationId": "08cc1473-2a78-4b87-94f2-d91cf45faf46",
+      "senderId": "01a1d27f-d8f6-7323-ba7b-bac494843e36",
+      "senderDisplayName": "Ana Example",
+      "ciphertext": "AQEAAAABDn7-8u1H74vf0CJx...",
+      "keyEpoch": 1,
+      "createdAt": "2026-11-13T01:22:41.514499Z",
+      "clientMessageId": "84ed7404-a805-4bd2-9b7f-9c15f51fb3c2",
+      "attachments": [
+        {
+          "id": "01a1d27f-edb5-74c0-9b6e-30d311aca1bd",
+          "sizeBytes": 2077,
+          "url": "http://localhost:9000/chatnet/attachments/08cc1473-2a78-4b87-94f2-d91cf45faf46/01a1d27f-edb5-74c0-9b6e-30d311aca1bd?<signature parameters>"
+        }
+      ],
+      "editedAt": null,
+      "editCount": 0,
+      "isDeleted": false,
+      "changeSeq": 7
+    },
+    {
+      "id": "01a1d27f-e749-7524-b845-a2df6e4f0d57",
+      "conversationId": "08cc1473-2a78-4b87-94f2-d91cf45faf46",
+      "senderId": "01a1d27f-d8f6-7323-ba7b-bac494843e36",
+      "senderDisplayName": "Ana Example",
+      "ciphertext": null,
+      "keyEpoch": 1,
+      "createdAt": "2026-11-13T01:22:40.073062Z",
+      "clientMessageId": "de995e7e-be17-4db7-90f9-5c79ac8cf3d0",
+      "attachments": [],
+      "editedAt": "2026-11-13T01:22:41.047563Z",
+      "editCount": 1,
+      "isDeleted": true,
+      "changeSeq": 8
+    }
+  ],
+  "cursor": 8,
+  "more": false
+}
+```
+
+`cursor` is where the next request starts: the last number returned while `more` is true, and the conversation's number as it was read when `more` is false.
 
 ### Member
 
@@ -290,9 +345,9 @@ A deleted message has `ciphertext: null`, `isDeleted: true` and no attachments.
 
 ```json
 {
-  "uploadKey": "pending/833b6b39-1545-46b1-8dd5-0b767196501b/01a1d03b-2a2b-7542-ba59-8cc08bef7fd5/e3c87603-c50e-4971-8c05-d8f58ca6212b",
-  "url": "http://localhost:9000/chatnet/pending/833b6b39-1545-46b1-8dd5-0b767196501b/01a1d03b-2a2b-7542-ba59-8cc08bef7fd5/e3c87603-c50e-4971-8c05-d8f58ca6212b?<signature parameters>",
-  "expiresAt": "2026-11-12T14:58:26Z"
+  "uploadKey": "pending/08cc1473-2a78-4b87-94f2-d91cf45faf46/01a1d27f-d8f6-7323-ba7b-bac494843e36/790cec6f-9d7e-4f9a-a377-b38c532fee92",
+  "url": "http://localhost:9000/chatnet/pending/08cc1473-2a78-4b87-94f2-d91cf45faf46/01a1d27f-d8f6-7323-ba7b-bac494843e36/790cec6f-9d7e-4f9a-a377-b38c532fee92?<signature parameters>",
+  "expiresAt": "2026-11-13T01:32:41Z"
 }
 ```
 
@@ -304,8 +359,8 @@ A deleted message has `ciphertext: null`, `isDeleted: true` and no attachments.
 
 ```json
 {
-  "url": "http://localhost:9000/chatnet/attachments/833b6b39-1545-46b1-8dd5-0b767196501b/01a1d03b-402a-7bc2-a2f9-6e5e97e2c1d7?<signature parameters>",
-  "expiresAt": "2026-11-12T15:48:26Z"
+  "url": "http://localhost:9000/chatnet/attachments/08cc1473-2a78-4b87-94f2-d91cf45faf46/01a1d27f-edb5-74c0-9b6e-30d311aca1bd?<signature parameters>",
+  "expiresAt": "2026-11-13T02:22:42Z"
 }
 ```
 
@@ -319,20 +374,20 @@ A mention carries the message it is about as `message`, sealed as it was sent (n
 {
   "items": [
     {
-      "id": "01a1d03b-3b71-7784-85f0-80d72ac3b9e6",
+      "id": "01a1d27f-e87c-7b29-9585-302a2c61bda6",
       "type": "Mention",
-      "conversationId": "833b6b39-1545-46b1-8dd5-0b767196501b",
-      "actorId": "01a1d03b-2ed7-7d62-a10f-d3d5160ec916",
+      "conversationId": "08cc1473-2a78-4b87-94f2-d91cf45faf46",
+      "actorId": "01a1d27f-dc12-70dd-8293-ef403f288b55",
       "actorDisplayName": "Ben Example",
-      "messageId": "01a1d03b-3b59-7838-b023-b9bc42cd3341",
+      "messageId": "01a1d27f-e867-7bd6-8bfa-875b8a022d52",
       "message": {
-        "ciphertext": "AQEAAAABMsfq2SEtRHXJb1lO...",
+        "ciphertext": "AQEAAAABRFj3T4TBpgX8Gq3O...",
         "keyEpoch": 1,
-        "clientMessageId": "b29174ec-8883-4014-a235-1600d2c7b68b",
+        "clientMessageId": "78e54f64-89d8-4152-ae27-890b611196a4",
         "editCount": 0
       },
       "isRead": false,
-      "createdAt": "2026-11-12T14:48:25.177396Z"
+      "createdAt": "2026-11-13T01:22:40.35935Z"
     }
   ],
   "unreadCount": 2

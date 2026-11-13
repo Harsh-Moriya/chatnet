@@ -1,6 +1,13 @@
 import { useChatStore } from '../store/chatStore'
 import { openLastMessage, openMessage, sealedOf } from './openWire'
 
+// Whoever keeps messages that could not be opened (the local store) opens them again too, when the keys may have arrived.
+let listener: ((conversationId: string) => Promise<void>) | null = null
+
+export function setReopenListener(next: ((conversationId: string) => Promise<void>) | null): void {
+  listener = next
+}
+
 // What was held of a conversation that could not be opened is opened again when its keys may have arrived: the conversation was made
 // ready, or an epoch was announced. The opener is told to forget that keys were missing, so it asks for them again.
 export async function reopenConversation(conversationId: string): Promise<void> {
@@ -27,4 +34,6 @@ export async function reopenConversation(conversationId: string): Promise<void> 
 
   const shown = chat().conversations[conversationId]?.lastMessage
   if (shown?.sealed && shown.unreadable) chat().applyOpenedPreview(conversationId, await openLastMessage(conversationId, shown))
+
+  await listener?.(conversationId)
 }

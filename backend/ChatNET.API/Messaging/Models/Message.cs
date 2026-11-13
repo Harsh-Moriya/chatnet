@@ -32,6 +32,12 @@ public class Message
     public int EditCount { get; set; }
     public DateTime? EditedAt { get; set; }
 
+    // The number of the latest change to this message in its conversation: the number the send, the edit or the delete that last
+    // touched it took from the conversation's counter (see Conversation.ChangeSeq). Unique within the conversation, so a reader that
+    // has seen every number up to N holds the current state of every message that changed up to N, which is what the changes feed
+    // hands out.
+    public long ChangeSeq { get; set; }
+
     public bool IsDeleted { get; set; }
     public DateTime? DeletedAt { get; set; }
 

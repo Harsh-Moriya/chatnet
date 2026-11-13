@@ -48,18 +48,19 @@ Arguments are positional. The examples are real payloads as the JavaScript clien
 ```json
 [
   {
-    "id": "01a1d03b-3a2e-70f2-8ed2-e7bf5a915040",
-    "conversationId": "833b6b39-1545-46b1-8dd5-0b767196501b",
-    "senderId": "01a1d03b-2a2b-7542-ba59-8cc08bef7fd5",
+    "id": "01a1d27f-e749-7524-b845-a2df6e4f0d57",
+    "conversationId": "08cc1473-2a78-4b87-94f2-d91cf45faf46",
+    "senderId": "01a1d27f-d8f6-7323-ba7b-bac494843e36",
     "senderDisplayName": "Ana Example",
-    "ciphertext": "AQEAAAABWdIbbic22qqLYI0Y...",
+    "ciphertext": "AQEAAAABYhPqsDWjQ1vsQPFz...",
     "keyEpoch": 1,
-    "createdAt": "2026-11-12T14:48:24.878495Z",
-    "clientMessageId": "3969dd9c-857d-40d7-ac28-a2f875d64c06",
+    "createdAt": "2026-11-13T01:22:40.073062Z",
+    "clientMessageId": "de995e7e-be17-4db7-90f9-5c79ac8cf3d0",
     "attachments": [],
     "editedAt": null,
     "editCount": 0,
-    "isDeleted": false
+    "isDeleted": false,
+    "changeSeq": 1
   }
 ]
 ```
@@ -211,20 +212,20 @@ Arguments are positional. The examples are real payloads as the JavaScript clien
 ```json
 [
   {
-    "id": "01a1d03b-3b71-7784-85f0-80d72ac3b9e6",
+    "id": "01a1d27f-e87c-7b29-9585-302a2c61bda6",
     "type": "Mention",
-    "conversationId": "833b6b39-1545-46b1-8dd5-0b767196501b",
-    "actorId": "01a1d03b-2ed7-7d62-a10f-d3d5160ec916",
+    "conversationId": "08cc1473-2a78-4b87-94f2-d91cf45faf46",
+    "actorId": "01a1d27f-dc12-70dd-8293-ef403f288b55",
     "actorDisplayName": "Ben Example",
-    "messageId": "01a1d03b-3b59-7838-b023-b9bc42cd3341",
+    "messageId": "01a1d27f-e867-7bd6-8bfa-875b8a022d52",
     "message": {
-      "ciphertext": "AQEAAAABMsfq2SEtRHXJb1lO...",
+      "ciphertext": "AQEAAAABRFj3T4TBpgX8Gq3O...",
       "keyEpoch": 1,
-      "clientMessageId": "b29174ec-8883-4014-a235-1600d2c7b68b",
+      "clientMessageId": "78e54f64-89d8-4152-ae27-890b611196a4",
       "editCount": 0
     },
     "isRead": false,
-    "createdAt": "2026-11-12T14:48:25.177396Z"
+    "createdAt": "2026-11-13T01:22:40.35935Z"
   }
 ]
 ```

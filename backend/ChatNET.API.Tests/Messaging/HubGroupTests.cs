@@ -216,7 +216,7 @@ public class HubGroupTests
         var hub = host.Services.GetRequiredService<IHubContext<ChatHub, IChatClient>>();
         var message = new MessageDto(
             Guid.NewGuid(), conversationId, Guid.NewGuid(), "Someone", FakeMessage.Ciphertext(1, "hello"), 1, DateTime.UtcNow,
-            Guid.NewGuid(), [], null, 0, false);
+            Guid.NewGuid(), [], null, 0, false, 1);
 
         return hub.Clients.Group(ChatGroups.Conversation(conversationId)).ReceiveMessage(message);
     }

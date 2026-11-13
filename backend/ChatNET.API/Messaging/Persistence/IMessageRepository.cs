@@ -38,7 +38,8 @@ public interface IMessageRepository
     // Saves the message, the notifications it causes, the outbox rows for their pushes and its conversation's
     // UpdatedAt (moved to the message's CreatedAt), as one atomic write: either all of it happens or none of it
     // does. The conversation must be in the epoch the message was sealed in and not marked for replacement, which one
-    // conditional UPDATE decides together with whoever changes the conversation's keys.
+    // conditional UPDATE decides together with whoever changes the conversation's keys. The same statement gives the message
+    // the next change number of the conversation (set on the message that was passed in).
     Task<AddOutcome> TryAddAsync(
         Message message, IReadOnlyList<Notification> notifications, IReadOnlyList<OutboxMessage> outbox,
         CancellationToken cancellationToken);
@@ -53,19 +54,20 @@ public interface IMessageRepository
         Guid conversationId, Guid messageId, DateTime since, CancellationToken cancellationToken);
 
     // Replaces the text of a message that is not deleted and was sent after notBefore, which was last edited editCount - 1 times,
-    // counts the edit, and saves the notifications and outbox rows that come with it, in one transaction. The conversation must be
-    // in the epoch the new text was sealed in and not marked for replacement. One conditional UPDATE decides, so an edit that
-    // loses to a delete or to another edit (or arrives after the window closed) changes nothing and says why.
+    // counts the edit, gives the message the next change number of the conversation, and saves the notifications and outbox rows
+    // that come with it, in one transaction. The conversation must be in the epoch the new text was sealed in and not marked for
+    // replacement. One conditional UPDATE decides, so an edit that loses to a delete or to another edit (or arrives after the
+    // window closed) changes nothing and says why, and takes no number.
     Task<EditOutcome> TryEditAsync(
         Guid conversationId, Guid messageId, byte[] ciphertext, int keyEpoch, int editCount, DateTime editedAt, DateTime notBefore,
         IReadOnlyList<Guid> mentionedUserIds, IReadOnlyList<Notification> notifications, IReadOnlyList<OutboxMessage> outbox,
         CancellationToken cancellationToken);
 
-    // Marks a message that is not deleted as deleted, removes its text (the key period it was sealed in is kept), and saves the
-    // outbox rows, in one transaction.
-    // False, with nothing saved, when it already was deleted.
+    // Marks a message that is not deleted as deleted, removes its text (the key period it was sealed in is kept), gives it the next
+    // change number of its conversation, and saves the outbox rows, in one transaction.
+    // False, with nothing saved and no number taken, when it already was deleted.
     Task<bool> TryDeleteAsync(
-        Guid messageId, Guid deletedById, DateTime deletedAt, IReadOnlyList<OutboxMessage> outbox,
+        Guid conversationId, Guid messageId, Guid deletedById, DateTime deletedAt, IReadOnlyList<OutboxMessage> outbox,
         CancellationToken cancellationToken);
 
     // The message this sender already sent in this conversation with this client id, or null.
@@ -92,4 +94,14 @@ public interface IMessageRepository
     // The messages just newer than the cursor: the oldest "take" of those positioned after it.
     Task<List<MessageDto>> GetAfterAsync(
         Guid conversationId, MemberWindow window, MessageCursor cursor, int take, CancellationToken cancellationToken);
+
+    // The latest change number of the conversation, or null when there is no such conversation.
+    Task<long?> GetChangeSeqAsync(Guid conversationId, CancellationToken cancellationToken);
+
+    // The messages sent inside the window whose latest change is numbered above "since" and no higher than "upTo", in the order of
+    // that number, at most "take". A deleted message is returned with its content removed. "upTo" is what the caller read as the
+    // conversation's counter before this read, and it is what makes a cursor taken from the answer safe: every number up to a
+    // counter that has been read is committed.
+    Task<List<MessageDto>> GetChangesAsync(
+        Guid conversationId, MemberWindow window, long since, long upTo, int take, CancellationToken cancellationToken);
 }

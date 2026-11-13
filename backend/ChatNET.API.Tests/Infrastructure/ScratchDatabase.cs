@@ -74,16 +74,19 @@ public sealed class ScratchDatabase : IAsyncDisposable
     // Columns that migrations added to tables the model writes. A schema from before such a migration lacks them, and the model
     // writes them on every insert, so they are added for the time of the insert and dropped again: the rows are as they would have
     // been, and the schema is the one the test asked for. (AvatarKeys renamed the picture columns; AddConversationKeyEpochs added
-    // the key epoch of a conversation; EncryptMessages replaced the text of a message with a blob.)
+    // the key epoch of a conversation; EncryptMessages replaced the text of a message with a blob; AddChangeSequence numbered the changes of
+    // a conversation.)
     private static readonly (string Table, string Column, string Definition)[] ModelColumns =
     [
         ("AspNetUsers", "AvatarKey", "text"),
         ("Conversations", "AvatarKey", "text"),
         ("Conversations", "KeyEpoch", "integer NOT NULL DEFAULT 0"),
         ("Conversations", "KeyRotationRequired", "boolean NOT NULL DEFAULT false"),
+        ("Conversations", "ChangeSeq", "bigint NOT NULL DEFAULT 0"),
         ("Messages", "Ciphertext", "bytea"),
         ("Messages", "KeyEpoch", "integer NOT NULL DEFAULT 0"),
         ("Messages", "MentionedUserIds", "uuid[] NOT NULL DEFAULT ARRAY[]::uuid[]"),
+        ("Messages", "ChangeSeq", "bigint NOT NULL DEFAULT 0"),
     ];
 
     private async Task WithModelColumnsAsync(Func<Task> insert)

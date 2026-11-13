@@ -9,6 +9,7 @@ A real-time, multi-user chat application with direct (1:1) and group conversatio
 - **Conversations.** Direct chats and groups on one model. Groups have an owner, admins and members; people can be added, removed, promoted and can leave, and the owner role is handed on automatically.
 - **Live messaging.** Messages, typing indicators, read receipts ("Seen"), unread counts and online presence arrive over SignalR, correctly across several server instances.
 - **Reliable history.** Cursor-paged history, gap-free catch-up after a reconnect, and sends that are safe to retry: a message is stored once however many times the request arrives.
+- **Search.** Search your messages by words in any order, `"exact phrase"`, `-word` and `a or b`. It runs in the browser over a copy of the messages the device has read, kept current by a per-conversation changes feed.
 - **Edit and delete.** Edit your own message for 15 minutes; delete at any time (group owners and admins can delete anyone's). Everyone sees the change live.
 - **Files and pictures.** Up to four files per message, encrypted in the browser and uploaded straight to S3-compatible object storage, so the bucket holds ciphertext. Profile and group pictures.
 - **Notifications.** `@mentions`, group invitations, a bell with an unread count, browser alerts, per-conversation mute, and optional Web Push alerts while the app is closed.

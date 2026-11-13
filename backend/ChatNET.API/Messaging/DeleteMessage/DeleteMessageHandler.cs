@@ -106,7 +106,7 @@ public class DeleteMessageHandler : IRequestHandler<DeleteMessageCommand, Messag
 
         // False means another request deleted it between the read above and here: it announced the deletion and
         // took the files out.
-        if (!await _messages.TryDeleteAsync(message.Id, request.UserId, now, rows, cancellationToken))
+        if (!await _messages.TryDeleteAsync(request.ConversationId, message.Id, request.UserId, now, rows, cancellationToken))
             return await CurrentAsync(message.Id, cancellationToken);
 
         _logger.LogInformation(

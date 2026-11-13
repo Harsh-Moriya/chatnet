@@ -14,7 +14,7 @@ public class PushAlertTextTests
 
     private static MessageDto Message(string sender = "Alice") => new(
         Guid.NewGuid(), ConversationId, Guid.NewGuid(), sender, FakeMessage.Ciphertext(1, "the words that must not leave"), 1,
-        DateTime.UtcNow, Guid.NewGuid(), [], EditedAt: null, EditCount: 0, IsDeleted: false);
+        DateTime.UtcNow, Guid.NewGuid(), [], EditedAt: null, EditCount: 0, IsDeleted: false, ChangeSeq: 1);
 
     private static NotificationDto Notification(NotificationType type, string actor = "Alice", Guid? messageId = null)
     {

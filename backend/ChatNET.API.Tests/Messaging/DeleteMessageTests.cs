@@ -463,7 +463,7 @@ public class DeleteMessageTests
         removal.Kind = new string('x', 65);
 
         await Assert.ThrowsAsync<DbUpdateException>(() => scope.ServiceProvider.GetRequiredService<IMessageRepository>()
-            .TryDeleteAsync(sent.MessageIdOf(), alice.Id, DateTime.UtcNow, [update, removal], CancellationToken.None));
+            .TryDeleteAsync(conversation, sent.MessageIdOf(), alice.Id, DateTime.UtcNow, [update, removal], CancellationToken.None));
 
         Assert.False((await StoredAsync(sent)).IsDeleted);
         Assert.True(await _factory.ObjectExistsAsync(file.StorageKey));
@@ -539,10 +539,31 @@ public class DeleteMessageTests
             .Create(new MessageUpdated(sent.MessageIdOf(), conversation));
 
         var deleted = await scope.ServiceProvider.GetRequiredService<IMessageRepository>()
-            .TryDeleteAsync(sent.MessageIdOf(), alice.Id, DateTime.UtcNow.AddMinutes(5), [row], CancellationToken.None);
+            .TryDeleteAsync(conversation, sent.MessageIdOf(), alice.Id, DateTime.UtcNow.AddMinutes(5), [row], CancellationToken.None);
 
         Assert.False(deleted);
         Assert.Equal(first.DeletedAt, (await StoredAsync(sent)).DeletedAt);
+        Assert.Equal(0, await _factory.QueryDbAsync(db => db.OutboxMessages.CountAsync(o => o.Id == row.Id)));
+    }
+
+    // The statement names the conversation as well as the message, so a message is never deleted, or numbered among the changes,
+    // under another conversation's claim.
+    [Fact]
+    public async Task A_message_is_not_deleted_by_naming_another_conversation()
+    {
+        var (sent, conversation, alice, _) = await SentInDirectChatAsync("stays put");
+        var (_, _, elsewhere) = await _factory.DirectChatAsync();
+        using var scope = _factory.Services.CreateScope();
+        var row = scope.ServiceProvider.GetRequiredService<OutboxPublisher>()
+            .Create(new MessageUpdated(sent.MessageIdOf(), conversation));
+
+        var deleted = await scope.ServiceProvider.GetRequiredService<IMessageRepository>()
+            .TryDeleteAsync(elsewhere, sent.MessageIdOf(), alice.Id, DateTime.UtcNow, [row], CancellationToken.None);
+
+        Assert.False(deleted);
+        var stored = await StoredAsync(sent);
+        Assert.False(stored.IsDeleted);
+        Assert.Equal("stays put", stored.Text());
         Assert.Equal(0, await _factory.QueryDbAsync(db => db.OutboxMessages.CountAsync(o => o.Id == row.Id)));
     }
 
@@ -557,7 +578,7 @@ public class DeleteMessageTests
         row.Kind = new string('x', 65);
 
         await Assert.ThrowsAsync<DbUpdateException>(() => scope.ServiceProvider.GetRequiredService<IMessageRepository>()
-            .TryDeleteAsync(sent.MessageIdOf(), alice.Id, DateTime.UtcNow, [row], CancellationToken.None));
+            .TryDeleteAsync(conversation, sent.MessageIdOf(), alice.Id, DateTime.UtcNow, [row], CancellationToken.None));
 
         var stored = await StoredAsync(sent);
         Assert.False(stored.IsDeleted);

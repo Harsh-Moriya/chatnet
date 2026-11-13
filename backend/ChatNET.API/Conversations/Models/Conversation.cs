@@ -35,6 +35,12 @@ public class Conversation
     // Cleared when the next epoch is stored. Set in the same transaction as the change in membership.
     public bool KeyRotationRequired { get; set; }
 
+    // The number of the latest change to any message of the conversation. Every send, edit and delete takes the next one, in the
+    // transaction that makes the change, by a statement that holds this row's lock until the transaction ends. Numbers are therefore
+    // consecutive and in commit order: when a reader sees number N, every change numbered below it has been committed too, which is
+    // what lets a client follow the changes by a cursor and miss none. 0 while nothing was ever said.
+    public long ChangeSeq { get; set; }
+
     public AppUser CreatedBy { get; set; } = null!;
     public ICollection<ConversationMember> Members { get; set; } = [];
 

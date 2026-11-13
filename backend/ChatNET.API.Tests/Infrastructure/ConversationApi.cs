@@ -2,6 +2,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using ChatNET.API.Common.Persistence;
 using ChatNET.API.Messaging.Models;
 using Microsoft.EntityFrameworkCore;
 
@@ -175,6 +176,17 @@ public static class ConversationApi
             .Where(u => u.Id == user.Id)
             .ExecuteUpdateAsync(s => s.SetProperty(u => u.IsDeactivated, true)));
 
+    // Takes "count" consecutive change numbers of the conversation, as the API does for a send, and returns the first. A message
+    // inserted straight into the database needs one, or it would share the number 0 with the next.
+    public static async Task<long> TakeChangeNumbersAsync(this AppDbContext db, Guid conversationId, int count)
+    {
+        var last = await db.Database.SqlQuery<long>($"""
+            UPDATE "Conversations" SET "ChangeSeq" = "ChangeSeq" + {count} WHERE "Id" = {conversationId} RETURNING "ChangeSeq" AS "Value"
+            """).ToListAsync();
+
+        return last.Single() - count + 1;
+    }
+
     // Inserts a message straight into the database. The send endpoint always stamps the current
     // time and cannot produce a deleted message, so tests that need control of the timestamp or
     // of the deleted state, or that need thousands of messages, arrange them here.
@@ -190,6 +202,7 @@ public static class ConversationApi
                 Ciphertext = deleted ? null : FakeMessage.Blob(1, content),
                 KeyEpoch = 1,
                 CreatedAt = createdAt,
+                ChangeSeq = await db.TakeChangeNumbersAsync(conversationId, 1),
                 ClientMessageId = clientMessageId ?? Guid.NewGuid(),
                 IsDeleted = deleted,
                 DeletedAt = deleted ? createdAt : null,
@@ -213,6 +226,7 @@ public static class ConversationApi
         DateTime firstAt, TimeSpan step, string prefix = "message") =>
         factory.ExecuteDbAsync(async db =>
         {
+            var first = await db.TakeChangeNumbersAsync(conversationId, count);
             db.Messages.AddRange(Enumerable.Range(0, count).Select(i => new Message
             {
                 ConversationId = conversationId,
@@ -221,6 +235,7 @@ public static class ConversationApi
                 KeyEpoch = 1,
                 ClientMessageId = Guid.NewGuid(),
                 CreatedAt = firstAt + i * step,
+                ChangeSeq = first + i,
             }));
             await db.SaveChangesAsync();
         });

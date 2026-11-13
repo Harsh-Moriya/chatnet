@@ -56,9 +56,16 @@ public sealed class ForgetfulMessageRepository : IMessageRepository
             cancellationToken);
 
     public Task<bool> TryDeleteAsync(
-        Guid messageId, Guid deletedById, DateTime deletedAt, IReadOnlyList<OutboxMessage> outbox,
+        Guid conversationId, Guid messageId, Guid deletedById, DateTime deletedAt, IReadOnlyList<OutboxMessage> outbox,
         CancellationToken cancellationToken)
-        => _inner.TryDeleteAsync(messageId, deletedById, deletedAt, outbox, cancellationToken);
+        => _inner.TryDeleteAsync(conversationId, messageId, deletedById, deletedAt, outbox, cancellationToken);
+
+    public Task<long?> GetChangeSeqAsync(Guid conversationId, CancellationToken cancellationToken)
+        => _inner.GetChangeSeqAsync(conversationId, cancellationToken);
+
+    public Task<List<MessageDto>> GetChangesAsync(
+        Guid conversationId, MemberWindow window, long since, long upTo, int take, CancellationToken cancellationToken)
+        => _inner.GetChangesAsync(conversationId, window, since, upTo, take, cancellationToken);
 
     public Task<MessageCursor?> FindCursorAsync(
         Guid conversationId, Guid messageId, MemberWindow window, CancellationToken cancellationToken)

@@ -276,7 +276,8 @@ public class ConversationRepository : IConversationRepository
                mine."IsMuted" AS "IsMuted",
                mine."LeftAt" AS "LeftAt",
                c."KeyEpoch" AS "KeyEpoch",
-               c."KeyRotationRequired" AS "KeyRotationRequired"
+               c."KeyRotationRequired" AS "KeyRotationRequired",
+               c."ChangeSeq" AS "ChangeSeq"
         FROM "Conversations" c
         JOIN "ConversationMembers" mine
           ON mine."ConversationId" = c."Id" AND mine."UserId" = @viewerId
@@ -327,7 +328,7 @@ public class ConversationRepository : IConversationRepository
 
         return new ConversationDto(
             row.Id, Enum.Parse<ConversationType>(row.Type), row.Name ?? "Unknown", AvatarKeys.PublicUrl(row.AvatarKey), row.UpdatedAt, last,
-            row.UnreadCount, row.OtherUserId, row.IsMuted, row.LeftAt, row.KeyEpoch, row.KeyRotationRequired);
+            row.UnreadCount, row.OtherUserId, row.IsMuted, row.LeftAt, row.KeyEpoch, row.KeyRotationRequired, row.ChangeSeq);
     }
 
     // One row of the queries above. Property names match the column aliases in the SQL, which is how
@@ -352,5 +353,6 @@ public class ConversationRepository : IConversationRepository
         public DateTime? LeftAt { get; set; }
         public int KeyEpoch { get; set; }
         public bool KeyRotationRequired { get; set; }
+        public long ChangeSeq { get; set; }
     }
 }

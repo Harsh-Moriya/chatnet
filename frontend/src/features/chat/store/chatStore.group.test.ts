@@ -21,6 +21,7 @@ function group(overrides: Partial<Conversation> & { id: string }): Conversation 
     leftAt: null,
     keyEpoch: 0,
     keyRotationRequired: false,
+    changeSeq: 0,
     ...overrides,
   }
 }

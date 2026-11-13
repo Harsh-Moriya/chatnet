@@ -10,6 +10,10 @@ public class MessageConfiguration : IEntityTypeConfiguration<Message>
     // catches a violation.
     public const string ClientMessageIndexName = "IX_Messages_ConversationId_SenderId_ClientMessageId";
 
+    // Named so a test can find the index, and so it reads as what it is: the guarantee that two changes of one conversation never
+    // share a number, whatever code path made them.
+    public const string ChangeSeqIndexName = "IX_Messages_ConversationId_ChangeSeq";
+
     public void Configure(EntityTypeBuilder<Message> builder)
     {
         builder.HasKey(m => m.Id);
@@ -61,6 +65,14 @@ public class MessageConfiguration : IEntityTypeConfiguration<Message>
         builder.HasIndex(m => new { m.ConversationId, m.SenderId, m.ClientMessageId })
             .IsUnique()
             .HasDatabaseName(ClientMessageIndexName);
+
+        // The changes feed reads a conversation's messages in the order of their latest change, from a cursor. Unique, because
+        // every change takes a number from the conversation's counter: a path that forgot to would collide here instead of
+        // silently hiding a change from the clients that follow the feed.
+        builder.Property(m => m.ChangeSeq).IsRequired();
+        builder.HasIndex(m => new { m.ConversationId, m.ChangeSeq })
+            .IsUnique()
+            .HasDatabaseName(ChangeSeqIndexName);
 
         builder.HasOne(m => m.Conversation)
             .WithMany()

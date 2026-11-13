@@ -195,6 +195,11 @@ namespace ChatNET.API.Migrations
                     b.Property<string>("AvatarKey")
                         .HasColumnType("text");
 
+                    b.Property<long>("ChangeSeq")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(0L);
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -481,6 +486,9 @@ namespace ChatNET.API.Migrations
                         .HasColumnType("uuid")
                         .HasDefaultValueSql("gen_random_uuid()");
 
+                    b.Property<long>("ChangeSeq")
+                        .HasColumnType("bigint");
+
                     b.Property<byte[]>("Ciphertext")
                         .HasColumnType("bytea");
 
@@ -529,6 +537,10 @@ namespace ChatNET.API.Migrations
                     b.HasIndex("DeletedById");
 
                     b.HasIndex("SenderId");
+
+                    b.HasIndex("ConversationId", "ChangeSeq")
+                        .IsUnique()
+                        .HasDatabaseName("IX_Messages_ConversationId_ChangeSeq");
 
                     b.HasIndex("ConversationId", "CreatedAt")
                         .IsDescending(false, true);

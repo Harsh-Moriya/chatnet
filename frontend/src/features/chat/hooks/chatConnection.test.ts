@@ -123,7 +123,7 @@ function message(id: string, overrides: Partial<Message> = {}): Message {
 }
 
 function conversation(id: string): Conversation {
-  return { id, type: 'Direct', name: 'Bob', avatarUrl: null, updatedAt: '2026-10-11T09:00:00Z', lastMessage: null, unreadCount: 0, otherUserId: null, isMuted: false, leftAt: null, keyEpoch: 0, keyRotationRequired: false }
+  return { id, type: 'Direct', name: 'Bob', avatarUrl: null, updatedAt: '2026-10-11T09:00:00Z', lastMessage: null, unreadCount: 0, otherUserId: null, isMuted: false, leftAt: null, keyEpoch: 0, keyRotationRequired: false, changeSeq: 0 }
 }
 
 const RETRY_DELAYS = [100, 200, 400]

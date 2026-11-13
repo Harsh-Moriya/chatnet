@@ -45,13 +45,17 @@ Messages are ordered by `CreatedAt`, set by the server that handled the send, th
 - **Windows.** A message far back (one a notification names) is shown by loading the history around it. The store then holds a window that does not reach the newest message; pushes that arrive meanwhile go into a buffer so they do not leave a hole, and join the window when it reaches the newest message. "Jump to latest" or sending drops the window and loads the latest page.
 - **Catch-up after a reconnect.** Events sent while the connection was down are lost to that client, so after reconnecting each loaded conversation asks for its latest page. If that page contains the newest message the tab holds, or is short, it is merged: it brings the new messages and the current state of the last messages held, including edits and deletions. Otherwise the client reads `after=<newest id>` page by page until a short page, then looks back over the last messages held with `before=`. Past 10 pages the conversation is dropped and loaded afresh. A page that does not join up with what the store holds is never added, so a hole is never created.
 
+## Change numbers
+
+Every message carries `changeSeq`, the number its conversation gave to its latest change, and every conversation in the list carries the number of its latest change. `GET /api/conversations/{id}/changes?since=N` returns the messages changed after a number, which is how a client keeps a local copy current. See [searching messages](message-search.md#the-changes-feed).
+
 ## Endpoints and events
 
-`POST` and `GET /api/conversations/{id}/messages`; hub events `ReceiveMessage` and `MessageUpdated`. See [endpoints](../api/endpoints.md) and [real-time events](../api/realtime-events.md).
+`POST` and `GET /api/conversations/{id}/messages`, `GET /api/conversations/{id}/changes`; hub events `ReceiveMessage` and `MessageUpdated`. See [endpoints](../api/endpoints.md) and [real-time events](../api/realtime-events.md).
 
 ## Limits
 
-- The server cannot search or preview text, so it has no search endpoint; the sidebar preview and the notification text are opened in the browser.
+- The server cannot search or preview text, so it has no search endpoint; search, the sidebar preview and the notification text are done in the browser. See [searching messages](message-search.md).
 - The deletion of a message older than the last 50 held, in a tab that was away for more than a page of new messages, shows after a reload.
 - Sending is limited to 30 messages per 10 seconds per person.
 - Files are encrypted in the browser, so the server sees how many there are and how large each is, never what they are called, what type they are or what they hold. See [attachments](attachments.md).

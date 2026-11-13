@@ -25,7 +25,8 @@ public class MessageRepository : IMessageRepository
         Guid ClientMessageId,
         DateTime? EditedAt,
         int EditCount,
-        bool IsDeleted);
+        bool IsDeleted,
+        long ChangeSeq);
 
     private static readonly Expression<Func<Message, MessageRow>> ToRow = m => new MessageRow(
         m.Id,
@@ -38,7 +39,8 @@ public class MessageRepository : IMessageRepository
         m.ClientMessageId,
         m.EditedAt,
         m.EditCount,
-        m.IsDeleted);
+        m.IsDeleted,
+        m.ChangeSeq);
 
     // The files are filled in for the page as a whole afterwards (AttachmentLoader): one query for all of its files.
     private static MessageDto ToDto(MessageRow row) => new(
@@ -53,14 +55,8 @@ public class MessageRepository : IMessageRepository
         [],
         row.EditedAt,
         row.EditCount,
-        row.IsDeleted);
-
-    // What a conversation says about its keys: the row that decides whether a message may be stored under an epoch.
-    private sealed class EpochState
-    {
-        public int KeyEpoch { get; set; }
-        public bool KeyRotationRequired { get; set; }
-    }
+        row.IsDeleted,
+        row.ChangeSeq);
 
     private readonly AppDbContext _db;
 
@@ -71,8 +67,11 @@ public class MessageRepository : IMessageRepository
 
     // One conditional UPDATE of the conversation decides whether the message may be stored under the epoch it was sealed in: the
     // conversation must be in that epoch and not marked for replacement. It also moves the conversation's UpdatedAt, which the
-    // sidebar needs, and it takes the row lock that every change of the conversation's keys takes too, so a removal that marks the
-    // epoch as due and a send under it are settled by Postgres: whichever commits second finds the first one's result and is refused.
+    // sidebar needs, and takes the next change number of the conversation (the message is stored under it), and it takes the row lock
+    // that every change of the conversation's keys takes too, so a removal that marks the epoch as due and a send under it are settled
+    // by Postgres: whichever commits second finds the first one's result and is refused. The lock is also what makes the numbers
+    // consecutive and in commit order: no other change of the conversation can take the next number until this transaction ends.
+    // A send that is refused, or that loses to the idempotency index, rolls back with the transaction and leaves no number unused.
     // The message, the sender's read position, the notifications and the outbox rows are saved in the same transaction.
     public async Task<AddOutcome> TryAddAsync(
         Message message, IReadOnlyList<Notification> notifications, IReadOnlyList<OutboxMessage> outbox,
@@ -80,13 +79,11 @@ public class MessageRepository : IMessageRepository
     {
         await using var transaction = await _db.Database.BeginTransactionAsync(cancellationToken);
 
-        var claimed = await _db.Conversations
-            .Where(c => c.Id == message.ConversationId && c.KeyEpoch == message.KeyEpoch && !c.KeyRotationRequired)
-            .ExecuteUpdateAsync(s => s.SetProperty(c => c.UpdatedAt, message.CreatedAt), cancellationToken);
+        var seq = await ClaimForSendAsync(message.ConversationId, message.KeyEpoch, message.CreatedAt, cancellationToken);
+        if (seq is null)
+            return await IsInEpochAsync(message.ConversationId, message.KeyEpoch, cancellationToken) ? AddOutcome.EpochDue : AddOutcome.EpochStale;
 
-        if (claimed == 0)
-            return await RefusalAsync(message.ConversationId, message.KeyEpoch, cancellationToken);
-
+        message.ChangeSeq = seq.Value;
         _db.Messages.Add(message);
         _db.Notifications.AddRange(notifications);
 
@@ -130,9 +127,53 @@ public class MessageRepository : IMessageRepository
             ConstraintName: MessageConfiguration.ClientMessageIndexName,
         };
 
-    // Why a conversation did not take a message: it is in another epoch (the sender went by what was true earlier, or the
-    // conversation has none yet), or it is in that epoch and a removal or a leave marked it for replacement.
-    private async Task<AddOutcome> RefusalAsync(Guid conversationId, int epoch, CancellationToken cancellationToken)
+    // The three statements that take the next change number of a conversation. Each is one UPDATE ... RETURNING, so the number is
+    // taken and the row lock is held in a single step, and the lock lasts until the transaction ends. Raw SQL because EF cannot
+    // return the value an UPDATE wrote. Null means no row matched: the conversation is not in the epoch asked for, or is marked for
+    // replacement (or does not exist).
+    private async Task<long?> ClaimForSendAsync(Guid conversationId, int epoch, DateTime createdAt, CancellationToken cancellationToken)
+    {
+        var numbers = await _db.Database.SqlQuery<long>($"""
+            UPDATE "Conversations"
+            SET "UpdatedAt" = {createdAt}, "ChangeSeq" = "ChangeSeq" + 1
+            WHERE "Id" = {conversationId} AND "KeyEpoch" = {epoch} AND NOT "KeyRotationRequired"
+            RETURNING "ChangeSeq" AS "Value"
+            """).ToListAsync(cancellationToken);
+
+        return numbers.Count == 0 ? null : numbers[0];
+    }
+
+    // An edit does not move the conversation in the sidebar, so UpdatedAt is left alone. The same epoch conditions as a send: this
+    // statement replaces the shared lock the edit used to take on the conversation, and is stronger, which is what keeps two edits that
+    // each hold a shared lock from both waiting to take an exclusive one.
+    private async Task<long?> ClaimForEditAsync(Guid conversationId, int epoch, CancellationToken cancellationToken)
+    {
+        var numbers = await _db.Database.SqlQuery<long>($"""
+            UPDATE "Conversations"
+            SET "ChangeSeq" = "ChangeSeq" + 1
+            WHERE "Id" = {conversationId} AND "KeyEpoch" = {epoch} AND NOT "KeyRotationRequired"
+            RETURNING "ChangeSeq" AS "Value"
+            """).ToListAsync(cancellationToken);
+
+        return numbers.Count == 0 ? null : numbers[0];
+    }
+
+    // A deletion is allowed in any epoch: it removes what was said, it does not say anything under a key.
+    private async Task<long?> ClaimForDeleteAsync(Guid conversationId, CancellationToken cancellationToken)
+    {
+        var numbers = await _db.Database.SqlQuery<long>($"""
+            UPDATE "Conversations"
+            SET "ChangeSeq" = "ChangeSeq" + 1
+            WHERE "Id" = {conversationId}
+            RETURNING "ChangeSeq" AS "Value"
+            """).ToListAsync(cancellationToken);
+
+        return numbers.Count == 0 ? null : numbers[0];
+    }
+
+    // Why a conversation did not take a change: it is in another epoch (the sender went by what was true earlier, or the
+    // conversation has none yet), or it is in that epoch and a removal or a leave marked it for replacement. True for the second.
+    private async Task<bool> IsInEpochAsync(Guid conversationId, int epoch, CancellationToken cancellationToken)
     {
         var state = await _db.Conversations
             .AsNoTracking()
@@ -140,7 +181,7 @@ public class MessageRepository : IMessageRepository
             .Select(c => new { c.KeyEpoch })
             .FirstOrDefaultAsync(cancellationToken);
 
-        return state is not null && state.KeyEpoch == epoch ? AddOutcome.EpochDue : AddOutcome.EpochStale;
+        return state is not null && state.KeyEpoch == epoch;
     }
 
     public async Task<MessageDto?> FindByIdAsync(Guid messageId, CancellationToken cancellationToken)
@@ -164,9 +205,11 @@ public class MessageRepository : IMessageRepository
 
     // Two requests racing for one message (an edit and a delete, two edits, an edit at the end of the window) are settled by
     // Postgres: the UPDATE carries every condition, so each statement is checked against what the other wrote. The edit count is
-    // one of them: it is part of what the sender signed, so an edit made from an older version cannot be stored. The conversation's
-    // keys are looked at first under FOR SHARE, which keeps a removal from marking the epoch as due between this look and the
-    // commit. The transaction keeps the new text, the notifications and the rows that announce them together.
+    // one of them: it is part of what the sender signed, so an edit made from an older version cannot be stored. The conversation is
+    // claimed first, which checks its keys and takes its next change number under its row lock: that keeps a removal from marking the
+    // epoch as due between this look and the commit, and orders this edit among the other changes of the conversation. An edit that
+    // changes nothing returns before the commit, so its number is rolled back. The transaction keeps the new text, the notifications
+    // and the rows that announce them together.
     public async Task<EditOutcome> TryEditAsync(
         Guid conversationId, Guid messageId, byte[] ciphertext, int keyEpoch, int editCount, DateTime editedAt, DateTime notBefore,
         IReadOnlyList<Guid> mentionedUserIds, IReadOnlyList<Notification> notifications, IReadOnlyList<OutboxMessage> outbox,
@@ -174,16 +217,11 @@ public class MessageRepository : IMessageRepository
     {
         await using var transaction = await _db.Database.BeginTransactionAsync(cancellationToken);
 
-        var states = await _db.Database
-            .SqlQuery<EpochState>($"""SELECT "KeyEpoch", "KeyRotationRequired" FROM "Conversations" WHERE "Id" = {conversationId} FOR SHARE""")
-            .ToListAsync(cancellationToken);
+        var seq = await ClaimForEditAsync(conversationId, keyEpoch, cancellationToken);
+        if (seq is null)
+            return await IsInEpochAsync(conversationId, keyEpoch, cancellationToken) ? EditOutcome.EpochDue : EditOutcome.EpochStale;
 
-        if (states.Count == 0 || states[0].KeyEpoch != keyEpoch)
-            return EditOutcome.EpochStale;
-
-        if (states[0].KeyRotationRequired)
-            return EditOutcome.EpochDue;
-
+        var number = seq.Value;
         var updated = await _db.Messages
             .Where(m => m.Id == messageId && !m.IsDeleted && m.CreatedAt > notBefore && m.EditCount == editCount - 1)
             .ExecuteUpdateAsync(
@@ -191,7 +229,8 @@ public class MessageRepository : IMessageRepository
                     .SetProperty(m => m.KeyEpoch, keyEpoch)
                     .SetProperty(m => m.EditCount, editCount)
                     .SetProperty(m => m.EditedAt, (DateTime?)editedAt)
-                    .SetProperty(m => m.MentionedUserIds, mentionedUserIds.ToArray()),
+                    .SetProperty(m => m.MentionedUserIds, mentionedUserIds.ToArray())
+                    .SetProperty(m => m.ChangeSeq, number),
                 cancellationToken);
 
         if (updated == 0)
@@ -219,19 +258,28 @@ public class MessageRepository : IMessageRepository
         return now.CreatedAt <= notBefore ? EditOutcome.TooLate : EditOutcome.EditCountStale;
     }
 
+    // The conversation is claimed before the message is touched, so every change takes the locks in the same order (the conversation's
+    // row, then the message's) and a deletion is numbered among the other changes of the conversation. A deletion that finds the
+    // message already deleted returns before the commit and its number is rolled back.
     public async Task<bool> TryDeleteAsync(
-        Guid messageId, Guid deletedById, DateTime deletedAt, IReadOnlyList<OutboxMessage> outbox,
+        Guid conversationId, Guid messageId, Guid deletedById, DateTime deletedAt, IReadOnlyList<OutboxMessage> outbox,
         CancellationToken cancellationToken)
     {
         await using var transaction = await _db.Database.BeginTransactionAsync(cancellationToken);
 
+        var seq = await ClaimForDeleteAsync(conversationId, cancellationToken);
+        if (seq is null)
+            return false;
+
+        var number = seq.Value;
         var updated = await _db.Messages
-            .Where(m => m.Id == messageId && !m.IsDeleted)
+            .Where(m => m.Id == messageId && m.ConversationId == conversationId && !m.IsDeleted)
             .ExecuteUpdateAsync(
                 s => s.SetProperty(m => m.IsDeleted, true)
                     .SetProperty(m => m.DeletedAt, (DateTime?)deletedAt)
                     .SetProperty(m => m.DeletedById, (Guid?)deletedById)
-                    .SetProperty(m => m.Ciphertext, (byte[]?)null),
+                    .SetProperty(m => m.Ciphertext, (byte[]?)null)
+                    .SetProperty(m => m.ChangeSeq, number),
                 cancellationToken);
 
         if (updated == 0)
@@ -289,6 +337,29 @@ public class MessageRepository : IMessageRepository
         var rows = await InConversation(conversationId, window)
             .Where(m => m.CreatedAt >= cursor.CreatedAt && (m.CreatedAt > cursor.CreatedAt || m.Id.CompareTo(cursor.Id) > 0))
             .OrderBy(m => m.CreatedAt).ThenBy(m => m.Id)
+            .Take(take)
+            .Select(ToRow)
+            .ToListAsync(cancellationToken);
+
+        return rows.Select(ToDto).ToList();
+    }
+
+    public Task<long?> GetChangeSeqAsync(Guid conversationId, CancellationToken cancellationToken)
+        => _db.Conversations
+            .AsNoTracking()
+            .Where(c => c.Id == conversationId)
+            .Select(c => (long?)c.ChangeSeq)
+            .FirstOrDefaultAsync(cancellationToken);
+
+    // Walks the (ConversationId, ChangeSeq) index from the cursor, in order, so a page costs about its own rows whatever the size of
+    // the conversation. The window is a filter on what the walk reaches: for someone who has been a member from the start there is
+    // nothing to filter out.
+    public async Task<List<MessageDto>> GetChangesAsync(
+        Guid conversationId, MemberWindow window, long since, long upTo, int take, CancellationToken cancellationToken)
+    {
+        var rows = await InConversation(conversationId, window)
+            .Where(m => m.ChangeSeq > since && m.ChangeSeq <= upTo)
+            .OrderBy(m => m.ChangeSeq)
             .Take(take)
             .Select(ToRow)
             .ToListAsync(cancellationToken);

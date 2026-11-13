@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { encryptedFileLength } from '../../../lib/crypto/file'
 import type { FileRef } from '../../../lib/crypto/message'
 import type { NotificationWire } from '../../notifications/types'
@@ -11,9 +11,11 @@ import {
   openLastMessage,
   openMessage,
   openMessages,
+  openMessagesQuietly,
   openNotification,
   ownMessage,
   sealedOf,
+  setOpenedSink,
 } from './openWire'
 
 // The keys of a conversation need a signed-in person and this browser's stores; see keysDouble.ts for what stands in for them.
@@ -33,6 +35,7 @@ function wireMessage(overrides: Partial<MessageWire> = {}): MessageWire {
     editedAt: null,
     editCount: 0,
     isDeleted: false,
+    changeSeq: 1,
     ...overrides,
   }
 }
@@ -64,6 +67,7 @@ function conversationWire(lastMessage: LastMessageWire | null): ConversationWire
     leftAt: null,
     keyEpoch: 2,
     keyRotationRequired: false,
+    changeSeq: 0,
   }
 }
 
@@ -210,6 +214,91 @@ describe('opening the files of a message', () => {
     const message = await openMessage(wireMessage({ ciphertext: sealed('x', [entry('one.png', 100)]), attachments: [storedFile('a1', 100)] }))
 
     expect(message.attachments[0]).toMatchObject({ id: 'a1', sizeBytes: encryptedFileLength(100, 65536), url: 'https://files.test/a1' })
+  })
+})
+
+describe('handing on what is opened to whoever keeps it', () => {
+  afterEach(() => setOpenedSink(null))
+
+  it('hands on a message that is opened, as it is shown', async () => {
+    const sink = vi.fn()
+    setOpenedSink(sink)
+
+    const message = await openMessage(wireMessage({ ciphertext: sealed('kept') }))
+
+    expect(sink).toHaveBeenCalledTimes(1)
+    expect(sink).toHaveBeenCalledWith(message)
+    expect(message.content).toBe('kept')
+  })
+
+  it('hands on every message of a page', async () => {
+    const sink = vi.fn()
+    setOpenedSink(sink)
+
+    await openMessages([wireMessage({ id: 'm1' }), wireMessage({ id: 'm2', ciphertext: 'not sealed here' }), wireMessage({ id: 'm3' })])
+
+    expect(sink.mock.calls.map(([message]) => message.id)).toEqual(['m1', 'm2', 'm3'])
+  })
+
+  it('hands on a message that could not be opened, and a deleted one, as they are', async () => {
+    const sink = vi.fn()
+    setOpenedSink(sink)
+
+    await openMessage(wireMessage({ id: 'lost', ciphertext: 'not sealed here' }))
+    await openMessage(wireMessage({ id: 'gone', ciphertext: null, isDeleted: true }))
+
+    expect(sink.mock.calls[0][0]).toMatchObject({ id: 'lost', content: null, unreadable: 'invalid' })
+    expect(sink.mock.calls[1][0]).toMatchObject({ id: 'gone', isDeleted: true })
+  })
+
+  it('hands on the message this tab sealed itself, once the server has confirmed it', () => {
+    const sink = vi.fn()
+    setOpenedSink(sink)
+
+    const message = ownMessage(wireMessage({ ciphertext: sealed('what the server stored') }), 'what was written', [])
+
+    expect(sink).toHaveBeenCalledWith(message)
+    expect(message.content).toBe('what was written')
+  })
+
+  it('does not hand on what is opened for the one that keeps it, which writes it itself', async () => {
+    const sink = vi.fn()
+    setOpenedSink(sink)
+
+    const opened = await openMessagesQuietly([wireMessage({ ciphertext: sealed('quiet') })])
+
+    expect(sink).not.toHaveBeenCalled()
+    expect(opened[0].content).toBe('quiet')
+  })
+
+  it('shows the message even when what keeps it fails', async () => {
+    setOpenedSink(() => {
+      throw new Error('the disk is full')
+    })
+
+    const message = await openMessage(wireMessage({ ciphertext: sealed('still shown') }))
+
+    expect(message.content).toBe('still shown')
+  })
+
+  it('stops handing on once it is told there is no one', async () => {
+    const sink = vi.fn()
+    setOpenedSink(sink)
+    setOpenedSink(null)
+
+    await openMessage(wireMessage())
+
+    expect(sink).not.toHaveBeenCalled()
+  })
+
+  it('does not hand on a notification or a preview, which are not messages of a conversation', async () => {
+    const sink = vi.fn()
+    setOpenedSink(sink)
+
+    await openNotification(notificationWire())
+    await openLastMessage('c1', conversationOf(conversationWire(lastWire())).lastMessage!)
+
+    expect(sink).not.toHaveBeenCalled()
   })
 })
 
