@@ -14,6 +14,7 @@ import { useMessages } from '../api/useMessages'
 import { useWindowPaging } from '../hooks/useWindowPaging'
 import { useChatStore } from '../store/chatStore'
 import type { Conversation } from '../types'
+import { LazyFileViewer } from '../viewer/LazyFileViewer'
 import { ChatHeader } from './ChatHeader'
 import { MessageComposer } from './MessageComposer'
 import { MessageList, type OlderMessages } from './MessageList'
@@ -150,6 +151,7 @@ function ConversationPane({ conversation }: { conversation: Conversation }) {
           <MessageComposer conversationId={conversation.id} />
         </>
       )}
+      <LazyFileViewer conversationId={conversation.id} />
     </>
   )
 }
