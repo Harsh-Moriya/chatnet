@@ -1,5 +1,5 @@
-import { ChevronLeft, ChevronRight, Download, X } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { ChevronLeft, ChevronRight, Download, LoaderCircle, X } from 'lucide-react'
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Dialog } from '../../../components/ui/Dialog'
 import { cn } from '../../../lib/cn'
 import { formatFileSize, formatListTime } from '../../../lib/format'
@@ -13,8 +13,11 @@ import { useViewerStore } from './viewerStore'
 
 const NO_MESSAGES: Message[] = []
 
-// The full-screen viewer of the pictures of a conversation. It shows the file the viewer store names, and moves through the pictures of the
-// messages that are loaded (the ones the list shows). A kind of file other than a picture gets its own renderer here when it has one.
+// The PDF renderer brings pdf.js and its worker, so it is fetched when a PDF is first opened and not with the viewer.
+const PdfViewer = lazy(() => import('./PdfViewer').then((module) => ({ default: module.PdfViewer })))
+
+// The full-screen viewer of the pictures and the PDFs of a conversation. It shows the file the viewer store names, and moves through the
+// files of the messages that are loaded (the ones the list shows). A kind of file gets its own renderer here when it has one.
 export function FileViewer({ conversationId }: { conversationId: string }) {
   const target = useViewerStore((state) => state.target)
   const open = useViewerStore((state) => state.open)
@@ -83,7 +86,7 @@ export function FileViewer({ conversationId }: { conversationId: string }) {
   const saveFailed = current !== null && failedFor === current.source.id
 
   return (
-    <Dialog open={attachmentId !== null} onClose={close} title={current?.name ?? 'Picture'} variant="fullscreen">
+    <Dialog open={attachmentId !== null} onClose={close} title={current?.name ?? 'File'} variant="fullscreen">
       {current && (
         <div className="flex h-dvh flex-col">
           <header className="flex shrink-0 items-center gap-2 border-b border-white/10 px-3 py-2">
@@ -107,15 +110,27 @@ export function FileViewer({ conversationId }: { conversationId: string }) {
           </header>
 
           <div className="relative flex min-h-0 flex-1">
-            {/* Keyed by the file, so that each picture starts fitted and the one before it is let go of. */}
-            <ImageViewer key={current.source.id} source={current.source} name={current.name} onDownload={save} onStep={step} />
+            {/* Keyed by the file, so that each one starts fitted and the one before it is let go of. */}
+            {current.kind === 'Pdf' ? (
+              <Suspense
+                fallback={
+                  <div role="status" aria-label={`Loading ${current.name}`} className="flex flex-1 items-center justify-center">
+                    <LoaderCircle className="h-8 w-8 animate-spin text-slate-300" aria-hidden="true" />
+                  </div>
+                }
+              >
+                <PdfViewer key={current.source.id} source={current.source} name={current.name} onDownload={save} />
+              </Suspense>
+            ) : (
+              <ImageViewer key={current.source.id} source={current.source} name={current.name} onDownload={save} onStep={step} />
+            )}
             {previous && (
-              <ViewerButton aria-label="Previous picture" className="absolute left-2 top-1/2 -translate-y-1/2 bg-slate-800/70" onClick={() => step(-1)}>
+              <ViewerButton aria-label="Previous file" className="absolute left-2 top-1/2 -translate-y-1/2 bg-slate-800/70" onClick={() => step(-1)}>
                 <ChevronLeft className="h-6 w-6" />
               </ViewerButton>
             )}
             {next && (
-              <ViewerButton aria-label="Next picture" className="absolute right-2 top-1/2 -translate-y-1/2 bg-slate-800/70" onClick={() => step(1)}>
+              <ViewerButton aria-label="Next file" className="absolute right-2 top-1/2 -translate-y-1/2 bg-slate-800/70" onClick={() => step(1)}>
                 <ChevronRight className="h-6 w-6" />
               </ViewerButton>
             )}

@@ -24,7 +24,7 @@ function message(id: string, attachments: Attachment[], overrides: Partial<Messa
   }
 }
 
-describe('the pictures of a conversation', () => {
+describe('the pictures and the PDFs of a conversation', () => {
   it('lists them in the order of the messages, and in the order of the files of a message', () => {
     const items = viewerItemsOf([
       message('m1', [attachment('a1', entry('one.png')), attachment('a2', entry('two.jpg', 'image/jpeg'))]),
@@ -34,10 +34,24 @@ describe('the pictures of a conversation', () => {
     expect(items.map((item) => item.source.id)).toEqual(['a1', 'a2', 'a3'])
   })
 
+  it('lists a PDF with the pictures, with its kind, whatever case or parameters the sender wrote', () => {
+    const items = viewerItemsOf([
+      message('m1', [attachment('a1', entry('one.png')), attachment('a2', entry('plan.pdf', 'Application/PDF; version=1.7'))]),
+      message('m2', [attachment('a3', entry('two.jpg', 'image/jpeg'))]),
+    ])
+
+    expect(items.map((item) => [item.source.id, item.kind])).toEqual([
+      ['a1', 'Image'],
+      ['a2', 'Pdf'],
+      ['a3', 'Image'],
+    ])
+  })
+
   it('carries what is needed to open each one, who sent it and when', () => {
     const [item] = viewerItemsOf([message('m1', [attachment('a1', entry('map.png', 'image/png', 4321))], { senderDisplayName: 'Ben', createdAt: '2026-11-14T11:30:00Z' })])
 
     expect(item).toEqual({
+      kind: 'Image',
       source: { id: 'a1', conversationId: 'c1', messageId: 'm1', url: 'https://files.test/a1', entry: entry('map.png', 'image/png', 4321) },
       name: 'map.png',
       size: 4321,
@@ -52,7 +66,7 @@ describe('the pictures of a conversation', () => {
     expect(item.name).toBe('evilgnp.exe')
   })
 
-  it.each(['video/mp4', 'application/pdf', 'text/plain', 'application/zip', 'image/svg+xml', 'image/x-icon', ''])('does not list a file that says it is %s', (type) => {
+  it.each(['video/mp4', 'application/x-pdf', 'text/plain', 'application/zip', 'image/svg+xml', 'image/x-icon', ''])('does not list a file that says it is %s', (type) => {
     expect(viewerItemsOf([message('m1', [attachment('a1', entry('f', type))])])).toEqual([])
   })
 
@@ -76,6 +90,14 @@ describe('moving from one picture to the next', () => {
   it('finds the one after and the one before', () => {
     expect(neighbour(items, 'a2', 1)?.source.id).toBe('a3')
     expect(neighbour(items, 'a2', -1)?.source.id).toBe('a1')
+  })
+
+  it('goes from a picture to a PDF and back, as they are in one list', () => {
+    const mixed = viewerItemsOf([message('m1', [attachment('a1', entry('1.png')), attachment('a2', entry('2.pdf', 'application/pdf')), attachment('a3', entry('3.png'))])])
+
+    expect(neighbour(mixed, 'a1', 1)).toMatchObject({ kind: 'Pdf', source: { id: 'a2' } })
+    expect(neighbour(mixed, 'a2', 1)).toMatchObject({ kind: 'Image', source: { id: 'a3' } })
+    expect(neighbour(mixed, 'a3', -1)).toMatchObject({ kind: 'Pdf' })
   })
 
   it('stops at either end and does not wrap round', () => {
