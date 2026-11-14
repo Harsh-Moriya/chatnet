@@ -77,6 +77,15 @@ describe('zooming around a point', () => {
     expect(zoomAt({ scale: 1, x: 0, y: 0 }, 0.001, { x: 0, y: 0 }, BIG)).toEqual(fitView(BIG))
   })
 
+  it('keeps the part under the point under it when the zoom stops at the largest, and does not jump', () => {
+    const point = { x: 100, y: 50 }
+
+    const view = zoomAt(fitView(BIG), 100, point, BIG)
+
+    // From half to four times is eight times as large, whatever was asked for: the picture under the point has moved by that, no more.
+    expect(view).toEqual({ scale: MAX_SCALE, x: -700, y: -350 })
+  })
+
   it('zooms in and out again to where it was, around the centre', () => {
     const zoomedIn = zoomAt(fitView(BIG), BUTTON_STEP, { x: 0, y: 0 }, BIG)
 
