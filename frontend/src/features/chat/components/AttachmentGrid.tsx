@@ -1,4 +1,4 @@
-import { AlertCircle, Download, Lock, Maximize2, Play } from 'lucide-react'
+import { AlertCircle, Download, Lock, Maximize2 } from 'lucide-react'
 import { type ReactNode, useState } from 'react'
 import { Button } from '../../../components/ui/Button'
 import { cn } from '../../../lib/cn'
@@ -24,12 +24,12 @@ interface AttachmentGridProps {
 type Opened = { attachment: Attachment; file: FileRef; source: FileSource }
 
 // The files the viewer has a renderer for.
-const isViewable = (file: FileRef) => kindOf(file) === 'Image' || kindOf(file) === 'Pdf'
+const isViewable = (file: FileRef) => ['Image', 'Pdf', 'Video'].includes(kindOf(file))
 
 // The files of a confirmed message. The files are encrypted in the bucket, so each is fetched and opened here: pictures as they come near the
-// screen when they are not large, and anything else when it is asked for (a video is then played in place, any other file is saved, and a
-// large picture and a PDF are opened in the viewer, as a picture is when it is clicked). A file the sealed message does not vouch for is
-// not drawn, and says that it cannot be opened.
+// screen when they are not large, and anything else when it is asked for (any other file is saved, and a large picture, a PDF and a video
+// are opened in the viewer, as a picture is when it is clicked). A file the sealed message does not vouch for is not drawn, and says that it
+// cannot be opened.
 export function AttachmentGrid({ attachments, own, conversationId, messageId }: AttachmentGridProps) {
   const openViewer = useViewerStore((state) => state.open)
   const vouched: Opened[] = []
@@ -41,8 +41,7 @@ export function AttachmentGrid({ attachments, own, conversationId, messageId }: 
   }
 
   const pictures = vouched.filter((item) => isInlinePicture(item.file))
-  const videos = vouched.filter((item) => kindOf(item.file) === 'Video')
-  const files = vouched.filter((item) => !isInlinePicture(item.file) && kindOf(item.file) !== 'Video')
+  const files = vouched.filter((item) => !isInlinePicture(item.file))
 
   return (
     <div className="flex flex-col gap-1.5">
@@ -53,10 +52,6 @@ export function AttachmentGrid({ attachments, own, conversationId, messageId }: 
           ))}
         </div>
       )}
-
-      {videos.map((item) => (
-        <VideoTile key={item.attachment.id} item={item} own={own} />
-      ))}
 
       {files.map((item) => (
         <FileChip
@@ -106,30 +101,7 @@ function PictureTile({ item, alone, onOpen }: { item: Opened; alone: boolean; on
   )
 }
 
-function VideoTile({ item, own }: { item: Opened; own: boolean }) {
-  const [asked, setAsked] = useState(false)
-  const [state, retry] = useFileObject(item.source, asked)
-  const name = cleanFileName(item.file.name)
-
-  if (state.status === 'ready') {
-    return <video src={state.url} aria-label={name} controls autoPlay className="max-h-72 w-64 max-w-full rounded-lg bg-black" />
-  }
-
-  const failed = state.status === 'failed'
-  return (
-    <ChipButton
-      own={own}
-      icon={failed ? <AlertCircle className="h-5 w-5 shrink-0" aria-hidden="true" /> : <Play className="h-5 w-5 shrink-0" aria-hidden="true" />}
-      name={name}
-      detail={failed ? "Couldn't load it. Tap to try again." : state.status === 'loading' ? 'Opening...' : formatFileSize(item.file.size)}
-      busy={state.status === 'loading'}
-      onClick={failed ? retry : () => setAsked(true)}
-      label={`Play ${name}`}
-    />
-  )
-}
-
-// A file to save, or a picture too large to be drawn in the message or a PDF, which open in the viewer instead.
+// A file to save, or a picture too large to be drawn in the message, a PDF or a video, which open in the viewer instead.
 function FileChip({ item, own, onOpen }: { item: Opened; own: boolean; onOpen?: () => void }) {
   const [saving, setSaving] = useState(false)
   const [failed, setFailed] = useState(false)

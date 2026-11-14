@@ -7,6 +7,7 @@ import { saveFile } from '../files/openFiles'
 import { useChatStore } from '../store/chatStore'
 import type { Message } from '../types'
 import { ImageViewer } from './ImageViewer'
+import { VideoViewer } from './VideoViewer'
 import { ViewerButton } from './ViewerButton'
 import { indexOfItem, neighbour, viewerItemsOf } from './viewerItems'
 import { useViewerStore } from './viewerStore'
@@ -59,6 +60,8 @@ export function FileViewer({ conversationId }: { conversationId: string }) {
 
     const onKey = (event: KeyboardEvent) => {
       if (event.ctrlKey || event.metaKey || event.altKey) return
+      // In a field or on a slider the arrow keys are its own (the page number of a PDF, the seek bar of a video).
+      if (event.target instanceof HTMLInputElement) return
       if (event.key === 'ArrowLeft') step(-1)
       else if (event.key === 'ArrowRight') step(1)
       else return
@@ -121,6 +124,8 @@ export function FileViewer({ conversationId }: { conversationId: string }) {
               >
                 <PdfViewer key={current.source.id} source={current.source} name={current.name} onDownload={save} />
               </Suspense>
+            ) : current.kind === 'Video' ? (
+              <VideoViewer key={current.source.id} source={current.source} name={current.name} onDownload={save} />
             ) : (
               <ImageViewer key={current.source.id} source={current.source} name={current.name} onDownload={save} onStep={step} />
             )}

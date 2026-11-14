@@ -49,7 +49,7 @@ The browser offers and accepts JPEG, PNG, GIF and WebP images, MP4 and WebM vide
 A paperclip and paste add files. Chips show progress. The browser refuses a type or size it would not send before it encrypts anything.
 
 - **Pictures** (PNG, JPEG, GIF, WebP) up to 10 MiB are fetched, decrypted and drawn in the message as they come near the screen. A larger picture is not drawn there: it shows its name and size, and is fetched only when it is opened. A click on either opens the picture in the viewer.
-- **Videos** (MP4, WebM) show a play button; a click fetches, decrypts and plays the video in place.
+- **Videos** (MP4, WebM) show their name and size; a click opens the video in the viewer.
 - **PDFs** show their name and size; a click opens the PDF in the viewer.
 - **Any other file** shows its name and size; a click decrypts it and saves it under its name.
 - **A fetch that fails** is tried once more with a new link, since the one in the message may have expired, and then says so and offers to try again. A file that is not the one the message describes, or that has been changed in the bucket, is refused: nothing is drawn or saved, and the file says it could not be loaded, with a way to try again.
@@ -58,13 +58,13 @@ A paperclip and paste add files. Chips show progress. The browser refuses a type
 
 ### The viewer
 
-A picture or a PDF opens full screen on a dark background. The viewer is loaded the first time a file is opened, and the PDF part, with pdf.js, the first time a PDF is. The picture viewer is described first and the PDF viewer after it.
+A picture, a PDF or a video opens full screen on a dark background. The viewer is loaded the first time a file is opened, and the PDF part, with pdf.js, the first time a PDF is. The picture viewer is described first, then the PDF viewer and the video viewer.
 
 A picture is fitted to the screen (one smaller than the screen is shown at its own size, not enlarged).
 
 - **Zoom** from the fit up to four times the picture's own size: the mouse wheel, a pinch, the buttons (zoom out, actual size, zoom in, fit to screen) or the keys `+`, `-`, `1` (actual size) and `0` (fit). A double click or a double tap goes from the fit to actual size at that point, and back.
 - **Move** a zoomed picture by dragging it; it cannot be dragged off the screen.
-- **Next and previous** with the arrow keys, the buttons, or a sideways swipe on a picture that is not zoomed. They go through the pictures and the PDFs of the messages loaded in the conversation, oldest first, and stop at either end; the position is shown ("3 of 12"). Only files the sealed message describes are included, and nothing from a deleted message. If the file that is open is deleted, the viewer moves to the nearest one, or closes when there is none.
+- **Next and previous** with the arrow keys, the buttons, or a sideways swipe on a picture that is not zoomed. They go through the pictures, the PDFs and the videos of the messages loaded in the conversation, oldest first, and stop at either end; the position is shown ("3 of 12"). Only files the sealed message describes are included, and nothing from a deleted message. If the file that is open is deleted, the viewer moves to the nearest one, or closes when there is none.
 - **Download** saves the file under its name as opaque bytes, as the chip does. **Escape** or the close button closes the viewer and returns focus to what opened it.
 - A picture that cannot be fetched, or that the browser cannot draw, says so and offers Download (and a retry for a failed fetch).
 
@@ -78,6 +78,18 @@ The pages of a PDF are drawn to canvas by pdf.js, in a column that scrolls. The 
 - **What a PDF can do here is small.** There is no text layer, so text cannot be selected or searched, no links or forms, no scripting and no XFA. Nothing in the file runs.
 - **A PDF that asks for a password** is not opened ("protected by a password"), and offers Download. A file that is not a PDF, or that cannot be read, says so and offers Download too, with a retry when the fetch failed.
 - **Fonts and images.** The character maps for fonts that are not in the PDF (mostly Chinese, Japanese and Korean ones) and the decoders for JPEG 2000, JBIG2 and ICC colour images are files of this site, fetched only when a PDF needs them. The 14 standard fonts are not shipped, so a PDF that uses one without embedding it is drawn in a font of the system.
+
+### Videos in the viewer
+
+A video is played from the encrypted file a range at a time, so it starts, and can be moved about in, without the whole file being fetched and decrypted first. This is done by the service worker of the application (see [web push](web-push.md), which uses the same worker for alerts): the page tells it which file the video is and the key that opens it, the video element asks `/file-stream/<id>` for the bytes it wants, and the worker fetches only the chunks of the stored file that hold them, opens each with its key, and answers with the bytes. Nothing is answered that did not authenticate (a changed byte, a file cut short or of another size, another key, or a bucket that does not honour a range is an error, not a few wrong frames), an answer holds at most 2 MiB so a request for "to the end" does not open the whole video, and answers are marked not to be kept. The key is in the worker's memory only. When the browser stops an idle worker and it loses the stream, it asks the page for the stream again; when the link to the bucket has expired it asks the page for a new one, once.
+
+In a measured case (a video of 60 MiB, whose picture data was a small part of it) opening it, playing it through and moving about in it read about 2.4 MB from the bucket.
+
+Where no worker controls the page (a browser without service workers, one that refused to register it, or a page that was loaded past it with a hard reload), or the stream fails before the video has loaded, the whole file is decrypted and played instead, once.
+
+- **Controls** are the viewer's own, over a video without the browser's: play and pause, a seek bar that shows how much is loaded, the time, mute and volume (the volume slider is left out on a narrow screen), the speed (0.5, 1, 1.25, 1.5 and 2) and full screen. They go away three seconds after the last movement while the video plays. A click on the video plays or pauses it, a double click is full screen. A video whose length is not known (a recording that was never finished) plays but cannot be moved about in.
+- **Keys:** Space or `K` play and pause, `J` and `L` go ten seconds back and forward, `M` mutes and `F` is full screen. The left and right arrow keys stay with the viewer (the previous and next file), except on the seek bar and the volume slider, where they are the slider's.
+- **A video that cannot be played** says so and offers Download and a retry.
 
 ## Editing
 

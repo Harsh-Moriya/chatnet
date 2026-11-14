@@ -1,8 +1,10 @@
-import { describe, expect, it, vi } from 'vitest'
-import source from '../../../public/sw.js?raw'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { encryptFile, newFileKey } from '../lib/crypto/file'
+import type { StreamDescriptor } from './protocol'
+import type { StreamDeps } from './streams'
+import { type WorkerScope, installWorker } from './worker'
 
-// The service worker is a plain script the browser runs on its own, so it is loaded here the way the browser would: the file as
-// it is, run against a stand-in for the worker scope, and given the events the browser gives it.
+// The service worker is installed here into a stand-in for the worker scope, and given the events the browser gives it.
 
 const CONVERSATION = '7d3c1f0e-1b2a-4c3d-8e4f-5a6b7c8d9e0f'
 const MESSAGE = '0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d'
@@ -27,7 +29,7 @@ function aWindow(overrides: Partial<FakeWindow> = {}): FakeWindow {
   }
 }
 
-function loadWorker(windows: FakeWindow[] = []) {
+function loadWorker(windows: FakeWindow[] = [], deps?: StreamDeps) {
   const listeners = new Map<string, (event: unknown) => void>()
   const scope = {
     location: { origin: ORIGIN },
@@ -36,12 +38,13 @@ function loadWorker(windows: FakeWindow[] = []) {
     clients: {
       claim: vi.fn(async () => undefined),
       matchAll: vi.fn(async () => windows),
+      get: vi.fn(async (id: string) => windows.find((window) => (window as FakeWindow & { id?: string }).id === id)),
       openWindow: vi.fn(async () => null),
     },
     registration: { showNotification: vi.fn(async () => undefined) },
   }
 
-  new Function('self', source)(scope)
+  installWorker(scope as unknown as WorkerScope, deps)
 
   // Runs a handler the way the browser does: the work it hands to waitUntil is what keeps the worker alive, so it is awaited.
   async function dispatch(type: string, event: object) {
@@ -59,7 +62,32 @@ function loadWorker(windows: FakeWindow[] = []) {
     return dispatch('notificationclick', { notification }).then(() => notification)
   }
 
-  return { scope, listeners, dispatch, push, click }
+  // A request for a file, the way the browser gives it to the worker: what is handed to respondWith is what the page gets, and a worker that
+  // does not answer leaves it out.
+  function fetched(url: string, headers: Record<string, string> = {}, clientId = '') {
+    let answer: Promise<Response> | null = null
+    const handler = listeners.get('fetch')
+    if (!handler) throw new Error('The worker does not listen for fetch.')
+
+    handler({ request: new Request(url, { headers }), clientId, respondWith: (response: Promise<Response>) => (answer = response) })
+    return answer as Promise<Response> | null
+  }
+
+  // A message from the page, with the port the worker answers on.
+  async function message(data: unknown) {
+    const channel = new MessageChannel()
+    const reply = new Promise<unknown>((resolve) => {
+      channel.port1.onmessage = (event) => resolve(event.data)
+      setTimeout(() => resolve(undefined), 50)
+    })
+    listeners.get('message')?.({ data, ports: [channel.port2] })
+    const answered = await reply
+    channel.port1.close()
+    channel.port2.close()
+    return answered
+  }
+
+  return { scope, listeners, dispatch, push, click, fetched, message }
 }
 
 const alert = {
@@ -271,6 +299,151 @@ describe('the life of the worker', () => {
   })
 
   it('listens for exactly the events it handles', () => {
-    expect([...loadWorker().listeners.keys()].sort()).toEqual(['activate', 'install', 'notificationclick', 'push'])
+    expect([...loadWorker().listeners.keys()].sort()).toEqual(['activate', 'fetch', 'install', 'message', 'notificationclick', 'push'])
+  })
+})
+
+describe('playing a video', () => {
+  const STREAM = '7d3c1f0e-1b2a-4c3d-8e4f-5a6b7c8d9e0f'
+  const URL_OF = `${ORIGIN}/file-stream/${STREAM}`
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  async function video(length = 300) {
+    const key = newFileKey()
+    const plain = Uint8Array.from({ length }, (_, i) => (i * 7 + 1) % 251)
+    const stored = await encryptFile(key, plain, { chunkSize: 64 })
+    const stream: StreamDescriptor = { id: STREAM, key, chunkSize: 64, size: length, storedSize: stored.length, url: 'https://bucket.test/f?sig=1', contentType: 'video/webm' }
+    const fetchRange = vi.fn(async (_url: string, from: number, to: number) => new Response(stored.slice(from, to + 1), { status: 206 }))
+    const deps: StreamDeps = { fetchRange, askPageForStream: vi.fn(async () => null), askPageForLink: vi.fn(async () => null) }
+    return { plain, stored, stream, fetchRange, deps }
+  }
+
+  // A bucket as `fetch` meets it: the range is in a header, and the answer is those bytes of the object.
+  const bucketOf = (object: Uint8Array) => async (_url: string, init: RequestInit) => {
+    const [from, to] = /bytes=(\d+)-(\d+)/.exec(String((init.headers as Record<string, string>).Range))!.slice(1).map(Number)
+    return new Response(object.slice(from, to + 1), { status: 206 })
+  }
+
+  const bodyOf = async (response: Promise<Response> | null) => new Uint8Array(await (await response!).arrayBuffer())
+
+  it('answers a request for a stream of its own site, and leaves every other request to the network', async () => {
+    const worker = loadWorker()
+
+    expect(worker.fetched(`${ORIGIN}/api/conversations`)).toBeNull()
+    expect(worker.fetched(`${ORIGIN}/assets/index.js`)).toBeNull()
+    expect(worker.fetched(`${ORIGIN}/file-stream/not-an-id`)).toBeNull()
+    expect(worker.fetched(`https://elsewhere.example/file-stream/${STREAM}`)).toBeNull()
+    expect(worker.fetched(URL_OF)).not.toBeNull()
+  })
+
+  it('plays the stream the page opened, and says it took it', async () => {
+    const file = await video()
+    const worker = loadWorker([], file.deps)
+
+    const reply = await worker.message({ type: 'stream-open', stream: file.stream })
+    const response = worker.fetched(URL_OF, { Range: 'bytes=70-79' })
+
+    expect(reply).toEqual({ ok: true })
+    expect(Array.from(await bodyOf(response))).toEqual(Array.from(file.plain.subarray(70, 80)))
+  })
+
+  it('says it did not take a stream that is not usable, and then has none to play', async () => {
+    const file = await video()
+    const worker = loadWorker([], file.deps)
+
+    const reply = await worker.message({ type: 'stream-open', stream: { ...file.stream, contentType: 'text/html' } })
+    const response = await worker.fetched(URL_OF, { Range: 'bytes=0-9' })
+
+    expect(reply).toEqual({ ok: false })
+    expect(response!.status).toBe(404)
+  })
+
+  it.each([null, 'text', 42, {}, { type: 'something-else' }])('ignores a message it does not understand: %j', async (data) => {
+    const worker = loadWorker([], (await video()).deps)
+
+    expect(await worker.message(data)).toBeUndefined()
+  })
+
+  it('forgets a stream the page closes: the next request asks the page, which still has it', async () => {
+    const file = await video()
+    file.deps.askPageForStream = vi.fn(async () => file.stream)
+    const worker = loadWorker([], file.deps)
+
+    await worker.message({ type: 'stream-open', stream: file.stream })
+    await worker.message({ type: 'stream-close', id: STREAM })
+    const response = worker.fetched(URL_OF, { Range: 'bytes=0-9' })
+
+    expect(Array.from(await bodyOf(response))).toEqual(Array.from(file.plain.subarray(0, 10)))
+    expect(file.deps.askPageForStream).toHaveBeenCalledOnce()
+  })
+
+  describe('with the page asked for real, on a channel made for the question', () => {
+    // A window that answers what the worker asks the way the page does.
+    function page(answer: (request: { type: string; id: string }) => unknown) {
+      const window = aWindow() as FakeWindow & { id: string }
+      window.id = 'page-1'
+      window.postMessage = vi.fn((request: unknown, transfer?: Transferable[]) => {
+        const port = transfer![0] as MessagePort
+        port.postMessage(answer(request as { type: string; id: string }))
+        port.close()
+      })
+      return window
+    }
+
+    it('gets back a stream it lost when the browser stopped it, from the page that made the request', async () => {
+      const file = await video()
+      vi.stubGlobal('fetch', bucketOf(file.stored))
+      const window = page((request) => (request.type === 'stream-need' ? file.stream : null))
+      const worker = loadWorker([window])
+
+      const response = worker.fetched(URL_OF, { Range: 'bytes=100-120' }, 'page-1')
+
+      expect(Array.from(await bodyOf(response))).toEqual(Array.from(file.plain.subarray(100, 121)))
+      expect(window.postMessage).toHaveBeenCalledWith({ type: 'stream-need', id: STREAM }, expect.any(Array))
+    })
+
+    it('asks the page for a new link when the bucket refuses the old one, and plays on', async () => {
+      const file = await video()
+      const answer = bucketOf(file.stored)
+      vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit) => (String(url).includes('sig=1') ? new Response(null, { status: 403 }) : answer(url, init))))
+      const window = page((request) => (request.type === 'stream-need' ? file.stream : { url: 'https://bucket.test/f?sig=2' }))
+      const worker = loadWorker([window])
+
+      const response = worker.fetched(URL_OF, { Range: 'bytes=0-9' }, 'page-1')
+
+      expect(Array.from(await bodyOf(response))).toEqual(Array.from(file.plain.subarray(0, 10)))
+      expect(window.postMessage).toHaveBeenCalledWith({ type: 'stream-renew', id: STREAM }, expect.any(Array))
+    })
+
+    it('sends the range to the bucket as a header, without the credentials of the site', async () => {
+      const file = await video()
+      const bucket = vi.fn(bucketOf(file.stored))
+      vi.stubGlobal('fetch', bucket)
+      const worker = loadWorker([page(() => file.stream)])
+
+      await bodyOf(worker.fetched(URL_OF, { Range: 'bytes=0-9' }, 'page-1'))
+
+      expect(bucket).toHaveBeenCalledWith('https://bucket.test/f?sig=1', expect.objectContaining({ credentials: 'omit', headers: { Range: expect.stringMatching(/^bytes=\d+-\d+$/) } }))
+    })
+
+    it('has nothing to play, and says so, when no page answers', async () => {
+      vi.useFakeTimers()
+      try {
+        const window = aWindow() as FakeWindow & { id: string }
+        window.id = 'page-1'
+        window.postMessage = vi.fn()
+        const worker = loadWorker([window])
+
+        const response = worker.fetched(URL_OF, { Range: 'bytes=0-9' }, 'page-1')
+        await vi.advanceTimersByTimeAsync(6000)
+
+        expect((await response!).status).toBe(404)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
   })
 })

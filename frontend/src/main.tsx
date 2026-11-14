@@ -5,6 +5,7 @@ import { BrowserRouter } from 'react-router-dom'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { queryClient } from './lib/queryClient'
 import { reloadForStaleChunk } from './lib/staleChunks'
+import { registerWorker } from './sw/register'
 import { setDeviceIdProvider, startSession } from './features/auth/session'
 import { indexedDbDeviceStore } from './features/encryption/deviceStore'
 import App from './App'
@@ -14,6 +15,7 @@ import './index.css'
 // so every page load starts without one. Routes show a loading state until this is answered.
 setDeviceIdProvider(() => indexedDbDeviceStore.lastDeviceId())
 void startSession()
+void registerWorker()
 
 // Fired when a script file this tab asks for no longer exists, which is what an update leaves behind for a tab that was already open.
 window.addEventListener('vite:preloadError', (event) => {

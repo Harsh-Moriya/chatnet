@@ -5,7 +5,7 @@ import type { Message } from '../types'
 // The files of a conversation the viewer can show, and the way from one to the next.
 
 // The kinds of file the viewer has a renderer for.
-export type ViewerKind = Extract<AttachmentKind, 'Image' | 'Pdf'>
+export type ViewerKind = Extract<AttachmentKind, 'Image' | 'Pdf' | 'Video'>
 
 export interface ViewerItem {
   kind: ViewerKind
@@ -16,7 +16,7 @@ export interface ViewerItem {
   sentAt: string
 }
 
-// The pictures and the PDFs of the messages, in the order the messages are in (the store keeps them oldest first). A file is only listed when
+// The pictures, the PDFs and the videos of the messages, in the order the messages are in (the store keeps them oldest first). A file is only listed when
 // the sealed message vouches for it, and what the sender says it is is one the app shows (so not SVG): the same test the message does before
 // it draws it. Nothing of a deleted message is listed.
 export function viewerItemsOf(messages: readonly Message[]): ViewerItem[] {
@@ -26,7 +26,7 @@ export function viewerItemsOf(messages: readonly Message[]): ViewerItem[] {
     return message.attachments.flatMap((attachment) => {
       const file = attachment.file
       const kind = file === null ? null : kindOf(file)
-      if (file === null || (kind !== 'Image' && kind !== 'Pdf')) return []
+      if (file === null || (kind !== 'Image' && kind !== 'Pdf' && kind !== 'Video')) return []
 
       return [
         {

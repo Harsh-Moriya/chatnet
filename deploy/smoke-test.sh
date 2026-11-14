@@ -88,6 +88,20 @@ expect_header "responses are compressed" "$public" / "content-encoding: gzip" "A
 expect_header "the service worker is served as a script" "$public" /sw.js "content-type: text/javascript"
 expect_header "the service worker is not cached"         "$public" /sw.js "cache-control: no-cache"
 
+# It is the worker the build makes (the second build, vite.sw.config.ts, into the same folder as the page) and not a stale file: it plays
+# encrypted video from /file-stream/ and still shows alerts, and it is one classic script, which a browser runs from this address.
+worker=$(curl -s -H "Host: $public" "http://localhost:$port/sw.js")
+if echo "$worker" | grep -q "file-stream" && echo "$worker" | grep -q "notificationclick"; then
+  echo "ok    the service worker is the built one: it plays video and shows alerts"
+else
+  echo "FAIL  the service worker is the built one (it does not name file-stream and notificationclick)"; failures=$((failures + 1))
+fi
+if echo "$worker" | grep -Eq '(^|[;{}])(import|export)[ {*]'; then
+  echo "FAIL  the service worker is one classic script (it has an import or export)"; failures=$((failures + 1))
+else
+  echo "ok    the service worker is one classic script"
+fi
+
 # The PDF viewer's worker is a module worker, which a browser refuses to start unless it is served with a script type, and what pdf.js reads
 # while it draws (the character maps and the image decoders) is built as files like the rest. Only the viewer's own script names them, so
 # they are found in the image. Their absence would show as a PDF that does not open, or as a Japanese one with the wrong glyphs.
