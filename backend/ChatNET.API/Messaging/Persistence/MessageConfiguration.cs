@@ -14,6 +14,9 @@ public class MessageConfiguration : IEntityTypeConfiguration<Message>
     // share a number, whatever code path made them.
     public const string ChangeSeqIndexName = "IX_Messages_ConversationId_ChangeSeq";
 
+    // The messages that have files and are not deleted, newest first: what the gallery pages through.
+    public const string FilesIndexName = "IX_Messages_ConversationId_CreatedAt_Files";
+
     public void Configure(EntityTypeBuilder<Message> builder)
     {
         builder.HasKey(m => m.Id);
@@ -73,6 +76,14 @@ public class MessageConfiguration : IEntityTypeConfiguration<Message>
         builder.HasIndex(m => new { m.ConversationId, m.ChangeSeq })
             .IsUnique()
             .HasDatabaseName(ChangeSeqIndexName);
+
+        // A partial index over only the messages the gallery lists, in the order it lists them, so a page costs about its own rows
+        // however long the conversation is and however few of its messages have files. The query must repeat the filter exactly.
+        builder.Property(m => m.HasFiles).IsRequired();
+        builder.HasIndex(m => new { m.ConversationId, m.CreatedAt, m.Id })
+            .IsDescending(false, true, true)
+            .HasFilter("\"HasFiles\" AND NOT \"IsDeleted\"")
+            .HasDatabaseName(FilesIndexName);
 
         builder.HasOne(m => m.Conversation)
             .WithMany()

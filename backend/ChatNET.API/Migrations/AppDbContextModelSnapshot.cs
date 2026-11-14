@@ -515,6 +515,9 @@ namespace ChatNET.API.Migrations
                     b.Property<DateTime?>("EditedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<bool>("HasFiles")
+                        .HasColumnType("boolean");
+
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
@@ -544,6 +547,11 @@ namespace ChatNET.API.Migrations
 
                     b.HasIndex("ConversationId", "CreatedAt")
                         .IsDescending(false, true);
+
+                    b.HasIndex("ConversationId", "CreatedAt", "Id")
+                        .IsDescending(false, true, true)
+                        .HasDatabaseName("IX_Messages_ConversationId_CreatedAt_Files")
+                        .HasFilter("\"HasFiles\" AND NOT \"IsDeleted\"");
 
                     b.HasIndex("ConversationId", "SenderId", "ClientMessageId")
                         .IsUnique()

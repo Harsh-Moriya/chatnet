@@ -117,6 +117,7 @@ public static class MediaApi
             KeyEpoch = 1,
             ClientMessageId = Guid.NewGuid(),
             CreatedAt = createdAt,
+            HasFiles = fileCount > 0,
             IsDeleted = deleted,
             DeletedAt = deleted ? createdAt : null,
             DeletedById = deleted ? senderId : null,

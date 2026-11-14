@@ -129,7 +129,10 @@ public class SendMessageHandler : IRequestHandler<SendMessageCommand, SendMessag
             ClientMessageId = request.ClientMessageId!.Value,
         };
         if (staged is not null)
+        {
             message.Attachments = staged.Attachments;
+            message.HasFiles = staged.Attachments.Count > 0;
+        }
 
         var mentions = await MentionsAsync(message, request.MentionedUserIds, cancellationToken);
 
