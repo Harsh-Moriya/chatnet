@@ -1,8 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
-import source from '../../../public/sw.js?raw'
+import { type WorkerScope, installWorker } from './worker'
 
-// The service worker is a plain script the browser runs on its own, so it is loaded here the way the browser would: the file as
-// it is, run against a stand-in for the worker scope, and given the events the browser gives it.
+// The service worker is installed here into a stand-in for the worker scope, and given the events the browser gives it.
 
 const CONVERSATION = '7d3c1f0e-1b2a-4c3d-8e4f-5a6b7c8d9e0f'
 const MESSAGE = '0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d'
@@ -41,7 +40,7 @@ function loadWorker(windows: FakeWindow[] = []) {
     registration: { showNotification: vi.fn(async () => undefined) },
   }
 
-  new Function('self', source)(scope)
+  installWorker(scope as unknown as WorkerScope)
 
   // Runs a handler the way the browser does: the work it hands to waitUntil is what keeps the worker alive, so it is awaited.
   async function dispatch(type: string, event: object) {

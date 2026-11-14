@@ -1,11 +1,10 @@
+import { registerWorker } from '../../sw/register'
 import { alertPermission } from '../notifications/browserAlert'
 import { decodeKey, usesKey } from './pushKeys'
 import type { SubscriptionState } from './pushPlan'
 
 // The browser's side of push: the service worker, and the subscription the push manager holds for it. Thin and free of rules; what
 // to do is decided in pushPlan.ts.
-
-const WORKER = '/sw.js'
 
 export function pushSupported(): boolean {
   return (
@@ -21,9 +20,10 @@ export function pushPermission(): NotificationPermission {
   return permission === 'unsupported' ? 'default' : permission
 }
 
-// The worker is registered when it is first needed, so a person who never turns alerts on never has one.
+// The worker is registered when the application starts (see sw/register.ts); this waits for it to be ready, and fails when it could not be
+// registered.
 async function readyWorker(): Promise<ServiceWorkerRegistration> {
-  await navigator.serviceWorker.register(WORKER)
+  if ((await registerWorker()) === null) throw new Error('The service worker could not be registered.')
   return navigator.serviceWorker.ready
 }
 
