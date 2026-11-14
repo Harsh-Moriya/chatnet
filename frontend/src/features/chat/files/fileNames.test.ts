@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { INLINE_PICTURE_MAX_BYTES, cleanFileName, imageTypeOf, isInlinePicture, kindOf, videoTypeOf } from './fileNames'
+import { INLINE_PICTURE_MAX_BYTES, cleanFileName, imageTypeOf, isInlinePicture, kindOf, pdfTypeOf, videoTypeOf } from './fileNames'
 
 describe('cleaning the name of a file', () => {
   it.each([
@@ -62,7 +62,16 @@ describe('what a type lets a file be shown as', () => {
     expect(videoTypeOf(type)).toBeNull()
   })
 
-  it.each(['application/pdf', 'text/plain', 'application/zip', 'text/html', 'image/svg+xml', 'application/x-msdownload', ''])(
+  it.each(['application/pdf', 'APPLICATION/PDF', 'application/pdf; version=1.7'])('draws %s page by page as a PDF', (type) => {
+    expect(pdfTypeOf(type)).toBe('application/pdf')
+    expect(kindOf({ type })).toBe('Pdf')
+  })
+
+  it.each(['application/x-pdf', 'application/pdfx', 'text/pdf', 'application/zip', 'image/png', ''])('does not draw %j as a PDF', (type) => {
+    expect(pdfTypeOf(type)).toBeNull()
+  })
+
+  it.each(['text/plain', 'application/zip', 'text/html', 'image/svg+xml', 'application/x-msdownload', ''])(
     'offers %j as a file to save',
     (type) => {
       expect(kindOf({ type })).toBe('File')

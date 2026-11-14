@@ -50,20 +50,34 @@ A paperclip and paste add files. Chips show progress. The browser refuses a type
 
 - **Pictures** (PNG, JPEG, GIF, WebP) up to 10 MiB are fetched, decrypted and drawn in the message as they come near the screen. A larger picture is not drawn there: it shows its name and size, and is fetched only when it is opened. A click on either opens the picture in the viewer.
 - **Videos** (MP4, WebM) show a play button; a click fetches, decrypts and plays the video in place.
+- **PDFs** show their name and size; a click opens the PDF in the viewer.
 - **Any other file** shows its name and size; a click decrypts it and saves it under its name.
 - **A fetch that fails** is tried once more with a new link, since the one in the message may have expired, and then says so and offers to try again. A file that is not the one the message describes, or that has been changed in the bucket, is refused: nothing is drawn or saved, and the file says it could not be loaded, with a way to try again.
-- **What a sender says is not trusted.** A name is cut to its last path part, with control and invisible characters removed and at most 255 characters. Only the image and video types above are given a type that a browser draws or plays; SVG is never drawn, and everything else is saved as opaque bytes, so a file that says it is a web page is never opened as one.
+- **What a sender says is not trusted.** A name is cut to its last path part, with control and invisible characters removed and at most 255 characters. Only the image, video and PDF types above are given a type that the app shows; SVG is never drawn, and everything else is saved as opaque bytes, so a file that says it is a web page is never opened as one. A file that says it is a PDF is read by pdf.js, which refuses what is not one; the address of the decrypted file goes to pdf.js and nowhere else, never to a frame or a link, which would hand it to the browser's own viewer.
 - **Memory.** A file is fetched as a `Blob` and decrypted a slice of pieces at a time, so the page never holds a whole large file in its own memory. Files that were opened and are not being shown are kept up to 64 MiB, newest first, so that showing one again does not fetch it again.
 
-### The picture viewer
+### The viewer
 
-A picture opens full screen on a dark background, fitted to the screen (a picture smaller than the screen is shown at its own size, not enlarged). The viewer is loaded the first time a picture is opened.
+A picture or a PDF opens full screen on a dark background. The viewer is loaded the first time a file is opened, and the PDF part, with pdf.js, the first time a PDF is. The picture viewer is described first and the PDF viewer after it.
+
+A picture is fitted to the screen (one smaller than the screen is shown at its own size, not enlarged).
 
 - **Zoom** from the fit up to four times the picture's own size: the mouse wheel, a pinch, the buttons (zoom out, actual size, zoom in, fit to screen) or the keys `+`, `-`, `1` (actual size) and `0` (fit). A double click or a double tap goes from the fit to actual size at that point, and back.
 - **Move** a zoomed picture by dragging it; it cannot be dragged off the screen.
-- **Next and previous** with the arrow keys, the buttons, or a sideways swipe on a picture that is not zoomed. They go through the pictures of the messages loaded in the conversation, oldest first, and stop at either end; the position is shown ("3 of 12"). Only pictures the sealed message describes are included, and nothing from a deleted message. If the picture that is open is deleted, the viewer moves to the nearest one, or closes when there is none.
+- **Next and previous** with the arrow keys, the buttons, or a sideways swipe on a picture that is not zoomed. They go through the pictures and the PDFs of the messages loaded in the conversation, oldest first, and stop at either end; the position is shown ("3 of 12"). Only files the sealed message describes are included, and nothing from a deleted message. If the file that is open is deleted, the viewer moves to the nearest one, or closes when there is none.
 - **Download** saves the file under its name as opaque bytes, as the chip does. **Escape** or the close button closes the viewer and returns focus to what opened it.
 - A picture that cannot be fetched, or that the browser cannot draw, says so and offers Download (and a retry for a failed fetch).
+
+### PDFs in the viewer
+
+The pages of a PDF are drawn to canvas by pdf.js, in a column that scrolls. The file is read in pdf.js's own worker from the decrypted file, so its bytes do not pass through the page.
+
+- **Pages** are drawn when they come within a screen of the view and let go of when they are further, so a long document holds only a handful of canvases. Each page has its box from the start, so the column is as long as it will be.
+- **The toolbar** shows the page the middle of the view is on ("Page 3 of 12"), takes a page number to go to, zooms out and in, and fits to the width. The document opens fitted to the width. The zoom goes from 19% to 375%, where 100% is 96 pixels to the inch. The keys `+`, `-` and `0` (fit to width) and ctrl or cmd with the wheel zoom as well, and a zoom keeps the part of the document at the top of the view where it was. Space, page up and down, home, end and the up and down arrow keys scroll the column. The left and right arrow keys still go to the previous and next file.
+- **On a touch screen** the zoom is the buttons. The browser's own pinch scales the whole screen, the toolbar included.
+- **What a PDF can do here is small.** There is no text layer, so text cannot be selected or searched, no links or forms, no scripting and no XFA. Nothing in the file runs.
+- **A PDF that asks for a password** is not opened ("protected by a password"), and offers Download. A file that is not a PDF, or that cannot be read, says so and offers Download too, with a retry when the fetch failed.
+- **Fonts and images.** The character maps for fonts that are not in the PDF (mostly Chinese, Japanese and Korean ones) and the decoders for JPEG 2000, JBIG2 and ICC colour images are files of this site, fetched only when a PDF needs them. The 14 standard fonts are not shipped, so a PDF that uses one without embedding it is drawn in a font of the system.
 
 ## Editing
 

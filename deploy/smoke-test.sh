@@ -88,6 +88,26 @@ expect_header "responses are compressed" "$public" / "content-encoding: gzip" "A
 expect_header "the service worker is served as a script" "$public" /sw.js "content-type: text/javascript"
 expect_header "the service worker is not cached"         "$public" /sw.js "cache-control: no-cache"
 
+# The PDF viewer's worker is a module worker, which a browser refuses to start unless it is served with a script type, and what pdf.js reads
+# while it draws (the character maps and the image decoders) is built as files like the rest. Only the viewer's own script names them, so
+# they are found in the image. Their absence would show as a PDF that does not open, or as a Japanese one with the wrong glyphs.
+assets=$(docker exec "$name" sh -c 'ls /srv/assets')
+worker=$(echo "$assets" | grep '^pdf\.worker\..*\.mjs$' | head -1)
+if [ -z "$worker" ]; then
+  echo "FAIL  the build has the PDF worker"; failures=$((failures + 1))
+else
+  expect_header "the PDF worker is served as a script"  "$public" "/assets/$worker" "content-type: text/javascript"
+  expect_header "the PDF worker is cached for a year"   "$public" "/assets/$worker" "cache-control: public, max-age=31536000, immutable"
+fi
+for pattern in '^UniJIS-UCS2-H-.*\.bcmap$' '^openjpeg-.*\.wasm$' '^jbig2-.*\.wasm$' '^qcms_bg-.*\.wasm$'; do
+  file=$(echo "$assets" | grep "$pattern" | head -1)
+  if [ -z "$file" ]; then
+    echo "FAIL  the build has a file of pdf.js matching $pattern"; failures=$((failures + 1))
+  else
+    expect_header "a file of pdf.js is served and cached for a year ($file)" "$public" "/assets/$file" "cache-control: public, max-age=31536000, immutable"
+  fi
+done
+
 # The access token SignalR puts in a query string must not be written to the log. No API is behind this proxy, so the
 # answer is an error; the line is what matters.
 curl -s -o /dev/null -X POST -H "Host: $public" "http://localhost:$port/hubs/chat/negotiate?negotiateVersion=1&access_token=SMOKESECRET"

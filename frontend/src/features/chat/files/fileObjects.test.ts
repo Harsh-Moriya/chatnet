@@ -57,6 +57,15 @@ describe('showing a file', () => {
     expect(d.makeUrl).toHaveBeenCalledWith(PLAIN, 'image/png')
   })
 
+  it('holds a PDF as a PDF, whatever case or parameters the sender wrote', async () => {
+    const d = deps()
+
+    const url = await createFileObjects(d).hold(source('p1', 'Application/PDF; version=1.7'))
+
+    expect(url).toBe('blob:1')
+    expect(d.makeUrl).toHaveBeenCalledWith(PLAIN, 'application/pdf')
+  })
+
   it('plays a video as a video', async () => {
     const d = deps()
 
@@ -65,7 +74,7 @@ describe('showing a file', () => {
     expect(d.makeUrl).toHaveBeenCalledWith(PLAIN, 'video/mp4')
   })
 
-  it.each(['image/svg+xml', 'text/html', 'application/pdf', 'application/octet-stream', 'image/x-icon', ''])(
+  it.each(['image/svg+xml', 'text/html', 'application/x-pdf', 'application/octet-stream', 'image/x-icon', ''])(
     'draws nothing for a file that says it is %s, and does not even fetch it',
     async (type) => {
       const d = deps()

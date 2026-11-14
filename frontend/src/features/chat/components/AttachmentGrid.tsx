@@ -23,10 +23,13 @@ interface AttachmentGridProps {
 // An attachment the sealed message vouches for, with what is needed to find and open it.
 type Opened = { attachment: Attachment; file: FileRef; source: FileSource }
 
+// The files the viewer has a renderer for.
+const isViewable = (file: FileRef) => kindOf(file) === 'Image' || kindOf(file) === 'Pdf'
+
 // The files of a confirmed message. The files are encrypted in the bucket, so each is fetched and opened here: pictures as they come near the
 // screen when they are not large, and anything else when it is asked for (a video is then played in place, any other file is saved, and a
-// large picture is opened in the viewer, as a picture is when it is clicked). A file the sealed message does not vouch for is not drawn, and
-// says that it cannot be opened.
+// large picture and a PDF are opened in the viewer, as a picture is when it is clicked). A file the sealed message does not vouch for is
+// not drawn, and says that it cannot be opened.
 export function AttachmentGrid({ attachments, own, conversationId, messageId }: AttachmentGridProps) {
   const openViewer = useViewerStore((state) => state.open)
   const vouched: Opened[] = []
@@ -60,7 +63,7 @@ export function AttachmentGrid({ attachments, own, conversationId, messageId }: 
           key={item.attachment.id}
           item={item}
           own={own}
-          onOpen={kindOf(item.file) === 'Image' ? () => openViewer(conversationId, item.attachment.id) : undefined}
+          onOpen={isViewable(item.file) ? () => openViewer(conversationId, item.attachment.id) : undefined}
         />
       ))}
 
@@ -126,7 +129,7 @@ function VideoTile({ item, own }: { item: Opened; own: boolean }) {
   )
 }
 
-// A file to save, or a picture too large to be drawn in the message, which opens in the viewer instead.
+// A file to save, or a picture too large to be drawn in the message or a PDF, which open in the viewer instead.
 function FileChip({ item, own, onOpen }: { item: Opened; own: boolean; onOpen?: () => void }) {
   const [saving, setSaving] = useState(false)
   const [failed, setFailed] = useState(false)
