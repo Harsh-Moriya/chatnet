@@ -6,7 +6,7 @@ namespace ChatNET.API.Tests.Media;
 // encrypted, so the largest object is what such a file becomes.
 public class SealedFileTests
 {
-    private const long TenMebibytes = 10 * 1024 * 1024;
+    private const long HundredMebibytes = 100 * 1024 * 1024;
 
     [Fact]
     public void The_smallest_sealed_file_is_a_header_and_the_tag_of_one_empty_chunk()
@@ -14,11 +14,11 @@ public class SealedFileTests
         Assert.Equal(13 + 16, SealedFile.MinBytes);
     }
 
-    // 160 chunks of 64 KiB, each with a 16 byte tag, and a 13 byte header.
+    // 1600 chunks of 64 KiB, each with a 16 byte tag, and a 13 byte header.
     [Fact]
     public void A_file_of_the_limit_becomes_the_file_the_header_and_a_tag_for_every_chunk()
     {
-        Assert.Equal(TenMebibytes + 13 + 160 * 16, SealedFile.MaxBytes(TenMebibytes));
+        Assert.Equal(HundredMebibytes + 13 + 1600 * 16, SealedFile.MaxBytes(HundredMebibytes));
     }
 
     [Fact]

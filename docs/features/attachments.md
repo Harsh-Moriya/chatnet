@@ -1,6 +1,6 @@
 # File attachments
 
-A message can carry up to 4 files of up to 10 MiB each. Every file is encrypted in the sender's browser before it is uploaded, so object storage holds bytes that only the members of the conversation can open. Files go straight from the browser to object storage; the API signs links and checks what was stored, but never receives the bytes and cannot read them.
+A message can carry up to 4 files of up to 100 MiB each. Every file is encrypted in the sender's browser before it is uploaded, so object storage holds bytes that only the members of the conversation can open. Files go straight from the browser to object storage; the API signs links and checks what was stored, but never receives the bytes and cannot read them.
 
 ## What the server knows
 
@@ -27,12 +27,12 @@ sequenceDiagram
 
 1. **Encrypt.** The browser makes a random key for the file, cuts the file into pieces of 64 KiB and encrypts each piece with AES-256-GCM. The result is slightly larger than the file: a 13-byte header and a 16-byte tag for every piece.
 2. **Ticket.** The caller must be an active member of a non-deactivated account. The request carries one number, the size of the encrypted file. The ticket checks it and returns a presigned PUT that lasts 10 minutes and accepts exactly the content type `application/octet-stream`, whatever the file is. The `uploadKey` is `pending/{conversationId}/{userId}/{guid}`; nothing is stored yet, so the answer is a 200.
-3. **Upload.** The browser PUTs the encrypted file directly to the bucket and shows progress; removing the chip cancels the upload.
+3. **Upload.** The browser PUTs the encrypted file directly to the bucket and shows progress; removing the chip cancels the upload. The file is read and encrypted a slice of pieces (about 4 MiB) at a time into a `Blob`, and the `Blob` is what is sent, so a file of 100 MiB is never held whole in the page's memory.
 4. **Send.** The message's sealed text carries one entry for each file, in order: name, type, size, key and chunk size. The request names the uploads by key and says nothing else about them. A presigned PUT cannot enforce size, so the send re-checks every named object: the key carries the caller's own conversation and user id (so someone else's upload cannot be attached), the object exists, and its size is within the bounds below. A foreign key, a missing object and a changed one get the same answer. Each file is then copied inside the bucket, only if its ETag is still the one that was checked, to `attachments/{conversationId}/{attachmentId}`. The message and its attachment rows are saved in one transaction, and the uploads under `pending/` are removed (or expire by the bucket's lifecycle rule). Whatever fails after copies exist removes them.
 
 ### Size bounds
 
-`Storage:MaxFileBytes` is the largest file as a person sees it, before encryption (10 MiB). The server accepts a stored file of at least 29 bytes (the header and the tag of one empty piece) and at most what a file of that largest size becomes at 64 KiB pieces: 10,488,333 bytes for 10 MiB. A client that chooses smaller pieces makes its own file larger and so can store less, never more.
+`Storage:MaxFileBytes` is the largest file as a person sees it, before encryption (100 MiB). The server accepts a stored file of at least 29 bytes (the header and the tag of one empty piece) and at most what a file of that largest size becomes at 64 KiB pieces: 104,883,213 bytes for 100 MiB. A client that chooses smaller pieces makes its own file larger and so can store less, never more.
 
 ## What a file is allowed to be
 
@@ -65,7 +65,7 @@ A deleted message's files are removed through the outbox job `MessageFilesRemove
 
 ## Configuration
 
-`Storage:MaxFileBytes` (10 MiB), `Storage:MaxFilesPerMessage` (4), `Storage:UploadUrlMinutes` (10), `Storage:DownloadUrlMinutes` (60). See [configuration](../operations/configuration.md).
+`Storage:MaxFileBytes` (100 MiB), `Storage:MaxFilesPerMessage` (4), `Storage:UploadUrlMinutes` (10), `Storage:DownloadUrlMinutes` (60). See [configuration](../operations/configuration.md).
 
 ## Limits
 

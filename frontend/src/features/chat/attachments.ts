@@ -4,7 +4,7 @@ import { formatFileSize } from '../../lib/format'
 // refused before it is encrypted and uploaded. The server stays the authority for these two and answers with a message of its own if this
 // copy has drifted. The size is that of the file as a person sees it: what is stored for it is a little larger (a header, and a tag for
 // every 64 KiB), which the server allows for.
-export const MAX_FILE_BYTES = 10 * 1024 * 1024
+export const MAX_FILE_BYTES = 100 * 1024 * 1024
 export const MAX_FILES_PER_MESSAGE = 4
 
 // What kinds of file a message may carry is decided here and nowhere else: the server cannot see what a file is, because it is encrypted.

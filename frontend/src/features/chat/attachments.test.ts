@@ -36,7 +36,7 @@ describe('checkFile', () => {
 
   it('accepts a file of exactly the size limit and refuses one byte more', () => {
     expect(checkFile(file('image/png', MAX_FILE_BYTES), 0)).toBeNull()
-    expect(checkFile(file('image/png', MAX_FILE_BYTES + 1, 'big.png'), 0)).toContain('10 MB')
+    expect(checkFile(file('image/png', MAX_FILE_BYTES + 1, 'big.png'), 0)).toContain('100 MB')
   })
 
   it('refuses a file once the message has as many as it may carry', () => {
