@@ -41,6 +41,12 @@ describe('a script file that is gone after an update', () => {
     expect(reload).toHaveBeenCalledTimes(1)
   })
 
+  it('reloads when nothing is stored, whatever time the clock says', () => {
+    const { storage, reload, event } = setup()
+
+    expect(reloadForStaleChunk(event, { storage: () => storage, now: () => 1_000, reload })).toBe(true)
+  })
+
   it('treats a stored value that is not a time as nothing stored', () => {
     const { storage, reload, event } = setup('not a time')
 
