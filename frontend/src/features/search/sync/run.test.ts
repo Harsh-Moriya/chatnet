@@ -119,8 +119,7 @@ describe('starting to read into the store', () => {
   })
 
   it('says search is not available where the browser cannot keep the store, and reads nothing', async () => {
-    // @ts-expect-error a browser without it
-    globalThis.indexedDB = undefined
+    vi.stubGlobal('indexedDB', undefined)
 
     await readIntoStore(ANA, [{ id: 'c1', changeSeq: 1 }], new AbortController().signal)
 

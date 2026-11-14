@@ -1,5 +1,5 @@
 import { IDBFactory } from 'fake-indexeddb'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { canHoldKeys, indexedDbDeviceStore as store } from './deviceStore'
 
 // A fresh database for every test, as a new browser profile would be.
@@ -79,8 +79,7 @@ describe('which device a sign-in names', () => {
 
 describe('a browser that cannot keep keys', () => {
   it('rejects instead of pretending, when there is no IndexedDB', async () => {
-    // @ts-expect-error a browser without IndexedDB has no such global
-    globalThis.indexedDB = undefined
+    vi.stubGlobal('indexedDB', undefined)
 
     await expect(store.load('alice')).rejects.toThrow('IndexedDB is not available')
     await expect(store.save({ userId: 'alice', deviceId: 'a', secrets: secrets(1) })).rejects.toThrow()
@@ -89,5 +88,24 @@ describe('a browser that cannot keep keys', () => {
 
   it('can hold keys where IndexedDB and the algorithms are there', async () => {
     expect(await canHoldKeys()).toBe(true)
+  })
+
+  // An older browser opens IndexedDB and fails only when the first key of a kind is made, which is why the probe makes one of each.
+  it.each(['X25519', 'Ed25519'])('cannot where the browser does not do %s', async (name) => {
+    const generateKey = crypto.subtle.generateKey.bind(crypto.subtle)
+    vi.spyOn(crypto.subtle, 'generateKey').mockImplementation(((algorithm: { name: string }, ...rest: never[]) => {
+      if (algorithm.name === name) return Promise.reject(new DOMException('Unrecognized name', 'NotSupportedError'))
+      return (generateKey as (...args: unknown[]) => Promise<unknown>)(algorithm, ...rest)
+    }) as typeof crypto.subtle.generateKey)
+
+    expect(await canHoldKeys()).toBe(false)
+    vi.restoreAllMocks()
+  })
+
+  it('cannot where the page has no WebCrypto, as on a page that is not a secure context', async () => {
+    vi.stubGlobal('crypto', {})
+
+    expect(await canHoldKeys()).toBe(false)
+    vi.unstubAllGlobals()
   })
 })

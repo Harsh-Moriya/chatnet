@@ -74,7 +74,7 @@ function remember(message: Message): Message {
   try {
     sink?.(message)
   } catch {
-    // Keeping a message is for later; it is never a reason not to show it.
+    // Keeping a copy for search is secondary; it is never a reason not to show the message.
   }
   return message
 }

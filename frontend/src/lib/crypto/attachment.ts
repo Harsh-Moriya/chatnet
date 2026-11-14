@@ -1,7 +1,7 @@
 // One attachment, as the app uses the file format: the bytes of a file go in and come out as the file the bucket stores and an entry for
 // the sealed message, and the other way round. The entry carries what the server is never told (the name, the type, the size) and the key
 // that opens the file; the stored file carries nothing but chunks (see file.ts). Whole files in memory: a file is at most a few
-// megabytes, and the chunked layout is there so a later reader can fetch and open any part of a larger one.
+// megabytes, and the chunked layout is there so a reader can fetch and open any part of a larger one.
 
 import { CryptoError, fromBase64Url, toBase64Url, type Bytes } from './bytes'
 import { FILE_CHUNK_BYTES, type FileOverrides, decryptFile, encryptFile, encryptedFileLength, newFileKey, readFileHeader } from './file'
