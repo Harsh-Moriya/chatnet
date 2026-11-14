@@ -3,8 +3,7 @@ import { LogOut, SquarePen } from 'lucide-react'
 import { Avatar } from '../../../components/ui/Avatar'
 import { Button } from '../../../components/ui/Button'
 import { useAuth } from '../../auth/hooks/useAuth'
-import { session } from '../../auth/session'
-import { signOutDeletesKeys } from '../../encryption/signOutCheck'
+import { useSignOut } from '../../encryption/hooks/useSignOut'
 import { NotificationBell } from '../../notifications/components/NotificationBell'
 import { NotificationPanel } from '../../notifications/components/NotificationPanel'
 import { SearchBox } from '../../search/components/SearchBox'
@@ -22,11 +21,6 @@ const ProfileDialog = lazy(() =>
   import('../../profile/components/ProfileDialog').then((module) => ({ default: module.ProfileDialog })),
 )
 
-// Only asked for when signing out would delete encryption keys.
-const SignOutDialog = lazy(() =>
-  import('../../encryption/components/SignOutDialog').then((module) => ({ default: module.SignOutDialog })),
-)
-
 const NOTIFICATION_PANEL_ID = 'notification-panel'
 
 export function Sidebar() {
@@ -37,8 +31,7 @@ export function Sidebar() {
   const [panelOpen, setPanelOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
   const [profileMounted, setProfileMounted] = useState(false)
-  const [signOutOpen, setSignOutOpen] = useState(false)
-  const [signOutMounted, setSignOutMounted] = useState(false)
+  const { requestSignOut, signOutDialog } = useSignOut()
   // Kept here, not in the results, so the search is still there after a result is opened (on a phone, when the list comes back).
   const [searchInput, setSearchInput] = useState('')
   const searching = searchInput.trim() !== ''
@@ -46,17 +39,6 @@ export function Sidebar() {
   function openProfile() {
     setProfileMounted(true)
     setProfileOpen(true)
-  }
-
-  // Signs out at once, unless this browser holds encryption keys, which signing out deletes: then the person is asked first.
-  async function requestSignOut() {
-    if (user && (await signOutDeletesKeys(user.userId))) {
-      setSignOutMounted(true)
-      setSignOutOpen(true)
-      return
-    }
-
-    await session.signOut()
   }
 
   function openDialog() {
@@ -123,11 +105,7 @@ export function Sidebar() {
         </Suspense>
       )}
 
-      {signOutMounted && (
-        <Suspense fallback={null}>
-          <SignOutDialog open={signOutOpen} onClose={() => setSignOutOpen(false)} />
-        </Suspense>
-      )}
+      {signOutDialog}
     </>
   )
 }

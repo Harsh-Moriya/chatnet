@@ -2,10 +2,10 @@ import { useEffect, type ReactNode } from 'react'
 import { AlertCircle, LockKeyhole } from 'lucide-react'
 import { Button } from '../../../components/ui/Button'
 import { SessionLoading } from '../../../components/SessionLoading'
-import { session } from '../../auth/session'
 import { loadEncryption } from '../controller'
 import { type GateScreen, gateScreen } from '../gate'
 import { useEncryptionSync } from '../hooks/useEncryptionSync'
+import { useSignOut } from '../hooks/useSignOut'
 import { useEncryptionStore } from '../store'
 import { LockedPanel } from './LockedPanel'
 import { OutdatedPanel } from './OutdatedPanel'
@@ -17,6 +17,8 @@ import { SetUpPanel } from './SetUpPanel'
 export function EncryptionGate({ children }: { children: ReactNode }) {
   useEncryptionSync()
 
+  // A browser that holds keys from before they were renewed is asked first, like one in the chat: signing out deletes them.
+  const { requestSignOut, signOutDialog } = useSignOut()
   const status = useEncryptionStore((state) => state.status)
   const hasKeys = useEncryptionStore((state) => state.secrets !== null)
 
@@ -33,11 +35,12 @@ export function EncryptionGate({ children }: { children: ReactNode }) {
       <div className="w-full max-w-md space-y-4 rounded-lg border border-line bg-white p-6">
         <GateContent screen={screen} />
         <div className="border-t border-line pt-3">
-          <Button variant="ghost" size="sm" onClick={() => void session.signOut()}>
+          <Button variant="ghost" size="sm" onClick={() => void requestSignOut()}>
             Sign out
           </Button>
         </div>
       </div>
+      {signOutDialog}
     </main>
   )
 }
