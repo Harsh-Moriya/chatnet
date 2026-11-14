@@ -33,7 +33,7 @@ The push service sees which endpoint, when and how big. The payload names the se
 
 ## In the browser
 
-The page decides what to do from facts (permission, existing subscription, the server's key, the person's choice), keeps the choice per person in the browser, ends a subscription it finds for a person who did not ask for it, and releases the browser on sign-out. The service worker shows the alert, and a click focuses or opens the app at the conversation.
+The page decides what to do from facts (permission, existing subscription, the server's key, the person's choice), keeps the choice per person in the browser, ends a subscription it finds for a person who did not ask for it, and releases the browser on sign-out. The service worker shows the alert, and a click focuses or opens the app at the conversation. The same worker, which is registered when the application starts, also plays encrypted video (see [attachments](attachments.md#videos-in-the-viewer)); it is built from TypeScript into one classic script served at `/sw.js`.
 
 ## Configuration
 

@@ -212,6 +212,8 @@ The file is cut into pieces of the chunk size; the last piece may be shorter, an
 
 Putting the index and the final flag in the nonce means chunks cannot be reordered, the end cannot be cut off without detection, and a chunk cannot be moved to another file. To read one chunk, fetch bytes `13 + i * (chunkSize + 16)` for `chunkSize + 16` bytes (fewer for the last chunk), and decrypt knowing whether it is the last. Chunk `i` is the last when the stored file ends within it.
 
+**Reading by range.** A reader that wants part of a file (the web client's service worker plays a video this way) asks the store for the bytes from `13 + first * (chunkSize + 16)` to the end of the last chunk it needs, cut at the end of the stored file, and opens each chunk with its own index. It sets `final` for the chunk number `max(1, ceil(n / chunkSize)) - 1` only, from the size the message states, so that a file cut short or extended fails to authenticate instead of ending early. It reads the 13-byte header once, for the nonce prefix.
+
 ## Device linking
 
 A new device gets the secrets of a person from a device that is already signed in. The server relays one sealed box and cannot open it.

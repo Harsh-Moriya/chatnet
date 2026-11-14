@@ -40,7 +40,7 @@ The API and Caddy containers drop all Linux capabilities and cannot gain new pri
 
 The bucket needs two things, the same ones `docker/storage/init.sh` applies to the local object store:
 
-1. A **CORS rule** that allows `PUT`, `GET` and `HEAD` from your site's origin and exposes the `ETag` header. The browser uploads and fetches files itself, so `GET` and `PUT` from the site's origin are both required. Start from `docker/storage/cors.json` and replace `AllowedOrigins` with `https://<your domain>`.
+1. A **CORS rule** that allows `PUT`, `GET` and `HEAD` from your site's origin and exposes the `ETag` header. The browser uploads and fetches files itself, so `GET` and `PUT` from the site's origin are both required. The video player reads a file in ranges: a request for a range of the form `bytes=start-end` goes without a preflight, but a rule that lists its allowed headers (R2's does) should include `Range` too, since a range of another form would need it. Start from `docker/storage/cors.json` and replace `AllowedOrigins` with `https://<your domain>`.
 2. A **lifecycle rule** that expires objects under `pending/` after one day (`docker/storage/lifecycle.json`), so uploads that were never attached to a message do not stay.
 
 Both are standard S3 API calls (`put-bucket-cors`, `put-bucket-lifecycle-configuration`).
