@@ -1,6 +1,6 @@
 # Files are encrypted in the browser, and the server enforces size and count only
 
-Status: Accepted
+Status: Accepted. The size limit and the memory rule in the consequences were changed by [0042](0042-files-up-to-100-mib-sealed-and-opened-a-slice-at-a-time.md).
 
 ## Context
 

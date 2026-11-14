@@ -152,7 +152,7 @@ public class UploadTicketTests
 
     // ##### What may be uploaded #####
 
-    // A file of the limit becomes the file, a header and a tag for each chunk of 64 KiB: 10 MiB are 160 chunks.
+    // A file of the limit becomes the file, a header and a tag for each chunk of 64 KiB: 100 MiB are 1600 chunks.
     [Fact]
     public async Task The_largest_object_for_a_file_of_the_limit_is_accepted_and_one_byte_more_is_refused()
     {
@@ -163,7 +163,7 @@ public class UploadTicketTests
         var atLimit = await client.RequestUploadAsync(conversation, largest);
         var over = await client.RequestUploadAsync(conversation, largest + 1);
 
-        Assert.Equal(Limit + 13 + 160 * 16, largest);
+        Assert.Equal(Limit + 13 + 1600 * 16, largest);
         Assert.Equal(HttpStatusCode.OK, atLimit.StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, over.StatusCode);
         Assert.True((await over.ReadProblemAsync()).Errors!.Value.TryGetProperty("SizeBytes", out _));

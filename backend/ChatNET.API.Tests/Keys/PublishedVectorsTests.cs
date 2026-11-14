@@ -106,11 +106,11 @@ public class PublishedVectorsTests
     [Fact]
     public void A_file_of_the_largest_size_becomes_an_object_the_size_the_specification_gives_at_the_usual_chunk_size()
     {
-        const long tenMebibytes = 10 * 1024 * 1024;
+        const long hundredMebibytes = 100 * 1024 * 1024;
         const int usualChunk = 64 * 1024;
 
-        var chunks = (tenMebibytes + usualChunk - 1) / usualChunk;
+        var chunks = (hundredMebibytes + usualChunk - 1) / usualChunk;
 
-        Assert.Equal(13 + tenMebibytes + chunks * 16, SealedFile.MaxBytes(tenMebibytes));
+        Assert.Equal(13 + hundredMebibytes + chunks * 16, SealedFile.MaxBytes(hundredMebibytes));
     }
 }

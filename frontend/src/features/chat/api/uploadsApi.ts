@@ -6,7 +6,8 @@ import type { Uploaded } from '../uploads'
 // Uploading a file is three steps. The file is encrypted here, under a key made for it that only goes into the sealed message. The API is
 // asked for permission, and told only how large the encrypted file is, and gives a link that points straight at the storage bucket; and the
 // encrypted file is sent there, without going through the API. The file's bytes never pass through the server, which is why a presigned link
-// is used, and the server never learns what the file is or is called.
+// is used, and the server never learns what the file is or is called. The file is read and encrypted a slice at a time into a Blob, so a
+// file of the largest size is never held whole in memory.
 const loadFileCrypto = () => import('../../../lib/crypto/attachment')
 
 // The one content type every upload is signed for, whatever the file is.
@@ -36,11 +37,11 @@ export async function uploadFile(
   signal: AbortSignal,
 ): Promise<Uploaded> {
   const { sealAttachment } = await loadFileCrypto()
-  const { stored, ref } = await sealAttachment({ name: cleanFileName(file.name), type: file.type }, new Uint8Array(await file.arrayBuffer()))
+  const { stored, ref } = await sealAttachment({ name: cleanFileName(file.name), type: file.type }, file)
 
   const { data: ticket } = await api.post<UploadTicket>(
     `/conversations/${conversationId}/uploads`,
-    { sizeBytes: stored.length },
+    { sizeBytes: stored.size },
     { signal },
   )
 
