@@ -93,6 +93,7 @@ public static class AuthEndpoints
         .ReturnsNoContent(StatusCodes.Status400BadRequest, StatusCodes.Status429TooManyRequests)
         .AllowAnonymous();
 
+        NativeAuthEndpoints.Map(auth.MapGroup("/native"));
         return app;
     }
 }

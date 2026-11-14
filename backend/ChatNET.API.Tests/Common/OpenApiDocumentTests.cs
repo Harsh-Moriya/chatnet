@@ -21,6 +21,10 @@ public class OpenApiDocumentTests
     // and the error statuses the operation can return.
     private static readonly (string Method, string Path, string Status, string Schema, string Errors)[] All =
     [
+        ("post", "/api/auth/native/register", "200", "NativeAuthResponse", "400,409,429"),
+        ("post", "/api/auth/native/login", "200", "NativeAuthResponse", "400,401,403,429"),
+        ("post", "/api/auth/native/refresh", "200", "NativeAuthResponse", "400,401,409,429"),
+        ("post", "/api/auth/native/logout", "204", "", "400,429"),
         ("post", "/api/auth/register", "200", "AuthResponse", "400,409,429"),
         ("post", "/api/auth/login", "200", "AuthResponse", "400,401,403,429"),
         ("post", "/api/auth/refresh", "200", "AuthResponse", "401,403,409,429"),
