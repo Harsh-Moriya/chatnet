@@ -109,7 +109,7 @@ The app is at `http://localhost:5173`. Vite proxies `/api` and `/hubs` (with Web
 
 ### Trying the app as two users
 
-The refresh cookie is kept per host, so two tabs on one host share a session. To be two people at once, open `http://localhost:5173` for one and `http://127.0.0.1:5173` (or `http://[::1]:5173`) for the other; each host name is a separate browser as far as the app is concerned. The bucket's CORS rule in `docker/storage/cors.json` lists these three origins.
+The refresh cookie is kept per host, so two tabs on one host share a session. To be two people at once, open `http://localhost:5173` for one and `http://127.0.0.1:5173` (or `http://[::1]:5173`) for the other; each host name is a separate browser as far as the app is concerned. Each person also sets up their encryption keys the first time they sign in (a recovery passphrase of at least 12 characters), and two people can only chat once both have. The bucket's CORS rule in `docker/storage/cors.json` lists these three origins.
 
 ## Tests
 
