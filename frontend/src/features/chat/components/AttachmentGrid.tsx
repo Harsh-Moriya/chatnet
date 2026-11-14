@@ -1,4 +1,4 @@
-import { AlertCircle, Download, Lock, Play } from 'lucide-react'
+import { AlertCircle, Download, Lock, Maximize2, Play } from 'lucide-react'
 import { type ReactNode, useState } from 'react'
 import { Button } from '../../../components/ui/Button'
 import { cn } from '../../../lib/cn'
@@ -10,6 +10,7 @@ import { saveFile } from '../files/openFiles'
 import { useFileObject } from '../hooks/useFileObject'
 import { useInView } from '../hooks/useInView'
 import type { Attachment } from '../types'
+import { useViewerStore } from '../viewer/viewerStore'
 import { AttachmentIcon } from './AttachmentIcon'
 
 interface AttachmentGridProps {
@@ -23,9 +24,11 @@ interface AttachmentGridProps {
 type Opened = { attachment: Attachment; file: FileRef; source: FileSource }
 
 // The files of a confirmed message. The files are encrypted in the bucket, so each is fetched and opened here: pictures as they come near the
-// screen when they are not large, and anything else when it is asked for (a video is then played in place, any other file, and a large
-// picture, is saved). A file the sealed message does not vouch for is not drawn, and says that it cannot be opened.
+// screen when they are not large, and anything else when it is asked for (a video is then played in place, any other file is saved, and a
+// large picture is opened in the viewer, as a picture is when it is clicked). A file the sealed message does not vouch for is not drawn, and
+// says that it cannot be opened.
 export function AttachmentGrid({ attachments, own, conversationId, messageId }: AttachmentGridProps) {
+  const openViewer = useViewerStore((state) => state.open)
   const vouched: Opened[] = []
   const unopenable: Attachment[] = []
 
@@ -43,7 +46,7 @@ export function AttachmentGrid({ attachments, own, conversationId, messageId }: 
       {pictures.length > 0 && (
         <div className={cn('grid w-64 max-w-full gap-1', pictures.length === 1 ? 'grid-cols-1' : 'grid-cols-2')}>
           {pictures.map((item) => (
-            <PictureTile key={item.attachment.id} item={item} alone={pictures.length === 1} />
+            <PictureTile key={item.attachment.id} item={item} alone={pictures.length === 1} onOpen={() => openViewer(conversationId, item.attachment.id)} />
           ))}
         </div>
       )}
@@ -53,7 +56,12 @@ export function AttachmentGrid({ attachments, own, conversationId, messageId }: 
       ))}
 
       {files.map((item) => (
-        <FileChip key={item.attachment.id} item={item} own={own} />
+        <FileChip
+          key={item.attachment.id}
+          item={item}
+          own={own}
+          onOpen={kindOf(item.file) === 'Image' ? () => openViewer(conversationId, item.attachment.id) : undefined}
+        />
       ))}
 
       {unopenable.map((attachment) => (
@@ -72,7 +80,7 @@ export function AttachmentGrid({ attachments, own, conversationId, messageId }: 
   )
 }
 
-function PictureTile({ item, alone }: { item: Opened; alone: boolean }) {
+function PictureTile({ item, alone, onOpen }: { item: Opened; alone: boolean; onOpen: () => void }) {
   const [attach, near] = useInView<HTMLDivElement>()
   const [state, retry] = useFileObject(item.source, near)
   const name = cleanFileName(item.file.name)
@@ -80,9 +88,9 @@ function PictureTile({ item, alone }: { item: Opened; alone: boolean }) {
   return (
     <div ref={attach} className="overflow-hidden rounded-lg bg-slate-100">
       {state.status === 'ready' ? (
-        <a href={state.url} target="_blank" rel="noopener noreferrer" className="block">
+        <Button variant="ghost" aria-label={`Open ${name}`} className="h-auto w-full rounded-none p-0 hover:bg-transparent active:bg-transparent" onClick={onOpen}>
           <img src={state.url} alt={name} decoding="async" className={cn('w-full object-cover', alone ? 'max-h-72 min-h-16' : 'aspect-square')} />
-        </a>
+        </Button>
       ) : state.status === 'failed' ? (
         <Button variant="ghost" className={cn('h-auto w-full flex-col py-4 text-xs text-slate-500', alone ? 'min-h-24' : 'aspect-square')} onClick={retry}>
           <AlertCircle className="h-4 w-4" aria-hidden="true" />
@@ -118,7 +126,8 @@ function VideoTile({ item, own }: { item: Opened; own: boolean }) {
   )
 }
 
-function FileChip({ item, own }: { item: Opened; own: boolean }) {
+// A file to save, or a picture too large to be drawn in the message, which opens in the viewer instead.
+function FileChip({ item, own, onOpen }: { item: Opened; own: boolean; onOpen?: () => void }) {
   const [saving, setSaving] = useState(false)
   const [failed, setFailed] = useState(false)
   const name = cleanFileName(item.file.name)
@@ -138,9 +147,9 @@ function FileChip({ item, own }: { item: Opened; own: boolean }) {
       name={name}
       detail={failed ? "Couldn't open it. Tap to try again." : saving ? 'Opening...' : formatFileSize(item.file.size)}
       busy={saving}
-      onClick={save}
-      label={`Save ${name}`}
-      trailing={<Download className="h-4 w-4 shrink-0" aria-hidden="true" />}
+      onClick={onOpen ?? save}
+      label={onOpen ? `Open ${name}` : `Save ${name}`}
+      trailing={onOpen ? <Maximize2 className="h-4 w-4 shrink-0" aria-hidden="true" /> : <Download className="h-4 w-4 shrink-0" aria-hidden="true" />}
     />
   )
 }

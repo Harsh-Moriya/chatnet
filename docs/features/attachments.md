@@ -48,12 +48,22 @@ The browser offers and accepts JPEG, PNG, GIF and WebP images, MP4 and WebM vide
 
 A paperclip and paste add files. Chips show progress. The browser refuses a type or size it would not send before it encrypts anything.
 
-- **Pictures** (PNG, JPEG, GIF, WebP) are fetched, decrypted and drawn in the message as they come near the screen. A click opens the picture on its own.
+- **Pictures** (PNG, JPEG, GIF, WebP) up to 10 MiB are fetched, decrypted and drawn in the message as they come near the screen. A larger picture is not drawn there: it shows its name and size, and is fetched only when it is opened. A click on either opens the picture in the viewer.
 - **Videos** (MP4, WebM) show a play button; a click fetches, decrypts and plays the video in place.
 - **Any other file** shows its name and size; a click decrypts it and saves it under its name.
 - **A fetch that fails** is tried once more with a new link, since the one in the message may have expired, and then says so and offers to try again. A file that is not the one the message describes, or that has been changed in the bucket, is refused: nothing is drawn or saved, and the file says it could not be loaded, with a way to try again.
 - **What a sender says is not trusted.** A name is cut to its last path part, with control and invisible characters removed and at most 255 characters. Only the image and video types above are given a type that a browser draws or plays; SVG is never drawn, and everything else is saved as opaque bytes, so a file that says it is a web page is never opened as one.
-- **Memory.** A file is fetched and decrypted whole, so it is held in memory while it is shown. The format allows reading by piece for a later reader.
+- **Memory.** A file is fetched as a `Blob` and decrypted a slice of pieces at a time, so the page never holds a whole large file in its own memory. Files that were opened and are not being shown are kept up to 64 MiB, newest first, so that showing one again does not fetch it again.
+
+### The picture viewer
+
+A picture opens full screen on a dark background, fitted to the screen (a picture smaller than the screen is shown at its own size, not enlarged). The viewer is loaded the first time a picture is opened.
+
+- **Zoom** from the fit up to four times the picture's own size: the mouse wheel, a pinch, the buttons (zoom out, actual size, zoom in, fit to screen) or the keys `+`, `-`, `1` (actual size) and `0` (fit). A double click or a double tap goes from the fit to actual size at that point, and back.
+- **Move** a zoomed picture by dragging it; it cannot be dragged off the screen.
+- **Next and previous** with the arrow keys, the buttons, or a sideways swipe on a picture that is not zoomed. They go through the pictures of the messages loaded in the conversation, oldest first, and stop at either end; the position is shown ("3 of 12"). Only pictures the sealed message describes are included, and nothing from a deleted message. If the picture that is open is deleted, the viewer moves to the nearest one, or closes when there is none.
+- **Download** saves the file under its name as opaque bytes, as the chip does. **Escape** or the close button closes the viewer and returns focus to what opened it.
+- A picture that cannot be fetched, or that the browser cannot draw, says so and offers Download (and a retry for a failed fetch).
 
 ## Editing
 
