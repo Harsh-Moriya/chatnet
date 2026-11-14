@@ -12,7 +12,7 @@ export interface WindowLike {
   visibilityState: string
   focused: boolean
   focus: () => Promise<unknown>
-  postMessage: (message: unknown) => void
+  postMessage: (message: unknown, transfer?: Transferable[]) => void
 }
 
 export interface PushScope {
