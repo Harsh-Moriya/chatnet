@@ -433,6 +433,18 @@ public class GroupManagementTests
     }
 
     [Fact]
+    public async Task Someone_who_was_never_in_the_group_cannot_change_a_role_and_gets_the_refusal_every_endpoint_gives()
+    {
+        var team = await TeamAsync();
+        using var outsider = As(team.Outsider);
+
+        var response = await outsider.ChangeRoleResponseAsync(team.Id, team.Member.Id, "Admin");
+
+        await AssertRefusedAsync(response, HttpStatusCode.Forbidden, "You are not a member of this conversation.");
+        Assert.Equal(MemberRole.Member, (await RowAsync(team.Id, team.Member)).Role);
+    }
+
+    [Fact]
     public async Task A_role_that_is_missing_or_unknown_is_refused_and_a_person_who_is_not_in_the_group_is_not_found()
     {
         var team = await TeamAsync();
