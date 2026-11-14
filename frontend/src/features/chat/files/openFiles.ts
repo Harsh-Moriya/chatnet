@@ -6,13 +6,16 @@ import { type FileSource, createFileObjects } from './fileObjects'
 // cryptography when the first one is needed, and handed to the page as object URLs.
 const loadFileCrypto = () => import('../../../lib/crypto/attachment')
 
+// A new link for a file whose link has expired, from the API (which asks the same questions as when the message was read).
+export const renewAttachmentLink = (file: FileSource) => refreshAttachmentUrl(file.conversationId, file.messageId, file.id)
+
 export const fileObjects = createFileObjects({
   fetchStored: async (url) => {
     const response = await fetch(url, { credentials: 'omit' })
     if (!response.ok) throw new Error(`The storage answered ${response.status}.`)
     return response.blob()
   },
-  renewLink: (file) => refreshAttachmentUrl(file.conversationId, file.messageId, file.id),
+  renewLink: renewAttachmentLink,
   open: async (entry, stored) => (await loadFileCrypto()).openAttachment(entry, stored),
   makeUrl: (file, type) => URL.createObjectURL(new Blob([file], { type })),
   revokeUrl: (url) => URL.revokeObjectURL(url),
