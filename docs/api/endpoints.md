@@ -88,7 +88,7 @@ Authentication column: **Bearer** needs an access token; **Refresh cookie** need
 
 | Method and route | Auth | Limit | Statuses | Description |
 |---|---|---|---|---|
-| `POST /api/conversations/{conversationId}/messages` | Bearer | send | 200, 201, 400, 401, 403, 429 | Sends a message sealed in the browser (`clientMessageId`, `ciphertext`, `mentionedUserIds`, and `attachments`, each only `{ uploadKey }`: what a file is called and is lies inside `ciphertext`). 201 for a new message, 200 with the stored message when this `clientMessageId` was already sent. 409 with `epoch-stale` or `epoch-due` when the conversation is not in the epoch the message was sealed under, or that epoch is marked for replacement. |
+| `POST /api/conversations/{conversationId}/messages` | Bearer | send | 200, 201, 400, 401, 403, 409, 429 | Sends a message sealed in the browser (`clientMessageId`, `ciphertext`, `mentionedUserIds`, and `attachments`, each only `{ uploadKey }`: what a file is called and is lies inside `ciphertext`). 201 for a new message, 200 with the stored message when this `clientMessageId` was already sent. 409 with `epoch-stale` or `epoch-due` when the conversation is not in the epoch the message was sealed under, or that epoch is marked for replacement. |
 | `GET /api/conversations/{conversationId}/messages` | Bearer |  | 200, 400, 401, 403 | History, at most 50, oldest first. At most one of `before`, `after`, `around` (a message id). |
 | `GET /api/conversations/{conversationId}/changes` | Bearer |  | 200, 400, 401, 403, 409 | The messages changed after a point (`since`, the number of the last change the client has seen, 0 for none; required), in the order the changes were made, at most 100, with `cursor` to continue from and `more`. A message appears once, in its current state; a deleted one comes with `ciphertext: null`. The member window of the history applies. 409 `changes-cursor-ahead` when `since` is past the newest change the server has. See [searching messages](../features/message-search.md#the-changes-feed). |
 | `PATCH /api/conversations/{conversationId}/messages/{messageId}` | Bearer | edit | 200, 400, 401, 403, 404, 409, 429 | Edits the caller's own message within the edit window, with a new sealed text (`ciphertext`, `editCount`, `mentionedUserIds`). `editCount` must be one more than the message has now, otherwise 409 `edit-count-stale`; the epoch rules of a send apply. |
@@ -186,19 +186,19 @@ The refresh token is in the `Set-Cookie` header, not the body: `chatnet_refresh=
 
 ```json
 {
-  "id": "333a4966-982e-4646-b3bd-7ec5c758bf6e",
+  "id": "b7e9b446-5fa3-48d5-a5bc-7e3b50a5a940",
   "type": "Direct",
   "name": "Ben Example",
   "avatarUrl": null,
-  "updatedAt": "2026-11-13T15:39:02.755968Z",
+  "updatedAt": "2026-11-14T06:24:24.075107Z",
   "lastMessage": null,
   "unreadCount": 0,
-  "otherUserId": "01a1d58f-ec13-7060-b95b-e4e6ecb6ffb6",
+  "otherUserId": "01a1d8ba-7e2a-7cfc-bdac-fc7da1085002",
   "isMuted": false,
   "leftAt": null,
   "keyEpoch": 1,
   "keyRotationRequired": false,
-  "keyEpochAt": "2026-11-13T15:39:02.755968Z",
+  "keyEpochAt": "2026-11-14T06:24:24.075107Z",
   "changeSeq": 0
 }
 ```
@@ -209,12 +209,12 @@ For a direct chat `name` is the other person's display name and `otherUserId` is
 
 ```json
 {
-  "senderId": "01a1d58f-f9ae-7505-8f26-2f2a0325526c",
-  "ciphertext": "AQEAAAABfZdsobwiprSHICnY...",
+  "senderId": "01a1d8b9-4dc1-750f-a3ba-4b6b8e74bd35",
+  "ciphertext": "AQEAAAABDsORYX32e315guJO...",
   "keyEpoch": 1,
-  "clientMessageId": "a21e7202-49c1-4f0e-bc62-2d9181316fb0",
+  "clientMessageId": "32707844-e45a-4eb7-8369-f949ea0e2070",
   "editCount": 0,
-  "createdAt": "2026-11-13T15:39:06.210517Z",
+  "createdAt": "2026-11-14T06:23:10.555082Z",
   "attachmentCount": 0
 }
 ```
@@ -225,14 +225,14 @@ For a direct chat `name` is the other person's display name and `otherUserId` is
 
 ```json
 {
-  "id": "01a1d58f-fd67-77cd-ae48-0784b8f63da6",
-  "conversationId": "b098b57a-4cf7-4658-938b-d7d4b75bbeff",
-  "senderId": "01a1d58f-f9ae-7505-8f26-2f2a0325526c",
+  "id": "01a1d8b9-5fc5-7a5b-b775-cd8f6f694b64",
+  "conversationId": "99924b68-906d-46df-ae3f-53af02f0cdd5",
+  "senderId": "01a1d8b9-4dc1-750f-a3ba-4b6b8e74bd35",
   "senderDisplayName": "Ana Example",
-  "ciphertext": "AQEAAAABELjVgN1rSV9S7-lt...",
+  "ciphertext": "AQEAAAABTiYzANbNRvxLKr6H...",
   "keyEpoch": 1,
-  "createdAt": "2026-11-13T15:39:05.95916Z",
-  "clientMessageId": "a12219b1-d6f4-4537-9b78-52fb21a2c625",
+  "createdAt": "2026-11-14T06:23:09.764167Z",
+  "clientMessageId": "84bb8acc-33b9-48fa-b643-f04bca173e6c",
   "attachments": [],
   "editedAt": null,
   "editCount": 0,
@@ -245,9 +245,9 @@ A message with a file carries its attachments, each an id, the stored size (the 
 
 ```json
 {
-  "id": "01a1d590-0147-744d-9681-2ed3a94f2d1d",
+  "id": "01a1d8b9-6b1d-79e3-b938-f474e3e71eef",
   "sizeBytes": 2077,
-  "url": "http://localhost:9000/chatnet/attachments/b098b57a-4cf7-4658-938b-d7d4b75bbeff/01a1d590-0147-744d-9681-2ed3a94f2d1d?<signature parameters>"
+  "url": "http://localhost:9000/chatnet/attachments/99924b68-906d-46df-ae3f-53af02f0cdd5/01a1d8b9-6b1d-79e3-b938-f474e3e71eef?<signature parameters>"
 }
 ```
 
@@ -263,19 +263,19 @@ A deleted message has `ciphertext: null`, `isDeleted: true` and no attachments.
 {
   "changes": [
     {
-      "id": "01a1d590-0172-793b-96b9-23d9ea997dbe",
-      "conversationId": "b098b57a-4cf7-4658-938b-d7d4b75bbeff",
-      "senderId": "01a1d58f-f9ae-7505-8f26-2f2a0325526c",
+      "id": "01a1d8b9-6b9e-7ed5-bce9-af33dff59784",
+      "conversationId": "99924b68-906d-46df-ae3f-53af02f0cdd5",
+      "senderId": "01a1d8b9-4dc1-750f-a3ba-4b6b8e74bd35",
       "senderDisplayName": "Ana Example",
-      "ciphertext": "AQEAAAAB7uyjQKt7dymUuZU7...",
+      "ciphertext": "AQEAAAABZlJrYaqozEWuTUHW...",
       "keyEpoch": 1,
-      "createdAt": "2026-11-13T15:39:06.827598Z",
-      "clientMessageId": "cab949e3-418e-4b4e-ab0b-a98e4973f50c",
+      "createdAt": "2026-11-14T06:23:12.345055Z",
+      "clientMessageId": "65e9c18f-1214-49e0-a19d-6e9f8b163f6f",
       "attachments": [
         {
-          "id": "01a1d590-0147-744d-9681-2ed3a94f2d1d",
+          "id": "01a1d8b9-6b1d-79e3-b938-f474e3e71eef",
           "sizeBytes": 2077,
-          "url": "http://localhost:9000/chatnet/attachments/b098b57a-4cf7-4658-938b-d7d4b75bbeff/01a1d590-0147-744d-9681-2ed3a94f2d1d?<signature parameters>"
+          "url": "http://localhost:9000/chatnet/attachments/99924b68-906d-46df-ae3f-53af02f0cdd5/01a1d8b9-6b1d-79e3-b938-f474e3e71eef?<signature parameters>"
         }
       ],
       "editedAt": null,
@@ -284,16 +284,16 @@ A deleted message has `ciphertext: null`, `isDeleted: true` and no attachments.
       "changeSeq": 7
     },
     {
-      "id": "01a1d58f-fd67-77cd-ae48-0784b8f63da6",
-      "conversationId": "b098b57a-4cf7-4658-938b-d7d4b75bbeff",
-      "senderId": "01a1d58f-f9ae-7505-8f26-2f2a0325526c",
+      "id": "01a1d8b9-5fc5-7a5b-b775-cd8f6f694b64",
+      "conversationId": "99924b68-906d-46df-ae3f-53af02f0cdd5",
+      "senderId": "01a1d8b9-4dc1-750f-a3ba-4b6b8e74bd35",
       "senderDisplayName": "Ana Example",
       "ciphertext": null,
       "keyEpoch": 1,
-      "createdAt": "2026-11-13T15:39:05.95916Z",
-      "clientMessageId": "a12219b1-d6f4-4537-9b78-52fb21a2c625",
+      "createdAt": "2026-11-14T06:23:09.764167Z",
+      "clientMessageId": "84bb8acc-33b9-48fa-b643-f04bca173e6c",
       "attachments": [],
-      "editedAt": "2026-11-13T15:39:06.529556Z",
+      "editedAt": "2026-11-14T06:23:11.521043Z",
       "editCount": 1,
       "isDeleted": true,
       "changeSeq": 8
@@ -349,9 +349,9 @@ A deleted message has `ciphertext: null`, `isDeleted: true` and no attachments.
 
 ```json
 {
-  "uploadKey": "pending/b098b57a-4cf7-4658-938b-d7d4b75bbeff/01a1d58f-f9ae-7505-8f26-2f2a0325526c/398af653-e979-436d-b036-8d72da00fabc",
-  "url": "http://localhost:9000/chatnet/pending/b098b57a-4cf7-4658-938b-d7d4b75bbeff/01a1d58f-f9ae-7505-8f26-2f2a0325526c/398af653-e979-436d-b036-8d72da00fabc?<signature parameters>",
-  "expiresAt": "2026-11-13T15:49:06Z"
+  "uploadKey": "pending/99924b68-906d-46df-ae3f-53af02f0cdd5/01a1d8b9-4dc1-750f-a3ba-4b6b8e74bd35/f5844b70-91ce-445f-97a1-b7fe0d2f6dff",
+  "url": "http://localhost:9000/chatnet/pending/99924b68-906d-46df-ae3f-53af02f0cdd5/01a1d8b9-4dc1-750f-a3ba-4b6b8e74bd35/f5844b70-91ce-445f-97a1-b7fe0d2f6dff?<signature parameters>",
+  "expiresAt": "2026-11-14T06:33:11Z"
 }
 ```
 
@@ -363,8 +363,8 @@ A deleted message has `ciphertext: null`, `isDeleted: true` and no attachments.
 
 ```json
 {
-  "url": "http://localhost:9000/chatnet/attachments/b098b57a-4cf7-4658-938b-d7d4b75bbeff/01a1d590-0147-744d-9681-2ed3a94f2d1d?<signature parameters>",
-  "expiresAt": "2026-11-13T16:39:07Z"
+  "url": "http://localhost:9000/chatnet/attachments/99924b68-906d-46df-ae3f-53af02f0cdd5/01a1d8b9-6b1d-79e3-b938-f474e3e71eef?<signature parameters>",
+  "expiresAt": "2026-11-14T07:23:13Z"
 }
 ```
 
@@ -378,20 +378,20 @@ A mention carries the message it is about as `message`, sealed as it was sent (n
 {
   "items": [
     {
-      "id": "01a1d58f-fdfb-7f75-9c50-232f3f49ce4d",
+      "id": "01a1d8b9-61c0-7405-bd7e-c4b90cde583d",
       "type": "Mention",
-      "conversationId": "b098b57a-4cf7-4658-938b-d7d4b75bbeff",
-      "actorId": "01a1d58f-fa1b-7fe1-85bb-cc70ee20a8ae",
+      "conversationId": "99924b68-906d-46df-ae3f-53af02f0cdd5",
+      "actorId": "01a1d8b9-5307-73df-aa61-05adbc82681b",
       "actorDisplayName": "Ben Example",
-      "messageId": "01a1d58f-fdf1-7a6a-a903-bd7a1cfa384b",
+      "messageId": "01a1d8b9-6199-70a7-8f8b-5c3de906f8ae",
       "message": {
-        "ciphertext": "AQEAAAABlLGZfMzoR5jd_OvD...",
+        "ciphertext": "AQEAAAAB734U_6pZGVjg3ccc...",
         "keyEpoch": 1,
-        "clientMessageId": "b6626b06-0cd4-41c6-923b-be4e969b2b12",
+        "clientMessageId": "930d9700-bf92-4733-979a-f2361fb39adf",
         "editCount": 0
       },
       "isRead": false,
-      "createdAt": "2026-11-13T15:39:06.09731Z"
+      "createdAt": "2026-11-14T06:23:10.233738Z"
     }
   ],
   "unreadCount": 2
@@ -559,8 +559,8 @@ Bytes are base64url without padding. Long values are shortened here. `GET /api/k
 ```json
 {
   "userIds": [
-    "01a1d58f-ec13-7060-b95b-e4e6ecb6ffb6",
-    "01a1d58f-ec79-7b00-9375-ad23ef080e9d"
+    "01a1d8ba-7e2a-7cfc-bdac-fc7da1085002",
+    "01a1d8ba-7ec1-7ac0-b682-716f2af43bde"
   ]
 }
 ```
@@ -569,14 +569,14 @@ Bytes are base64url without padding. Long values are shortened here. `GET /api/k
 {
   "bundles": [
     {
-      "userId": "01a1d58f-ec13-7060-b95b-e4e6ecb6ffb6",
+      "userId": "01a1d8ba-7e2a-7cfc-bdac-fc7da1085002",
       "generation": 1,
-      "bundle": "AQEAAAAB3Dhcf1wXtsoPcx5K..."
+      "bundle": "AQEAAAABoCl4QxMh8GDqZF-S..."
     },
     {
-      "userId": "01a1d58f-ec79-7b00-9375-ad23ef080e9d",
+      "userId": "01a1d8ba-7ec1-7ac0-b682-716f2af43bde",
       "generation": 1,
-      "bundle": "AQEAAAABFai-jHwaU-zEV26-..."
+      "bundle": "AQEAAAABwrT6rcBwQmS4dRL7..."
     }
   ]
 }
@@ -586,22 +586,22 @@ A new conversation, and a group that people are added to, carry the epoch. `POST
 
 ```json
 {
-  "id": "333a4966-982e-4646-b3bd-7ec5c758bf6e",
-  "otherUserId": "01a1d58f-ec13-7060-b95b-e4e6ecb6ffb6",
+  "id": "b7e9b446-5fa3-48d5-a5bc-7e3b50a5a940",
+  "otherUserId": "01a1d8ba-7e2a-7cfc-bdac-fc7da1085002",
   "epoch": {
     "epoch": 1,
-    "commitment": "NMo-B19JVwDkogbY8a4J0cPTFY0qVGk4T5zpB2yNPGg",
-    "signature": "lbRGVHuzSNufCbSCSZQeNLgN...",
+    "commitment": "UmaqWfxc8hilAIFJ7SkWCusEc-s2Jo9FlNODY930T6s",
+    "signature": "Tu73kK3XD-NSuKSGFntAmXpE...",
     "envelopes": [
       {
-        "userId": "01a1d58f-eb99-7255-97e3-9cdcf80ca854",
+        "userId": "01a1d8ba-7da0-7519-84e0-930bb2e54500",
         "generation": 1,
-        "envelope": "AQGCwkVMp5-w3IeHovd-kZ4K..."
+        "envelope": "AQFip7_pUb1OtpAaQrBlFfhb..."
       },
       {
-        "userId": "01a1d58f-ec13-7060-b95b-e4e6ecb6ffb6",
+        "userId": "01a1d8ba-7e2a-7cfc-bdac-fc7da1085002",
         "generation": 1,
-        "envelope": "AQFpkFvfK6xriTLCQsoMY9Wa..."
+        "envelope": "AQGlbqr-joITBzI617-YLEp9..."
       }
     ]
   }
@@ -615,27 +615,27 @@ A new conversation, and a group that people are added to, carry the epoch. `POST
   "epochs": [
     {
       "epoch": 1,
-      "creatorId": "01a1d58f-eb99-7255-97e3-9cdcf80ca854",
+      "creatorId": "01a1d8ba-7da0-7519-84e0-930bb2e54500",
       "reason": "Created",
-      "createdAt": "2026-11-13T15:39:03.203984Z",
-      "commitment": "I5XT5FcYmtjcVitOdMZulzz36BSfQ9MzLSwoS_VsXpA",
-      "signature": "wzOl7hBAhGsqWqU2WxM5p957...",
+      "createdAt": "2026-11-14T06:24:24.187318Z",
+      "commitment": "YK6RAW6S72BaDF8moO34tV8c3Htz1mCxBv8NL762gkw",
+      "signature": "rDR5wcu6Ad6A1KGiyI1ERvPF...",
       "members": [
         {
-          "userId": "01a1d58f-eb99-7255-97e3-9cdcf80ca854",
+          "userId": "01a1d8ba-7da0-7519-84e0-930bb2e54500",
           "generation": 1
         },
         {
-          "userId": "01a1d58f-ec13-7060-b95b-e4e6ecb6ffb6",
+          "userId": "01a1d8ba-7e2a-7cfc-bdac-fc7da1085002",
           "generation": 1
         },
         {
-          "userId": "01a1d58f-ec79-7b00-9375-ad23ef080e9d",
+          "userId": "01a1d8ba-7ec1-7ac0-b682-716f2af43bde",
           "generation": 1
         }
       ],
       "generation": 1,
-      "envelope": "AQEN5U1I_q6eP9X49jUevhOQ..."
+      "envelope": "AQGwkvWhGaU3lHF2HaomtPs0..."
     }
   ],
   "hasMore": false
@@ -651,7 +651,7 @@ A new conversation, and a group that people are added to, carry the epoch. `POST
   "status": 409,
   "detail": "Another epoch was stored first. Look at the conversation again.",
   "code": "epoch-stale",
-  "traceId": "00-c506033d07df6724c95551e46182d975-698223fccae5d690-01"
+  "traceId": "00-ae6e1ee38371e21584f6a903af05ee0a-c0bb43a209f50fbb-01"
 }
 ```
 

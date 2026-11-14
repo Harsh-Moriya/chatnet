@@ -41,7 +41,7 @@ sequenceDiagram
     Relay->>DB: mark dispatched, or schedule a retry
 ```
 
-- A change and its outbox row are saved in the **same transaction**. A row records what happened by id (`MessageCreated(messageId, conversationId)`), not the payload. The relay builds the push from the stored data when it makes it, so a late push of an edited or deleted message carries no text it should not.
+- A change and its outbox row are saved in the **same transaction**. A row records what happened by id (`MessageCreated(messageId, conversationId)`), not the payload. The relay builds the push from the stored data when it makes it, so a late push of an edited or deleted message says what is true then, and a deleted message has no ciphertext left to carry.
 - The request pushes right after the commit and marks the row. That is the fast path.
 - The relay runs on every instance every 2 seconds. It takes rows that are at least 5 seconds old and not dispatched, oldest first, in batches of 100. One statement, an `UPDATE` over a subquery that uses `FOR UPDATE SKIP LOCKED` and returns the rows, chooses and holds them and schedules their retry at the same time, so two relays never take the same row.
 - A failed attempt is retried after a delay that starts at 5 seconds and doubles per attempt, up to 64 times the base. After 10 attempts the relay gives up on the row: it keeps its last error (the exception type and a count only, no content) and is not tried again.

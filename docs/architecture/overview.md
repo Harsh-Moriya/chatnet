@@ -90,4 +90,5 @@ Inside a feature the flow is always endpoint, command or query, validator, handl
 - [Real-time design](real-time.md): groups, the backplane, the outbox, presence, eviction.
 - [Data model](data-model.md): tables, columns and indexes.
 - [Security model](security-model.md).
+- [Encryption formats](encryption-format.md): the byte layouts of messages, files, keys and backups, with test vectors.
 - [Decision records](../decisions/README.md): why the main choices were made.

@@ -92,9 +92,10 @@ A conversation carries `keyEpoch` (0 while it has none), `keyRotationRequired` a
 
 ## Limits
 
-- The server decides who is in a conversation, and it checks that each epoch covers them. It cannot make an epoch itself, but it can withhold epochs or serve an old one, and it can give a wrong public key the first time a person is seen. Nothing in the app yet lets two people compare keys outside it.
+- The server decides who is in a conversation, and it checks that each epoch covers them. It cannot make an epoch itself, but it can withhold epochs or serve an old one, and it can give a wrong public key the first time a person is seen. Two people can compare keys outside the app with [safety numbers](safety-numbers.md).
 - Keys are replaced when the membership changes, when a member's account key changes (a lost device was removed, or the person started over) and when the newest epoch is a week old. The server only holds back a replacement that nothing asks for within a day, and does not enforce the week: it is a rule the browsers follow, so a client that never replaces keys is not stopped. A key that has been in force a long time protects everything sent under it if it is ever exposed.
 - A member who stores an epoch that the others cannot use can keep the conversation on it for up to a day, or until that member is removed, which marks it as due.
+- The week is counted by each browser against the time the server gave for the newest epoch. A browser whose clock is a week or more ahead tries to replace the keys on every open, and the server holds the attempt back to once a day.
 - A person who has not set up encryption keeps a conversation from getting new keys until they set it up or are removed.
 - Every change of membership adds an epoch and none are deleted; a group of 101 people stores up to 101 envelopes for each epoch.
 - These endpoints share the limit of the other key endpoints: 60 requests per minute per person.

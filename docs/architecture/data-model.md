@@ -268,4 +268,4 @@ One row per browser. A browser registered to one person moves to whoever registe
 
 ## Extensions
 
-The migrations create `btree_gin` and `pg_trgm`. Both ship with Postgres and are trusted extensions, so the owner of the database can create them.
+The migrations create `pg_trgm`. It ships with Postgres and is a trusted extension, so the owner of the database can create it. (`btree_gin` was created for the message search index and is dropped with it.)

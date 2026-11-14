@@ -32,7 +32,7 @@ Arguments are positional. The examples are real payloads as the JavaScript clien
 | `AddedToConversation` | one `Conversation`, as this recipient sees it | the people added (and the creator's other tabs) | a conversation was created that includes you, or you were added to a group. Call `JoinConversation` for it. |
 | `MembersChanged` | one `{ conversationId, members, removedUserIds }` | each person who is in the group now | the people of a group changed |
 | `ConversationUpdated` | one `{ id, name, avatarUrl }` | each person in the group | a group was renamed or its picture changed |
-| `ConversationKeyChanged` | one `{ conversationId, keyEpoch, keyRotationRequired }` | each person in the conversation now | an epoch was stored, or a member left and the one in force must be replaced. Carries the state when it is sent, so it is safe to receive twice; apply it only if its epoch is not lower than the one held. |
+| `ConversationKeyChanged` | one `{ conversationId, keyEpoch, keyRotationRequired, keyEpochAt }` | each person in the conversation now | an epoch was stored, or a member left and the one in force must be replaced. Carries the state when it is sent, so it is safe to receive twice; apply it only if its epoch is not lower than the one held. |
 | `RemovedFromConversation` | `conversationId`, `leftAt` | every tab of the person | they left or were removed. The conversation stays, read-only. |
 | `ProfileChanged` | one `UserSummary` | everyone who shares a conversation with the person, and their own tabs | someone changed their name or picture |
 | `PresenceChanged` | one `Presence` | contacts | someone came online or went offline |
@@ -48,14 +48,14 @@ Arguments are positional. The examples are real payloads as the JavaScript clien
 ```json
 [
   {
-    "id": "01a1d58f-fd67-77cd-ae48-0784b8f63da6",
-    "conversationId": "b098b57a-4cf7-4658-938b-d7d4b75bbeff",
-    "senderId": "01a1d58f-f9ae-7505-8f26-2f2a0325526c",
+    "id": "01a1d8b9-5fc5-7a5b-b775-cd8f6f694b64",
+    "conversationId": "99924b68-906d-46df-ae3f-53af02f0cdd5",
+    "senderId": "01a1d8b9-4dc1-750f-a3ba-4b6b8e74bd35",
     "senderDisplayName": "Ana Example",
-    "ciphertext": "AQEAAAABELjVgN1rSV9S7-lt...",
+    "ciphertext": "AQEAAAABTiYzANbNRvxLKr6H...",
     "keyEpoch": 1,
-    "createdAt": "2026-11-13T15:39:05.95916Z",
-    "clientMessageId": "a12219b1-d6f4-4537-9b78-52fb21a2c625",
+    "createdAt": "2026-11-14T06:23:09.764167Z",
+    "clientMessageId": "84bb8acc-33b9-48fa-b643-f04bca173e6c",
     "attachments": [],
     "editedAt": null,
     "editCount": 0,
@@ -91,16 +91,20 @@ Arguments are positional. The examples are real payloads as the JavaScript clien
 ```json
 [
   {
-    "id": "01a1ba93-dd11-7338-bef5-793667730f02",
-    "type": "Direct",
-    "name": "Ben Example",
+    "id": "99924b68-906d-46df-ae3f-53af02f0cdd5",
+    "type": "Group",
+    "name": "Weekend plans",
     "avatarUrl": null,
-    "updatedAt": "2026-11-08T09:53:34.99311Z",
+    "updatedAt": "2026-11-14T06:23:08.355563Z",
     "lastMessage": null,
     "unreadCount": 0,
-    "otherUserId": "01a1ba93-d8f5-7d26-9b60-8314d89a1c5d",
+    "otherUserId": null,
     "isMuted": false,
-    "leftAt": null
+    "leftAt": null,
+    "keyEpoch": 1,
+    "keyRotationRequired": false,
+    "keyEpochAt": "2026-11-14T06:23:08.355563Z",
+    "changeSeq": 0
   }
 ]
 ```
@@ -143,10 +147,10 @@ Arguments are positional. The examples are real payloads as the JavaScript clien
 ```json
 [
   {
-    "conversationId": "c7d65802-a54e-42b7-a149-351740a6e84e",
+    "conversationId": "e47b99dd-512a-4042-9326-5b53d01de628",
     "keyEpoch": 2,
     "keyRotationRequired": false,
-    "keyEpochAt": "2026-11-13T15:39:03.622366Z"
+    "keyEpochAt": "2026-11-14T06:24:24.540887Z"
   }
 ]
 ```
@@ -154,10 +158,10 @@ Arguments are positional. The examples are real payloads as the JavaScript clien
 ```json
 [
   {
-    "conversationId": "c7d65802-a54e-42b7-a149-351740a6e84e",
+    "conversationId": "e47b99dd-512a-4042-9326-5b53d01de628",
     "keyEpoch": 2,
     "keyRotationRequired": true,
-    "keyEpochAt": "2026-11-13T15:39:03.622366Z"
+    "keyEpochAt": "2026-11-14T06:24:24.540887Z"
   }
 ]
 ```
@@ -214,20 +218,20 @@ Arguments are positional. The examples are real payloads as the JavaScript clien
 ```json
 [
   {
-    "id": "01a1d58f-fdfb-7f75-9c50-232f3f49ce4d",
+    "id": "01a1d8b9-61c0-7405-bd7e-c4b90cde583d",
     "type": "Mention",
-    "conversationId": "b098b57a-4cf7-4658-938b-d7d4b75bbeff",
-    "actorId": "01a1d58f-fa1b-7fe1-85bb-cc70ee20a8ae",
+    "conversationId": "99924b68-906d-46df-ae3f-53af02f0cdd5",
+    "actorId": "01a1d8b9-5307-73df-aa61-05adbc82681b",
     "actorDisplayName": "Ben Example",
-    "messageId": "01a1d58f-fdf1-7a6a-a903-bd7a1cfa384b",
+    "messageId": "01a1d8b9-6199-70a7-8f8b-5c3de906f8ae",
     "message": {
-      "ciphertext": "AQEAAAABlLGZfMzoR5jd_OvD...",
+      "ciphertext": "AQEAAAAB734U_6pZGVjg3ccc...",
       "keyEpoch": 1,
-      "clientMessageId": "b6626b06-0cd4-41c6-923b-be4e969b2b12",
+      "clientMessageId": "930d9700-bf92-4733-979a-f2361fb39adf",
       "editCount": 0
     },
     "isRead": false,
-    "createdAt": "2026-11-13T15:39:06.09731Z"
+    "createdAt": "2026-11-14T06:23:10.233738Z"
   }
 ]
 ```

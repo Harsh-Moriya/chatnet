@@ -97,7 +97,9 @@ See [rate limits](../features/rate-limits.md).
 | `Encryption:LinkLifetime` | `00:10:00` | 1 minute to 1 hour. How long a request to link a new device stays open |
 | `Encryption:MaxDevicesPerUser` | 10 | 1 to 50. Devices that hold the keys of one person |
 | `Encryption:MaxPendingLinkRequests` | 5 | 1 to 20. Link requests waiting for approval at once, per person |
-| `Encryption:MaxBackupBytes` | 65536 | 1024 to 1,048,576. The largest encrypted backup accepted |
+| `Encryption:MaxBackupBytes` | 65536 | 1024 to 783,360. The largest encrypted backup accepted. The upper bound is what still fits in a request body of 1 MiB once the backup is sent as base64url, beside a bundle and a password |
+
+Not settable, because they are part of the format or the protocol: the one-day minimum between replacements of a conversation key (the server), the seven days after which browsers replace one, the 600,000 rounds and 12 characters of the recovery passphrase, and the 4,000 characters of a message. The production Compose file forwards no `Encryption__*`, `Messaging__*` or storage limit variables, so these keys keep their defaults there unless the file is extended.
 
 See [encryption keys and devices](../features/encryption-keys.md).
 

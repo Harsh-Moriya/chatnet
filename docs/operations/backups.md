@@ -13,6 +13,8 @@ There are **no automatic backups**. This page says what to back up, how to do it
 
 The database is the one thing that cannot be rebuilt.
 
+A dump holds sealed messages and the encrypted key backups (`KeyBackups`). It does not hold a key that opens either, but the backups can be attacked offline by trying passphrases, so a dump is secret: store and copy it as carefully as the database itself.
+
 ## Taking a dump
 
 From the repository root, on the machine that runs the production stack:
@@ -41,7 +43,9 @@ docker compose -f docker-compose.prod.yml --env-file .env.prod start api
 
 `ON_ERROR_STOP=1` makes the restore stop at the first error, so a partial restore is not mistaken for a complete one. `dropdb` deletes the current data: take a fresh dump first if there is anything in it you might need.
 
-A restore carries the migration history (`__EFMigrationsHistory`), so the `migrate` job on the next update applies only migrations newer than the dump. Refresh tokens are in the dump: people signed in at the time of the dump stay signed in, and tokens revoked since then become valid again.
+A restore carries the migration history (`__EFMigrationsHistory`), so the `migrate` job on the next update applies only migrations newer than the dump. Refresh tokens are in the dump: people signed in at the time of the dump stay signed in, and tokens revoked since then become valid again, which includes the sessions of devices that were removed after the dump was taken.
+
+A restore to an older state also takes the keys back: conversation key periods and key generations made since the dump are gone from the server while browsers still hold them. A browser that is ahead of the server is refused with `changes-cursor-ahead` when it follows a conversation, and a person who made a new key generation since finds the server one behind (`generation-stale`). Start over from the people affected rather than restore over keys that were in use.
 
 ## Files
 
