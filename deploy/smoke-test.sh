@@ -74,6 +74,12 @@ else
   expect_header "a built file is cached for a year" "$public" "$asset" "cache-control: public, max-age=31536000, immutable"
 fi
 
+# A built file that is not there is a 404 and is not kept, and is not answered with the page: a tab that was open across an update asks for
+# files by their old names, and html under a script's address fails to run with an error that says nothing.
+missing=$(curl -s -o /dev/null -w '%{http_code}' -H "Host: $public" "http://localhost:$port/assets/not-built-0000.js")
+if [ "$missing" = "404" ]; then echo "ok    a built file that is not there is a 404"; else echo "FAIL  a built file that is not there is a 404 (got: $missing)"; failures=$((failures + 1)); fi
+expect_header    "a built file that is not there is not kept"       "$public" /assets/not-built-0000.js "cache-control: no-store"
+
 expect_header "responses are compressed" "$public" / "content-encoding: gzip" "Accept-Encoding: gzip"
 
 # The service worker is fetched by the browser from a fixed address, and a copy kept in a cache would keep a fix to it from

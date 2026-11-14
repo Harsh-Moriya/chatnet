@@ -1,3 +1,4 @@
+using ChatNET.API.Common.Hosting;
 using Microsoft.Extensions.Options;
 
 namespace ChatNET.API.Keys;
@@ -18,7 +19,8 @@ public sealed class EncryptionOptions
     // How many requests to link a device one person can have open at once.
     public int MaxPendingLinkRequests { get; set; } = 5;
 
-    // The largest encrypted key backup accepted, in bytes. A backup holds a few hundred bytes per generation of the account key.
+    // The largest encrypted key backup accepted, in bytes. A backup holds a few hundred bytes per generation of the account key. It cannot
+    // be set above what a request body can carry (RequestLimits.LargestBackupBytes).
     public int MaxBackupBytes { get; set; } = 64 * 1024;
 }
 
@@ -37,8 +39,8 @@ public sealed class EncryptionOptionsValidator : IValidateOptions<EncryptionOpti
         if (options.MaxPendingLinkRequests is < 1 or > 20)
             failures.Add("Encryption:MaxPendingLinkRequests must be between 1 and 20.");
 
-        if (options.MaxBackupBytes is < 1024 or > 1024 * 1024)
-            failures.Add("Encryption:MaxBackupBytes must be between 1024 and 1048576.");
+        if (options.MaxBackupBytes < 1024 || options.MaxBackupBytes > RequestLimits.LargestBackupBytes)
+            failures.Add($"Encryption:MaxBackupBytes must be between 1024 and {RequestLimits.LargestBackupBytes}.");
 
         return failures.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(failures);
     }

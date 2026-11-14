@@ -146,6 +146,24 @@ public class DeviceSessionTests
 
     // ##### Removing a device #####
 
+    // A stated limit, pinned so that changing it is a decision. The access token of a session lives for minutes and is checked without
+    // asking the database, so removing the device ends the session at its refresh token and leaves a token already issued working for the
+    // rest of its life. Until then a removed device can still call the API as its person (the security model page says so).
+    [Fact]
+    public async Task The_access_token_of_a_removed_device_works_until_it_expires_and_the_session_cannot_be_renewed()
+    {
+        var (user, bearer, device, client) = await ArrangeAsync();
+        var login = await LoginAsync(client, user, device.ToString());
+        var accessToken = (await login.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>()).GetProperty("token").GetString()!;
+        using var onTheDevice = _factory.CreateCookielessClient();
+        onTheDevice.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+
+        await bearer.DeleteAsync($"/api/devices/{device}");
+
+        Assert.Equal(HttpStatusCode.OK, (await onTheDevice.GetAsync("/api/keys/me")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await RefreshAsync(client, CookieOf(login), device.ToString())).StatusCode);
+    }
+
     [Fact]
     public async Task Removing_a_device_ends_the_session_that_was_signed_in_on_it()
     {

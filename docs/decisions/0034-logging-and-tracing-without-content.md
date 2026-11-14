@@ -8,7 +8,7 @@ Logs and traces are copied to other systems and read by more people than the dat
 
 ## Decision
 
-Serilog writes readable lines in Development and compact JSON elsewhere. One request line per request is written by the first middleware, with the path without its query string and the user id. A refused hub call is one Warning. EF Core's command and save failures are Warnings because callers sometimes expect them, so an Error means "unhandled". OpenTelemetry covers ASP.NET Core, SignalR, outgoing HTTP and Npgsql, plus one span per MediatR request tagged with the request type only; a processor removes query strings and push URLs from spans. Search text is never logged, only who and how many.
+Serilog writes readable lines in Development and compact JSON elsewhere. One request line per request is written by the first middleware, with the path without its query string and the user id. A refused hub call is one Warning. EF Core's command and save failures are Warnings because callers sometimes expect them, so an Error means "unhandled". OpenTelemetry covers ASP.NET Core, SignalR, outgoing HTTP and Npgsql, plus one span per MediatR request tagged with the request type only; a processor removes query strings and push URLs from spans. Message text is never logged, and the server has none; keys, sealed payloads and passwords are never logged either, only ids and sizes.
 
 ## Alternatives considered
 

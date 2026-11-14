@@ -1,5 +1,5 @@
 import { IDBFactory, IDBKeyRange } from 'fake-indexeddb'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { indexedDbDeviceStore } from './deviceStore'
 import { indexedDbEpochKeyStore as epochKeys } from './epochKeyStore'
 import { DATABASE } from './idb'
@@ -134,8 +134,7 @@ describe('a browser that had the first version of the database', () => {
 
 describe('a browser that cannot keep them', () => {
   it('rejects instead of pretending, when there is no IndexedDB', async () => {
-    // @ts-expect-error a browser without IndexedDB has no such global
-    globalThis.indexedDB = undefined
+    vi.stubGlobal('indexedDB', undefined)
 
     await expect(epochKeys.load(ANA, ROOM, 1)).rejects.toThrow('IndexedDB is not available')
     await expect(epochKeys.save(ANA, ROOM, 1, bytes(32, 1))).rejects.toThrow()

@@ -31,8 +31,8 @@ services:
   # Handles two separate concerns. First: the SignalR backplane, which fans out hub
   # messages to all connected server instances so every client receives events
   # regardless of which server they are connected to. Second: presence tracking,
-  # using TTL keys that expire automatically when a user stops sending heartbeats,
-  # so no cleanup job is needed to mark users as offline.
+  # using entries that each server keeps renewing and that expire on their own when a
+  # server dies, so no cleanup job is needed to mark users as offline.
   redis:
     image: redis:7-alpine
     container_name: chatnet-redis
@@ -66,7 +66,8 @@ services:
   # ##### RustFS #####
   # An S3-compatible object store for attachments. Browsers upload straight to it with presigned URLs,
   # so it has to be reachable from the browser: the S3 API is on http://localhost:9000 and a console on
-  # http://localhost:9001. Production uses Cloudflare R2 instead; the API talks to both through the S3 API.
+  # http://localhost:9001. Any S3-compatible store works in its place (Cloudflare R2 is the one this was written for);
+  # the API talks to all of them through the S3 API.
   # MinIO would be the usual choice here, but it no longer publishes container images.
   rustfs:
     image: rustfs/rustfs:1.0.3

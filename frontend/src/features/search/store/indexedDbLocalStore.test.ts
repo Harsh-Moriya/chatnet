@@ -1,5 +1,5 @@
 import { IDBFactory, IDBKeyRange } from 'fake-indexeddb'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { DATABASE, META, transaction, asPromise } from '../../encryption/idb'
 import { ANA, BEN, deletedStored, sealedStored, stored } from '../testKit'
 import { STORE_FORMAT, indexedDbLocalStore as store } from './indexedDbLocalStore'
@@ -318,8 +318,7 @@ describe('the shape of what is kept', () => {
 
 describe('where there is no IndexedDB', () => {
   it('refuses, so the search can say it is not available in this browser', async () => {
-    // @ts-expect-error a browser without it
-    globalThis.indexedDB = undefined
+    vi.stubGlobal('indexedDB', undefined)
 
     await expect(store.prepare(ANA)).rejects.toThrow('IndexedDB is not available')
   })

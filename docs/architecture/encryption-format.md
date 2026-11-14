@@ -223,7 +223,7 @@ A new device gets the secrets of a person from a device that is already signed i
 
 **Link code.** `digest = SHA-256(label("chatnet/v1/link-code", temporaryPublic))`. Take the first 50 bits of `digest`, most significant bit first, in groups of 5, and write each group as a character of the alphabet `0123456789ABCDEFGHJKMNPQRSTVWXYZ`. That gives 10 characters, shown as `XXXXX-XXXXX`. When reading a code, ignore case, spaces and hyphens, and read `O` as `0` and `I` or `L` as `1`.
 
-The code is derived from the key, so a server that handed the signed-in device a different key would also have to find one whose hash starts with the same 50 bits, which cannot be done within the few minutes a link request is meant to stay open.
+The code is derived from the key, so a server that handed the signed-in device a different key would also have to find one whose hash starts with the same 50 bits: about 10^15 attempts, each a key generation and a hash. That is far beyond one machine in the minutes a link request stays open (one core makes about 8,000 attempts a second with a general-purpose library), but it is a search that a great deal of hardware built for the purpose shortens, so the code protects against a server that swaps keys without such resources, not against one that has them. A QR code carries the whole key and so has no such search.
 
 **QR content.** `chatnet-link:1:<requestId>:<temporaryPublic as unpadded base64url>`, which carries the whole request with no server lookup.
 

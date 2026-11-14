@@ -51,9 +51,10 @@ USER $APP_UID
 ENTRYPOINT ["./efbundle"]
 
 # ##### API #####
-# The runtime is pinned to 10.0.13 or later: earlier releases carry a SignalR denial of service fix this app needs.
+# The runtime is pinned to 10.0.15 or later: earlier releases carry SignalR denial of service fixes this app needs (stateful reconnect, and
+# group removal on the Redis backplane).
 # The container runs as a user without privileges and listens on 8080, behind the reverse proxy.
-FROM mcr.microsoft.com/dotnet/aspnet:10.0.13 AS api
+FROM mcr.microsoft.com/dotnet/aspnet:10.0.15 AS api
 WORKDIR /app
 COPY --from=build /app/publish .
 # The base image already listens on port 8080 (ASPNETCORE_HTTP_PORTS). Setting ASPNETCORE_URLS as well makes the

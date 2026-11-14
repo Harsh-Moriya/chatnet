@@ -1,6 +1,6 @@
 # Observability
 
-Structured logs, distributed traces and a health check. All three are built so that **ids and metadata appear, never content**: no message text, search text, token, password, push endpoint or picture address.
+Structured logs, distributed traces and a health check. All three are built so that **ids and metadata appear, never content**: no message text, key, backup, sealed payload, token, password, push endpoint or picture address.
 
 ## Logs
 
@@ -30,7 +30,7 @@ Framework categories (`Microsoft.AspNetCore`, `Microsoft.EntityFrameworkCore`, `
 
 ### What is never logged
 
-- message content, search text, display names;
+- message content or ciphertext, keys, backups, link codes, display names;
 - access tokens, refresh tokens, passwords, signing keys;
 - push endpoints and keys; picture addresses;
 - the `access_token` query value, which the SignalR WebSocket request carries. The API does not log query strings; the production proxy replaces `access_token` with `REDACTED` in its access log and in its error lines.

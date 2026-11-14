@@ -8,7 +8,7 @@ Hard deletes orphan foreign keys, leave gaps in a conversation and break read po
 
 ## Decision
 
-A deleted message keeps its row: `Content` becomes null, `IsDeleted`, `DeletedAt` and `DeletedById` are set, and its files are removed from storage. Users are deactivated with `IsDeactivated`. Message times are set by the server and cut to microseconds, so they survive a round trip through Postgres unchanged.
+A deleted message keeps its row: `Ciphertext` becomes null, `IsDeleted`, `DeletedAt` and `DeletedById` are set, and its files are removed from storage. Users are deactivated with `IsDeactivated`. Message times are set by the server and cut to microseconds, so they survive a round trip through Postgres unchanged.
 
 ## Alternatives considered
 

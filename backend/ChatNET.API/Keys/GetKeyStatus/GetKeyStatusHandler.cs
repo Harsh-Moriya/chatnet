@@ -14,8 +14,8 @@ public class GetKeyStatusHandler : IRequestHandler<GetKeyStatusQuery, KeyStatusD
         _keys = keys;
     }
 
-    // Only the caller's own state: the id comes from the token. Other people's public keys are a different question, asked
-    // by someone who shares a conversation with them.
+    // Only the caller's own state: the id comes from the token. Other people's public keys are a different endpoint (the lookup),
+    // open to any signed-in person because a conversation starts with the other person's keys, before anything is shared.
     public async Task<KeyStatusDto> Handle(GetKeyStatusQuery request, CancellationToken cancellationToken)
     {
         var bundles = await _keys.GetBundlesAsync(request.UserId, cancellationToken);

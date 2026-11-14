@@ -54,9 +54,10 @@ export function RemoveDevicePanel({ device, onCancel, onRemoved }: RemoveDeviceP
       {lost && (
         <div className="space-y-3">
           <p className="text-xs text-slate-600">
-            A lost device still holds your keys. Renewing them means it cannot open anything sent from now on. It can still read what it
-            already had. Your other devices will ask for your recovery passphrase once, to get the new keys, and the people you talk to see
-            nothing change.
+            A lost device still holds your keys. Renewing them means that, once its sign-in runs out in a few minutes, it cannot open anything
+            sent from now on. It can still read what it already had, and until its sign-in runs out, if it is online, it can still act as
+            you. Your other devices will ask for your recovery passphrase once, to get the new keys, and the people you talk to see nothing
+            change.
           </p>
           <PassphraseForm
             idPrefix={`lost-${device.id}`}

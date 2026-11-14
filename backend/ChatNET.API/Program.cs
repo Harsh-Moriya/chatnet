@@ -378,7 +378,7 @@ try
 
     // ##### Rate limiting #####
     // Login, registration and session renewal are limited per client address, to slow down password guessing and mass account
-    // creation; sending, upload tickets, edits and search are limited per signed-in person. The counts are in Redis, so every
+    // creation; sending, upload tickets, edits and the key endpoints are limited per signed-in person. The counts are in Redis, so every
     // API instance applies one limit and not one each. The limits come from configuration (RateLimiting:<Policy>)
     // and are validated at startup; the policies are defined in RateLimiterSetup.
     foreach (var (policy, section) in RateLimitPolicies.All)
@@ -438,9 +438,8 @@ try
     builder.Services.Configure<RouteHandlerOptions>(options => options.ThrowOnBadRequest = true);
 
     // ##### Request limits and HSTS #####
-    // Kestrel allows 30 MB request bodies by default. The largest legitimate request here is a few
-    // kilobytes (a message is at most 4,000 characters), so a larger body is refused before it is read.
-    builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = 1_048_576);
+    // Kestrel allows 30 MB request bodies by default; see RequestLimits for why a megabyte is enough.
+    builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = RequestLimits.MaxBodyBytes);
 
     // Tells browsers to use https for a year once they have seen one https response. Added only
     // outside development (see UseHsts below).

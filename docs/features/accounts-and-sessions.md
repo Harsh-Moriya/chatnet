@@ -9,6 +9,7 @@ People register with an email, a handle and a password, and stay signed in throu
 - A deactivated account cannot sign in (403) and cannot send messages.
 - Both calls answer with the access token, the user's id, handle and display name, and when the token expires, and set the refresh cookie.
 - **Renewal.** The access token lives 15 minutes and is kept in memory only. The refresh token is an httpOnly cookie, valid for 14 days from its last use. `POST /api/auth/refresh` exchanges it for a new access token and a new refresh token, and the old refresh token stops working.
+- **Devices.** A browser that holds the person's encryption keys sends the id of its device in `X-Device-Id` when it signs in and when it renews, which ties the session to the device (see [encryption keys and devices](encryption-keys.md)). After signing in, a browser that does not hold the keys shows an unlock screen until it does.
 - **Sign-out.** `POST /api/auth/logout` revokes every refresh token of that session and removes the cookie.
 
 ## How refresh rotation works
@@ -54,4 +55,5 @@ sequenceDiagram
 - Sign-in and registration are limited to 10 per minute per client address; refresh and sign-out to 60 per minute per address, counted separately.
 - Only one person can be signed in per browser host, because the refresh cookie is per host. To try two users at once, open the app from two different host names (`localhost` and `127.0.0.1`).
 - There is no email confirmation. A forgotten password is recovered by email: see [account recovery](account-recovery.md).
-- An access token cannot be revoked before it expires; a deactivated user's token works for up to 15 minutes, though they cannot renew it.
+- An access token cannot be revoked before it expires; the token of a deactivated user, or of a device that was removed, works for up to 15 minutes, though neither can renew it.
+- Signing out of a browser that holds the keys asks first and deletes the keys and the local copy of messages from that browser. A session that only expires or is ended by the server keeps them.
