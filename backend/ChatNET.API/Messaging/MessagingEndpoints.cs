@@ -45,7 +45,7 @@ public static class MessagingEndpoints
         .RequireRateLimiting(RateLimitPolicies.Send)
         .Returns<MessageDto>(
             StatusCodes.Status201Created, StatusCodes.Status400BadRequest, StatusCodes.Status401Unauthorized,
-            StatusCodes.Status403Forbidden, StatusCodes.Status429TooManyRequests)
+            StatusCodes.Status403Forbidden, StatusCodes.Status409Conflict, StatusCodes.Status429TooManyRequests)
         .Produces<MessageDto>(StatusCodes.Status200OK);
 
         // Replaces the text of the caller's own message, within Messaging:EditWindow of sending it. 200 with the message as it

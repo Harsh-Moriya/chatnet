@@ -32,7 +32,7 @@ public class OpenApiDocumentTests
         ("get", "/api/conversations/{conversationId}", "200", "ConversationDto", "401,403"),
         ("post", "/api/conversations/direct", "200", "ConversationDto", "400,401,404,409"),
         ("post", "/api/conversations/group", "201", "ConversationDto", "400,401,404,409"),
-        ("post", "/api/conversations/{conversationId}/messages", "201", "MessageDto", "400,401,403,429"),
+        ("post", "/api/conversations/{conversationId}/messages", "201", "MessageDto", "400,401,403,409,429"),
         ("patch", "/api/conversations/{conversationId}/messages/{messageId}", "200", "MessageDto", "400,401,403,404,409,429"),
         ("get", "/api/conversations/{conversationId}/messages", "200", "MessageDto[]", "400,401,403"),
         ("post", "/api/conversations/{conversationId}/read", "204", "", "400,401,403"),
