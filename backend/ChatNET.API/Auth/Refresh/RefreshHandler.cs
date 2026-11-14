@@ -120,6 +120,6 @@ public class RefreshHandler : IRequestHandler<RefreshCommand, AuthResult>
         if (deviceId is not null)
             await _devices.TouchAsync(deviceId.Value, now, cancellationToken);
 
-        return new AuthResult(AuthResponse.For(current.User, _jwt.GenerateToken(current.User)), issued);
+        return new AuthResult(AuthResponse.For(current.User, _jwt.GenerateToken(current.User)), issued, deviceId);
     }
 }

@@ -1,6 +1,6 @@
 # Endpoints
 
-The HTTP API. In Development the running API also serves its OpenAPI document at `/openapi/v1.json` and an interactive reference at `/scalar/v1`; every operation there declares its success body and each error it can return. The tables below list every route (60 operations) with its authentication, its rate-limit policy and what it does. Request and response bodies in the examples were copied from a running API.
+The HTTP API. In Development the running API also serves its OpenAPI document at `/openapi/v1.json` and an interactive reference at `/scalar/v1`; every operation there declares its success body and each error it can return. The tables below list routes with their authentication, rate-limit policy and behavior. Request and response bodies in the examples were copied from a running API.
 
 ## Conventions
 
@@ -36,6 +36,10 @@ Authentication column: **Bearer** needs an access token; **Refresh cookie** need
 | `POST /api/auth/login` | None | auth | 200, 400, 401, 403, 429 | Signs in. 401 for a wrong email or password (same text), 403 for a deactivated account, 429 for the rate limit or a locked account. An optional `X-Device-Id` header ties the session to a device that holds the encryption keys; see [encryption keys](../features/encryption-keys.md). |
 | `POST /api/auth/refresh` | Refresh cookie | refresh | 200, 401, 403, 409, 429 | Exchanges the refresh cookie for a new access token and a new cookie; the old refresh token stops working. Needs `X-Requested-With: ChatNET`. 409 means another request replaced the token a moment ago: retry. An optional `X-Device-Id` header ties the session to a device that holds the encryption keys; see [encryption keys](../features/encryption-keys.md). |
 | `POST /api/auth/logout` | Refresh cookie | refresh | 204, 403, 429 | Revokes the session and removes the cookie. A missing cookie is also a 204. Needs `X-Requested-With: ChatNET`. |
+| `POST /api/auth/native/register` | None | auth | 200, 400, 409, 429 | Creates an account and returns a native session in JSON. |
+| `POST /api/auth/native/login` | None | auth | 200, 400, 401, 403, 429 | Signs in and returns a native session in JSON. An optional `X-Device-Id` binds an eligible device. |
+| `POST /api/auth/native/refresh` | Refresh token in JSON | refresh | 200, 400, 401, 409, 429 | Exchanges `refreshToken` for a new native session. An optional `X-Device-Id` can bind an eligible device. |
+| `POST /api/auth/native/logout` | Refresh token in JSON | refresh | 204, 400, 429 | Revokes the session identified by `refreshToken`; a missing or unknown token is also a 204. |
 | `POST /api/auth/forgot-password` | None | forgot-password | 202, 400, 429, 503 | Asks for an email with a link to choose a new password (`email`). Answers 202 with no body for every address, so it never says whether one has an account. At most 3 emails an hour go to one address. 503 when the server has no mail relay. |
 | `POST /api/auth/reset-password` | None | reset-password | 204, 400, 429 | Sets a new password from the link in that email (`token`, `newPassword`) and ends every session of the account. 204 with no body and no cookie. One 400 for an unknown, used, expired or voided link; a password that breaks a rule is a 400 on `NewPassword` and leaves the link usable. |
 

@@ -80,7 +80,7 @@ public class LoginHandler : IRequestHandler<LoginCommand, AuthResult>
         if (deviceId is not null)
             await _devices.TouchAsync(deviceId.Value, _time.GetUtcNow().UtcDateTime, cancellationToken);
 
-        return new AuthResult(AuthResponse.For(user, accessToken), refreshToken);
+        return new AuthResult(AuthResponse.For(user, accessToken), refreshToken, deviceId);
     }
 
     // Made once, with the default hasher, so it has the same cost as a real user's hash.

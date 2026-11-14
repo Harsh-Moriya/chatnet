@@ -46,9 +46,17 @@ sequenceDiagram
 - An unreachable server never signs anyone out.
 - The hub connection closes when its token expires and reconnects with a renewed one.
 
+## Native clients
+
+Native clients can use `POST /api/auth/native/register` and `/api/auth/native/login` with the same credential fields and rules as the browser routes. These return `token`, `userId`, `userName`, `displayName`, `accessTokenExpiresAt`, `refreshToken`, `refreshTokenExpiresAt` and the effective `deviceId` in JSON. `deviceId` can be null. Login accepts an optional `X-Device-Id` header.
+
+`POST /api/auth/native/refresh` accepts `{ "refreshToken": "..." }` and returns the same response shape with a rotated refresh token. It accepts the optional device header; an existing binding remains effective. A 409 indicates recent reuse, and a 401 indicates the session cannot be renewed. `POST /api/auth/native/logout` accepts the same request shape and returns 204, including for an absent or unknown token. Both use the refresh rate limit. Native routes do not set or clear browser cookies and do not require the browser's `X-Requested-With` header. Responses use `Cache-Control: no-store`. Clients must protect refresh tokens in platform secure storage, transmit them only over HTTPS and persist a replacement before using it.
+
+The same rotation, grace period, theft detection and device revocation rules apply to native and browser sessions. Native clients should coordinate concurrent renewals and only retry a 409 with a newer stored token for the same account.
+
 ## Endpoints
 
-`POST /api/auth/register`, `POST /api/auth/login`, `POST /api/auth/refresh`, `POST /api/auth/logout`. See [endpoints](../api/endpoints.md).
+Browser and native registration, login, refresh and logout routes are listed in [endpoints](../api/endpoints.md).
 
 ## Limits
 

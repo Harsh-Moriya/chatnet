@@ -2,8 +2,7 @@ using ChatNET.API.Auth.Services;
 
 namespace ChatNET.API.Auth.Models;
 
-// The body of a successful sign-in, registration or refresh. The refresh token is not part of it: it
-// travels only in an httpOnly cookie, which scripts on the page cannot read.
+// Access credential and identity fields shared by the browser and native session responses.
 public record AuthResponse(
     string Token,
     string UserId,
