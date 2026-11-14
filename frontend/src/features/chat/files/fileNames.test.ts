@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { cleanFileName, imageTypeOf, kindOf, videoTypeOf } from './fileNames'
+import { INLINE_PICTURE_MAX_BYTES, cleanFileName, imageTypeOf, isInlinePicture, kindOf, videoTypeOf } from './fileNames'
 
 describe('cleaning the name of a file', () => {
   it.each([
@@ -68,4 +68,15 @@ describe('what a type lets a file be shown as', () => {
       expect(kindOf({ type })).toBe('File')
     },
   )
+})
+
+describe('drawing a picture in the message', () => {
+  it('draws a picture up to the largest size, and a file to save for one byte more', () => {
+    expect(isInlinePicture({ type: 'image/png', size: INLINE_PICTURE_MAX_BYTES })).toBe(true)
+    expect(isInlinePicture({ type: 'image/png', size: INLINE_PICTURE_MAX_BYTES + 1 })).toBe(false)
+  })
+
+  it.each(['video/mp4', 'application/pdf', 'image/svg+xml', ''])('never draws a file that says it is %s', (type) => {
+    expect(isInlinePicture({ type, size: 100 })).toBe(false)
+  })
 })

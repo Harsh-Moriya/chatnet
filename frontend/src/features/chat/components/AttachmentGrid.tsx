@@ -4,7 +4,7 @@ import { Button } from '../../../components/ui/Button'
 import { cn } from '../../../lib/cn'
 import { formatFileSize } from '../../../lib/format'
 import type { FileRef } from '../../../lib/crypto/message'
-import { cleanFileName, kindOf } from '../files/fileNames'
+import { cleanFileName, isInlinePicture, kindOf } from '../files/fileNames'
 import type { FileSource } from '../files/fileObjects'
 import { saveFile } from '../files/openFiles'
 import { useFileObject } from '../hooks/useFileObject'
@@ -23,8 +23,8 @@ interface AttachmentGridProps {
 type Opened = { attachment: Attachment; file: FileRef; source: FileSource }
 
 // The files of a confirmed message. The files are encrypted in the bucket, so each is fetched and opened here: pictures as they come near the
-// screen, and anything else when it is asked for (a video is then played in place, any other file is saved). A file the sealed message does
-// not vouch for is not drawn, and says that it cannot be opened.
+// screen when they are not large, and anything else when it is asked for (a video is then played in place, any other file, and a large
+// picture, is saved). A file the sealed message does not vouch for is not drawn, and says that it cannot be opened.
 export function AttachmentGrid({ attachments, own, conversationId, messageId }: AttachmentGridProps) {
   const vouched: Opened[] = []
   const unopenable: Attachment[] = []
@@ -34,9 +34,9 @@ export function AttachmentGrid({ attachments, own, conversationId, messageId }: 
     else vouched.push({ attachment, file: attachment.file, source: { id: attachment.id, conversationId, messageId, url: attachment.url, entry: attachment.file } })
   }
 
-  const pictures = vouched.filter((item) => kindOf(item.file) === 'Image')
+  const pictures = vouched.filter((item) => isInlinePicture(item.file))
   const videos = vouched.filter((item) => kindOf(item.file) === 'Video')
-  const files = vouched.filter((item) => kindOf(item.file) === 'File')
+  const files = vouched.filter((item) => !isInlinePicture(item.file) && kindOf(item.file) !== 'Video')
 
   return (
     <div className="flex flex-col gap-1.5">

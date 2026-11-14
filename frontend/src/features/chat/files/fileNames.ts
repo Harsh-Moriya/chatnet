@@ -51,3 +51,11 @@ export function kindOf(file: Pick<FileRef, 'type'>): AttachmentKind {
   if (videoTypeOf(file.type) !== null) return 'Video'
   return 'File'
 }
+
+// A picture is opened as it comes near the screen, without anyone asking, so a large one is not drawn in the message: it is a file to save
+// until it is asked for.
+export const INLINE_PICTURE_MAX_BYTES = 10 * 1024 * 1024
+
+export function isInlinePicture(file: Pick<FileRef, 'type' | 'size'>): boolean {
+  return kindOf(file) === 'Image' && file.size <= INLINE_PICTURE_MAX_BYTES
+}
