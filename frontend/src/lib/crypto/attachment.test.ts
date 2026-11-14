@@ -4,68 +4,63 @@ import { encryptedFileLength, newFileKey } from './file'
 import { openAttachment, sealAttachment } from './attachment'
 
 const bytesOf = (length: number) => Uint8Array.from({ length }, (_, i) => (i * 7 + 3) % 256)
+const fileOf = (length: number) => new Blob([bytesOf(length)])
+const read = async (blob: Blob) => new Uint8Array(await blob.arrayBuffer())
 
 describe('sealing a file for a message', () => {
   it('makes an entry that says what the file is, the size it has now and the key that opens it', async () => {
-    const plain = bytesOf(300)
-
-    const { ref } = await sealAttachment({ name: 'plan.pdf', type: 'application/pdf' }, plain)
+    const { ref } = await sealAttachment({ name: 'plan.pdf', type: 'application/pdf' }, fileOf(300))
 
     expect(ref).toMatchObject({ name: 'plan.pdf', type: 'application/pdf', size: 300, chunkSize: 65536 })
     expect(fromBase64Url(ref.key)).toHaveLength(32)
   })
 
   it('stores a file of the length the entry says it will have', async () => {
-    const { stored, ref } = await sealAttachment({ name: 'a', type: 'text/plain' }, bytesOf(70_000))
+    const { stored, ref } = await sealAttachment({ name: 'a', type: 'text/plain' }, fileOf(70_000))
 
-    expect(stored).toHaveLength(encryptedFileLength(ref.size, ref.chunkSize))
+    expect(stored.size).toBe(encryptedFileLength(ref.size, ref.chunkSize))
   })
 
   it('gives every file a key of its own, and a different stored file every time', async () => {
-    const plain = bytesOf(100)
-
-    const first = await sealAttachment({ name: 'a', type: 'text/plain' }, plain)
-    const second = await sealAttachment({ name: 'a', type: 'text/plain' }, plain)
+    const first = await sealAttachment({ name: 'a', type: 'text/plain' }, fileOf(100))
+    const second = await sealAttachment({ name: 'a', type: 'text/plain' }, fileOf(100))
 
     expect(first.ref.key).not.toBe(second.ref.key)
-    expect(first.stored).not.toEqual(second.stored)
+    expect(await read(first.stored)).not.toEqual(await read(second.stored))
   })
 
   it('keeps the name and the type as they are given and leaves making them harmless to the app', async () => {
-    const { ref } = await sealAttachment({ name: '../x‮gpj.exe', type: 'TEXT/HTML' }, bytesOf(1))
+    const { ref } = await sealAttachment({ name: '../x‮gpj.exe', type: 'TEXT/HTML' }, fileOf(1))
 
     expect(ref.name).toBe('../x‮gpj.exe')
     expect(ref.type).toBe('TEXT/HTML')
   })
 
   it('writes the chunk size it was asked for into the entry', async () => {
-    const { ref, stored } = await sealAttachment({ name: 'a', type: 'text/plain' }, bytesOf(200), { chunkSize: 64 })
+    const { ref, stored } = await sealAttachment({ name: 'a', type: 'text/plain' }, fileOf(200), { chunkSize: 64 })
 
     expect(ref.chunkSize).toBe(64)
-    expect(stored).toHaveLength(encryptedFileLength(200, 64))
+    expect(stored.size).toBe(encryptedFileLength(200, 64))
   })
 })
 
 describe('opening a file with its entry', () => {
   it.each([0, 1, 63, 64, 65, 128, 129, 300])('gives back a file of %i bytes as it was', async (length) => {
-    const plain = bytesOf(length)
-    const { stored, ref } = await sealAttachment({ name: 'a', type: 'text/plain' }, plain, { chunkSize: 64 })
+    const { stored, ref } = await sealAttachment({ name: 'a', type: 'text/plain' }, fileOf(length), { chunkSize: 64 })
 
-    expect(await openAttachment(ref, stored)).toEqual(plain)
+    expect(await read(await openAttachment(ref, stored))).toEqual(bytesOf(length))
   })
 
   it('opens a file of the usual chunk size across more than one chunk', async () => {
-    const plain = bytesOf(70_000)
-    const { stored, ref } = await sealAttachment({ name: 'a', type: 'application/zip' }, plain)
+    const { stored, ref } = await sealAttachment({ name: 'a', type: 'application/zip' }, fileOf(70_000))
 
-    expect(await openAttachment(ref, stored)).toEqual(plain)
+    expect(await read(await openAttachment(ref, stored))).toEqual(bytesOf(70_000))
   })
 
   describe('refuses', () => {
-    const plain = bytesOf(200)
-
     async function sealed() {
-      return sealAttachment({ name: 'a', type: 'text/plain' }, plain, { chunkSize: 64 })
+      const { stored, ref } = await sealAttachment({ name: 'a', type: 'text/plain' }, fileOf(200), { chunkSize: 64 })
+      return { stored: await read(stored), ref }
     }
 
     it('a file with any one byte changed', async () => {
@@ -75,14 +70,14 @@ describe('opening a file with its entry', () => {
         const damaged = new Uint8Array(stored)
         damaged[position] ^= 1
 
-        await expect(openAttachment(ref, damaged)).rejects.toBeInstanceOf(CryptoError)
+        await expect(openAttachment(ref, new Blob([damaged]))).rejects.toBeInstanceOf(CryptoError)
       }
     })
 
     it('a file that was cut off at the end', async () => {
       const { stored, ref } = await sealed()
 
-      await expect(openAttachment(ref, stored.subarray(0, stored.length - 80))).rejects.toThrow('not the size')
+      await expect(openAttachment(ref, new Blob([stored.subarray(0, stored.length - 80)]))).rejects.toThrow('not the size')
     })
 
     it('a file with a chunk added at the end', async () => {
@@ -90,32 +85,32 @@ describe('opening a file with its entry', () => {
       const longer = new Uint8Array(stored.length + 80)
       longer.set(stored)
 
-      await expect(openAttachment(ref, longer)).rejects.toThrow('not the size')
+      await expect(openAttachment(ref, new Blob([longer]))).rejects.toThrow('not the size')
     })
 
     it('a file under the key of another file', async () => {
       const { stored, ref } = await sealed()
       const other = { ...ref, key: toBase64Url(newFileKey()) }
 
-      await expect(openAttachment(other, stored)).rejects.toBeInstanceOf(CryptoError)
+      await expect(openAttachment(other, new Blob([stored]))).rejects.toBeInstanceOf(CryptoError)
     })
 
     it('an entry that says another size', async () => {
       const { stored, ref } = await sealed()
 
-      await expect(openAttachment({ ...ref, size: ref.size + 1 }, stored)).rejects.toThrow('not the size')
+      await expect(openAttachment({ ...ref, size: ref.size + 1 }, new Blob([stored]))).rejects.toThrow('not the size')
     })
 
     // 50 bytes are one chunk of 64 and one chunk of 128 alike, so the lengths agree and only the header tells them apart.
     it('an entry that says another chunk size, even when the length would agree', async () => {
-      const small = await sealAttachment({ name: 'a', type: 'text/plain' }, bytesOf(50), { chunkSize: 64 })
+      const small = await sealAttachment({ name: 'a', type: 'text/plain' }, fileOf(50), { chunkSize: 64 })
 
       await expect(openAttachment({ ...small.ref, chunkSize: 128 }, small.stored)).rejects.toThrow('not cut')
     })
 
     it('a file that is another file of the same message', async () => {
-      const one = await sealAttachment({ name: 'one', type: 'text/plain' }, bytesOf(200), { chunkSize: 64 })
-      const two = await sealAttachment({ name: 'two', type: 'text/plain' }, bytesOf(200), { chunkSize: 64 })
+      const one = await sealAttachment({ name: 'one', type: 'text/plain' }, fileOf(200), { chunkSize: 64 })
+      const two = await sealAttachment({ name: 'two', type: 'text/plain' }, fileOf(200), { chunkSize: 64 })
 
       await expect(openAttachment(one.ref, two.stored)).rejects.toBeInstanceOf(CryptoError)
     })
@@ -123,7 +118,7 @@ describe('opening a file with its entry', () => {
     it('something that is not a file at all', async () => {
       const { ref } = await sealed()
 
-      await expect(openAttachment(ref, new Uint8Array(encryptedFileLength(ref.size, ref.chunkSize)))).rejects.toBeInstanceOf(CryptoError)
+      await expect(openAttachment(ref, new Blob([new Uint8Array(encryptedFileLength(ref.size, ref.chunkSize))]))).rejects.toBeInstanceOf(CryptoError)
     })
   })
 })

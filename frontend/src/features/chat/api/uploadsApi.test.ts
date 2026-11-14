@@ -45,11 +45,11 @@ describe('uploading a file', () => {
 
     await uploadFile('c1', photo(), () => {}, new AbortController().signal)
 
-    const sent = put.mock.calls[0][1] as Uint8Array
+    const sent = put.mock.calls[0][1] as Blob
     expect(put.mock.calls[0][0]).toBe(TICKET.url)
     expect(put.mock.calls[0][2]).toMatchObject({ headers: { 'Content-Type': 'application/octet-stream' } })
-    expect(sent).toHaveLength(encryptedFileLength(2048))
-    expect(Array.from(sent.slice(0, 2))).toEqual([1, 1])
+    expect(sent.size).toBe(encryptedFileLength(2048))
+    expect(Array.from(new Uint8Array(await sent.slice(0, 2).arrayBuffer()))).toEqual([1, 1])
   })
 
   it('does not put the bytes of the file, or its name, into what is sent', async () => {
@@ -58,7 +58,7 @@ describe('uploading a file', () => {
 
     await uploadFile('c1', photo(), () => {}, new AbortController().signal)
 
-    const sent = Buffer.from(put.mock.calls[0][1] as Uint8Array)
+    const sent = Buffer.from(await (put.mock.calls[0][1] as Blob).arrayBuffer())
     expect(sent.includes(Buffer.from(PLAIN.slice(0, 64)))).toBe(false)
     expect(sent.includes(Buffer.from('photo.png'))).toBe(false)
   })
@@ -91,7 +91,7 @@ describe('uploading a file', () => {
     const { ref } = await uploadFile('c1', photo(), () => {}, new AbortController().signal)
     const { openAttachment } = await import('../../../lib/crypto/attachment')
 
-    expect(Array.from(await openAttachment(ref, put.mock.calls[0][1] as Uint8Array))).toEqual(Array.from(PLAIN))
+    expect(Array.from(new Uint8Array(await (await openAttachment(ref, put.mock.calls[0][1] as Blob)).arrayBuffer()))).toEqual(Array.from(PLAIN))
   })
 
   it('makes a key of its own for every file', async () => {

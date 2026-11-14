@@ -59,13 +59,18 @@ export interface FileOverrides {
   chunkSize?: number
 }
 
-export async function encryptFile(key: Uint8Array, plain: Uint8Array, overrides: FileOverrides = {}): Promise<Bytes> {
+// The header of a new file, with the pieces every chunk of it is sealed with.
+function startFile(overrides: FileOverrides) {
   const chunkSize = overrides.chunkSize ?? FILE_CHUNK_BYTES
   if (!Number.isInteger(chunkSize) || chunkSize < 1 || chunkSize > MAX_CHUNK_BYTES) throw new CryptoError('malformed', 'Chunk size is out of range')
 
   const header = { chunkSize, noncePrefix: overrides.noncePrefix ? new Uint8Array(overrides.noncePrefix) : randomBytes(NONCE_PREFIX_BYTES) }
   const headerBytes = encodeHeader(header)
-  const aad = labelled(LABELS.fileChunk, headerBytes)
+  return { chunkSize, header, headerBytes, aad: labelled(LABELS.fileChunk, headerBytes) }
+}
+
+export async function encryptFile(key: Uint8Array, plain: Uint8Array, overrides: FileOverrides = {}): Promise<Bytes> {
+  const { chunkSize, header, headerBytes, aad } = startFile(overrides)
   const count = Math.max(1, Math.ceil(plain.length / chunkSize))
 
   const parts: Uint8Array[] = [headerBytes]
@@ -76,20 +81,52 @@ export async function encryptFile(key: Uint8Array, plain: Uint8Array, overrides:
   return concat(...parts)
 }
 
+// How much of a file is read into memory at a time when it is worked on as a Blob: a slice of whole chunks of about this size.
+const SLICE_BYTES = 4 * 1024 * 1024
+
+const chunksPerSlice = (chunkSize: number) => Math.max(1, Math.floor(SLICE_BYTES / chunkSize))
+
+// The same stored file as encryptFile makes, from a Blob and as a Blob, a slice of chunks at a time. A file of 100 MiB is never in memory
+// whole: only the slice being sealed is, and the sealed slices are joined as Blobs, which the browser may keep outside the page's memory.
+export async function encryptFileBlob(key: Uint8Array, plain: Blob, overrides: FileOverrides = {}): Promise<Blob> {
+  const { chunkSize, header, headerBytes, aad } = startFile(overrides)
+  const count = Math.max(1, Math.ceil(plain.size / chunkSize))
+  const perSlice = chunksPerSlice(chunkSize)
+
+  const slices: BlobPart[] = [headerBytes]
+  for (let first = 0; first < count; first += perSlice) {
+    const end = Math.min(count, first + perSlice)
+    const bytes = new Uint8Array(await plain.slice(first * chunkSize, end * chunkSize).arrayBuffer())
+
+    const sealed: Bytes[] = []
+    for (let index = first; index < end; index++) {
+      const chunk = bytes.subarray((index - first) * chunkSize, (index - first + 1) * chunkSize)
+      sealed.push(await aesGcmEncrypt(key, chunkNonce(header.noncePrefix, index, index === count - 1), chunk, aad))
+    }
+    slices.push(new Blob(sealed))
+  }
+  return new Blob(slices)
+}
+
 // One chunk, as stored (ciphertext and tag). The caller says whether it is the last, which it
 // knows from the size of the stored file; a wrong answer fails to authenticate.
 export function decryptChunk(key: Uint8Array, header: FileHeader, index: number, isLast: boolean, chunk: Uint8Array): Promise<Bytes> {
   return aesGcmDecrypt(key, chunkNonce(header.noncePrefix, index, isLast), chunk, labelled(LABELS.fileChunk, encodeHeader(header)))
 }
 
-export async function decryptFile(key: Uint8Array, stored: Uint8Array): Promise<Bytes> {
-  const header = readFileHeader(stored)
-  const stride = header.chunkSize + TAG_BYTES
-  const body = stored.length - FILE_HEADER_BYTES
+// How many chunks a stored file of this length has.
+function chunkCount(header: FileHeader, storedLength: number): number {
+  const body = storedLength - FILE_HEADER_BYTES
   if (body < TAG_BYTES) throw new CryptoError('malformed', 'File has no chunks')
 
   // A last chunk shorter than its tag is refused by the decryption of that chunk.
-  const count = Math.ceil(body / stride)
+  return Math.ceil(body / (header.chunkSize + TAG_BYTES))
+}
+
+export async function decryptFile(key: Uint8Array, stored: Uint8Array): Promise<Bytes> {
+  const header = readFileHeader(stored)
+  const stride = header.chunkSize + TAG_BYTES
+  const count = chunkCount(header, stored.length)
 
   const parts: Uint8Array[] = []
   for (let index = 0; index < count; index++) {
@@ -97,4 +134,30 @@ export async function decryptFile(key: Uint8Array, stored: Uint8Array): Promise<
     parts.push(await decryptChunk(key, header, index, index === count - 1, stored.subarray(start, Math.min(start + stride, stored.length))))
   }
   return concat(...parts)
+}
+
+export async function readBlobHeader(stored: Blob): Promise<FileHeader> {
+  return readFileHeader(new Uint8Array(await stored.slice(0, FILE_HEADER_BYTES).arrayBuffer()))
+}
+
+// The file inside a stored file, both as Blobs, opened a slice of chunks at a time like encryptFileBlob seals them.
+export async function decryptFileBlob(key: Uint8Array, stored: Blob): Promise<Blob> {
+  const header = await readBlobHeader(stored)
+  const stride = header.chunkSize + TAG_BYTES
+  const count = chunkCount(header, stored.size)
+  const perSlice = chunksPerSlice(header.chunkSize)
+
+  const slices: BlobPart[] = []
+  for (let first = 0; first < count; first += perSlice) {
+    const end = Math.min(count, first + perSlice)
+    const bytes = new Uint8Array(await stored.slice(chunkOffset(header, first), Math.min(chunkOffset(header, end), stored.size)).arrayBuffer())
+
+    const opened: Bytes[] = []
+    for (let index = first; index < end; index++) {
+      const start = (index - first) * stride
+      opened.push(await decryptChunk(key, header, index, index === count - 1, bytes.subarray(start, start + stride)))
+    }
+    slices.push(new Blob(opened))
+  }
+  return new Blob(slices)
 }

@@ -12,8 +12,12 @@ const source = (id: string, type = 'image/png'): FileSource => ({
   entry: entry(type),
 })
 
-const STORED = new Uint8Array([9, 9, 9])
-const PLAIN = new Uint8Array([1, 2, 3])
+const STORED = new Blob([new Uint8Array([9, 9, 9])])
+const PLAIN = new Blob([new Uint8Array([1, 2, 3])])
+
+// A file of a size, for the budget of what is kept: nothing reads its bytes, so it is only a size.
+const MEBIBYTE = 1024 * 1024
+const sized = (bytes: number) => ({ size: bytes }) as Blob
 
 type Spied = { [K in keyof FileObjectDeps]: Mock<FileObjectDeps[K]> }
 
@@ -187,6 +191,14 @@ describe('a failure', () => {
 })
 
 describe('letting go of files', () => {
+  // Files of 20 MiB, of which three fit the budget of 64 MiB that is kept.
+  const bigFiles = () => deps({ open: vi.fn<FileObjectDeps['open']>(async () => sized(20 * MEBIBYTE)) })
+
+  const clock = () => {
+    let tick = 0
+    return () => ++tick
+  }
+
   async function holdAndRelease(objects: ReturnType<typeof createFileObjects>, count: number) {
     for (let i = 0; i < count; i++) {
       const file = source(`f${i}`)
@@ -208,14 +220,11 @@ describe('letting go of files', () => {
     expect(d.revokeUrl).not.toHaveBeenCalled()
   })
 
-  it('lets go of the oldest files nobody is showing once there are more than are kept, and revokes their addresses', async () => {
-    const d = deps()
-    const objects = createFileObjects(d, (() => {
-      let tick = 0
-      return () => ++tick
-    })())
+  it('lets go of the oldest files nobody is showing once together they are more than the budget, and revokes their addresses', async () => {
+    const d = bigFiles()
+    const objects = createFileObjects(d, clock())
 
-    await holdAndRelease(objects, 26)
+    await holdAndRelease(objects, 5)
     await Promise.resolve()
 
     expect(d.revokeUrl).toHaveBeenCalledTimes(2)
@@ -223,48 +232,62 @@ describe('letting go of files', () => {
     expect(d.revokeUrl).toHaveBeenCalledWith('blob:2')
   })
 
-  it('opens a file that was let go of again, from the start', async () => {
+  it('counts what is kept in bytes: any number of small files fit', async () => {
     const d = deps()
-    const objects = createFileObjects(d, (() => {
-      let tick = 0
-      return () => ++tick
-    })())
+    const objects = createFileObjects(d, clock())
 
-    await holdAndRelease(objects, 26)
+    await holdAndRelease(objects, 100)
+    await Promise.resolve()
+
+    expect(d.revokeUrl).not.toHaveBeenCalled()
+  })
+
+  it('lets go at once of a file larger than the whole budget when nobody shows it', async () => {
+    const d = deps({ open: vi.fn<FileObjectDeps['open']>(async () => sized(100 * MEBIBYTE)) })
+    const objects = createFileObjects(d, clock())
+    const file = source('huge', 'video/mp4')
+    await objects.hold(file)
+
+    expect(d.revokeUrl).not.toHaveBeenCalled()
+    objects.release(file)
+    await Promise.resolve()
+
+    expect(d.revokeUrl).toHaveBeenCalledWith('blob:1')
+  })
+
+  it('opens a file that was let go of again, from the start', async () => {
+    const d = bigFiles()
+    const objects = createFileObjects(d, clock())
+
+    await holdAndRelease(objects, 5)
     await objects.hold(source('f0'))
 
-    expect(d.fetchStored).toHaveBeenCalledTimes(27)
+    expect(d.fetchStored).toHaveBeenCalledTimes(6)
   })
 
   it('never lets go of a file that is being shown, however many are kept besides', async () => {
-    const d = deps()
-    const objects = createFileObjects(d, (() => {
-      let tick = 0
-      return () => ++tick
-    })())
+    const d = bigFiles()
+    const objects = createFileObjects(d, clock())
     const shown = source('shown')
     await objects.hold(shown)
 
-    await holdAndRelease(objects, 40)
+    await holdAndRelease(objects, 10)
     await Promise.resolve()
 
     expect(d.revokeUrl).not.toHaveBeenCalledWith('blob:1')
     await objects.hold(shown)
-    expect(d.fetchStored).toHaveBeenCalledTimes(41)
+    expect(d.fetchStored).toHaveBeenCalledTimes(11)
   })
 
   it('keeps a file that two places show until both have let go of it', async () => {
-    const d = deps()
-    const objects = createFileObjects(d, (() => {
-      let tick = 0
-      return () => ++tick
-    })())
+    const d = bigFiles()
+    const objects = createFileObjects(d, clock())
     const file = source('shared')
     await objects.hold(file)
     await objects.hold(file)
 
     objects.release(file)
-    await holdAndRelease(objects, 40)
+    await holdAndRelease(objects, 10)
     await Promise.resolve()
 
     expect(d.revokeUrl).not.toHaveBeenCalledWith('blob:1')
@@ -290,12 +313,12 @@ describe('letting go of files', () => {
 })
 
 describe('reading a file to save it', () => {
-  it('gives the bytes of any type of file, fetching and opening it', async () => {
+  it('gives any type of file, fetching and opening it', async () => {
     const d = deps()
 
-    const bytes = await createFileObjects(d).read(source('a1', 'application/pdf'))
+    const opened = await createFileObjects(d).read(source('a1', 'application/pdf'))
 
-    expect(bytes).toBe(PLAIN)
+    expect(opened).toBe(PLAIN)
     expect(d.open).toHaveBeenCalledWith(expect.objectContaining({ type: 'application/pdf' }), STORED)
   })
 
