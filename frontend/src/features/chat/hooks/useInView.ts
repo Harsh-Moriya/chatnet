@@ -1,27 +1,34 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-// Whether an element has come near the screen, once and for good: it starts false and turns true when the element is within a screen's
-// height of the viewport, and then stays true. A picture is fetched when it gets near and kept until it is let go with the message.
-export function useInView<T extends Element>(margin = '300px'): [(element: T | null) => void, boolean] {
+// Whether an element has come near the screen. It starts false and turns true when the element is within `margin` of the viewport, and then
+// stays true: a picture is fetched when it gets near and kept until it is let go with the message. With `release` it follows the element
+// instead and turns false again when it is far away, for a page of a document that is drawn only while it is near.
+export function useInView<T extends Element>(margin = '300px', release = false): [(element: T | null) => void, boolean] {
   const [near, setNear] = useState(false)
   const observer = useRef<IntersectionObserver | null>(null)
+  // Set once a flag that stays has turned true, so the observer is not made again.
+  const stayed = useRef(false)
 
   useEffect(() => () => observer.current?.disconnect(), [])
 
   const attach = useCallback(
     (element: T | null) => {
       observer.current?.disconnect()
-      if (!element || near) return
+      if (!element || stayed.current) return
 
       // A browser without IntersectionObserver fetches at once.
       if (typeof IntersectionObserver === 'undefined') {
+        stayed.current = true
         setNear(true)
         return
       }
 
       observer.current = new IntersectionObserver(
         (entries) => {
-          if (entries.some((entry) => entry.isIntersecting)) {
+          if (release) {
+            setNear(entries[entries.length - 1].isIntersecting)
+          } else if (entries.some((entry) => entry.isIntersecting)) {
+            stayed.current = true
             setNear(true)
             observer.current?.disconnect()
           }
@@ -30,7 +37,7 @@ export function useInView<T extends Element>(margin = '300px'): [(element: T | n
       )
       observer.current.observe(element)
     },
-    [near, margin],
+    [margin, release],
   )
 
   return [attach, near]

@@ -3,7 +3,7 @@ import type { FileRef } from '../../../lib/crypto/message'
 // What a file says it is is written by its sender and sealed in the message, and the server never sees it. Everything here decides what a
 // reader does with those claims: they are made harmless before they are shown, and only what is known to be safe to draw is drawn.
 
-export type AttachmentKind = 'Image' | 'Video' | 'File'
+export type AttachmentKind = 'Image' | 'Video' | 'Pdf' | 'File'
 
 // The longest name a file is shown with, in UTF-16 code units (the same the sealed entry allows).
 const MAX_NAME_LENGTH = 255
@@ -27,6 +27,9 @@ const IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp']
 // The videos that are played in a message.
 const VIDEO_TYPES = ['video/mp4', 'video/webm']
 
+// The one type a PDF has.
+const PDF_TYPE = 'application/pdf'
+
 // The type without parameters and in lower case: "Image/PNG; charset=x" is "image/png".
 function normalized(type: string): string {
   const parameters = type.indexOf(';')
@@ -45,10 +48,18 @@ export function videoTypeOf(type: string): string | null {
   return VIDEO_TYPES.includes(known) ? known : null
 }
 
-// How a file is shown: a picture drawn in the message, a video played in it, or anything else as a file to save.
+// The type to give the bytes of a PDF, or null when what the sender says it is is not a PDF. The sender's word only picks how the file is
+// shown; the PDF reader checks that it is one.
+export function pdfTypeOf(type: string): string | null {
+  return normalized(type) === PDF_TYPE ? PDF_TYPE : null
+}
+
+// How a file is shown: a picture drawn in the message, a video played in it, a PDF drawn page by page in the viewer, or anything else as a
+// file to save.
 export function kindOf(file: Pick<FileRef, 'type'>): AttachmentKind {
   if (imageTypeOf(file.type) !== null) return 'Image'
   if (videoTypeOf(file.type) !== null) return 'Video'
+  if (pdfTypeOf(file.type) !== null) return 'Pdf'
   return 'File'
 }
 

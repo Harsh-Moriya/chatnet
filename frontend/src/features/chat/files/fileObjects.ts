@@ -1,5 +1,5 @@
 import type { FileRef } from '../../../lib/crypto/message'
-import { imageTypeOf, videoTypeOf } from './fileNames'
+import { imageTypeOf, pdfTypeOf, videoTypeOf } from './fileNames'
 
 // A file of a message is encrypted in the bucket, so showing it means fetching the encrypted file, opening it with the entry of the
 // sealed message, and handing the browser an object URL for the result. Files are Blobs here, so one of the largest size (100 MiB) is not held
@@ -57,8 +57,9 @@ interface Held {
 }
 
 export interface FileObjects {
-  // The object URL of a picture or a video, opened once. Resolves to null for a file that is not drawn (any other type), without fetching
-  // anything. The caller takes a hold and gives it back with `release` when it stops showing the file.
+  // The object URL of a picture, a video or a PDF, opened once. Resolves to null for a file that is not shown (any other type), without
+  // fetching anything. The caller takes a hold and gives it back with `release` when it stops showing the file. The address of a PDF goes
+  // to the PDF reader and nowhere else: never to a frame, a link or an embed, which would hand the file to the browser's own viewer.
   hold: (file: FileSource) => Promise<string | null>
   release: (file: FileSource) => void
   // A file, for saving. Not kept.
@@ -92,7 +93,7 @@ export function createFileObjects(deps: FileObjectDeps, now: () => number = Date
   }
 
   function typeOf(entry: FileRef): string | null {
-    return imageTypeOf(entry.type) ?? videoTypeOf(entry.type)
+    return imageTypeOf(entry.type) ?? videoTypeOf(entry.type) ?? pdfTypeOf(entry.type)
   }
 
   // Lets go of the files nobody is showing, oldest first, once together they are more than the budget: the newest are kept while they fit.
