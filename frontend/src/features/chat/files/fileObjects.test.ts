@@ -232,6 +232,16 @@ describe('letting go of files', () => {
     expect(d.revokeUrl).toHaveBeenCalledWith('blob:2')
   })
 
+  it('keeps files that add up to exactly the budget', async () => {
+    const d = deps({ open: vi.fn<FileObjectDeps['open']>(async () => sized(32 * MEBIBYTE)) })
+    const objects = createFileObjects(d, clock())
+
+    await holdAndRelease(objects, 2)
+    await Promise.resolve()
+
+    expect(d.revokeUrl).not.toHaveBeenCalled()
+  })
+
   it('counts what is kept in bytes: any number of small files fit', async () => {
     const d = deps()
     const objects = createFileObjects(d, clock())
