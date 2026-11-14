@@ -232,6 +232,25 @@ describe('a file that cannot be trusted', () => {
     expect((await file.get('bytes=0-9')).status).toBe(502)
   })
 
+  it('does not read the body of a bucket that answers the whole object and not the range, which may be a file of 100 MiB', async () => {
+    const arrayBuffer = vi.fn(async () => new ArrayBuffer(10))
+    const file = await opened(300, 64, { fetchRange: async () => ({ status: 200, arrayBuffer }) as unknown as Response })
+
+    expect((await file.get('bytes=0-9')).status).toBe(502)
+    expect(arrayBuffer).not.toHaveBeenCalled()
+  })
+
+  it('is a 502 when the bucket answers more bytes than were asked for, or fewer', async () => {
+    const file = await sealed(300)
+    const registry = createRegistry()
+    registry.open(file.stream)
+    const longer = deps({ object: file.stored, fetchRange: async (_url, from, to) => new Response(file.stored.slice(from, to + 1 + 16), { status: 206 }) })
+    const shorter = deps({ object: file.stored, fetchRange: async (_url, from, to) => new Response(file.stored.slice(from, to), { status: 206 }) })
+
+    expect((await handleStreamRequest(request('bytes=0-9'), CLIENT, registry, longer)).status).toBe(502)
+    expect((await handleStreamRequest(request('bytes=0-9'), CLIENT, registry, shorter)).status).toBe(502)
+  })
+
   it('is a 502 when the bucket cannot be reached', async () => {
     const file = await opened(300, 64, {
       fetchRange: async () => {

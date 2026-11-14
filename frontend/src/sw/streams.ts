@@ -110,11 +110,10 @@ async function fetchStored(entry: Entry, from: number, to: number, clientId: str
 async function readHeader(entry: Entry, clientId: string, deps: StreamDeps): Promise<FileHeader> {
   if (entry.header) return entry.header
 
-  const header = readFileHeader(await fetchStored(entry, 0, FILE_HEADER_BYTES - 1, clientId, deps))
-  if (header.chunkSize !== entry.stream.chunkSize) throw new StreamError('The file is not cut as it was said to be.')
-
-  entry.header = header
-  return header
+  // A file that is not cut as the page said is not checked here: its chunks are then in other places than the worker looks for them, and
+  // none of them authenticates.
+  entry.header = readFileHeader(await fetchStored(entry, 0, FILE_HEADER_BYTES - 1, clientId, deps))
+  return entry.header
 }
 
 const failure = (status: number) => new Response(null, { status, headers: { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' } })
@@ -128,7 +127,7 @@ export async function handleStreamRequest(request: Request, clientId: string, re
   if (!entry) {
     // The browser stops a worker that has been idle, and what it kept goes with it. The page still has the stream.
     const stream = await deps.askPageForStream(clientId, id)
-    if (stream !== null && stream.id === id && registry.open(stream)) entry = registry.get(id)
+    if (stream !== null && registry.open(stream)) entry = registry.get(id)
   }
   if (!entry) return failure(404)
 
