@@ -130,6 +130,25 @@ services:
       - "1025:1025"
       - "8025:8025"
 
+  # ##### coturn #####
+  # The TURN server that relays a call when the two browsers cannot reach each other. Credentials are made by the API from TURN_SECRET
+  # (the same value as the user-secret Turn:Secret) and expire, so there is no user list here. Only the control port is published: two
+  # browsers on this machine reach each other directly, and a call forced through the relay (iceTransportPolicy "relay") is relayed
+  # between ports inside the container. The shared settings are docker/turn/turnserver.conf; the hardened set production adds
+  # (hardened.conf) is not mounted here, because everything on this stack is a private address.
+  coturn:
+    image: coturn/coturn:4.18.0
+    container_name: chatnet-coturn
+    entrypoint: ["/bin/sh", "/etc/chatnet-turn/start.sh"]
+    environment:
+      TURN_SECRET: ${TURN_SECRET}
+    ports:
+      - "3478:3478/udp"
+      - "3478:3478/tcp"
+    volumes:
+      - ./docker/turn/turnserver.conf:/etc/chatnet-turn/turnserver.conf:ro
+      - ./docker/turn/start.sh:/etc/chatnet-turn/start.sh:ro
+
 # Docker manages where named volumes live on disk.
 # Data persists across "docker-compose down" but is wiped by "docker-compose down -v".
 volumes:
