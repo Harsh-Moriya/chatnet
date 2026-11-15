@@ -331,6 +331,7 @@ describe('when the media drops', () => {
     rig.peers.current.state('disconnected')
     rig.peers.current.state('failed')
     rig.timers.fire((ms) => ms !== 15000)
+    await settle()
 
     expect(rig.peers.current.restartedWith).toEqual([])
     expect(rig.peers.current.offersMade).toBe(0)
