@@ -8,6 +8,7 @@ import {
   CONVERSATION,
   OFFER_SDP,
   OTHER,
+  RESTART_SDP,
   SELF,
   createRig,
   incomingCall,
@@ -228,15 +229,42 @@ describe('the offer', () => {
     expect(rig.api.signals.map((s) => s.type)).toEqual(['Answer'])
   })
 
-  it('has the candidates that came first added after it, in order, and the ones after it at once', async () => {
+  it('has the candidates that follow it added, in order', async () => {
     await accepted()
 
-    rig.controller.onCallSignal(CALL, 'Candidate', candidate(1))
     rig.controller.onCallSignal(CALL, 'Offer', await signedByOther(rig, 'offer', OFFER_SDP))
+    rig.controller.onCallSignal(CALL, 'Candidate', candidate(1))
     rig.controller.onCallSignal(CALL, 'Candidate', candidate(2))
     await settle()
 
     expect(rig.peers.current.log).toEqual(['acceptOffer', 'candidate candidate:1', 'candidate candidate:2'])
+  })
+
+  it('is answered again when the caller restarts ICE, with the candidates found meanwhile sent after the answer', async () => {
+    await accepted()
+    rig.controller.onCallSignal(CALL, 'Offer', await signedByOther(rig, 'offer', OFFER_SDP))
+    await settle()
+    const found = { candidate: 'candidate:7 1 udp 1 10.0.0.7 5000 typ host', sdpMid: '0', sdpMLineIndex: 0, usernameFragment: 'again' }
+    rig.peers.current.foundWhileDescribing = [found]
+    rig.api.signals.length = 0
+
+    rig.controller.onCallSignal(CALL, 'Offer', await signedByOther(rig, 'offer', RESTART_SDP))
+    await settle()
+
+    expect(rig.peers.current.acceptedOffers).toEqual([OFFER_SDP, RESTART_SDP])
+    expect(rig.api.signals.map((signal) => signal.type)).toEqual(['Answer', 'Candidate'])
+  })
+
+  it('is not accepted when a restart offer is not signed by the caller, and the call ends as unverifiable', async () => {
+    await accepted()
+    rig.controller.onCallSignal(CALL, 'Offer', await signedByOther(rig, 'offer', OFFER_SDP))
+    await settle()
+
+    rig.controller.onCallSignal(CALL, 'Offer', await signedByOther(rig, 'offer', RESTART_SDP, { key: rig.identity.keys }))
+    await settle()
+
+    expect(store()).toMatchObject({ phase: 'ended', notice: NOT_VERIFIED })
+    expect(rig.peers.current.acceptedOffers).toEqual([OFFER_SDP])
   })
 
   it('is ignored when it comes from a call that is not this one', async () => {
@@ -282,6 +310,73 @@ describe('the offer', () => {
       expect(stopped()).toBe(true)
       expect(store()).toMatchObject({ phase: 'ended', endedReason: 'Failed', notice: NOT_VERIFIED })
     })
+  })
+})
+
+describe('when the media drops', () => {
+  it('ends the call as failed when it is not connected within the time after it was answered, because no offer came or it never worked', async () => {
+    await accepted()
+
+    rig.timers.fire((ms) => ms === 15000)
+
+    expect(store()).toMatchObject({ phase: 'ended', notice: 'The call could not be connected.' })
+    expect(rig.api.ended).toEqual([{ callId: CALL, failed: true }])
+    expect(stopped()).toBe(true)
+  })
+
+  it('never offers, however long it is down: only the caller restarts, so the two never offer at once', async () => {
+    await accepted()
+    rig.peers.current.state('connected')
+
+    rig.peers.current.state('disconnected')
+    rig.peers.current.state('failed')
+    rig.timers.fire((ms) => ms !== 15000)
+    await settle()
+
+    expect(rig.peers.current.restartedWith).toEqual([])
+    expect(rig.peers.current.offersMade).toBe(0)
+    expect(store().reconnecting).toBe(true)
+  })
+
+  it('waits for the caller, and ends the call as dropped when nothing comes back in time', async () => {
+    await accepted()
+    rig.peers.current.state('connected')
+
+    rig.peers.current.state('disconnected')
+    rig.timers.fire((ms) => ms === 15000)
+
+    expect(store()).toMatchObject({ phase: 'ended', notice: 'The call was dropped.' })
+    expect(rig.api.ended).toEqual([{ callId: CALL, failed: true }])
+  })
+
+  it('does not offer again after a hub reconnect either', async () => {
+    await accepted()
+
+    rig.controller.onReconnected()
+    await settle()
+
+    expect(rig.api.rejoined).toHaveLength(1)
+    expect(rig.peers.current.restartedWith).toEqual([])
+  })
+})
+
+describe('when the page closes', () => {
+  it('leaves a call that is only ringing here alone: the server rings the page that opens next', () => {
+    rig.controller.onIncomingCall(incomingCall())
+
+    rig.controller.leave()
+
+    expect(rig.api.ended).toEqual([])
+    expect(store().phase).toBe('incoming')
+  })
+
+  it('ends a call it has answered, as a hang-up', async () => {
+    await accepted()
+
+    rig.controller.leave()
+
+    expect(rig.api.ended).toEqual([{ callId: CALL, failed: false }])
+    expect(stopped()).toBe(true)
   })
 })
 

@@ -45,3 +45,10 @@ export function startRefusal(code: string | null, peerName: string): string {
       return 'The call could not be started.'
   }
 }
+
+// A microphone or camera that was being sent stopped by itself (unplugged, or taken by something else): what the person is told, whether the
+// default one was put in its place or there was none.
+export function deviceLostNotice(kind: 'audio' | 'video', replaced: boolean): string {
+  const device = kind === 'audio' ? 'microphone' : 'camera'
+  return replaced ? `Your ${device} was disconnected, so the default one is used.` : `Your ${device} was disconnected.`
+}

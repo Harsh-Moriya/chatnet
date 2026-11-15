@@ -52,7 +52,12 @@ export function useSignalR() {
     })
     callsRef.current = controller
 
+    // A reload or a closed tab is a hang-up: the other person is told now and does not wait for the server to notice.
+    const onPageHide = () => controller.leave()
+    window.addEventListener('pagehide', onPageHide)
+
     return () => {
+      window.removeEventListener('pagehide', onPageHide)
       controller.dispose()
       callsRef.current = null
     }

@@ -39,6 +39,7 @@ export function CallView({ open, calls }: CallViewProps) {
   const sendingVideo = useCallStore((state) => state.sendingVideo)
   const muted = useCallStore((state) => state.muted)
   const cameraOff = useCallStore((state) => state.cameraOff)
+  const reconnecting = useCallStore((state) => state.reconnecting)
   const notice = useCallStore((state) => state.notice)
   const localStream = useCallStore((state) => state.localStream)
   const remoteStream = useCallStore((state) => state.remoteStream)
@@ -63,7 +64,9 @@ export function CallView({ open, calls }: CallViewProps) {
           ? 'Connecting'
           : ended
             ? 'Call ended'
-            : formatTime(elapsed)
+            : reconnecting
+              ? 'Reconnecting'
+              : formatTime(elapsed)
 
   return (
     <Dialog open={open} onClose={() => undefined} title="Call" variant="fullscreen" dismissible={false}>

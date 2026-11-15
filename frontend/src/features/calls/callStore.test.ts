@@ -81,6 +81,22 @@ describe('moves that do not fit where the call is', () => {
   })
 })
 
+describe('the media coming back', () => {
+  it('says it is reconnecting until told otherwise, and not once the call has ended', () => {
+    store().begin(people)
+
+    store().setReconnecting(true)
+    expect(store().reconnecting).toBe(true)
+
+    store().setReconnecting(false)
+    expect(store().reconnecting).toBe(false)
+
+    store().setReconnecting(true)
+    store().finish('Failed', 'The call was dropped.')
+    expect(store().reconnecting).toBe(false)
+  })
+})
+
 describe('what the person controls and is told', () => {
   it('keeps mute, camera, the notice and the streams', () => {
     store().begin(people)

@@ -153,6 +153,7 @@ The audio and video of a call are encrypted between the two browsers (DTLS-SRTP)
 | A server in the middle of the media | A swapped fingerprint no longer matches the signature, so the call is ended as unverifiable before any media flows | The first sight of a person's identity key is trusted, as for messages; two people who have compared the safety number are protected from the first call on |
 | Replaying a signature | The call, the conversation, both people and the role (offer or answer) are in the signed input | |
 | A person whose key changed | The call is refused and the person is told to compare the safety number, as for messages | |
+| Restarting the connection | The offer that restarts ICE after a network change is signed and checked like the first one, and only the caller makes it | The signature has no counter, so a server could replay an older offer that was validly signed in the same call; that can only break the connection, as dropping a signal can |
 | Candidates | Not signed | A false candidate can only make the connection fail |
 | Who may call whom | Only a member of a direct conversation, and not a deactivated account; one call at a time per person; 10 starts a minute | |
 | Alerts | The push for a ringing call carries who is calling, never anything else | |

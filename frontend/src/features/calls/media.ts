@@ -19,6 +19,8 @@ export interface MediaSource {
   capture: (video: boolean) => Promise<MediaStream>
   // A new track from a chosen device (to replace the one being sent). Rejects with MediaUnavailable.
   captureDevice: (kind: 'audio' | 'video', deviceId: string) => Promise<MediaStreamTrack>
+  // A new track from the default device of that kind, for when the one in use is gone. Rejects with MediaUnavailable.
+  captureDefault: (kind: 'audio' | 'video') => Promise<MediaStreamTrack>
 }
 
 function failureOf(error: unknown): MediaFailure {
@@ -30,15 +32,28 @@ function failureOf(error: unknown): MediaFailure {
   return 'other'
 }
 
+const AUDIO = { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+
 export const browserMedia: MediaSource = {
   async capture(video) {
     if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) throw new MediaUnavailable('unsupported')
 
     try {
       return await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+        audio: AUDIO,
         video: video ? { facingMode: 'user' } : false,
       })
+    } catch (error) {
+      throw new MediaUnavailable(failureOf(error))
+    }
+  },
+
+  async captureDefault(kind) {
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) throw new MediaUnavailable('unsupported')
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia(kind === 'audio' ? { audio: AUDIO } : { video: { facingMode: 'user' } })
+      return stream.getTracks()[0]
     } catch (error) {
       throw new MediaUnavailable(failureOf(error))
     }

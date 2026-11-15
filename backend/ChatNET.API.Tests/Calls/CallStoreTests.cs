@@ -296,16 +296,17 @@ public class CallStoreTests
 
             var accept = Task.Run(() => rig.Store.AcceptAsync(rig.Id, rig.Callee, "tab", "token", default));
             var decline = Task.Run(() => EndAsync(rig, rig.Callee));
-            await Task.WhenAll(accept, decline);
+            var accepted = await accept;
+            var declined = await decline;
 
             // Either the decline came first (Declined, and the answer finds it not ringing) or the answer did (and the callee's end is then a
             // hang-up of an active call: Completed). Never both.
-            var reason = decline.Result.Call!.Reason;
-            if (accept.Result.Outcome == AcceptOutcome.Accepted)
+            var reason = declined.Call!.Reason;
+            if (accepted.Outcome == AcceptOutcome.Accepted)
                 Assert.Equal(CallEndReason.Completed, reason);
             else
             {
-                Assert.Equal(AcceptOutcome.NotRinging, accept.Result.Outcome);
+                Assert.Equal(AcceptOutcome.NotRinging, accepted.Outcome);
                 Assert.Equal(CallEndReason.Declined, reason);
             }
         }

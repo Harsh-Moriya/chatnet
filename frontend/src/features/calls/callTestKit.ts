@@ -4,7 +4,7 @@ import { createCallController, type CallController } from './callController'
 import { useCallStore } from './callStore'
 import { MediaUnavailable, type MediaSource } from './media'
 import { PeerIdentityChanged, PeerKeysUnavailable, type CallIdentity } from './peerIdentity'
-import type { PeerFactory, PeerHandlers, PeerSession } from './peerSession'
+import type { PeerFactory, PeerHandlers, PeerSession, PeerState } from './peerSession'
 import type { Ringtone, RingKind } from './ringtone'
 import { encodeSdpSignal, type CandidateInit } from './signals'
 import type { CallAccepted, CallRejoined, CallStarted, CallsApi, IceServer, IncomingCall, SignalType } from './types'
@@ -19,6 +19,8 @@ export const CALL = 'ca11ca11-0000-4000-8000-000000000001'
 
 export const OFFER_SDP = 'v=0\r\na=fingerprint:sha-256 11:11:11:11\r\na=setup:actpass\r\n'
 export const ANSWER_SDP = 'v=0\r\na=fingerprint:sha-256 22:22:22:22\r\na=setup:active\r\n'
+// What a restart offer looks like: the same certificate, new ICE credentials.
+export const RESTART_SDP = 'v=0\r\na=fingerprint:sha-256 11:11:11:11\r\na=ice-ufrag:again\r\na=setup:actpass\r\n'
 
 // ##### Media #####
 
@@ -32,8 +34,19 @@ export class FakeTrack {
     this.kind = kind
   }
 
+  private readonly listeners: (() => void)[] = []
+
   stop() {
     this.stopped = true
+  }
+
+  addEventListener(type: string, listener: () => void) {
+    if (type === 'ended') this.listeners.push(listener)
+  }
+
+  // The device behind the track went away: the browser ends the track by itself (stop() does not do this).
+  end() {
+    this.listeners.forEach((listener) => listener())
   }
 }
 
@@ -68,6 +81,18 @@ export class FakeMedia implements MediaSource {
     return stream as unknown as MediaStream
   }
 
+  // What the default device gave, one track per call; `noDefault` makes the browser say there is none.
+  defaults: FakeTrack[] = []
+  noDefault = false
+
+  async captureDefault(kind: 'audio' | 'video') {
+    if (this.noDefault) throw new MediaUnavailable('missing')
+
+    const track = new FakeTrack(kind)
+    this.defaults.push(track)
+    return track as unknown as MediaStreamTrack
+  }
+
   async captureDevice(kind: 'audio' | 'video', deviceId: string) {
     if (this.failWith) throw this.failWith
 
@@ -90,6 +115,8 @@ export class FakeApi implements CallsApi {
   startResult: () => Promise<CallStarted> = async () => ({ callId: CALL, rejoinToken: 'caller-token', ringsUntil: '2030-01-01T00:00:30Z', iceServers: [] as IceServer[] })
   acceptResult: () => Promise<CallAccepted> = async () => ({ rejoinToken: 'callee-token', media: 'Audio', callerId: OTHER, iceServers: [] })
   rejoinResult: () => Promise<CallRejoined> = async () => ({ state: 'Active', media: 'Audio', iceServers: [] })
+  // False while the other side is away: the signal is not handed on.
+  delivers = true
 
   async startCall(conversationId: string, media: 'Audio' | 'Video') {
     this.calls.push('startCall')
@@ -110,7 +137,7 @@ export class FakeApi implements CallsApi {
   async sendSignal(callId: string, type: SignalType, payload: string) {
     this.calls.push(`signal:${type}`)
     this.signals.push({ callId, type, payload })
-    return true
+    return this.delivers
   }
 
   async rejoinCall(callId: string, token: string) {
@@ -129,6 +156,9 @@ export class FakePeer implements PeerSession {
   offersMade = 0
   acceptedOffers: string[] = []
   acceptedAnswers: string[] = []
+  restartedWith: IceServer[][] = []
+  // Found by the browser as it makes a description, which is when it starts gathering: they are reported before the description is returned.
+  foundWhileDescribing: CandidateInit[] = []
   candidates: CandidateInit[] = []
   replaced: { kind: string; track: unknown }[] = []
   closed = false
@@ -146,13 +176,19 @@ export class FakePeer implements PeerSession {
     this.tracks.push({ kind: track.kind, stream })
   }
 
+  private gather() {
+    for (const candidate of this.foundWhileDescribing) this.handlers.onCandidate(candidate)
+  }
+
   async createOffer() {
+    this.gather()
     this.offersMade++
     this.log.push('createOffer')
     return OFFER_SDP
   }
 
   async acceptOffer(sdp: string) {
+    this.gather()
     this.acceptedOffers.push(sdp)
     this.log.push('acceptOffer')
     return ANSWER_SDP
@@ -161,6 +197,18 @@ export class FakePeer implements PeerSession {
   async acceptAnswer(sdp: string) {
     this.acceptedAnswers.push(sdp)
     this.log.push('acceptAnswer')
+  }
+
+  async restartOffer(iceServers: IceServer[]) {
+    this.gather()
+    this.restartedWith.push(iceServers)
+    this.log.push('restartOffer')
+    return RESTART_SDP
+  }
+
+  // The connection says how it is: what the browser does as the network comes and goes.
+  state(state: PeerState) {
+    this.handlers.onState(state)
   }
 
   async addCandidate(candidate: CandidateInit) {

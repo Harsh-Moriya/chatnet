@@ -174,6 +174,13 @@ public sealed class HubClient : IAsyncDisposable
 
     public Task EndCallAsync(Guid callId, bool failed = false) => _connection.InvokeAsync("EndCall", callId, failed);
 
+    // What a closing page does: sends the hang-up and drops the connection without waiting for the answer.
+    public async Task EndCallAndCloseAsync(Guid callId)
+    {
+        await _connection.SendAsync("EndCall", callId, false);
+        await _connection.StopAsync();
+    }
+
     public Task<bool> SendCallSignalAsync(Guid callId, string type, string payload) =>
         _connection.InvokeAsync<bool>("SendCallSignal", callId, type, payload);
 

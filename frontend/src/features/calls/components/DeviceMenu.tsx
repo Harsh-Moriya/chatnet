@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Camera, Check, Mic, Settings } from 'lucide-react'
 import { cn } from '../../../lib/cn'
+import { useCallStore } from '../callStore'
 import type { CallActions } from '../../chat/hooks/chatConnectionContext'
 
 interface Device {
@@ -58,7 +59,13 @@ interface DeviceMenuProps {
 export function DeviceMenu({ video, onSwitch }: DeviceMenuProps) {
   const devices = useDevices()
   const [open, setOpen] = useState(false)
-  const [chosen, setChosen] = useState<Record<Device['kind'], string | null>>({ audio: null, video: null })
+  // Which device is being sent is read from the tracks themselves, so a headset that was unplugged and replaced by the default is not shown as
+  // still chosen. The list is drawn again each time it is opened.
+  const local = useCallStore((state) => state.localStream)
+  const inUse: Record<Device['kind'], string | undefined> = {
+    audio: local?.getAudioTracks()[0]?.getSettings().deviceId,
+    video: local?.getVideoTracks()[0]?.getSettings().deviceId,
+  }
 
   const choices = (['audio', 'video'] as const)
     .filter((kind) => kind === 'audio' || video)
@@ -101,9 +108,8 @@ export function DeviceMenu({ video, onSwitch }: DeviceMenuProps) {
                   key={device.id}
                   type="button"
                   role="menuitemradio"
-                  aria-checked={chosen[device.kind] === device.id}
+                  aria-checked={inUse[device.kind] === device.id}
                   onClick={() => {
-                    setChosen((current) => ({ ...current, [device.kind]: device.id }))
                     setOpen(false)
                     void onSwitch(device.kind, device.id)
                   }}
@@ -114,7 +120,7 @@ export function DeviceMenu({ video, onSwitch }: DeviceMenuProps) {
                 >
                   {device.kind === 'audio' ? <Mic className="h-4 w-4 shrink-0" aria-hidden="true" /> : <Camera className="h-4 w-4 shrink-0" aria-hidden="true" />}
                   <span className="min-w-0 flex-1 truncate">{device.label}</span>
-                  {chosen[device.kind] === device.id && <Check className="h-4 w-4 shrink-0" aria-hidden="true" />}
+                  {inUse[device.kind] === device.id && <Check className="h-4 w-4 shrink-0" aria-hidden="true" />}
                 </button>
               ))}
             </div>
