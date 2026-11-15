@@ -82,6 +82,7 @@ Time values are `hh:mm:ss` (or `d.hh:mm:ss`) strings, for example `Messaging__Ed
 | `ForgotPassword` | 5 per 900 s |
 | `ResetPassword` | 10 per 900 s |
 | `PasswordResetEmail` | 3 per 3600 s (counted per email address by the handler that asks for a link, not by the pipeline) |
+| `StartCall` | 10 per 60 s (counted per signed-in person when `StartCall` is invoked, not by the pipeline) |
 
 | Key | Default | Validation |
 |---|---|---|
@@ -136,6 +137,21 @@ Push is **off** unless the three keys are set. Some set, or a pair that does not
 | `Push:TimeToLive` | 1 day | At least a second. How long a push service holds a push for a browser that is off. |
 | `Push:RequestTimeout` | 10 s | Above zero. |
 | `Push:MaxParallelSends` | 8 | At least 1. Pushes in flight for one alert. |
+
+## Calls (timing and limits)
+
+| Key | Default | Validation |
+|---|---|---|
+| `Calls:RingTimeout` | 30 s | at least a second. How long a call rings before it is missed; counted by the server. |
+| `Calls:ReconnectGrace` | 10 s | at least a second. How long a side whose hub connection dropped has to rejoin before the call ends. |
+| `Calls:Lease` | 30 s | at least twice the renew interval. How long a side counts as there without being renewed; a call whose API instance died ends after this. |
+| `Calls:RenewInterval` | 10 s | at least the tick interval. How often each instance renews the sides it holds. |
+| `Calls:TickInterval` | 1 s | above zero. How often each instance looks for calls that are due. |
+| `Calls:EndingRetry` | 5 s | above zero. How long another instance waits before it finishes a call whose end was begun and not completed. |
+| `Calls:MaxSignalBytes` | 16384 | at least 1. The largest signal (an offer, an answer or a candidate) in bytes of its text. |
+| `Calls:MaxSignalsPerCall` | 600 | at least 1. How many signals one call may carry. |
+
+See [calls](../features/calls.md). The relay and its credentials have their own settings, below.
 
 ## Calls (the TURN relay)
 

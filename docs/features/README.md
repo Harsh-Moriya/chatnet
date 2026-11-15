@@ -6,6 +6,7 @@ One page per feature: what it does, the endpoints and hub events it uses, and it
 |---|---|
 | [Accounts and sessions](accounts-and-sessions.md) | Registration, sign-in, short-lived access tokens, rotating refresh tokens, sign-out |
 | [Account recovery](account-recovery.md) | Forgot and reset password by email, single-use links, every session ended |
+| [Calls](calls.md) | One-to-one audio and video calls: starting, ringing, answering on one of several devices, signals, why a call ends, dropped connections, several API instances |
 | [Conversations](conversations.md) | Direct and group conversations, the list, user search |
 | [Messaging and history](messaging.md) | Sending (idempotent), history paging, catch-up after a reconnect, optimistic sending |
 | [Searching messages](message-search.md) | Search in the browser over a local copy, the syntax, the changes feed that keeps the copy current |

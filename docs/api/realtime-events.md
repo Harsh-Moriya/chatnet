@@ -16,8 +16,13 @@ The live connection: SignalR over WebSockets (with the library's automatic fallb
 | `JoinConversation` | `conversationId` | Adds this connection to the conversation's group. | "You are not a member of this conversation." (the same text for an unknown conversation) |
 | `StartTyping` | `conversationId` | Others in the conversation receive `UserTyping` with `isTyping: true`. At most one per second per conversation per connection is delivered; extra calls succeed and are dropped. | The same text, if this connection has not joined the conversation. |
 | `StopTyping` | `conversationId` | Others receive `UserTyping` with `isTyping: false`. Never throttled. | Never; it does nothing if the connection has not joined. |
+| `StartCall` | `conversationId`, `media` | Starts a call in a direct conversation; the other person's connections get `IncomingCall`. Returns `{ callId, rejoinToken, ringsUntil, iceServers }`. | `not-a-member`, `not-a-direct-conversation`, `peer-unavailable`, `already-in-a-call`, `callee-busy`, `rate-limited`, `calls-unavailable` |
+| `AcceptCall` | `callId` | Answers a ringing call; both people's connections get `CallAnswered`. Returns `{ rejoinToken, media, callerId, iceServers }`. | `call-not-found`, `call-not-ringing`, `not-the-callee` |
+| `EndCall` | `callId`, `failed` | Hangs up, cancels or declines (the server works out which); both people's connections get `CallEnded`. | `call-not-found` |
+| `SendCallSignal` | `callId`, `type`, `payload` | Hands an offer, an answer or a candidate to the other side of an active call as `CallSignal`. Returns whether it was handed on. | `signal-too-large`, `signal-limit`, `not-in-the-call` |
+| `RejoinCall` | `callId`, `rejoinToken` | Takes a side of a call back on a new connection. Returns `{ state, media, iceServers }`. | `call-not-found`, `call-ended`, `not-in-the-call`, `bad-token` |
 
-Messages and history are never sent or loaded through the hub: those are REST.
+Messages and history are never sent or loaded through the hub: those are REST. The call methods take every argument (SignalR has no optional ones), and a refusal's code is the message of the `HubException`; see [calls](../features/calls.md).
 
 ## Events the server pushes
 
@@ -40,6 +45,10 @@ Arguments are positional. The examples are real payloads as the JavaScript clien
 | `NotificationsRead` | `ids` | the person's tabs | notifications were marked read, here or in another tab. Only the ids that changed. |
 | `NotificationDismissed` | `id` | the person's tabs | a notification was dismissed |
 | `ConversationMuteChanged` | `conversationId`, `isMuted` | the person's tabs | the person muted or unmuted a conversation |
+| `IncomingCall` | one `{ callId, conversationId, callerId, callerDisplayName, media, ringsUntil }` | every tab of the callee, and a tab that opens while it rings | someone is calling |
+| `CallAnswered` | `callId` | every tab of both people | the call was answered: the caller makes its offer, and a tab of the callee that is still ringing stops |
+| `CallSignal` | `callId`, `type`, `payload` | the other side's connection | an offer, an answer or an ICE candidate from the other side |
+| `CallEnded` | one `{ callId, reason, endedAt }` | every tab of both people | the call ended, for the reason recorded in the conversation |
 
 ### Examples
 
