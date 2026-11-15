@@ -1,0 +1,111 @@
+import { create } from 'zustand'
+import type { CallEndReason, CallMedia } from '../chat/types'
+
+// Where a call stands in this browser. A pure state machine: it holds no timers and makes no requests, and the controller drives it.
+//
+//   idle -> starting -> outgoing -> connecting -> active -> ended -> idle     (the caller)
+//   idle -> incoming -> connecting -> active -> ended -> idle                 (the callee)
+//
+// `starting` is the caller checking keys and opening the microphone before anything rings; `ended` stays long enough to say how it ended.
+export type CallPhase = 'idle' | 'starting' | 'outgoing' | 'incoming' | 'connecting' | 'active' | 'ended'
+
+export interface CallPeople {
+  conversationId: string
+  peerId: string
+  peerName: string
+  media: CallMedia
+}
+
+interface CallState extends Partial<CallPeople> {
+  phase: CallPhase
+  callId: string | null
+  // True when this browser made the call.
+  outgoing: boolean
+  // When it stops ringing, an ISO time; the server ends it, this is for the countdown shown.
+  ringsUntil: string | null
+  // The browser's clock when it was answered, for the time shown.
+  answeredAt: number | null
+  // Whether this side sends video: a video call answered as audio only does not.
+  sendingVideo: boolean
+  muted: boolean
+  cameraOff: boolean
+  endedReason: CallEndReason | null
+  // What the person must be told (a refusal, a failure, how it ended), or null.
+  notice: string | null
+  localStream: MediaStream | null
+  remoteStream: MediaStream | null
+
+  begin: (people: CallPeople) => void
+  ring: (call: CallPeople & { callId: string; ringsUntil: string }) => void
+  calling: (callId: string, ringsUntil: string) => void
+  answered: (now: number, sendingVideo?: boolean) => void
+  connected: () => void
+  finish: (reason: CallEndReason | null, notice: string | null) => void
+  clear: () => void
+  setMuted: (muted: boolean) => void
+  setCameraOff: (off: boolean) => void
+  setStreams: (streams: { local?: MediaStream | null; remote?: MediaStream | null }) => void
+  setNotice: (notice: string | null) => void
+}
+
+const IDLE = {
+  phase: 'idle' as CallPhase,
+  callId: null,
+  outgoing: false,
+  ringsUntil: null,
+  answeredAt: null,
+  sendingVideo: false,
+  muted: false,
+  cameraOff: false,
+  endedReason: null,
+  notice: null,
+  localStream: null,
+  remoteStream: null,
+  conversationId: undefined,
+  peerId: undefined,
+  peerName: undefined,
+  media: undefined,
+}
+
+export const useCallStore = create<CallState>()((set) => ({
+  ...IDLE,
+
+  // The caller starts: a person and a kind of call, not yet a call (the server has not made one).
+  begin: (people) =>
+    set((state) => (state.phase !== 'idle' ? state : { ...IDLE, ...people, phase: 'starting', outgoing: true, sendingVideo: people.media === 'Video' })),
+
+  ring: (call) =>
+    set((state) =>
+      state.phase !== 'idle' ? state : { ...IDLE, ...call, phase: 'incoming', outgoing: false, sendingVideo: call.media === 'Video' },
+    ),
+
+  calling: (callId, ringsUntil) => set((state) => (state.phase !== 'starting' ? state : { phase: 'outgoing', callId, ringsUntil })),
+
+  // The call was answered, by the callee's browser for the caller, and by this one for the callee: the media is being set up. For a callee
+  // that answers a video call as audio only, `sendingVideo` is false.
+  answered: (now, sendingVideo) =>
+    set((state) =>
+      state.phase !== 'outgoing' && state.phase !== 'incoming'
+        ? state
+        : { phase: 'connecting', answeredAt: now, ringsUntil: null, sendingVideo: sendingVideo ?? state.sendingVideo },
+    ),
+
+  connected: () => set((state) => (state.phase !== 'connecting' ? state : { phase: 'active' })),
+
+  finish: (reason, notice) =>
+    set((state) => (state.phase === 'idle' || state.phase === 'ended' ? state : { phase: 'ended', endedReason: reason, notice, ringsUntil: null })),
+
+  clear: () => set((state) => (state.phase === 'idle' ? state : { ...IDLE })),
+
+  setMuted: (muted) => set((state) => (state.muted === muted ? state : { muted })),
+  setCameraOff: (cameraOff) => set((state) => (state.cameraOff === cameraOff ? state : { cameraOff })),
+  setStreams: ({ local, remote }) =>
+    set((state) => ({
+      localStream: local === undefined ? state.localStream : local,
+      remoteStream: remote === undefined ? state.remoteStream : remote,
+    })),
+  setNotice: (notice) => set((state) => (state.notice === notice ? state : { notice })),
+}))
+
+// Whether a call is being made, rung, or running: what decides whether another can be started or rung.
+export const inCall = (phase: CallPhase): boolean => phase !== 'idle' && phase !== 'ended'
