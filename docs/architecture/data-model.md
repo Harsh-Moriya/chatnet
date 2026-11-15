@@ -100,12 +100,14 @@ Someone added again after leaving reuses their row: `JoinedAt` is reset, `LeftAt
 | `EditCount`, `EditedAt` | integer, timestamptz null | |
 | `IsDeleted`, `DeletedAt`, `DeletedById` | boolean, timestamptz null, uuid null | who deleted it: the sender, or a group owner or admin |
 | `ClientMessageId` | uuid | the id the browser made up for the send, for idempotency; bound into the sealed message |
+| `HasFiles` | boolean | true when the message was sent with files; set once, where the files are attached, since a message's files never change. What the gallery's list finds the messages by |
 | `ChangeSeq` | bigint | the number the conversation gave to the latest change of this message: its send, its latest edit or its delete. Unique within the conversation; what the [changes feed](../features/message-search.md#the-changes-feed) is ordered by |
 
 Indexes:
 
 - `IX_Messages_ConversationId_CreatedAt` on `(ConversationId, CreatedAt DESC)`: every history query walks this index from a cursor and stops after 50 rows.
 - `IX_Messages_ConversationId_SenderId_ClientMessageId`: **unique**. Concurrent copies of one send are settled by this index.
+- `IX_Messages_ConversationId_CreatedAt_Files`: a partial index on `(ConversationId, CreatedAt DESC, Id DESC)` for the messages that have `HasFiles` and are not deleted. The gallery's list walks it from a cursor, so a page costs about its own rows; the query repeats the filter exactly so that Postgres can use it.
 - `IX_Messages_ConversationId_ChangeSeq`: **unique** on `(ConversationId, ChangeSeq)`. The changes feed reads the messages after a number in order from this index, and a change path that forgot to take a number would fail on it.
 - Two check constraints: `CK_Messages_Ciphertext` (a deleted message has no blob and every other message has one of 98 to 32,768 bytes) and `CK_Messages_KeyEpoch` (at least 1).
 - Indexes on `SenderId` and `DeletedById` for the foreign keys.

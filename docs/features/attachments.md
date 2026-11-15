@@ -43,6 +43,7 @@ The browser offers and accepts JPEG, PNG, GIF and WebP images, MP4 and WebM vide
 - The table stores keys and sizes, never links, names or types. Every response, push and history page signs links for the reader (valid 60 minutes), from one query per page. A link is a plain signed GET with no content type or download name.
 - A message's attachments are `{ id, sizeBytes, url }`. What each file is comes from the sealed message: the n-th attachment, in the order the files were attached, is described by the n-th entry of the message. A reader accepts the pairing only when the size an encrypted file of that entry would have is the stored size. An attachment the message does not vouch for (no entry, another size, a message that could not be opened) is shown as a file that can't be opened and is never drawn or saved.
 - `GET /api/attachments/{id}/url` returns a new link `{ url, expiresAt }` under the rule that decides who can read the message: member, inside their join window, message not deleted. Every refusal is one 404.
+- `GET /api/conversations/{id}/attachments` lists the messages of a conversation that have files, newest first, 50 to a page, under the same member window as the history and with the same signed links. A message is marked when it is sent with files (`Messages.HasFiles`), and a partial index over the messages that are marked and not deleted serves the list, so a page costs about its own rows however few of a long conversation's messages have files. The marks of the messages that existed before the list was added were set by the migration.
 
 ## In the browser
 
@@ -64,7 +65,7 @@ A picture is fitted to the screen (one smaller than the screen is shown at its o
 
 - **Zoom** from the fit up to four times the picture's own size: the mouse wheel, a pinch, the buttons (zoom out, actual size, zoom in, fit to screen) or the keys `+`, `-`, `1` (actual size) and `0` (fit). A double click or a double tap goes from the fit to actual size at that point, and back.
 - **Move** a zoomed picture by dragging it; it cannot be dragged off the screen.
-- **Next and previous** with the arrow keys, the buttons, or a sideways swipe on a picture that is not zoomed. They go through the pictures, the PDFs and the videos of the messages loaded in the conversation, oldest first, and stop at either end; the position is shown ("3 of 12"). Only files the sealed message describes are included, and nothing from a deleted message. If the file that is open is deleted, the viewer moves to the nearest one, or closes when there is none.
+- **Next and previous** with the arrow keys, the buttons, or a sideways swipe on a picture that is not zoomed. They go through the pictures, the PDFs and the videos of the messages loaded in the conversation, oldest first, and stop at either end (a file opened from the gallery goes through the gallery's list instead, see below); the position is shown ("3 of 12"). Only files the sealed message describes are included, and nothing from a deleted message. If the file that is open is deleted, the viewer moves to the nearest one, or closes when there is none.
 - **Download** saves the file under its name as opaque bytes, as the chip does. **Escape** or the close button closes the viewer and returns focus to what opened it.
 - A picture that cannot be fetched, or that the browser cannot draw, says so and offers Download (and a retry for a failed fetch).
 
@@ -90,6 +91,14 @@ Where no worker controls the page (a browser without service workers, one that r
 - **Controls** are the viewer's own, over a video without the browser's: play and pause, a seek bar that shows how much is loaded, the time, mute and volume (the volume slider is left out on a narrow screen), the speed (0.5, 1, 1.25, 1.5 and 2) and full screen. They go away three seconds after the last movement while the video plays. A click on the video plays or pauses it, a double click is full screen. A video whose length is not known (a recording that was never finished) plays but cannot be moved about in.
 - **Keys:** Space or `K` play and pause, `J` and `L` go ten seconds back and forward, `M` mutes and `F` is full screen. The left and right arrow keys stay with the viewer (the previous and next file), except on the seek bar and the volume slider, where they are the slider's.
 - **A video that cannot be played** says so and offers Download and a retry.
+
+### The gallery
+
+A button in the conversation header (kept by a group the person has left, whose history can still be read) opens every picture, video and PDF of the conversation in a wide dialog, newest first, as a grid. It fills the screen on a phone.
+
+- **What is shown.** Pictures up to 10 MiB are drawn as thumbnails when they come near the view, and let go of when they are far from it, so a long history does not keep every picture in memory. A video, a PDF and a larger picture are a tile with its name and size; nothing of them is fetched until it is opened. Files the message does not vouch for, other types and SVG are not listed, as in the viewer.
+- **Paging.** The newest page is read when the dialog opens, and the next one when the end of the grid comes near, until the history ends. A page may add no tile (a conversation of many files that are not shown), in which case the next is read at once. A page that fails stops the reading and offers Try again. Each opening starts from the newest page, so a file sent since the last opening is in it; a file sent while it is open is not shown until it is opened again, and a message deleted while it is open leaves it.
+- **The viewer from the gallery.** A tile opens the viewer over the grid, and Escape closes the viewer and then the gallery. The viewer steps through the gallery's list, which reaches back through the whole history: next goes to an older file, the position reads "3 of 50+" while there is more to read, and the next page is read when the viewer is within five files of the end of what is loaded, so stepping on does not wait for it. At the end of what is loaded, with more to come, Next waits for the page.
 
 ## Editing
 
