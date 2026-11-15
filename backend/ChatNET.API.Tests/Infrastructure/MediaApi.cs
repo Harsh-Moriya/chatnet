@@ -88,6 +88,17 @@ public static class MediaApi
 
     public static string UrlOf(this JsonElement attachment) => attachment.GetProperty("url").GetString()!;
 
+    // The messages that have files, newest first. "before" is the id of the oldest message already had, and asks for the page just older.
+    public static Task<HttpResponseMessage> GetFilesResponseAsync(this HttpClient client, Guid conversationId, Guid? before = null) =>
+        client.GetAsync($"/api/conversations/{conversationId}/attachments" + (before is { } id ? $"?before={id}" : ""));
+
+    public static async Task<List<JsonElement>> GetFilesAsync(this HttpClient client, Guid conversationId, Guid? before = null)
+    {
+        var response = await client.GetFilesResponseAsync(conversationId, before);
+        response.EnsureSuccessStatusCode();
+        return (await response.Content.ReadFromJsonAsync<JsonElement>()).EnumerateArray().ToList();
+    }
+
     // What a browser gets by following a link from a message.
     public static async Task<HttpResponseMessage> FollowAsync(JsonElement attachment) =>
         await Bucket.GetAsync(attachment.UrlOf());

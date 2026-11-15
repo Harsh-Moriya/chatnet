@@ -324,11 +324,18 @@ public class MessageRepository : IMessageRepository
     // among messages stamped exactly t, so the rows it filters out are a handful at most.
     public Task<List<MessageDto>> GetBeforeAsync(
         Guid conversationId, MemberWindow window, MessageCursor cursor, int take, CancellationToken cancellationToken)
-        => ReadNewestFirstAsync(
-            InConversation(conversationId, window).Where(m =>
-                m.CreatedAt <= cursor.CreatedAt && (m.CreatedAt < cursor.CreatedAt || m.Id.CompareTo(cursor.Id) < 0)),
-            take,
-            cancellationToken);
+        => ReadNewestFirstAsync(InConversation(conversationId, window).Where(Before(cursor)), take, cancellationToken);
+
+    // The partial index on the messages that have files and are not deleted is only used by a query that repeats its filter, so the
+    // condition is written as the index states it.
+    public async Task<List<MessageDto>> GetWithFilesAsync(
+        Guid conversationId, MemberWindow window, MessageCursor? cursor, int take, CancellationToken cancellationToken)
+    {
+        var withFiles = InConversation(conversationId, window).Where(m => m.HasFiles && !m.IsDeleted);
+
+        return await ReadNewestFirstAsync(
+            cursor is { } position ? withFiles.Where(Before(position)) : withFiles, take, cancellationToken, turnAround: false);
+    }
 
     public async Task<List<MessageDto>> GetAfterAsync(
         Guid conversationId, MemberWindow window, MessageCursor cursor, int take, CancellationToken cancellationToken)
@@ -387,7 +394,7 @@ public class MessageRepository : IMessageRepository
     // the order the cursor comparison assumes. The page is turned around afterwards so the client
     // receives it in reading order.
     private static async Task<List<MessageDto>> ReadNewestFirstAsync(
-        IQueryable<Message> messages, int take, CancellationToken cancellationToken)
+        IQueryable<Message> messages, int take, CancellationToken cancellationToken, bool turnAround = true)
     {
         var newestFirst = await messages
             .OrderByDescending(m => m.CreatedAt).ThenByDescending(m => m.Id)
@@ -396,7 +403,13 @@ public class MessageRepository : IMessageRepository
             .ToListAsync(cancellationToken);
 
         var page = newestFirst.Select(ToDto).ToList();
-        page.Reverse();
+        if (turnAround)
+            page.Reverse();
         return page;
     }
+
+    // The messages positioned before the cursor, as (CreatedAt, Id): "CreatedAt <= t" first, which is what the index walk starts from,
+    // then the id, which only decides among messages stamped exactly t.
+    private static Expression<Func<Message, bool>> Before(MessageCursor cursor) =>
+        m => m.CreatedAt <= cursor.CreatedAt && (m.CreatedAt < cursor.CreatedAt || m.Id.CompareTo(cursor.Id) < 0);
 }
