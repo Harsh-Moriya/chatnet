@@ -185,6 +185,57 @@ namespace ChatNET.API.Migrations
                     b.ToTable("RefreshTokens");
                 });
 
+            modelBuilder.Entity("ChatNET.API.Calls.Models.Call", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("AnsweredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CalleeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CallerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ConversationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("EndReason")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<DateTime>("EndedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Media")
+                        .IsRequired()
+                        .HasMaxLength(8)
+                        .HasColumnType("character varying(8)");
+
+                    b.Property<DateTime>("StartedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CalleeId");
+
+                    b.HasIndex("CallerId");
+
+                    b.HasIndex("ConversationId");
+
+                    b.ToTable("Calls", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_Calls_Answer", "(\"EndReason\" = 'Completed' AND \"AnsweredAt\" IS NOT NULL) OR (\"EndReason\" IN ('Missed', 'Declined', 'Cancelled', 'Busy') AND \"AnsweredAt\" IS NULL) OR \"EndReason\" = 'Failed'");
+
+                            t.HasCheckConstraint("CK_Calls_People", "\"CallerId\" <> \"CalleeId\"");
+
+                            t.HasCheckConstraint("CK_Calls_Times", "\"StartedAt\" <= \"EndedAt\" AND (\"AnsweredAt\" IS NULL OR \"AnsweredAt\" BETWEEN \"StartedAt\" AND \"EndedAt\")");
+                        });
+                });
+
             modelBuilder.Entity("ChatNET.API.Conversations.Models.Conversation", b =>
                 {
                     b.Property<Guid>("Id")
@@ -486,6 +537,9 @@ namespace ChatNET.API.Migrations
                         .HasColumnType("uuid")
                         .HasDefaultValueSql("gen_random_uuid()");
 
+                    b.Property<Guid?>("CallId")
+                        .HasColumnType("uuid");
+
                     b.Property<long>("ChangeSeq")
                         .HasColumnType("bigint");
 
@@ -526,6 +580,13 @@ namespace ChatNET.API.Migrations
                     b.Property<int>("KeyEpoch")
                         .HasColumnType("integer");
 
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(8)
+                        .HasColumnType("character varying(8)")
+                        .HasDefaultValue("Text");
+
                     b.PrimitiveCollection<Guid[]>("MentionedUserIds")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
@@ -536,6 +597,11 @@ namespace ChatNET.API.Migrations
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CallId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_Messages_CallId")
+                        .HasFilter("\"CallId\" IS NOT NULL");
 
                     b.HasIndex("DeletedById");
 
@@ -559,9 +625,9 @@ namespace ChatNET.API.Migrations
 
                     b.ToTable("Messages", t =>
                         {
-                            t.HasCheckConstraint("CK_Messages_Ciphertext", "(\"IsDeleted\" AND \"Ciphertext\" IS NULL) OR (NOT \"IsDeleted\" AND \"Ciphertext\" IS NOT NULL AND length(\"Ciphertext\") BETWEEN 98 AND 32768)");
+                            t.HasCheckConstraint("CK_Messages_Content", "(\"Kind\" = 'Text' AND \"CallId\" IS NULL AND ((\"IsDeleted\" AND \"Ciphertext\" IS NULL) OR (NOT \"IsDeleted\" AND \"Ciphertext\" IS NOT NULL AND length(\"Ciphertext\") BETWEEN 98 AND 32768))) OR (\"Kind\" = 'Call' AND \"CallId\" IS NOT NULL AND \"Ciphertext\" IS NULL AND NOT \"IsDeleted\" AND \"EditCount\" = 0)");
 
-                            t.HasCheckConstraint("CK_Messages_KeyEpoch", "\"KeyEpoch\" >= 1");
+                            t.HasCheckConstraint("CK_Messages_KeyEpoch", "\"Kind\" = 'Call' OR \"KeyEpoch\" >= 1");
                         });
                 });
 
@@ -876,6 +942,33 @@ namespace ChatNET.API.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("ChatNET.API.Calls.Models.Call", b =>
+                {
+                    b.HasOne("ChatNET.API.Auth.Models.AppUser", "Callee")
+                        .WithMany()
+                        .HasForeignKey("CalleeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ChatNET.API.Auth.Models.AppUser", "Caller")
+                        .WithMany()
+                        .HasForeignKey("CallerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ChatNET.API.Conversations.Models.Conversation", "Conversation")
+                        .WithMany()
+                        .HasForeignKey("ConversationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Callee");
+
+                    b.Navigation("Caller");
+
+                    b.Navigation("Conversation");
+                });
+
             modelBuilder.Entity("ChatNET.API.Conversations.Models.Conversation", b =>
                 {
                     b.HasOne("ChatNET.API.Auth.Models.AppUser", "CreatedBy")
@@ -982,6 +1075,11 @@ namespace ChatNET.API.Migrations
 
             modelBuilder.Entity("ChatNET.API.Messaging.Models.Message", b =>
                 {
+                    b.HasOne("ChatNET.API.Calls.Models.Call", "Call")
+                        .WithOne()
+                        .HasForeignKey("ChatNET.API.Messaging.Models.Message", "CallId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
                     b.HasOne("ChatNET.API.Conversations.Models.Conversation", "Conversation")
                         .WithMany()
                         .HasForeignKey("ConversationId")
@@ -998,6 +1096,8 @@ namespace ChatNET.API.Migrations
                         .HasForeignKey("SenderId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.Navigation("Call");
 
                     b.Navigation("Conversation");
 

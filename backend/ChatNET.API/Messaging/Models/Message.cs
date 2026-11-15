@@ -1,4 +1,5 @@
 using ChatNET.API.Auth.Models;
+using ChatNET.API.Calls.Models;
 using ChatNET.API.Conversations.Models;
 
 namespace ChatNET.API.Messaging.Models;
@@ -8,6 +9,13 @@ public class Message
     public Guid Id { get; set; }
     public Guid ConversationId { get; set; }
     public Guid SenderId { get; set; }
+
+    // Text for what someone said, Call for the row the server writes when a call ends (then SenderId is the caller, Ciphertext is null
+    // without the message being deleted, KeyEpoch is 0 because nothing is sealed, and CallId names the call). The database holds
+    // the two shapes apart (CK_Messages_Content).
+    public MessageKind Kind { get; set; } = MessageKind.Text;
+
+    public Guid? CallId { get; set; }
 
     // The text of the message sealed in the browser of its sender: one opaque blob (see MessageBlob) that the server stores and
     // hands on and cannot read. Null exactly when the message is deleted, which removes what was said and keeps the row so the
@@ -51,5 +59,6 @@ public class Message
     public Conversation Conversation { get; set; } = null!;
     public AppUser Sender { get; set; } = null!;
     public AppUser? DeletedBy { get; set; }
+    public Call? Call { get; set; }
     public ICollection<MessageAttachment> Attachments { get; set; } = [];
 }

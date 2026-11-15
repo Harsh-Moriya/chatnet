@@ -69,12 +69,22 @@ public class PushAlerts
         if (message is null || message.IsDeleted)
             return;
 
+        // A call's row alerts only when the call was missed, and says so in its own words.
+        if (message.Call is { IsMissed: false })
+            return;
+
         var recipients = await _subscriptions.FindMessageRecipientsAsync(
             conversationId, message.SenderId, mentionedUserIds, cancellationToken);
 
         var away = await AwayAsync(recipients, cancellationToken);
         if (away.Count == 0)
             return;
+
+        if (message.Call is { } call)
+        {
+            await SendAsync(away, PushAlertText.ForMissedCall(message, call), cancellationToken);
+            return;
+        }
 
         var group = await _conversations.GetUpdateAsync(conversationId, cancellationToken);
         var files = (await _attachments.GetForMessagesAsync([messageId], cancellationToken)).Count;

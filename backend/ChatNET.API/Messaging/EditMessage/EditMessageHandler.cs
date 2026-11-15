@@ -29,6 +29,7 @@ public class EditMessageHandler : IRequestHandler<EditMessageCommand, MessageDto
 {
     public const string NotTheSender = "Only the sender can edit a message.";
     public const string Deleted = "This message was deleted.";
+    public const string CallRow = "The record of a call cannot be edited.";
     public const string TooLate = "This message can no longer be edited.";
     public const string EditCountStale = "This message was edited somewhere else first. Look at its latest version.";
 
@@ -92,6 +93,9 @@ public class EditMessageHandler : IRequestHandler<EditMessageCommand, MessageDto
         var message = await _messages.FindForChangeAsync(
             request.ConversationId, request.MessageId, joinedAt.Value, cancellationToken)
             ?? throw new NotFoundException("Message", request.MessageId);
+
+        if (message.IsCall)
+            throw new ConflictException(CallRow, MessageCodes.CallRow);
 
         if (message.SenderId != request.UserId)
         {

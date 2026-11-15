@@ -1,4 +1,5 @@
 using System.Linq.Expressions;
+using ChatNET.API.Calls.Models;
 using ChatNET.API.Common.Persistence;
 using ChatNET.API.Conversations.Models;
 using ChatNET.API.Keys;
@@ -26,7 +27,9 @@ public class MessageRepository : IMessageRepository
         DateTime? EditedAt,
         int EditCount,
         bool IsDeleted,
-        long ChangeSeq);
+        long ChangeSeq,
+        MessageKind Kind,
+        CallDto? Call);
 
     private static readonly Expression<Func<Message, MessageRow>> ToRow = m => new MessageRow(
         m.Id,
@@ -40,7 +43,9 @@ public class MessageRepository : IMessageRepository
         m.EditedAt,
         m.EditCount,
         m.IsDeleted,
-        m.ChangeSeq);
+        m.ChangeSeq,
+        m.Kind,
+        m.Call == null ? null : new CallDto(m.Call.Id, m.Call.Media, m.Call.StartedAt, m.Call.AnsweredAt, m.Call.EndedAt, m.Call.EndReason));
 
     // The files are filled in for the page as a whole afterwards (AttachmentLoader): one query for all of its files.
     private static MessageDto ToDto(MessageRow row) => new(
@@ -56,7 +61,9 @@ public class MessageRepository : IMessageRepository
         row.EditedAt,
         row.EditCount,
         row.IsDeleted,
-        row.ChangeSeq);
+        row.ChangeSeq,
+        row.Kind,
+        row.Call);
 
     private readonly AppDbContext _db;
 
@@ -200,7 +207,7 @@ public class MessageRepository : IMessageRepository
         => _db.Messages
             .AsNoTracking()
             .Where(m => m.Id == messageId && m.ConversationId == conversationId && m.CreatedAt >= since)
-            .Select(m => new MessageForChange(m.Id, m.SenderId, m.CreatedAt, m.IsDeleted, m.EditCount, m.MentionedUserIds))
+            .Select(m => new MessageForChange(m.Id, m.SenderId, m.CreatedAt, m.IsDeleted, m.EditCount, m.MentionedUserIds, m.Kind == MessageKind.Call))
             .FirstOrDefaultAsync(cancellationToken);
 
     // Two requests racing for one message (an edit and a delete, two edits, an edit at the end of the window) are settled by

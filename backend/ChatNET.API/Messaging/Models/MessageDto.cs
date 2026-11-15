@@ -1,3 +1,5 @@
+using ChatNET.API.Calls.Models;
+
 namespace ChatNET.API.Messaging.Models;
 
 // Ciphertext is the text of the message sealed by its sender, as unpadded base64url (see the encryption formats): the server
@@ -12,6 +14,10 @@ namespace ChatNET.API.Messaging.Models;
 //
 // ChangeSeq is the number of the latest change to the message in its conversation (see Conversation.ChangeSeq). A client that
 // keeps the messages it has read follows the conversation by it (the changes feed), and a copy with the higher number is the newer.
+//
+// Kind says what the row is. A Text row is as described above. A Call row is written by the server when a call ends: SenderId is the
+// caller, Ciphertext is null although the row is not deleted, KeyEpoch is 0, there are no files, it is never edited or deleted, and
+// Call says how the call went.
 public record MessageDto(
     Guid Id,
     Guid ConversationId,
@@ -25,5 +31,7 @@ public record MessageDto(
     DateTime? EditedAt,
     int EditCount,
     bool IsDeleted,
-    long ChangeSeq
+    long ChangeSeq,
+    MessageKind Kind = MessageKind.Text,
+    CallDto? Call = null
 );

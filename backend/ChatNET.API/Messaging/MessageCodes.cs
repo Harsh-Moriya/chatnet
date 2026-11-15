@@ -10,4 +10,7 @@ public static class MessageCodes
     // The changes feed was asked for a point past the newest change the server has, which a client can only hold if the server went back
     // to an older state (a restore). What the client keeps for the conversation cannot be trusted any more, so it reads it again.
     public const string ChangesCursorAhead = "changes-cursor-ahead";
+
+    // The row of a call was asked to be edited or deleted. It is the server's record of the call and nobody's message.
+    public const string CallRow = "call-row";
 }

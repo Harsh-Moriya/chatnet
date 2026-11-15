@@ -21,6 +21,7 @@ namespace ChatNET.API.Messaging.DeleteMessage;
 // message that is already deleted answers with it and does nothing else, so a repeated request is harmless.
 public class DeleteMessageHandler : IRequestHandler<DeleteMessageCommand, MessageDto>
 {
+    public const string CallRow = "The record of a call cannot be deleted.";
     public const string NotAllowed = "Only the sender or an admin of the group can delete this message.";
 
     private readonly IConversationRepository _conversations;
@@ -80,6 +81,9 @@ public class DeleteMessageHandler : IRequestHandler<DeleteMessageCommand, Messag
         var message = await _messages.FindForChangeAsync(
             request.ConversationId, request.MessageId, joinedAt.Value, cancellationToken)
             ?? throw new NotFoundException("Message", request.MessageId);
+
+        if (message.IsCall)
+            throw new ConflictException(CallRow, MessageCodes.CallRow);
 
         if (message.SenderId != request.UserId && !await IsGroupAdminAsync(request, cancellationToken))
         {

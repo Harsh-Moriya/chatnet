@@ -1,3 +1,4 @@
+using ChatNET.API.Calls.Models;
 using ChatNET.API.Auth.Models;
 using ChatNET.API.Conversations.Models;
 using ChatNET.API.Devices.Models;
@@ -25,6 +26,7 @@ public class AppDbContext : IdentityDbContext<AppUser, IdentityRole<Guid>, Guid>
     public DbSet<ConversationKeyEnvelope> ConversationKeyEnvelopes => Set<ConversationKeyEnvelope>();
     public DbSet<Message> Messages => Set<Message>();
     public DbSet<MessageAttachment> MessageAttachments => Set<MessageAttachment>();
+    public DbSet<Call> Calls => Set<Call>();
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
