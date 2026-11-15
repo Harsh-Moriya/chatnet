@@ -35,11 +35,19 @@ export function VideoViewer({ source, name, onDownload }: VideoViewerProps) {
   const stream = useRef<VideoStream | null>(null)
   const loaded = useRef(false)
 
+  // The link of the file may be renewed while this is mounted, and the stream must not start over for it: it is opened for the file, with the
+  // latest source.
+  const latest = useRef(source)
+  useEffect(() => {
+    latest.current = source
+  })
+
+  const fileId = source.id
   useEffect(() => {
     let current = true
     loaded.current = false
 
-    void videoStreams.open(source).then((opened) => {
+    void videoStreams.open(latest.current).then((opened) => {
       if (!current) {
         opened?.stop()
         return
@@ -53,9 +61,7 @@ export function VideoViewer({ source, name, onDownload }: VideoViewerProps) {
       stream.current?.stop()
       stream.current = null
     }
-    // The source is the same file for as long as this is mounted (it is keyed by the file); a new link does not start it over.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [attempt])
+  }, [fileId, attempt])
 
   const whole = playback.kind === 'whole'
   const [file, retryFile] = useFileObject(whole ? source : null, whole)
