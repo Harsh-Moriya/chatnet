@@ -27,6 +27,7 @@ docker-compose up -d
 | `storage-init` | none | a one-off job that creates the bucket and applies its CORS and lifecycle rules |
 | Jaeger | 16686 (UI), 4317 and 4318 (OTLP) | trace viewer |
 | Adminer | 8081 | a database browser |
+| coturn | 3478 (UDP and TCP) | the TURN server that relays a call when two browsers cannot reach each other. It needs `TURN_SECRET` in `.env` (see below); without it the container stops and says so, and nothing else is affected. |
 | Mailpit | 1025 (SMTP), 8025 (web page) | a mail catcher: it accepts any message and shows it at `http://localhost:8025`, so password reset emails can be read without a mail provider. Nothing is delivered anywhere, and the mail is gone when the container stops. |
 
 ## 2. Configure and run the backend
@@ -89,6 +90,19 @@ dotnet user-secrets set "Push:PublicKey" "<the first value>"
 dotnet user-secrets set "Push:PrivateKey" "<the second value>"
 dotnet user-secrets set "Push:Subject" "mailto:you@example.com"
 ```
+
+### The relay for calls (optional)
+
+Put a secret of at least 32 characters in `.env` as `TURN_SECRET` (`openssl rand -hex 32`) before starting the infrastructure, and give the API the same value and the relay's addresses. The addresses are not secrets, but `appsettings.Development.json` is not tracked, so they go in the same place:
+
+```bash
+dotnet user-secrets set "Turn:Secret" "<the value of TURN_SECRET>"
+dotnet user-secrets set "Turn:Urls:0" "turn:localhost:3478?transport=udp"
+dotnet user-secrets set "Turn:Urls:1" "turn:localhost:3478?transport=tcp"
+dotnet user-secrets set "Turn:StunUrls:0" "stun:localhost:3478"
+```
+
+Without the secret the API hands out no relay and a call goes directly between the browsers. Only the control port is published: two browsers on this machine reach each other directly, and a call forced through the relay is relayed between ports inside the container.
 
 ### Traces and logs
 

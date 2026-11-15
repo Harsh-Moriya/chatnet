@@ -15,6 +15,7 @@ Options are bound to classes and **validated when the host starts**, so a missin
 | `Jwt:SigningKey` | Signs access tokens | A secret. At least 32 bytes. Changing it signs everyone out. |
 | `Storage:AccessKey`, `Storage:SecretKey` | Credentials of the bucket | Secrets; both required; never printed. |
 | `Push:PublicKey`, `Push:PrivateKey`, `Push:Subject` | Identify the server to push services | See [Web Push](#web-push). The private key is a secret. |
+| `Turn:Secret` | Makes the credentials for the relay of calls | See [Calls](#calls-the-turn-relay). A secret; the relay is started with the same value (`TURN_SECRET`). |
 | `Email:Smtp:UserName`, `Email:Smtp:Password` | The login of the mail relay | See [Email](#email). The password is a secret. |
 
 ## Tokens
@@ -136,6 +137,17 @@ Push is **off** unless the three keys are set. Some set, or a pair that does not
 | `Push:RequestTimeout` | 10 s | Above zero. |
 | `Push:MaxParallelSends` | 8 | At least 1. Pushes in flight for one alert. |
 
+## Calls (the TURN relay)
+
+The relay is **off** unless `Turn:Secret` is set; the addresses may be set without it and then nothing is handed out. With a secret, a missing address, a malformed one, or a secret under 32 characters stops the host at start. The relay itself and its limits are described in [deployment](deployment.md#calls-the-turn-server).
+
+| Key | Default | Notes |
+|---|---|---|
+| `Turn:Secret` | none | At least 32 characters. The credentials are the HMAC-SHA1 of a username under it, so keep it as secret as a signing key. Changing it makes every credential already handed out stop working. |
+| `Turn:Urls` | none | The relay's addresses as a browser takes them, such as `turn:chat.example.com:3478?transport=udp`; at least one when a secret is set. `turn:` or `turns:`, a host name, an IPv4 address or a bracketed IPv6 address, an optional port, and an optional `?transport=udp` or `?transport=tcp`. |
+| `Turn:StunUrls` | none | Addresses of a STUN server, such as `stun:chat.example.com:3478`; the relay answers STUN too. Optional. |
+| `Turn:CredentialLifetime` | 1 hour | Between one minute and 24 hours. The relay checks a credential when an allocation is made or refreshed, so a longer lifetime only lets a stolen credential be used for longer. |
+
 ## Logging and tracing
 
 | Key | Default | Purpose |
@@ -164,6 +176,7 @@ Picture addresses are relative (`/api/avatars/...`), so the page and the API mus
 | `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` | The database container |
 | `RUSTFS_ACCESS_KEY`, `RUSTFS_SECRET_KEY` | The object-store container's credentials; use the same values for `Storage:AccessKey` and `Storage:SecretKey` |
 | `STORAGE_BUCKET` | The bucket the set-up job creates |
+| `TURN_SECRET` | The relay container's secret; use the same value for `Turn:Secret` |
 
 ### Production (`.env.prod`, from `.env.prod.example`)
 
@@ -177,6 +190,8 @@ Compose refuses a missing required value and names it.
 | `REDIS_PASSWORD` | yes | Redis |
 | `JWT_SIGNING_KEY` | yes | At least 32 bytes |
 | `STORAGE_SERVICE_URL`, `STORAGE_BUCKET`, `STORAGE_ACCESS_KEY`, `STORAGE_SECRET_KEY` | yes | The S3-compatible bucket |
+| `TURN_SECRET` | yes | At least 32 characters; shared by the relay and the API (`Turn__Secret`) |
+| `TURN_EXTERNAL_IP` | yes | The machine's `public address/private address`, for the relay |
 | `PUSH_PUBLIC_KEY`, `PUSH_PRIVATE_KEY`, `PUSH_SUBJECT` | no | Web Push; empty means off |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURITY`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `MAIL_FROM_ADDRESS`, `MAIL_FROM_NAME` | no | The mail relay for password reset emails; an empty `SMTP_HOST` means email is off. The port defaults to 587 and the security to `StartTls`. |
 | `ALLOWED_HOSTS` | no | Host names the API answers; default is `DOMAIN` and `localhost` |
