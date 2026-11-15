@@ -337,6 +337,11 @@ try
     builder.Services.AddScoped<IPushSubscriptionRepository, PushSubscriptionRepository>();
     builder.Services.AddScoped<PushAlertRows>();
     builder.Services.AddScoped<CallLog>();
+    builder.Services.AddOptions<CallOptions>()
+        .BindConfiguration(CallOptions.SectionName)
+        .ValidateOnStart();
+    builder.Services.AddSingleton<IValidateOptions<CallOptions>, CallOptionsValidator>();
+    builder.Services.AddSingleton<CallStore>();
     builder.Services.AddOptions<TurnOptions>()
         .BindConfiguration(TurnOptions.SectionName)
         .ValidateOnStart();
