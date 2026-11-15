@@ -1,6 +1,6 @@
 import { useInfiniteQuery } from '@tanstack/react-query'
 import { AlertCircle, FileText, Image as ImageIcon, LoaderCircle, Play } from 'lucide-react'
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Button } from '../../../components/ui/Button'
 import { Dialog } from '../../../components/ui/Dialog'
 import { cn } from '../../../lib/cn'
@@ -39,7 +39,9 @@ function GalleryContent({ conversationId }: { conversationId: string }) {
 
   // The next page is read when the end of the grid comes near. A page whose files cannot be shown adds no tile, so the end stays near and
   // the next one is read at once: that is how the grid walks past them. A failed page stops it until the person asks again.
-  const [attachEnd, endNear] = useInView<HTMLDivElement>('400px', true)
+  // The grid scrolls in a box of its own, so how near the end and the tiles are is measured from that box.
+  const [scroller, setScroller] = useState<HTMLDivElement | null>(null)
+  const [attachEnd, endNear] = useInView<HTMLDivElement>('400px', true, scroller)
   const { hasNextPage, isFetching, isFetchNextPageError, fetchNextPage } = query
   useEffect(() => {
     if (endNear && hasNextPage && !isFetching && !isFetchNextPageError) void fetchNextPage()
@@ -66,11 +68,11 @@ function GalleryContent({ conversationId }: { conversationId: string }) {
   }
 
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto p-2">
+    <div ref={setScroller} className="min-h-0 flex-1 overflow-y-auto p-2">
       <ul className="grid grid-cols-3 gap-1 sm:grid-cols-4 md:grid-cols-5">
         {items.map((item) => (
           <li key={item.source.id}>
-            <GalleryTile item={item} onOpen={() => openViewer(conversationId, item.source.id, 'gallery')} />
+            <GalleryTile item={item} scroller={scroller} onOpen={() => openViewer(conversationId, item.source.id, 'gallery')} />
           </li>
         ))}
       </ul>
@@ -101,9 +103,9 @@ function ErrorBanner({ message, onRetry }: { message: string; onRetry: () => voi
 
 // A picture of a size the messages draw is drawn here as it comes near, and let go of when it is far again, so a long history does not keep
 // every picture. A video, a PDF and a larger picture are a tile with its name, and nothing is fetched until it is opened.
-function GalleryTile({ item, onOpen }: { item: ViewerItem; onOpen: () => void }) {
+function GalleryTile({ item, scroller, onOpen }: { item: ViewerItem; scroller: Element | null; onOpen: () => void }) {
   const thumbnail = isInlinePicture(item.source.entry)
-  const [attach, near] = useInView<HTMLDivElement>('400px', true)
+  const [attach, near] = useInView<HTMLDivElement>('400px', true, scroller)
   const [state, retry] = useFileObject(thumbnail ? item.source : null, thumbnail && near)
 
   return (

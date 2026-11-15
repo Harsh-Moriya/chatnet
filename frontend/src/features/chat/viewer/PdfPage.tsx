@@ -19,12 +19,14 @@ interface PdfPageProps {
   size: Size
   // Reports the real size of the page when it has been read.
   onSize: (number: number, size: Size) => void
+  // The box the column scrolls in, which the distance to the screen is measured from; null until it is there.
+  scroller: Element | null
 }
 
 // One page of the column. The box has its size from the start, so the column is as long as it will be and scrolling is steady; the page is
 // drawn only while it is near the screen, and let go of when it is not, so a long document holds a handful of canvases.
-export function PdfPage({ pdf, number, count, scale, gap, size, onSize }: PdfPageProps) {
-  const [attach, near] = useInView<HTMLDivElement>(NEAR, true)
+export function PdfPage({ pdf, number, count, scale, gap, size, onSize, scroller }: PdfPageProps) {
+  const [attach, near] = useInView<HTMLDivElement>(NEAR, true, scroller)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const pageRef = useRef<PdfPageProxy | null>(null)
   const [failed, setFailed] = useState(false)

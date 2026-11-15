@@ -71,6 +71,12 @@ export function PdfViewer({ source, name, onDownload }: PdfViewerProps) {
   }
 
   const scrollerRef = useRef<HTMLDivElement>(null)
+  // The same box as an element in state, for the pages to measure their distance to the screen from (a ref does not re-render when it is set).
+  const [scroller, setScroller] = useState<HTMLDivElement | null>(null)
+  const attachScroller = useCallback((element: HTMLDivElement | null) => {
+    scrollerRef.current = element
+    setScroller(element)
+  }, [])
   const [stageWidth, setStageWidth] = useState<number | null>(null)
   // The scale when it is not the fit to the width. Null is the fit, which follows the width of the stage as it changes.
   const [zoom, setZoom] = useState<number | null>(null)
@@ -240,7 +246,7 @@ export function PdfViewer({ source, name, onDownload }: PdfViewerProps) {
       )}
 
       <div
-        ref={scrollerRef}
+        ref={attachScroller}
         tabIndex={0}
         aria-label={`${name}, pages`}
         onScroll={onScroll}
@@ -258,6 +264,7 @@ export function PdfViewer({ source, name, onDownload }: PdfViewerProps) {
                 gap={GAP}
                 size={sizes[index + 1] ?? ready.first}
                 onSize={onSize}
+                scroller={scroller}
               />
             ))}
           </div>
