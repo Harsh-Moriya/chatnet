@@ -361,6 +361,12 @@ describe('playing a video', () => {
     expect(response!.status).toBe(404)
   })
 
+  it.each([undefined, null, 'text', 42])('says it did not take a stream when the message carries none: %j', async (stream) => {
+    const worker = loadWorker([], (await video()).deps)
+
+    expect(await worker.message({ type: 'stream-open', stream })).toEqual({ ok: false })
+  })
+
   it.each([null, 'text', 42, {}, { type: 'something-else' }])('ignores a message it does not understand: %j', async (data) => {
     const worker = loadWorker([], (await video()).deps)
 
