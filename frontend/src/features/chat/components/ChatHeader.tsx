@@ -1,11 +1,12 @@
 import { Suspense, lazy, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Bell, BellOff, Fingerprint, Images, ShieldCheck, Users } from 'lucide-react'
+import { ArrowLeft, Bell, BellOff, Fingerprint, Images, Phone, ShieldCheck, Users, Video } from 'lucide-react'
 import { Avatar } from '../../../components/ui/Avatar'
 import { Button } from '../../../components/ui/Button'
 import { cn } from '../../../lib/cn'
 import { getApiError } from '../../../lib/errors'
 import { useNow } from '../../../lib/useNow'
+import { useStartCall } from '../../calls/useStartCall'
 import { useAuth } from '../../auth/hooks/useAuth'
 import { LazySafetyNumberDialog } from '../../encryption/components/LazySafetyNumberDialog'
 import { useVerified } from '../../encryption/hooks/useVerified'
@@ -38,6 +39,7 @@ export function ChatHeader({ conversation }: { conversation: Conversation }) {
   const [galleryOpen, setGalleryOpen] = useState(false)
   const [galleryMounted, setGalleryMounted] = useState(false)
   const verified = useVerified(isGroup ? null : conversation.otherUserId)
+  const { canCall, call } = useStartCall(conversation)
 
   // The people other than the signed-in user, for counting who is online in a group. Their presence is
   // read through a selector that returns a number, so the header re-renders when the count changes
@@ -116,6 +118,31 @@ export function ChatHeader({ conversation }: { conversation: Conversation }) {
 
         {!left && (
           <>
+            {!isGroup && conversation.otherUserId !== null && (
+              <>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Audio call"
+                  title="Call by voice"
+                  disabled={!canCall}
+                  onClick={() => call('Audio')}
+                >
+                  <Phone className="h-5 w-5" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Video call"
+                  title="Call with video"
+                  disabled={!canCall}
+                  onClick={() => call('Video')}
+                >
+                  <Video className="h-5 w-5" />
+                </Button>
+              </>
+            )}
+
             {!isGroup && conversation.otherUserId !== null && (
               <Button
                 variant="ghost"

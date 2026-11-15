@@ -8,11 +8,13 @@ interface CallRowProps {
   call: CallInfo
   // True when the signed-in user made the call.
   own: boolean
+  // Calls the person back with the same kind of call; absent where a call cannot be made (a conversation that was left, a dropped connection).
+  onCallBack?: () => void
 }
 
 // A finished call as a line of its own in the conversation: what it was, when it ended, and how long it ran. A call that was missed
 // stands out for the person who was called.
-export function CallRow({ call, own }: CallRowProps) {
+export function CallRow({ call, own, onCallBack }: CallRowProps) {
   const missedByMe = call.isMissed && !own
   const duration = callDuration(call)
   const Icon = missedByMe ? PhoneMissed : call.media === 'Video' ? Video : Phone
@@ -31,6 +33,15 @@ export function CallRow({ call, own }: CallRowProps) {
         <time dateTime={call.endedAt} className="font-normal">
           {formatClock(call.endedAt)}
         </time>
+        {onCallBack !== undefined && (
+          <button
+            type="button"
+            onClick={onCallBack}
+            className="rounded-full px-2 py-0.5 font-semibold text-blue-600 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+          >
+            Call back
+          </button>
+        )}
       </span>
     </div>
   )

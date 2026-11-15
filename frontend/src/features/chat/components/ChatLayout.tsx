@@ -1,5 +1,6 @@
 import { Outlet, useMatch } from 'react-router-dom'
 import { cn } from '../../../lib/cn'
+import { CallLayer } from '../../calls/components/CallLayer'
 import { useDocumentTitle } from '../../notifications/useDocumentTitle'
 import { useContactPresence } from '../api/useContactPresence'
 import { Sidebar } from './Sidebar'
@@ -32,6 +33,8 @@ export function ChatLayout() {
       <main className={cn('min-w-0 flex-1 flex-col md:flex', conversationOpen ? 'flex' : 'hidden')}>
         <Outlet />
       </main>
+
+      <CallLayer />
     </div>
   )
 }

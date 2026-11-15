@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { AlertCircle, ChevronDown, LoaderCircle, Pencil, Trash2 } from 'lucide-react'
 import { Button } from '../../../components/ui/Button'
+import { useStartCall } from '../../calls/useStartCall'
 import type { MenuItem } from '../../../components/ui/Menu'
 import { useNow } from '../../../lib/useNow'
 import { useAuth } from '../../auth/hooks/useAuth'
@@ -67,6 +68,7 @@ export function MessageList({ conversation, isLoading, errorMessage, onRetry, ol
   // The message being edited in place, and the one a delete is being confirmed for.
   const [editingId, setEditingId] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<Message | null>(null)
+  const { canCall, call } = useStartCall(conversation)
   const messages = useChatStore((state) => state.messages[conversation.id]) ?? NO_MESSAGES
   const pending = useChatStore((state) => state.pending[conversation.id]) ?? NO_PENDING
 
@@ -285,7 +287,7 @@ export function MessageList({ conversation, isLoading, errorMessage, onRetry, ol
           )
         }
 
-        if (item.kind === 'call') return <CallRow key={item.key} call={item.call} own={item.own} />
+        if (item.kind === 'call') return <CallRow key={item.key} call={item.call} own={item.own} onCallBack={canCall ? () => call(item.call.media) : undefined} />
 
         if (item.kind === 'pending') {
           return (
