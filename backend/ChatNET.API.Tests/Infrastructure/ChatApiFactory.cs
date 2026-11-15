@@ -79,6 +79,9 @@ public sealed class ChatApiFactory : WebApplicationFactory<Program>, IAsyncLifet
                 // the mail catcher, which takes no login, and a developer's real one would be refused with it.
                 ["Email:Smtp:UserName"] = string.Empty,
                 ["Email:Smtp:Password"] = string.Empty,
+
+                // And the secret of the relay: with one set, every call would be handed credentials for a relay that is not running.
+                ["Turn:Secret"] = string.Empty,
             }));
 
     // A client for the test bucket, to put objects where the API will look and to see what it left behind.

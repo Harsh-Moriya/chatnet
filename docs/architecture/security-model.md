@@ -144,6 +144,16 @@ The endpoint a browser registers is an address the server posts to, so it is tre
 - A push carries ids, who it is from and what kind it is (a new message, a file, a mention, an invitation), encrypted to the one browser it is for. It never carries the text of a message. The push service sees which endpoint, when and how big.
 - A person who learns an endpoint cannot push to it without the private key.
 
+## The relay for calls
+
+Calls go directly between two browsers when they can, and through a TURN server (`coturn`) when they cannot. The setup is in [deployment](../operations/deployment.md#calls-the-turn-server).
+
+- **Credentials.** The API makes one for a person from a secret it shares with the relay: the username is the time it ends and the person's id, the password is the HMAC-SHA1 of the username (the scheme a TURN server speaks as `use-auth-secret`). The relay needs no list of people and refuses a username whose time has passed. A credential lasts an hour, is good only for the relay (it opens nothing in the API), and names the person by id, which is in the relay's log. The secret is at least 32 characters, is checked at start, and is never logged or put on a command line.
+- **What a relay could be made to do.** It forwards to whatever address a caller names. The production configuration refuses private, loopback, link-local (the cloud metadata address among them), shared and multicast ranges, makes no TCP relays and has no admin console and no TLS listener. The server's own private address is the one exception coturn makes itself, because two people who both need the relay reach each other through it. It runs read-only, as an unprivileged user, without capabilities beyond the one its binary needs, with a memory limit.
+- **Limits.** 12 allocations per credential, 300 in all, 4 Mbit/s for one allocation and 200 Mbit/s for all of them. The per-credential limit stops one browser from taking many allocations; the totals protect the host as a whole.
+- **What it sees.** The media between two browsers is encrypted with DTLS-SRTP, so the relay moves ciphertext. It learns the addresses of the two ends, the sizes and the timing of the packets.
+- **Known limit.** There is no TLS TURN, so a network that allows only outbound port 443 cannot relay a call.
+
 ## Transport and headers
 
 - Every response carries `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY` and `Referrer-Policy: no-referrer`.

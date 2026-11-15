@@ -10,7 +10,10 @@ namespace ChatNET.API.Tests.Infrastructure;
 // jump forward two weeks instead of waiting for them.
 public sealed class ManualTimeProvider : TimeProvider
 {
-    private DateTimeOffset _now = DateTimeOffset.UtcNow;
+    private DateTimeOffset _now;
+
+    // The moment the clock starts at: now, unless a test needs one it can write a fixed answer for.
+    public ManualTimeProvider(DateTimeOffset? start = null) => _now = start ?? DateTimeOffset.UtcNow;
 
     public override DateTimeOffset GetUtcNow() => _now;
 
