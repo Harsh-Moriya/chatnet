@@ -18,7 +18,7 @@ import type {
   UserSummary,
 } from '../types'
 import { entriesOf } from '../files/joinFiles'
-import { conversationOf, openMessage as openWireMessage, openMessages, ownMessage } from './openWire'
+import { conversationOf, openMessage as openWireMessage, openMessages, openMessagesQuietly, ownMessage } from './openWire'
 import { openPreviews } from './previews'
 import { fetchAttachmentLink } from './uploadsApi'
 
@@ -82,6 +82,22 @@ export async function requestMessages(
     signal,
   })
   return openMessages(data)
+}
+
+// The messages of the conversation that have files, newest first, a page at a time, for the gallery: the page just older than the
+// message "before" (none means the newest). They are opened without being added to the store, which holds the conversation as it is
+// read; these are a list of their own, and a page may be far from anything the store holds.
+export async function requestMessageFiles(
+  conversationId: string,
+  { before, signal }: { before?: string; signal?: AbortSignal } = {},
+): Promise<Message[]> {
+  await waitForConnection(signal)
+
+  const { data } = await api.get<MessageWire[]>(`/conversations/${conversationId}/attachments`, {
+    params: { before },
+    signal,
+  })
+  return openMessagesQuietly(data)
 }
 
 // ##### Reading a window of the history #####
