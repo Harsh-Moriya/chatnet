@@ -14,6 +14,7 @@ import {
   type AccountSecrets,
 } from './keys'
 import { formatLinkCode, linkCode, linkUri, matchesLinkCode, normalizeLinkCode, openLinkSecrets, parseLinkUri, sealLinkSecrets } from './link'
+import { callSignatureInput, fingerprintsOf, signCall, verifyCall, type CallContext } from './call'
 import { messageSignatureInput, openMessage, readMessageEpoch, sealMessage, type MessageContext } from './message'
 import { ed25519FromSeed, x25519FromPrivate, type KeyPair } from './primitives'
 import { formatSafetyNumber, safetyNumber } from './safety'
@@ -58,6 +59,11 @@ interface Vectors {
     sealed: string
   }
   safetyNumber: { a: { userId: string; identityPublic: string }; b: { userId: string; identityPublic: string }; number: string }
+  call: {
+    callId: string
+    offer: { sdp: string; fingerprints: string[]; signatureInput: string; signature: string }
+    answer: { sdp: string; fingerprints: string[]; signatureInput: string; signature: string }
+  }
 }
 
 // Read as text and parsed here, so the type check of the build does not need the file beside the
@@ -324,5 +330,27 @@ describe('safety number', () => {
   it('belongs to these identity keys', () => {
     expect(a.identityPublic).toBe(toHex(identityA.publicKey))
     expect(b.identityPublic).toBe(toHex(identityB.publicKey))
+  })
+})
+
+describe('call signature', () => {
+  const call = vectors.call
+  const base = { callId: call.callId, conversationId: vectors.epoch.conversationId }
+  const offerContext: CallContext = { ...base, signerId: vectors.bundle.userId, peerId: vectors.safetyNumber.b.userId }
+  const answerContext: CallContext = { ...base, signerId: vectors.safetyNumber.b.userId, peerId: vectors.bundle.userId }
+
+  it.each([
+    ['offer', offerContext, identityA, call.offer],
+    ['answer', answerContext, identityB, call.answer],
+  ] as const)('the %s has the published fingerprints, signed input and signature, and verifies', async (role, context, signer, vector) => {
+    expect(fingerprintsOf(vector.sdp)).toEqual(vector.fingerprints)
+    expect(toHex(callSignatureInput(context, role, vector.fingerprints))).toBe(vector.signatureInput)
+    expect(toHex(await signCall(signer, context, role, vector.sdp))).toBe(vector.signature)
+    expect(await verifyCall(signer.publicKey, context, role, vector.sdp, fromHex(vector.signature))).toBe(true)
+  })
+
+  it('does not verify an offer as an answer or the other person’s signature under the first one’s key', async () => {
+    expect(await verifyCall(identityA.publicKey, { ...offerContext }, 'answer', call.offer.sdp, fromHex(call.offer.signature))).toBe(false)
+    expect(await verifyCall(identityA.publicKey, answerContext, 'answer', call.answer.sdp, fromHex(call.answer.signature))).toBe(false)
   })
 })

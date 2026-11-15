@@ -30,7 +30,7 @@ export function showAlert(text: AlertText, onOpen: () => void): void {
   if (alertPermission() !== 'granted') return
 
   try {
-    const alert = new Notification(text.title, { body: text.body, tag: text.tag })
+    const alert = new Notification(text.title, { body: text.body, tag: text.tag, requireInteraction: text.persistent === true })
     alert.onclick = () => {
       alert.close()
       window.focus()

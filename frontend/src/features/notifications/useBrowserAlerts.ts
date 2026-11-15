@@ -3,9 +3,12 @@ import { useMatch, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../auth/store/authStore'
 import { useChatStore } from '../chat/store/chatStore'
 import type { Message } from '../chat/types'
+import type { IncomingCall } from '../calls/types'
 import {
+  incomingCallAlertText,
   messageAlertText,
   notificationAlertText,
+  shouldAlertForIncomingCall,
   shouldAlertForMessage,
   shouldAlertForNotification,
 } from './alerts'
@@ -30,6 +33,11 @@ export function useBrowserAlerts() {
       latest.current.navigate(conversationPath(conversationId), { state: focusState(messageId) })
 
     return {
+      call(call: IncomingCall) {
+        if (!shouldAlertForIncomingCall(currentView(latest.current.open))) return
+
+        showAlert(incomingCallAlertText(call), () => openConversation(call.conversationId, null))
+      },
       message(message: Message) {
         const conversation = useChatStore.getState().conversations[message.conversationId]
         const selfId = useAuthStore.getState().user?.userId ?? null

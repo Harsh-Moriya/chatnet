@@ -1,10 +1,12 @@
 import { isUnauthorized, reconnectDelay } from '../../../lib/signalr'
 import { conversationOf, inArrivalOrder, openMessage, openNotification } from '../api/openWire'
 import { openPreviews } from '../api/previews'
+import type { CallAccepted, CallEnded, CallEvents, CallRejoined, CallStarted, CallsApi, IncomingCall, SignalType } from '../../calls/types'
 import { useChatStore } from '../store/chatStore'
 import type { NotificationItem, NotificationWire } from '../../notifications/types'
 import type { Presence } from '../../presence/types'
 import type {
+  CallMedia,
   ConversationKeyChange,
   ConversationUpdate,
   ConversationWire,
@@ -58,6 +60,9 @@ export interface ChatConnectionDeps {
   onNotificationsRead: (ids: string[]) => void
   // Called with the id of a notification that was dismissed, here or in another tab.
   onNotificationDismissed: (id: string) => void
+  // What the hub tells the browser about calls: someone is calling, it was answered, a signal from the other side, it ended, and the
+  // connection came back (a side that was running takes its call back).
+  calls: CallEvents
   // Called when the server refuses a connection attempt with 401: it does not accept the token the client
   // holds. The owner renews the session, so the next attempt carries a new token.
   onUnauthorized: () => void
@@ -66,6 +71,8 @@ export interface ChatConnectionDeps {
 
 export interface ChatConnection {
   sendTyping: (conversationId: string, isTyping: boolean) => void
+  // The methods of a call on the hub. They reject while the connection is down; a refusal carries one of the codes in callErrors.ts.
+  calls: CallsApi
   dispose: () => void
 }
 
@@ -218,6 +225,31 @@ export function connectChat(hub: ChatHub, deps: ChatConnectionDeps): ChatConnect
     }
   })
 
+  // ##### Calls #####
+  // The server pushes a call's events to the tabs that are in it or ringing; each is handed to the call controller as it comes.
+
+  hub.on('IncomingCall', (call: IncomingCall) => {
+    deps.calls.onIncomingCall(call)
+  })
+
+  hub.on('CallAnswered', (callId: string) => {
+    deps.calls.onCallAnswered(callId)
+  })
+
+  hub.on('CallSignal', (callId: string, type: SignalType, payload: string) => {
+    deps.calls.onCallSignal(callId, type, payload)
+  })
+
+  hub.on('CallEnded', (ended: CallEnded) => {
+    deps.calls.onCallEnded(ended)
+  })
+
+  // The connection is ready again after a drop: what was lost is reloaded, and a call that was running is taken back.
+  function reconnected() {
+    deps.onReconnected()
+    deps.calls.onReconnected()
+  }
+
   // ##### Connection events #####
 
   hub.onreconnecting(() => {
@@ -227,7 +259,7 @@ export function connectChat(hub: ChatHub, deps: ChatConnectionDeps): ChatConnect
 
   hub.onreconnected(() => {
     void becomeReady().then((ready) => {
-      if (ready) deps.onReconnected()
+      if (ready) reconnected()
     })
   })
 
@@ -290,7 +322,7 @@ export function connectChat(hub: ChatHub, deps: ChatConnectionDeps): ChatConnect
         holdingGuard = false
 
         const ready = await becomeReady()
-        if (ready && afterLoss) deps.onReconnected()
+        if (ready && afterLoss) reconnected()
         return
       }
     } finally {
@@ -308,7 +340,19 @@ export function connectChat(hub: ChatHub, deps: ChatConnectionDeps): ChatConnect
 
   void connect({ afterLoss: false })
 
+  const calls: CallsApi = {
+    startCall: (conversationId: string, media: CallMedia) => hub.invoke('StartCall', conversationId, media) as Promise<CallStarted>,
+    acceptCall: (callId) => hub.invoke('AcceptCall', callId) as Promise<CallAccepted>,
+    endCall: async (callId, failed) => {
+      await hub.invoke('EndCall', callId, failed)
+    },
+    sendSignal: (callId, type, payload) => hub.invoke('SendCallSignal', callId, type, payload) as Promise<boolean>,
+    rejoinCall: (callId, rejoinToken) => hub.invoke('RejoinCall', callId, rejoinToken) as Promise<CallRejoined>,
+  }
+
   return {
+    calls,
+
     // Typing signals are best effort. When the connection is down, or the server refuses, nothing
     // is lost that matters, so there is no queue and no error.
     sendTyping(conversationId, isTyping) {

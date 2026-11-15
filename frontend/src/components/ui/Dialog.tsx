@@ -11,13 +11,15 @@ interface DialogProps {
   // `fullscreen` fills the screen and draws no box or header of its own, for content that brings its own controls (the file viewer).
   // `wide` is the default box made large, for content that scrolls inside it (the gallery); on a phone it fills the screen.
   variant?: 'default' | 'wide' | 'fullscreen'
+  // False for a dialog that must be answered with its own buttons (a ringing call): Escape and a click outside do nothing.
+  dismissible?: boolean
 }
 
 // A modal built on the browser's own <dialog> element, which already provides what a hand-made
 // modal has to imitate: it traps focus, closes on Escape, makes the page behind it inert, and
 // returns focus to what opened it. The content is only rendered while open, so a form inside
 // starts empty every time.
-export function Dialog({ open, onClose, title, children, variant = 'default' }: DialogProps) {
+export function Dialog({ open, onClose, title, children, variant = 'default', dismissible = true }: DialogProps) {
   const ref = useRef<HTMLDialogElement>(null)
 
   useEffect(() => {
@@ -33,9 +35,12 @@ export function Dialog({ open, onClose, title, children, variant = 'default' }: 
       ref={ref}
       aria-label={title}
       onClose={onClose}
+      onCancel={(event) => {
+        if (!dismissible) event.preventDefault()
+      }}
       // A click on the dim area outside the box lands on the <dialog> itself.
       onClick={(event) => {
-        if (event.target === event.currentTarget) onClose()
+        if (dismissible && event.target === event.currentTarget) onClose()
       }}
       className={
         variant === 'fullscreen'
@@ -53,9 +58,11 @@ export function Dialog({ open, onClose, title, children, variant = 'default' }: 
         <div className={cn('flex flex-col', variant === 'wide' ? 'h-[85dvh] max-sm:h-dvh' : 'max-h-[85dvh]')}>
           <div className="flex items-center justify-between border-b border-line px-5 py-4">
             <h2 className="text-base font-semibold text-slate-900">{title}</h2>
-            <Button variant="ghost" size="icon" aria-label="Close" onClick={onClose}>
-              <X className="h-5 w-5" />
-            </Button>
+            {dismissible && (
+              <Button variant="ghost" size="icon" aria-label="Close" onClick={onClose}>
+                <X className="h-5 w-5" />
+              </Button>
+            )}
           </div>
           {children}
         </div>

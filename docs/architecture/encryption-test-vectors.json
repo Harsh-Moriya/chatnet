@@ -163,5 +163,25 @@
       "identityPublic": "94365cdf2b435f538b131817e7708b7e9f95ebbd46d48c94e4c92727cab68989"
     },
     "number": "575433042147512040866897029745115158529855262204748865068673"
+  },
+  "call": {
+    "description": "An offer signed by user A (the caller) and the answer signed by user B, for one call. The signed input is built from the ids, the role and the normalised, sorted fingerprints of the session description (see the call signature section of the format). Ed25519 is deterministic, so the signatures are fixed.",
+    "callId": "ca11ca11-0000-4000-8000-000000000001",
+    "offer": {
+      "sdp": "v=0\r\no=- 4611731400430051336 2 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\na=fingerprint:SHA-256 ab:cd:ef:01:23:45:67:89:ab:cd:ef:01:23:45:67:89:ab:cd:ef:01:23:45:67:89:ab:cd:ef:01:23:45:67:89\r\na=setup:actpass\r\n",
+      "fingerprints": [
+        "sha-256 AB:CD:EF:01:23:45:67:89:AB:CD:EF:01:23:45:67:89:AB:CD:EF:01:23:45:67:89:AB:CD:EF:01:23:45:67:89"
+      ],
+      "signatureInput": "636861746e65742f76312f63616c6c2d7369676e617475726500ca11ca11000040008000000000000001c0ffee0012344abc8def0123456789ab3f2a9c1e7b4d4e8a9c550a1b2c3d4e5f9d8c7b6a5f4e4d3c8b2a1f0e9d8c7b6a00000100677368612d3235362041423a43443a45463a30313a32333a34353a36373a38393a41423a43443a45463a30313a32333a34353a36373a38393a41423a43443a45463a30313a32333a34353a36373a38393a41423a43443a45463a30313a32333a34353a36373a3839",
+      "signature": "137a99e3bc22412fba4983e45d36694bb035b16a7ce504cb7e0ee8adb06245d5a7fcccbca4f7384f8bd50bc21355dac118126d8d7d38c615888c475a45749a0f"
+    },
+    "answer": {
+      "sdp": "v=0\r\no=- 2 2 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\na=fingerprint:sha-256 FE:DC:BA:98:76:54:32:10:FE:DC:BA:98:76:54:32:10:FE:DC:BA:98:76:54:32:10:FE:DC:BA:98:76:54:32:10\r\na=setup:active\r\n",
+      "fingerprints": [
+        "sha-256 FE:DC:BA:98:76:54:32:10:FE:DC:BA:98:76:54:32:10:FE:DC:BA:98:76:54:32:10:FE:DC:BA:98:76:54:32:10"
+      ],
+      "signatureInput": "636861746e65742f76312f63616c6c2d7369676e617475726500ca11ca11000040008000000000000001c0ffee0012344abc8def0123456789ab9d8c7b6a5f4e4d3c8b2a1f0e9d8c7b6a3f2a9c1e7b4d4e8a9c550a1b2c3d4e5f01000100677368612d3235362046453a44433a42413a39383a37363a35343a33323a31303a46453a44433a42413a39383a37363a35343a33323a31303a46453a44433a42413a39383a37363a35343a33323a31303a46453a44433a42413a39383a37363a35343a33323a3130",
+      "signature": "fe7511374c8a7a05454a9296a02b7561a833a8fe4db7434f213d52ab4ae89e159cc72da22bddd6e901fe20a8dff84426448961860c75cf9bdcac25912e433d0e"
+    }
   }
 }
