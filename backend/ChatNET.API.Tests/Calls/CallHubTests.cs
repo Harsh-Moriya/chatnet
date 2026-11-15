@@ -103,6 +103,25 @@ public class CallHubTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_hang_up_sent_as_the_page_closes_still_ends_the_call_for_the_other_person_at_once()
+    {
+        var (alice, bob, conversation) = await _factory.DirectChatAsync();
+        await using var caller = await HubClient.ConnectAsync(_factory, alice);
+        await using var callee = await HubClient.ConnectAsync(_factory, bob);
+        var callId = CallIdOf(await caller.StartCallAsync(conversation));
+        await callee.WaitForIncomingCallAsync(callId);
+        await callee.AcceptCallAsync(callId);
+        await caller.WaitForCallAnsweredAsync(callId);
+
+        await caller.EndCallAndCloseAsync(callId);
+
+        var ended = await callee.WaitForCallEndedAsync(callId);
+        Assert.Equal("Completed", ended.GetProperty("reason").GetString());
+        var recorded = Assert.Single(await CallsOfAsync(conversation));
+        Assert.Equal(CallEndReason.Completed, recorded.EndReason);
+    }
+
+    [Fact]
     public async Task Every_tab_of_the_callee_rings_and_when_one_answers_the_others_stop_and_signals_go_to_that_one_only()
     {
         var (alice, bob, conversation) = await _factory.DirectChatAsync();

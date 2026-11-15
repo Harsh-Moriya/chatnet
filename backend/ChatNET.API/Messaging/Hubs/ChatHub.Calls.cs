@@ -35,9 +35,12 @@ public partial class ChatHub
 
     // Hangs up, cancels or declines: the server works out which from the state of the call and who asks. `failed` says the media could not
     // be connected or broke, which is recorded as a failed call. Ending a call that is already over is not an error.
+    //
+    // Not tied to the connection: a page that is closing sends this as its last act and the browser drops the socket straight after, which
+    // aborts the connection. Ending the call has to finish anyway, or the other person waits for the sweeper to find it half ended.
     public async Task EndCall(Guid callId, bool failed)
     {
-        await _calls.EndAsync(Context.User!.GetUserId(), callId, failed, Context.ConnectionAborted);
+        await _calls.EndAsync(Context.User!.GetUserId(), callId, failed, CancellationToken.None);
 
         if (ConnectionState.CallOf(Context.Items) == callId)
             ConnectionState.SetCall(Context.Items, null);
