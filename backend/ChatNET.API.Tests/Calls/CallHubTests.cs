@@ -5,7 +5,6 @@ using ChatNET.API.Tests.Infrastructure;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 
 namespace ChatNET.API.Tests.Calls;
 
@@ -29,22 +28,7 @@ public class CallHubTests : IAsyncLifetime
 
     public Task DisposeAsync() => _factory.RemoveWaitingOutboxRowsAsync();
 
-    // A host whose calls time out in seconds and whose rounds run by themselves every second, for the tests about time.
-    private WebApplicationFactory<Program> Quick(Dictionary<string, string?>? more = null)
-    {
-        var settings = new Dictionary<string, string?>
-        {
-            ["Calls:RingTimeout"] = "00:00:01",
-            ["Calls:ReconnectGrace"] = "00:00:02",
-            ["Calls:Lease"] = "00:00:04",
-            ["Calls:RenewInterval"] = "00:00:01",
-            ["Calls:TickInterval"] = "00:00:01",
-        };
-        foreach (var (key, value) in more ?? [])
-            settings[key] = value;
-
-        return _factory.WithWebHostBuilder(builder => builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(settings)));
-    }
+    private WebApplicationFactory<Program> Quick(Dictionary<string, string?>? more = null) => _factory.QuickCalls(more);
 
     private static Guid CallIdOf(JsonElement started) => started.GetProperty("callId").GetGuid();
 

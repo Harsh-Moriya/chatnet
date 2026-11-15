@@ -1,6 +1,7 @@
 using ChatNET.API.Calls.Models;
 using ChatNET.API.Messaging.Models;
 using ChatNET.API.Notifications.Models;
+using ChatNET.API.Outbox.Models;
 
 namespace ChatNET.API.Push;
 
@@ -42,6 +43,16 @@ public static class PushAlertText
         message.Id);
 
     public static string CallTag(Guid callId) => $"call-{callId}";
+
+    // A call that is ringing now, from the caller. The same tag as the missed-call alert, which replaces this one on the screen when the
+    // call is missed, and as the call, so an alert about a call that has ended is not left behind.
+    public static PushAlert ForIncomingCall(CallAlertRequested call) => new(
+        call.CallerDisplayName,
+        call.Media == CallMedia.Video ? "Incoming video call" : "Incoming audio call",
+        CallTag(call.CallId),
+        PushAlertTypes.Call,
+        call.ConversationId,
+        null);
 
     // Someone named the person in a message. It alerts in a muted conversation too. The title says it; there is no text.
     public static PushAlert ForMention(NotificationDto notification, Guid conversationId, string? groupName) => new(

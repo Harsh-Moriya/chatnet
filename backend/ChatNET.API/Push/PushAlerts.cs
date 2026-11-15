@@ -1,9 +1,11 @@
+using ChatNET.API.Calls;
 using System.Collections.Concurrent;
 using ChatNET.API.Common.Time;
 using ChatNET.API.Conversations.Persistence;
 using ChatNET.API.Messaging.Persistence;
 using ChatNET.API.Notifications.Models;
 using ChatNET.API.Notifications.Persistence;
+using ChatNET.API.Outbox.Models;
 using ChatNET.API.Presence;
 using ChatNET.API.Push.Persistence;
 using Microsoft.Extensions.Options;
@@ -26,6 +28,7 @@ public class PushAlerts
     private readonly IAttachmentRepository _attachments;
     private readonly INotificationRepository _notifications;
     private readonly IConversationRepository _conversations;
+    private readonly CallStore _calls;
     private readonly PushOptions _options;
     private readonly TimeProvider _time;
     private readonly ILogger<PushAlerts> _logger;
@@ -38,6 +41,7 @@ public class PushAlerts
         IAttachmentRepository attachments,
         INotificationRepository notifications,
         IConversationRepository conversations,
+        CallStore calls,
         IOptions<PushOptions> options,
         TimeProvider time,
         ILogger<PushAlerts> logger)
@@ -49,6 +53,7 @@ public class PushAlerts
         _attachments = attachments;
         _notifications = notifications;
         _conversations = conversations;
+        _calls = calls;
         _options = options.Value;
         _time = time;
         _logger = logger;
@@ -87,6 +92,28 @@ public class PushAlerts
         var files = (await _attachments.GetForMessagesAsync([messageId], cancellationToken)).Count;
 
         await SendAsync(away, PushAlertText.ForMessage(message, group?.Name, files), cancellationToken);
+    }
+
+    // A call that is ringing: its callee, if they are away and have not muted the conversation. Only while it still rings: the row may be
+    // taken by the relay after the call ended, and an alert that a phone is ringing for a call that is over would be worse than none.
+    public async Task AlertForCallAsync(CallAlertRequested call, CancellationToken cancellationToken)
+    {
+        if (!_options.Enabled)
+            return;
+
+        if (await _calls.GetAsync(call.CallId, cancellationToken) is not { State: CallState.Ringing })
+            return;
+
+        // The people of the conversation the caller's alert may reach (it leaves out the caller and whoever muted it): the callee or nobody.
+        var recipients = (await _subscriptions.FindMessageRecipientsAsync(call.ConversationId, call.CallerId, [], cancellationToken))
+            .Where(person => person == call.CalleeId)
+            .ToList();
+
+        var away = await AwayAsync(recipients, cancellationToken);
+        if (away.Count == 0)
+            return;
+
+        await SendAsync(away, PushAlertText.ForIncomingCall(call), cancellationToken);
     }
 
     // A notification: its recipient, if they are away. A mention alerts in a muted conversation too, because someone addressed the

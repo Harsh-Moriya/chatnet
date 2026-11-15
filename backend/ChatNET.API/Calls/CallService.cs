@@ -6,6 +6,10 @@ using ChatNET.API.Common.Persistence;
 using ChatNET.API.Common.Time;
 using ChatNET.API.Conversations.Persistence;
 using ChatNET.API.Messaging.Hubs;
+using ChatNET.API.Outbox.Models;
+using ChatNET.API.Outbox.Persistence;
+using ChatNET.API.Outbox;
+using ChatNET.API.Push;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.EntityFrameworkCore;
@@ -105,10 +109,14 @@ public sealed class CallService
             "Call {CallId} started by {UserId} to {CalleeId} in conversation {ConversationId} ({Media})",
             call.Id, callerId, peer.PeerId, conversationId, media);
 
+        var callerName = await DisplayNameAsync(scope, callerId, cancellationToken);
+
         await TellAsync(async () =>
             await _hub.Clients.User(peer.PeerId.ToString()).IncomingCall(new IncomingCallDto(
-                call.Id, conversationId, callerId, await DisplayNameAsync(scope, callerId, cancellationToken), media, started.RingsUntil)),
+                call.Id, conversationId, callerId, callerName, media, started.RingsUntil)),
             call.Id);
+
+        await AlertAwayAsync(scope, new CallAlertRequested(call.Id, conversationId, callerId, peer.PeerId, callerName, media), cancellationToken);
 
         return new CallStartedDto(call.Id, token, started.RingsUntil, _ice.For(callerId));
     }
@@ -354,6 +362,41 @@ public sealed class CallService
             await _hub.Clients.User(ended.CallerId.ToString()).CallEnded(told);
             await _hub.Clients.User(ended.CalleeId.ToString()).CallEnded(told);
         }, ended.Id);
+    }
+
+    // The callee's browsers that are away are alerted by push: the row that asks for it is saved here, and the push is made at once but not
+    // waited for, so the caller is not held up by a push service. If the push fails the relay takes the row.
+    private async Task AlertAwayAsync(IServiceScope scope, CallAlertRequested alert, CancellationToken cancellationToken)
+    {
+        try
+        {
+            if (scope.ServiceProvider.GetRequiredService<PushAlertRows>().ForCall(alert) is not { } row)
+                return;
+
+            await scope.ServiceProvider.GetRequiredService<IOutboxRepository>().AddAsync(row, cancellationToken);
+            _ = DeliverAlertAsync(row, alert);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+        {
+            _logger.LogWarning(ex, "Could not save the alert for call {CallId}; the callee is not alerted by push", alert.CallId);
+        }
+    }
+
+    // Not awaited by anyone, so it handles its own failures (the publisher logs a push that failed and leaves the row for the relay).
+    private async Task DeliverAlertAsync(OutboxMessage row, CallAlertRequested alert)
+    {
+        try
+        {
+            using var scope = _scopes.CreateScope();
+            var alerts = scope.ServiceProvider.GetRequiredService<PushAlerts>();
+
+            await scope.ServiceProvider.GetRequiredService<OutboxPublisher>()
+                .DeliverAsync(row, () => alerts.AlertForCallAsync(alert, CancellationToken.None), CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Could not push the alert for call {CallId}; the relay will try", alert.CallId);
+        }
     }
 
     // A caller who calls somebody who is already in a call has tried and failed: the callee sees it as a missed call.
