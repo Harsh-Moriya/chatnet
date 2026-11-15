@@ -150,6 +150,17 @@ describe('showing a push', () => {
     )
   })
 
+  it('keeps a call that is ringing on the screen until it is dealt with, and no other kind of alert', async () => {
+    const worker = loadWorker()
+
+    await worker.push({ ...alert, title: 'Bob', body: 'Incoming audio call', tag: 'call-k1', type: 'call', messageId: undefined })
+    await worker.push({ ...alert, type: 'missed-call', tag: 'call-k1', body: 'Missed audio call' })
+
+    const [ringing, missed] = worker.scope.registration.showNotification.mock.calls as unknown as [string, Record<string, unknown>][]
+    expect(ringing[1]).toMatchObject({ tag: 'call-k1', requireInteraction: true })
+    expect(missed[1]).not.toHaveProperty('requireInteraction')
+  })
+
   it('shows an alert without a tag as one that replaces nothing', async () => {
     const worker = loadWorker()
 

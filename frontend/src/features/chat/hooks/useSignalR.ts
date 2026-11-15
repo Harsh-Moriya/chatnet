@@ -3,6 +3,12 @@ import { useQueryClient } from '@tanstack/react-query'
 import { createChatConnection } from '../../../lib/signalr'
 import { catchUpAll } from '../api/catchUp'
 import { reopenConversation } from '../api/reopen'
+import { createCallController, type CallController } from '../../calls/callController'
+import { createCallIdentity } from '../../calls/callIdentity'
+import { browserMedia } from '../../calls/media'
+import { createRtcPeer } from '../../calls/peerSession'
+import { createRingtone } from '../../calls/ringtone'
+import type { CallEvents } from '../../calls/types'
 import { session } from '../../auth/session'
 import { useAuthStore } from '../../auth/store/authStore'
 import { useNotificationStore } from '../../notifications/store/notificationStore'
@@ -22,10 +28,49 @@ export function useSignalR() {
   const alerts = useBrowserAlerts()
   const connectionRef = useRef<ChatConnection | null>(null)
 
+  // The call of this browser: one for as long as the chat is open, so a call goes on through a reconnect. It talks to the hub through whichever
+  // connection is current, and not at all (it says so) while there is none, and reads the page's alerts when a call comes in.
+  const callsRef = useRef<CallController | null>(null)
+  const alertsRef = useRef(alerts)
+  useEffect(() => {
+    alertsRef.current = alerts
+  })
+
+  useEffect(() => {
+    const controller = createCallController({
+      api: () => (useChatStore.getState().connection === 'connected' ? (connectionRef.current?.calls ?? null) : null),
+      peers: createRtcPeer,
+      media: browserMedia,
+      ringtone: createRingtone(),
+      identity: createCallIdentity(),
+      now: Date.now,
+      after: (run, ms) => {
+        const timer = setTimeout(run, ms)
+        return () => clearTimeout(timer)
+      },
+      onIncoming: (call) => alertsRef.current.call(call),
+    })
+    callsRef.current = controller
+
+    return () => {
+      controller.dispose()
+      callsRef.current = null
+    }
+  }, [])
+
   useEffect(() => {
     useChatStore.getState().setConnection('connecting')
 
     let connection: ChatConnection | null = null
+
+    // What the hub says about calls goes to the controller that is current when it arrives.
+    const callEvents: CallEvents = {
+      onIncomingCall: (call) => callsRef.current?.onIncomingCall(call),
+      onCallAnswered: (callId) => callsRef.current?.onCallAnswered(callId),
+      onCallSignal: (callId, type, payload) => callsRef.current?.onCallSignal(callId, type, payload),
+      onCallEnded: (ended) => callsRef.current?.onCallEnded(ended),
+      onReconnected: () => callsRef.current?.onReconnected(),
+    }
 
     // The connection is opened one tick later. React's development double-mount runs this effect,
     // undoes it and runs it again within the same tick, so the first run is cancelled before it
@@ -61,6 +106,8 @@ export function useSignalR() {
         },
         onNotificationsRead: (ids) => useNotificationStore.getState().applyRead(ids),
         onNotificationDismissed: (id) => useNotificationStore.getState().applyDismissed(id),
+
+        calls: callEvents,
 
         // The server refused the token. Renewing the session gives the next attempt a new one.
         onUnauthorized: () => void session.refresh(),
@@ -98,5 +145,17 @@ export function useSignalR() {
     connectionRef.current?.sendTyping(conversationId, isTyping)
   }, [])
 
-  return useMemo(() => ({ sendTyping }), [sendTyping])
+  const calls = useMemo(
+    () => ({
+      start: (input: Parameters<CallController['start']>[0]) => callsRef.current?.start(input) ?? Promise.resolve(),
+      accept: (withVideo?: boolean) => callsRef.current?.accept(withVideo) ?? Promise.resolve(),
+      end: () => callsRef.current?.end(),
+      setMuted: (muted: boolean) => callsRef.current?.setMuted(muted),
+      setCameraOff: (off: boolean) => callsRef.current?.setCameraOff(off),
+      switchDevice: (kind: 'audio' | 'video', deviceId: string) => callsRef.current?.switchDevice(kind, deviceId) ?? Promise.resolve(),
+    }),
+    [],
+  )
+
+  return useMemo(() => ({ sendTyping, calls }), [sendTyping, calls])
 }

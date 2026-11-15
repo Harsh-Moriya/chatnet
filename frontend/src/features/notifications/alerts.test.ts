@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest'
 import type { Conversation, Message } from '../chat/types'
 import {
   conversationTag,
+  incomingCallAlertText,
   messageAlertText,
   notificationAlertText,
+  shouldAlertForIncomingCall,
   shouldAlertForMessage,
   shouldAlertForNotification,
   type Viewing,
@@ -249,5 +251,32 @@ describe('a call', () => {
 
     expect(shouldAlertForMessage(answered, 'me', conversation(), away)).toBe(false)
     expect(shouldAlertForMessage(declined, 'me', conversation(), away)).toBe(false)
+  })
+})
+
+// ##### A call coming in #####
+
+describe('an incoming call', () => {
+  const call = {
+    callId: 'k1',
+    conversationId: 'c1',
+    callerId: 'bob',
+    callerDisplayName: 'Bob',
+    media: 'Video' as const,
+    ringsUntil: '2030-01-01T00:00:30Z',
+  }
+
+  it('alerts when the person is not looking at the page, which has a live connection and so is not pushed to', () => {
+    expect(shouldAlertForIncomingCall(away)).toBe(true)
+  })
+
+  it('does not alert when the person is looking at the page, which rings and shows the call itself', () => {
+    expect(shouldAlertForIncomingCall(looking(null))).toBe(false)
+    expect(shouldAlertForIncomingCall(looking('c1'))).toBe(false)
+  })
+
+  it('says who is calling and what kind of call, under the tag of the server’s push for the same call, and stays until it is dealt with', () => {
+    expect(incomingCallAlertText(call)).toEqual({ title: 'Bob', body: 'Incoming video call', tag: 'call-k1', persistent: true })
+    expect(incomingCallAlertText({ ...call, media: 'Audio' }).body).toBe('Incoming audio call')
   })
 })

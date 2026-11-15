@@ -22,7 +22,7 @@ export interface PushScope {
     openWindow: (url: string) => Promise<unknown>
   }
   registration: {
-    showNotification: (title: string, options?: { body?: string; tag?: string; data?: unknown }) => Promise<void>
+    showNotification: (title: string, options?: { body?: string; tag?: string; data?: unknown; requireInteraction?: boolean }) => Promise<void>
   }
 }
 
@@ -38,6 +38,8 @@ interface Alert {
   title: string
   body: string
   tag: string
+  // What kind of alert it is ("message", "mention", "invitation", "call", "missed-call"); empty when the push does not say.
+  type: string
   conversationId: string | null
   messageId: string | null
 }
@@ -67,6 +69,7 @@ export function readAlert(event: PushEventLike): Alert | null {
     title: text(fields.title),
     body: text(fields.body),
     tag: text(fields.tag),
+    type: text(fields.type),
     conversationId: isId(fields.conversationId) ? fields.conversationId : null,
     messageId: isId(fields.messageId) ? fields.messageId : null,
   }
@@ -89,6 +92,8 @@ export async function showAlert(scope: PushScope, alert: Alert | null): Promise<
     // Alerts with the same tag replace each other, so a conversation shows one at a time.
     tag: alert.tag === '' ? undefined : alert.tag,
     data: { conversationId: alert.conversationId, messageId: alert.messageId },
+    // A call that is ringing stays on the screen until it is dealt with, as an incoming call does on a phone.
+    ...(alert.type === 'call' ? { requireInteraction: true } : {}),
   })
 }
 

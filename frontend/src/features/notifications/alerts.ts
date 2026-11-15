@@ -1,4 +1,5 @@
 import { callLabel, countsAsUnread } from '../chat/calls'
+import type { IncomingCall } from '../calls/types'
 import type { Conversation, Message } from '../chat/types'
 import type { NotificationItem } from './types'
 
@@ -47,6 +48,8 @@ export interface AlertText {
   // Alerts with the same tag replace each other, so a conversation shows one alert at a time and a mention
   // that follows the message it is in does not stack up.
   tag: string
+  // Stays on the screen until the person deals with it, as a ringing phone does, instead of going by itself.
+  persistent?: boolean
 }
 
 const PREVIEW_LENGTH = 100
@@ -54,6 +57,22 @@ const PREVIEW_LENGTH = 100
 function preview(text: string): string {
   const trimmed = text.trim()
   return trimmed.length > PREVIEW_LENGTH ? `${trimmed.slice(0, PREVIEW_LENGTH).trimEnd()}…` : trimmed
+}
+
+// A call coming in: alerted only when the person is not looking at the page. The server alerts people with no connection by push; a page that
+// is open but hidden has a connection, so it has to raise the alert itself.
+export function shouldAlertForIncomingCall(view: Viewing): boolean {
+  return !view.looking
+}
+
+// The tag is the one the server's push for the same call carries, so the two are one alert on the screen.
+export function incomingCallAlertText(call: IncomingCall): AlertText {
+  return {
+    title: call.callerDisplayName,
+    body: call.media === 'Video' ? 'Incoming video call' : 'Incoming audio call',
+    tag: `call-${call.callId}`,
+    persistent: true,
+  }
 }
 
 export function conversationTag(conversationId: string): string {

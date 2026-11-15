@@ -141,6 +141,7 @@ function setup(options: { hub?: FakeHub } = {}) {
   const onNotificationsRead = vi.fn()
   const onNotificationDismissed = vi.fn()
   const onUnauthorized = vi.fn()
+  const calls = { onIncomingCall: vi.fn(), onCallAnswered: vi.fn(), onCallSignal: vi.fn(), onCallEnded: vi.fn(), onReconnected: vi.fn() }
   const connection = connectChat(hub, {
     getUserId: () => 'me',
     onReconnected,
@@ -153,6 +154,7 @@ function setup(options: { hub?: FakeHub } = {}) {
     onNotificationReceived,
     onNotificationsRead,
     onNotificationDismissed,
+    calls,
     onUnauthorized,
     retryDelay: (attempt) => RETRY_DELAYS[Math.min(attempt, RETRY_DELAYS.length - 1)],
   })
@@ -170,6 +172,7 @@ function setup(options: { hub?: FakeHub } = {}) {
     onNotificationsRead,
     onNotificationDismissed,
     onUnauthorized,
+    calls,
   }
 }
 
@@ -1150,5 +1153,88 @@ describe('opening what the server pushes', () => {
 
     expect(onKeysChanged).toHaveBeenCalledWith('c1')
     expect(epochWhenTold).toBe(4)
+  })
+})
+
+describe('calls', () => {
+  const incoming = { callId: 'k1', conversationId: 'c1', callerId: 'bob', callerDisplayName: 'Bob', media: 'Audio', ringsUntil: '2030-01-01T00:00:30Z' }
+
+  it('hands each event of a call on as it comes', async () => {
+    const { hub, calls } = await connected()
+
+    hub.emit('IncomingCall', incoming)
+    hub.emit('CallAnswered', 'k1')
+    hub.emit('CallSignal', 'k1', 'Offer', '{"sdp":"x"}')
+    hub.emit('CallEnded', { callId: 'k1', reason: 'Completed', endedAt: '2030-01-01T00:01:00Z' })
+
+    expect(calls.onIncomingCall).toHaveBeenCalledExactlyOnceWith(incoming)
+    expect(calls.onCallAnswered).toHaveBeenCalledExactlyOnceWith('k1')
+    expect(calls.onCallSignal).toHaveBeenCalledExactlyOnceWith('k1', 'Offer', '{"sdp":"x"}')
+    expect(calls.onCallEnded).toHaveBeenCalledExactlyOnceWith({ callId: 'k1', reason: 'Completed', endedAt: '2030-01-01T00:01:00Z' })
+  })
+
+  it('has handlers that return nothing, as the library replies to the server with whatever a handler returns', async () => {
+    const { hub, calls } = await connected()
+    calls.onIncomingCall.mockReturnValue('a reply')
+
+    expect(hub.emit('IncomingCall', incoming)).toBeUndefined()
+  })
+
+  it('calls the hub methods by their names, with the arguments in the order the server takes them', async () => {
+    const { hub, connection } = await connected()
+    hub.invokeImpl = async () => true
+
+    await connection.calls.startCall('c1', 'Video')
+    await connection.calls.acceptCall('k1')
+    await connection.calls.endCall('k1', true)
+    await connection.calls.sendSignal('k1', 'Candidate', '{}')
+    await connection.calls.rejoinCall('k1', 'token')
+
+    expect(hub.invocations.filter((i) => i.method !== 'StopTyping')).toEqual([
+      { method: 'StartCall', args: ['c1', 'Video'] },
+      { method: 'AcceptCall', args: ['k1'] },
+      { method: 'EndCall', args: ['k1', true] },
+      { method: 'SendCallSignal', args: ['k1', 'Candidate', '{}'] },
+      { method: 'RejoinCall', args: ['k1', 'token'] },
+    ])
+  })
+
+  it('hands on what the hub answers and the reason it refused', async () => {
+    const { hub, connection } = await connected()
+    const started = { callId: 'k1', rejoinToken: 't', ringsUntil: 'x', iceServers: [] }
+    hub.invokeImpl = async (method) => {
+      if (method === 'StartCall') return started
+      throw new Error('HubException: callee-busy')
+    }
+
+    await expect(connection.calls.startCall('c1', 'Audio')).resolves.toBe(started)
+    await expect(connection.calls.acceptCall('k1')).rejects.toThrow('callee-busy')
+  })
+
+  it('tells the call that the connection came back, after a drop the library recovered from', async () => {
+    const { hub, calls, onReconnected } = await connected()
+
+    hub.fireReconnecting()
+    hub.fireReconnected()
+    await flush()
+
+    expect(onReconnected).toHaveBeenCalledOnce()
+    expect(calls.onReconnected).toHaveBeenCalledOnce()
+  })
+
+  it('tells the call that the connection came back after one the library let go of', async () => {
+    const { hub, calls } = await connected()
+
+    hub.fireClosed()
+    await flush()
+    await vi.advanceTimersByTimeAsync(RETRY_DELAYS[0])
+
+    expect(calls.onReconnected).toHaveBeenCalledOnce()
+  })
+
+  it('does not tell the call about the first connection, which is not a return', async () => {
+    const { calls } = await connected()
+
+    expect(calls.onReconnected).not.toHaveBeenCalled()
   })
 })
