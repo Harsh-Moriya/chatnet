@@ -243,4 +243,55 @@ public class MessageFilesTests
             Assert.Equal(GetMessageHistoryHandler.UnknownCursor, (await response.ReadProblemAsync()).Detail);
         }
     }
+
+    [Fact]
+    public async Task A_before_that_is_not_an_id_is_refused()
+    {
+        var (alice, _, conversation) = await _factory.DirectChatAsync();
+        using var client = _factory.CreateClientFor(alice);
+
+        var response = await client.GetAsync($"/api/conversations/{conversation}/attachments?before=not-an-id");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    // A message that has since been deleted is still a position in the conversation, so a client that holds it can continue from it.
+    [Fact]
+    public async Task A_deleted_message_is_a_valid_place_to_continue_from()
+    {
+        var (alice, _, conversation) = await _factory.DirectChatAsync();
+        await _factory.BackdateJoinAsync(conversation);
+        await _factory.AddMessageWithFilesAsync(conversation, alice.Id, "older", Ago(10), fileCount: 1);
+        var deleted = (await _factory.AddMessageWithFilesAsync(conversation, alice.Id, "gone", Ago(8), fileCount: 1, deleted: true)).MessageId;
+        await _factory.AddMessageWithFilesAsync(conversation, alice.Id, "newer", Ago(6), fileCount: 1);
+        using var client = _factory.CreateClientFor(alice);
+
+        var page = await client.GetFilesAsync(conversation, before: deleted);
+
+        Assert.Equal(["older"], page.Select(m => m.ContentOf()));
+    }
+
+    // The upper end of the window is as much a limit for the place to continue from as the lower end: a message sent after the caller left
+    // is "no such message" to them.
+    [Fact]
+    public async Task A_cursor_from_after_the_caller_left_is_refused()
+    {
+        var alice = await _factory.RegisterUserAsync("alice");
+        var bob = await _factory.RegisterUserAsync("bob");
+        using var aliceClient = _factory.CreateClientFor(alice);
+        var group = (await aliceClient.CreateGroupAsync("Left", bob.Id)).IdOf();
+        await _factory.BackdateJoinAsync(group);
+        var leftAt = Ago(30);
+        await _factory.AddMessageWithFilesAsync(group, alice.Id, "while a member", leftAt.AddMinutes(-5), fileCount: 1);
+        var after = (await _factory.AddMessageWithFilesAsync(group, alice.Id, "after leaving", leftAt.AddMinutes(5), fileCount: 1)).MessageId;
+        await _factory.ExecuteDbAsync(db => db.ConversationMembers
+            .Where(m => m.ConversationId == group && m.UserId == bob.Id)
+            .ExecuteUpdateAsync(s => s.SetProperty(m => m.LeftAt, (DateTime?)leftAt)));
+        using var bobClient = _factory.CreateClientFor(bob);
+
+        var response = await bobClient.GetFilesResponseAsync(group, before: after);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(GetMessageHistoryHandler.UnknownCursor, (await response.ReadProblemAsync()).Detail);
+    }
 }
