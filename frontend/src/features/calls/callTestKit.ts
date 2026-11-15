@@ -34,8 +34,19 @@ export class FakeTrack {
     this.kind = kind
   }
 
+  private readonly listeners: (() => void)[] = []
+
   stop() {
     this.stopped = true
+  }
+
+  addEventListener(type: string, listener: () => void) {
+    if (type === 'ended') this.listeners.push(listener)
+  }
+
+  // The device behind the track went away: the browser ends the track by itself (stop() does not do this).
+  end() {
+    this.listeners.forEach((listener) => listener())
   }
 }
 
@@ -68,6 +79,18 @@ export class FakeMedia implements MediaSource {
     const stream = new FakeStream(video ? ['audio', 'video'] : ['audio'])
     this.streams.push(stream)
     return stream as unknown as MediaStream
+  }
+
+  // What the default device gave, one track per call; `noDefault` makes the browser say there is none.
+  defaults: FakeTrack[] = []
+  noDefault = false
+
+  async captureDefault(kind: 'audio' | 'video') {
+    if (this.noDefault) throw new MediaUnavailable('missing')
+
+    const track = new FakeTrack(kind)
+    this.defaults.push(track)
+    return track as unknown as MediaStreamTrack
   }
 
   async captureDevice(kind: 'audio' | 'video', deviceId: string) {

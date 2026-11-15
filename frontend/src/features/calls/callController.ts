@@ -2,7 +2,7 @@ import { signCall, verifyCall, type CallContext, type CallRole } from '../../lib
 import type { CallMedia } from '../chat/types'
 import { callErrorCode } from './callErrors'
 import { useCallStore } from './callStore'
-import { NOT_VERIFIED, endedNotice, startRefusal } from './callTexts'
+import { NOT_VERIFIED, deviceLostNotice, endedNotice, startRefusal } from './callTexts'
 import { MediaUnavailable, stopStream, type MediaSource } from './media'
 import { PeerIdentityChanged, PeerKeysUnavailable, type CallIdentity } from './peerIdentity'
 import type { PeerFactory, PeerSession, PeerState } from './peerSession'
@@ -74,6 +74,9 @@ export interface CallController extends CallEvents {
   setMuted: (muted: boolean) => void
   setCameraOff: (off: boolean) => void
   switchDevice: (kind: 'audio' | 'video', deviceId: string) => Promise<void>
+  // The page is closing or reloading: a call this side made or answered is ended at once, so the other person is not left waiting out the
+  // server's grace. A call that is only ringing here is left alone: nothing was answered, and the page that opens next is told about it.
+  leave: () => void
   // The call screen is dismissed, or the page is going away: forget everything without telling anyone.
   dispose: () => void
 }
@@ -381,6 +384,7 @@ export function createCallController(deps: CallDeps): CallController {
     }
     if (session !== s) return stopStream(local)
     s.local = local
+    watchTracks(s, local)
 
     let ringsUntil: string
     try {
@@ -488,6 +492,7 @@ export function createCallController(deps: CallDeps): CallController {
     }
 
     s.local = local
+    watchTracks(s, local)
     s.answered = true
     s.cancelRingEnd?.()
     s.cancelRingEnd = null
@@ -629,20 +634,59 @@ export function createCallController(deps: CallDeps): CallController {
       const track = await deps.media.captureDevice(kind, deviceId)
       if (session !== s || s.local === null || s.peer === null) return track.stop()
 
-      // The new track keeps what the person chose: a muted microphone stays muted.
-      track.enabled = kind === 'audio' ? !store().muted : !store().cameraOff
-      await s.peer.replaceTrack(kind, track)
-
-      const previous = kind === 'audio' ? s.local.getAudioTracks() : s.local.getVideoTracks()
-      previous.forEach((old) => {
-        s.local?.removeTrack(old)
-        old.stop()
-      })
-      s.local.addTrack(track)
-      store().setStreams({ local: s.local })
+      await swapTrack(s, kind, track)
     } catch (error) {
       store().setNotice(error instanceof MediaUnavailable ? error.message : 'The device could not be used.')
     }
+  }
+
+  // Sends this track instead of the one of its kind. The new track keeps what the person chose: a muted microphone stays muted.
+  async function swapTrack(s: Session, kind: 'audio' | 'video', track: MediaStreamTrack) {
+    const local = s.local as MediaStream
+
+    track.enabled = kind === 'audio' ? !store().muted : !store().cameraOff
+    await s.peer?.replaceTrack(kind, track)
+
+    const previous = kind === 'audio' ? local.getAudioTracks() : local.getVideoTracks()
+    previous.forEach((old) => {
+      local.removeTrack(old)
+      old.stop()
+    })
+    local.addTrack(track)
+    watchTracks(s, track)
+    store().setStreams({ local })
+  }
+
+  // ##### A device that goes away #####
+
+  // A track that ends by itself (a headset unplugged, a camera taken by another program) is replaced by the default device of its kind. The
+  // tracks this side stops, when it switches device or the call ends, do not raise `ended`, and are no longer in the stream anyway.
+  function watchTracks(s: Session, source: MediaStream | MediaStreamTrack) {
+    const tracks = 'getTracks' in source ? source.getTracks() : [source]
+    for (const track of tracks) track.addEventListener('ended', () => void lost(s, track))
+  }
+
+  async function lost(s: Session, track: MediaStreamTrack) {
+    if (session !== s || s.local === null || !s.local.getTracks().includes(track)) return
+
+    const kind = track.kind as 'audio' | 'video'
+
+    try {
+      const replacement = await deps.media.captureDefault(kind)
+      if (session !== s || s.local === null) return replacement.stop()
+
+      await swapTrack(s, kind, replacement)
+      store().setNotice(deviceLostNotice(kind, true))
+    } catch {
+      if (session !== s) return
+      if (kind === 'video') setCameraOff(true)
+      store().setNotice(deviceLostNotice(kind, false))
+    }
+  }
+
+  function leave() {
+    const phase = store().phase
+    if (phase === 'outgoing' || phase === 'connecting' || phase === 'active') end()
   }
 
   function dispose() {
@@ -660,6 +704,7 @@ export function createCallController(deps: CallDeps): CallController {
     setMuted,
     setCameraOff,
     switchDevice,
+    leave,
     dispose,
     onIncomingCall: incoming,
     onCallAnswered,

@@ -349,6 +349,26 @@ describe('when the media drops', () => {
   })
 })
 
+describe('when the page closes', () => {
+  it('leaves a call that is only ringing here alone: the server rings the page that opens next', () => {
+    rig.controller.onIncomingCall(incomingCall())
+
+    rig.controller.leave()
+
+    expect(rig.api.ended).toEqual([])
+    expect(store().phase).toBe('incoming')
+  })
+
+  it('ends a call it has answered, as a hang-up', async () => {
+    await accepted()
+
+    rig.controller.leave()
+
+    expect(rig.api.ended).toEqual([{ callId: CALL, failed: false }])
+    expect(stopped()).toBe(true)
+  })
+})
+
 describe('the call going on and ending', () => {
   it('is active once the media connects', async () => {
     await accepted()

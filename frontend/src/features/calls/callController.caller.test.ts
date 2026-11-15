@@ -531,6 +531,128 @@ describe('when the media drops and comes back', () => {
   })
 })
 
+describe('a device that goes away', () => {
+  const firstTrack = (kind: 'audio' | 'video') => rig.media.streams[0].tracks.find((track) => track.kind === kind)!
+
+  it('has the default microphone put in its place, keeps it muted if it was, and says so', async () => {
+    await answered()
+    rig.controller.setMuted(true)
+    const gone = firstTrack('audio')
+
+    gone.end()
+    await settle()
+
+    const [replacement] = rig.media.defaults
+    expect(replacement).toMatchObject({ kind: 'audio', enabled: false })
+    expect(rig.peers.current.replaced).toEqual([{ kind: 'audio', track: replacement }])
+    expect(rig.media.streams[0].tracks).toEqual([replacement])
+    expect(store().notice).toBe('Your microphone was disconnected, so the default one is used.')
+    expect(store().phase).toBe('connecting')
+  })
+
+  it('has the default camera put in its place', async () => {
+    await ringing('Video')
+    rig.controller.onCallAnswered(CALL)
+    await settle()
+
+    firstTrack('video').end()
+    await settle()
+
+    expect(rig.media.defaults.map((track) => track.kind)).toEqual(['video'])
+    expect(store().notice).toBe('Your camera was disconnected, so the default one is used.')
+  })
+
+  it('goes on, and says so, when there is no other microphone', async () => {
+    await answered()
+    rig.media.noDefault = true
+
+    firstTrack('audio').end()
+    await settle()
+
+    expect(store().notice).toBe('Your microphone was disconnected.')
+    expect(store().phase).toBe('connecting')
+    expect(rig.api.ended).toEqual([])
+  })
+
+  it('turns the camera off, and says so, when there is no other camera', async () => {
+    await ringing('Video')
+    rig.controller.onCallAnswered(CALL)
+    await settle()
+    rig.media.noDefault = true
+
+    firstTrack('video').end()
+    await settle()
+
+    expect(store()).toMatchObject({ cameraOff: true, notice: 'Your camera was disconnected.' })
+  })
+
+  it('is replaced while the call is only ringing too, before the connection exists', async () => {
+    await ringing()
+
+    firstTrack('audio').end()
+    await settle()
+
+    expect(rig.media.defaults).toHaveLength(1)
+    expect(rig.media.streams[0].tracks).toEqual(rig.media.defaults)
+  })
+
+  it('does not treat the track it replaced itself as lost', async () => {
+    await answered()
+    const old = firstTrack('audio')
+
+    await rig.controller.switchDevice('audio', 'headset')
+    old.end()
+    await settle()
+
+    expect(rig.media.defaults).toEqual([])
+    expect(store().notice).toBeNull()
+  })
+
+  it('does nothing about a track that ends after the call is over', async () => {
+    await answered()
+    const track = firstTrack('audio')
+    rig.controller.end()
+
+    track.end()
+    await settle()
+
+    expect(rig.media.defaults).toEqual([])
+  })
+})
+
+describe('when the page closes', () => {
+  it('ends a call that is ringing out, as a hang-up, so the other person is not left waiting', async () => {
+    await ringing()
+
+    rig.controller.leave()
+
+    expect(rig.api.ended).toEqual([{ callId: CALL, failed: false }])
+    expect(stopped()).toBe(true)
+  })
+
+  it('ends a call that is being connected or in progress', async () => {
+    await answered()
+    rig.peers.current.state('connected')
+
+    rig.controller.leave()
+
+    expect(rig.api.ended).toEqual([{ callId: CALL, failed: false }])
+    expect(stopped()).toBe(true)
+  })
+
+  it('has nothing to end when there is no call, or the call is not made yet', async () => {
+    rig.controller.leave()
+    expect(rig.api.ended).toEqual([])
+
+    rig.api.startResult = () => new Promise(() => {})
+    void rig.controller.start(input)
+    await settle()
+    rig.controller.leave()
+
+    expect(rig.api.ended).toEqual([])
+  })
+})
+
 describe('when the call ends', () => {
   it('on the person’s hang-up, it tells the server, lets go of everything and shows that it ended', async () => {
     await answered()
