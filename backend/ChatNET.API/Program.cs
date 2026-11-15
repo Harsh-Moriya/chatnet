@@ -1,4 +1,5 @@
 using ChatNET.API.Calls;
+using ChatNET.API.Calls.Ice;
 using System.Text;
 using System.Text.Json.Serialization;
 using ChatNET.API.Auth;
@@ -336,6 +337,11 @@ try
     builder.Services.AddScoped<IPushSubscriptionRepository, PushSubscriptionRepository>();
     builder.Services.AddScoped<PushAlertRows>();
     builder.Services.AddScoped<CallLog>();
+    builder.Services.AddOptions<TurnOptions>()
+        .BindConfiguration(TurnOptions.SectionName)
+        .ValidateOnStart();
+    builder.Services.AddSingleton<IValidateOptions<TurnOptions>, TurnOptionsValidator>();
+    builder.Services.AddSingleton<IceServers>();
     builder.Services.AddScoped<PushAlerts>();
     builder.Services.AddHostedService<PushSubscriptionCleanupService>();
 
