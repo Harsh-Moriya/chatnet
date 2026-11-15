@@ -22,10 +22,12 @@ export type { PDFDocumentProxy as PdfDocument, PDFPageProxy as PdfPageProxy }
 GlobalWorkerOptions.workerSrc = workerUrl
 
 // The data pdf.js reads while drawing: the character maps of fonts that are not in the PDF (mostly Chinese, Japanese and Korean ones), and
-// the decoders of three kinds of image (JPEG 2000, JBIG2 scans and ICC colour profiles). Vite builds each as a file under /assets with a hashed
-// name, so what pdf.js asks for by name is looked up here, and each is fetched only when a PDF needs it. Standard font files are not shipped: a
-// font that is not in the PDF falls back to one of the system.
-const bundled = import.meta.glob('/node_modules/pdfjs-dist/{cmaps/*.bcmap,wasm/{openjpeg,jbig2,qcms_bg}.wasm}', {
+// the decoders of two kinds of image (JPEG 2000 and JBIG2 scans). Vite builds each as a file under /assets with a hashed name, so what pdf.js
+// asks for by name is looked up here, and each is fetched only when a PDF needs it. Standard font files are not shipped: a font that is not in
+// the PDF falls back to one of the system. The decoder of ICC colour profiles is not shipped either: pdf.js only uses it when its worker
+// fetches data by itself (useWorkerFetch), which would need fixed file names, so such a profile is not applied and the colours are the
+// device's.
+const bundled = import.meta.glob('/node_modules/pdfjs-dist/{cmaps/*.bcmap,wasm/{openjpeg,jbig2}.wasm}', {
   query: '?url&no-inline',
   import: 'default',
   eager: true,

@@ -78,7 +78,7 @@ The pages of a PDF are drawn to canvas by pdf.js, in a column that scrolls. The 
 - **On a touch screen** the zoom is the buttons. The browser's own pinch scales the whole screen, the toolbar included.
 - **What a PDF can do here is small.** There is no text layer, so text cannot be selected or searched, no links or forms, no scripting and no XFA. Nothing in the file runs.
 - **A PDF that asks for a password** is not opened ("protected by a password"), and offers Download. A file that is not a PDF, or that cannot be read, says so and offers Download too, with a retry when the fetch failed.
-- **Fonts and images.** The character maps for fonts that are not in the PDF (mostly Chinese, Japanese and Korean ones) and the decoders for JPEG 2000, JBIG2 and ICC colour images are files of this site, fetched only when a PDF needs them. The 14 standard fonts are not shipped, so a PDF that uses one without embedding it is drawn in a font of the system.
+- **Fonts and images.** The character maps for fonts that are not in the PDF (mostly Chinese, Japanese and Korean ones) and the decoders for JPEG 2000 and JBIG2 images are files of this site, fetched only when a PDF needs them. A colour profile (ICC) in a PDF is not applied, and its colours are drawn as the device's. The 14 standard fonts are not shipped, so a PDF that uses one without embedding it is drawn in a font of the system.
 
 ### Videos in the viewer
 
