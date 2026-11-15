@@ -274,6 +274,22 @@ describe('letting go of files', () => {
     expect(d.revokeUrl).toHaveBeenCalledWith('blob:1')
   })
 
+  it('keeps the older files that fit when a newer one is larger than the whole budget, since the one let go of takes no room', async () => {
+    const sizes = [10, 100]
+    const d = deps({ open: vi.fn<FileObjectDeps['open']>(async () => sized(sizes.shift()! * MEBIBYTE)) })
+    const objects = createFileObjects(d, clock())
+    const small = source('small')
+    const huge = source('huge', 'video/mp4')
+    await objects.hold(small)
+    objects.release(small)
+    await objects.hold(huge)
+    objects.release(huge)
+    await Promise.resolve()
+
+    expect(d.revokeUrl).toHaveBeenCalledTimes(1)
+    expect(d.revokeUrl).toHaveBeenCalledWith('blob:2')
+  })
+
   it('opens a file that was let go of again, from the start', async () => {
     const d = bigFiles()
     const objects = createFileObjects(d, clock())

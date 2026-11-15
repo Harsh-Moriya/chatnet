@@ -100,10 +100,13 @@ export function createFileObjects(deps: FileObjectDeps, now: () => number = Date
   function trim() {
     const idle = [...held.entries()].filter(([, entry]) => entry.holders === 0).sort((a, b) => b[1].lastUsed - a[1].lastUsed)
 
+    // A file that is let go of takes no room, so a large one does not cost the older files that would fit without it.
     let kept = 0
     for (const [id, entry] of idle) {
-      kept += entry.size
-      if (kept <= KEPT_UNUSED_BYTES) continue
+      if (kept + entry.size <= KEPT_UNUSED_BYTES) {
+        kept += entry.size
+        continue
+      }
 
       held.delete(id)
       entry.url.then(deps.revokeUrl, () => undefined)
