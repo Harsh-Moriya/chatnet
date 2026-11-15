@@ -2,7 +2,7 @@
 
 The byte formats used to encrypt message content, files and keys, written so that a client on any platform can read and write them. This page is the specification of version 1. The reference implementation is `frontend/src/lib/crypto`, and [encryption-test-vectors.json](encryption-test-vectors.json) holds fixed inputs and the exact bytes every format must produce.
 
-The formats cover what is stored and relayed as opaque bytes: the public key bundle of a person, the encrypted key backup, the key of a conversation and how it reaches each member, the message blob, the encrypted file, device linking and the safety number.
+The formats cover what is stored and relayed as opaque bytes: the public key bundle of a person, the encrypted key backup, the key of a conversation and how it reaches each member, the message blob, the encrypted file, device linking, the safety number and the signature that protects the media of a call.
 
 ## Conventions
 
@@ -237,6 +237,20 @@ Sixty digits two people can compare to confirm that each has the identity key th
 
 For each person, `digest = SHA-256(label("chatnet/v1/safety", userId(16) || identityPublic(32)))`. Read the first 30 bytes as six groups of 5 bytes, each a big-endian number, reduce each modulo 100000 and write it with five digits. That gives 30 digits. The number is the 30 digits of the person whose 16 user id bytes sort first, followed by the 30 digits of the other, so both people see the same number. It is shown as twelve groups of five.
 
+## Call signature
+
+A call's audio and video are encrypted between the two browsers by WebRTC (DTLS-SRTP), and the certificate each side will use is named in its session description (SDP) as `a=fingerprint:<algorithm> <hex>`. The server relays the SDP, so without more it could replace the fingerprints with its own and sit in the middle of the call. Each side therefore signs the fingerprints of the SDP it sends with its Ed25519 identity key, and the other side checks the signature against the identity key it holds for that person (the one the [safety number](#safety-number) is made of). An SDP whose fingerprints were changed on the way no longer matches its signature.
+
+**Fingerprints.** Read every line of the SDP that starts with `a=fingerprint:`. A line is `a=fingerprint:` followed by an algorithm of letters, digits and hyphens, a space, and hex pairs separated by colons. Write each as the algorithm in lower case, a space, and the hex in upper case (`sha-256 AB:CD:...`), remove repeats and sort the strings by their UTF-8 bytes. A line of that prefix that does not have this shape, an SDP with none, and an SDP with more than 8 distinct ones are rejected. A browser writes one line per media section, all for one certificate, so a real SDP gives one or two.
+
+**Signature input:** `label("chatnet/v1/call-signature", callId(16) || conversationId(16) || signerId(16) || peerId(16) || role(1) || count(2) || for each fingerprint: length(2) || UTF-8 bytes)`. The role is `00` for an offer and `01` for an answer. The signer is the person who signs and the peer is the other one, so the answer of the callee is signed with the callee as signer. Binding the call, the conversation, the two people and the role means a signature cannot be replayed into another call, or turned around into the other side's answer.
+
+**On the wire.** The offer and the answer travel as the payload of a call signal (see [calls](../features/calls.md)): the JSON `{"sdp":"<the session description>","signature":"<64 bytes as unpadded base64url>"}`. The server relays it as text and reads none of it.
+
+**What is not signed.** ICE candidates are not. A false candidate can only make the connection fail, because the other side cannot complete the DTLS handshake without the certificate that the signed fingerprint names.
+
+A reader treats a signature that does not verify, a signature that is not 64 bytes, an SDP it cannot take fingerprints from, and a signer whose identity key it does not hold (or that differs from the remembered one) as a call that cannot be verified, and ends it.
+
 ## What readers must reject
 
 A reader treats each of these as an error and does not try to repair the input:
@@ -247,6 +261,7 @@ A reader treats each of these as an error and does not try to repair the input:
 - a stored file whose length is not the one its entry gives, or whose header names another chunk size than the entry
 - a signature that does not verify, a ciphertext that does not authenticate, or an association (conversation, sender, client message id, edit count, epoch, member, generation) that differs from the one the blob was made for
 - an epoch key that does not match its commitment
+- a call signature that does not verify, or a session description without a usable fingerprint
 - an account key generation list that does not ascend
 
 ## Limits of the formats
@@ -258,6 +273,6 @@ A reader treats each of these as an error and does not try to repair the input:
 
 ## Test vectors
 
-[encryption-test-vectors.json](encryption-test-vectors.json) holds, for version 1: the keys used (all derived from SHA-256 of a fixed text, so no key is chosen by hand), and for each format the inputs and the exact output bytes in hex. Random values (ephemeral keys, nonces, salts) are fixed in the vectors so that output is reproducible; real use draws them at random. Sections: `bundle`, `secrets`, `backup`, `epoch` (commitment, envelope, signed record), `messages`, `files`, `link`, `safetyNumber`.
+[encryption-test-vectors.json](encryption-test-vectors.json) holds, for version 1: the keys used (all derived from SHA-256 of a fixed text, so no key is chosen by hand), and for each format the inputs and the exact output bytes in hex. Random values (ephemeral keys, nonces, salts) are fixed in the vectors so that output is reproducible; real use draws them at random. Sections: `bundle`, `secrets`, `backup`, `epoch` (commitment, envelope, signed record), `messages`, `files`, `link`, `safetyNumber`, `call` (a signed offer and a signed answer, with the exact input that was signed).
 
 The vectors were produced by an implementation written separately from the one in the web client, on a different cryptography library, and the web client's tests check that it reproduces every value and opens every blob. A new client implementation should do the same before it handles real data.

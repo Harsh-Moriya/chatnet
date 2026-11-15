@@ -144,6 +144,20 @@ The endpoint a browser registers is an address the server posts to, so it is tre
 - A push carries ids, who it is from and what kind it is (a new message, a file, a mention, an invitation), encrypted to the one browser it is for. It never carries the text of a message. The push service sees which endpoint, when and how big.
 - A person who learns an endpoint cannot push to it without the private key.
 
+## Calls
+
+The audio and video of a call are encrypted between the two browsers (DTLS-SRTP), with certificates the browsers make for the call. The server relays the signals that set the call up, so the question is who vouches for the certificates. Each side signs the fingerprints of its session description with its identity key, and the other side checks them against the identity key it holds for that person, the key the safety number covers. Format and fields are in [encryption formats](encryption-format.md#call-signature).
+
+| Concern | How it is handled | Limit |
+|---|---|---|
+| A server in the middle of the media | A swapped fingerprint no longer matches the signature, so the call is ended as unverifiable before any media flows | The first sight of a person's identity key is trusted, as for messages; two people who have compared the safety number are protected from the first call on |
+| Replaying a signature | The call, the conversation, both people and the role (offer or answer) are in the signed input | |
+| A person whose key changed | The call is refused and the person is told to compare the safety number, as for messages | |
+| Candidates | Not signed | A false candidate can only make the connection fail |
+| Who may call whom | Only a member of a direct conversation, and not a deactivated account; one call at a time per person; 10 starts a minute | |
+| Alerts | The push for a ringing call carries who is calling, never anything else | |
+| Logs | Ids only: no session description and no candidate, which hold network addresses | The relay's own log names an address and a credential's person id |
+
 ## The relay for calls
 
 Calls go directly between two browsers when they can, and through a TURN server (`coturn`) when they cannot. The setup is in [deployment](../operations/deployment.md#calls-the-turn-server).

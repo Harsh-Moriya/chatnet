@@ -1,6 +1,6 @@
 # Calls
 
-One-to-one audio and video calls in a direct conversation. The media goes between the two browsers (or through the relay, see [deployment](../operations/deployment.md#calls-the-turn-server)); the server decides who may call whom, keeps the state of a call that is ringing or running, relays the signals the two sides use to set the media up, ends the call when it must, and writes the call into the conversation when it is over. This page is the server's side: the methods and events a client uses and the rules behind them.
+One-to-one audio and video calls in a direct conversation. The media goes between the two browsers (or through the relay, see [deployment](../operations/deployment.md#calls-the-turn-server)); the server decides who may call whom, keeps the state of a call that is ringing or running, relays the signals the two sides use to set the media up, ends the call when it must, and writes the call into the conversation when it is over. This page covers the server's side (the methods and events a client uses and the rules behind them) and what a client has to do for a call to be safe and to work; the web client is the reference implementation, in `frontend/src/features/calls`.
 
 ## The life of a call
 
@@ -11,6 +11,26 @@ One-to-one audio and video calls in a direct conversation. The media goes betwee
 5. **End.** `EndCall(callId, failed)` from either person, or the server when the call is due. Every connection of both people gets `CallEnded` with the reason. The call is recorded in the conversation, see [messaging](messaging.md#calls-in-the-timeline).
 
 A call that does not exist, or that somebody else is already ending, is not an error for `EndCall`: a hang-up that arrives twice is the same hang-up.
+
+## What a client does
+
+The server relays signals and trusts nobody's media. The client is what makes the call private, so these steps are part of the contract and not only of the web client.
+
+**Before it asks.** A caller first makes sure it can call: it holds, or can fetch, the identity key of the other person (a person who has not set up encryption cannot be called, and a changed key must be accepted after comparing the safety number), and it opens the microphone (and the camera for a video call). A refused permission starts no call, so nobody rings for a call that could not carry sound. The callee does the same before `AcceptCall`. A video call can be answered as audio only.
+
+**The caller** calls `StartCall`, plays a ringing tone, and waits. The offer is made only when `CallAnswered` arrives, so no session description, and with it no network address, reaches somebody who did not answer. The caller builds the peer connection from `iceServers`, adds its tracks, creates the offer, signs the fingerprints (see [the call signature](../architecture/encryption-format.md#call-signature)) and sends `Offer` with `{"sdp","signature"}`.
+
+**The callee** calls `AcceptCall`, builds the peer connection from the `iceServers` it returned and waits for the `Offer`. The offer can arrive before `AcceptCall` has returned, and `CallAnswered` can arrive at the answering connection itself before then (it goes to every connection of both people): a client holds early signals and handles them in order, and does not take its own `CallAnswered` as "answered elsewhere". On the offer it verifies, sets the remote description, creates the answer, signs it as the callee and sends `Answer`.
+
+**Verifying.** The receiver of an `Offer` or `Answer` checks the signature with the identity key of the other person, with the call, the conversation, both people and the role as the signed input. If the key is missing, has changed, or the signature does not verify, the client ends the call with `EndCall(callId, failed: true)` and tells the person that the call could not be verified. Nothing is played before the check passes.
+
+**Candidates** are sent as `Candidate` with the JSON of the ICE candidate (`candidate`, `sdpMid`, `sdpMLineIndex`, `usernameFragment`) as it is found, and a receiver holds the ones that arrive before the remote description is set. A `Candidate` that does not decode is ignored, an `Offer` or `Answer` that does not decode counts as one that could not be verified, and a `Candidate` is never signed.
+
+**While it runs.** Muting and turning the camera off only disable the track, so the other side hears silence or sees a still frame and the connection is untouched; changing the microphone or camera replaces the track being sent. If the media is down for 8 seconds the client ends the call with `failed: true`. After the hub reconnects, a client in a call calls `RejoinCall` with its token, and a refusal ends the call on its side. `CallEnded` ends everything: tracks stopped, the connection closed, the ring stopped.
+
+**Several devices.** `IncomingCall` reaches each device the callee has open. A device that sees `CallAnswered` for a call it is still ringing for, without having accepted it, stops ringing; it does not take part in the call.
+
+**Showing the call.** The web client shows a ringing call as a dialog that is answered with its own buttons (Escape does not decline), and a call in progress full screen. Accept is green, and decline, cancel and hang up are red. A page that is open but hidden raises an operating system notification for an incoming call, and one that is closed is reached by the push alert described above; both stay until they are used or dismissed.
 
 ## How it ended
 
