@@ -15,7 +15,7 @@
 // the signed fingerprint names.
 
 import { CryptoError, u16, utf8, uuidBytes, type Bytes } from './bytes'
-import { LABELS, SIGNATURE_BYTES, labelled } from './formats'
+import { LABELS, labelled } from './formats'
 import { ed25519Sign, ed25519Verify, type KeyPair } from './primitives'
 
 export type CallRole = 'offer' | 'answer'
@@ -84,7 +84,5 @@ export async function verifyCall(
   sdp: string,
   signature: Uint8Array,
 ): Promise<boolean> {
-  if (signature.length !== SIGNATURE_BYTES) return false
-
   return ed25519Verify(signerPublic, callSignatureInput(context, role, fingerprintsOf(sdp)), signature)
 }
