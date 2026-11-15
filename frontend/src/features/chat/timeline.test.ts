@@ -214,3 +214,35 @@ describe('deleted messages', () => {
     expect(items[0].message.content).toBeNull()
   })
 })
+
+// ##### Calls #####
+
+describe('a finished call', () => {
+  const callInfo = {
+    id: 'call-1',
+    media: 'Audio' as const,
+    startedAt: at(11, 10, 0),
+    answeredAt: null,
+    endedAt: at(11, 10, 1),
+    endReason: 'Missed' as const,
+    isMissed: true,
+  }
+  const callRow = (id: string, senderId: string, createdAt: string) =>
+    message(id, senderId, createdAt, { kind: 'Call', call: callInfo, content: null })
+
+  it('is a line of its own, and says whether the signed-in user made the call', () => {
+    const items = build([callRow('k1', 'me', at(11, 10, 1)), callRow('k2', 'bob', at(11, 10, 2))])
+
+    expect(items.filter((i) => i.kind === 'call').map((i) => i.kind === 'call' && i.own)).toEqual([true, false])
+  })
+
+  it('breaks a run: what the same person says after it is a new run', () => {
+    const items = build([message('a', 'bob', at(11, 10, 0)), callRow('k', 'me', at(11, 10, 1)), message('b', 'bob', at(11, 10, 2))], [], { isGroup: true })
+
+    expect(kinds(items)).toEqual(['day', 'message', 'call', 'message'])
+    expect(messages(items).map((m) => [m.continuing, m.showSender])).toEqual([
+      [false, true],
+      [false, true],
+    ])
+  })
+})

@@ -1,3 +1,4 @@
+import { callLabel, countsAsUnread } from '../chat/calls'
 import type { Conversation, Message } from '../chat/types'
 import type { NotificationItem } from './types'
 
@@ -25,6 +26,9 @@ export function shouldAlertForMessage(
 ): boolean {
   if (message.senderId === selfId) return false
   if (conversation?.isMuted) return false
+
+  // A call that was answered or turned down is no news; one that was missed is.
+  if (!countsAsUnread(message)) return false
 
   return !onScreen(message.conversationId, view)
 }
@@ -57,6 +61,11 @@ export function conversationTag(conversationId: string): string {
 }
 
 export function messageAlertText(message: Message, conversation: Conversation | undefined): AlertText {
+  // The tag is the one the server's push for the same call carries, so the two are one alert on the screen.
+  if (message.kind === 'Call' && message.call) {
+    return { title: message.senderDisplayName, body: callLabel(message.call, false), tag: `call-${message.call.id}` }
+  }
+
   const inGroup = conversation?.type === 'Group'
   const files = message.attachments.length
 

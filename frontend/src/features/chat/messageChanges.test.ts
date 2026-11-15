@@ -7,6 +7,7 @@ import {
   isNewer,
   isPreviewOf,
   latest,
+  previewFrom,
   withChangedPreview,
 } from './messageChanges'
 import type { Attachment, Conversation, Message } from './types'
@@ -332,5 +333,62 @@ describe('afterDeletion', () => {
 
     expect(afterDeletion(shown, undefined, message({ createdAt: '2026-10-11T10:02:00Z' }), 'me').unreadCount).toBe(1)
     expect(afterDeletion(shown, undefined, message({ createdAt: '2026-10-11T10:01:00Z' }), 'me')).toBe(shown)
+  })
+})
+
+// ##### Calls #####
+
+describe('the row of a call', () => {
+  const callRow = (overrides: Partial<Message> = {}): Message => ({
+    id: 'k1',
+    conversationId: 'c1',
+    senderId: 'me',
+    senderDisplayName: 'Me',
+    content: null,
+    createdAt: '2026-10-11T10:00:00Z',
+    clientMessageId: null,
+    editedAt: null,
+    editCount: 0,
+    isDeleted: false,
+    attachments: [],
+    kind: 'Call',
+    call: {
+      id: 'call-1',
+      media: 'Video',
+      startedAt: '2026-10-11T09:59:00Z',
+      answeredAt: null,
+      endedAt: '2026-10-11T10:00:00Z',
+      endReason: 'Missed',
+      isMissed: true,
+    },
+    ...overrides,
+  })
+
+  it('cannot be edited, even by the caller, and cannot be deleted, even by an owner', () => {
+    const now = new Date('2026-10-11T10:00:30Z').getTime()
+
+    expect(canEdit(callRow(), 'me', now)).toBe(false)
+    expect(canDelete(callRow(), 'me', 'Owner')).toBe(false)
+  })
+
+  it('is what the sidebar shows when it is the last message, with its call', () => {
+    const preview = previewFrom(callRow())
+
+    expect(preview.kind).toBe('Call')
+    expect(preview.call?.media).toBe('Video')
+    expect(preview.content).toBeNull()
+    expect(preview.sealed).toBeNull()
+  })
+
+  it('is not counted among the unread when one of them is deleted, unless it was missed', () => {
+    const held = [
+      callRow({ id: 'answered', senderId: 'bob', call: { ...callRow().call!, answeredAt: '2026-10-11T10:00:00Z', endReason: 'Completed', isMissed: false } }),
+      callRow({ id: 'missed', senderId: 'bob' }),
+      { ...callRow({ id: 'text', senderId: 'bob' }), kind: 'Text' as const, call: null, content: 'hi' },
+    ]
+    const conversation = { unreadCount: 2 } as Conversation
+
+    // Two are unread (the missed call and the text); the answered call is not one of them, so deleting the text takes one off.
+    expect(afterDeletion(conversation, held, held[2], 'me').unreadCount).toBe(1)
   })
 })

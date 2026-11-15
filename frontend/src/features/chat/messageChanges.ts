@@ -1,4 +1,5 @@
 import { compareTimestamps } from '../../lib/time'
+import { countsAsUnread } from './calls'
 import { previewOf } from './preview'
 import type { Attachment, Conversation, LastMessage, Member, Message, SealedPreview } from './types'
 
@@ -61,6 +62,8 @@ export function previewFrom(message: Message): LastMessage {
     createdAt: message.createdAt,
     attachmentCount: message.isDeleted ? 0 : message.attachments.length,
     sealed: sealedPreviewOf(message),
+    // Said only for a call: a text preview is a preview that says nothing of its kind.
+    ...(message.kind === 'Call' ? { kind: 'Call' as const, call: message.call ?? null } : {}),
   }
 }
 
@@ -68,7 +71,7 @@ export function previewFrom(message: Message): LastMessage {
 // window ago. The window is counted from the sender's own timestamp to the reader's clock, so a wrong clock only
 // changes whether the button shows; the server answers for the rest.
 export function canEdit(message: Message, selfId: string, now: number): boolean {
-  if (message.isDeleted || message.senderId !== selfId) return false
+  if (message.isDeleted || message.kind === 'Call' || message.senderId !== selfId) return false
 
   // An edit seals the message again with its text and the entries of its files. A message that could not be opened has neither, and one
   // with a file the sealed message does not vouch for has an entry missing, which would put the others out of place: it is not offered.
@@ -81,7 +84,8 @@ export function canEdit(message: Message, selfId: string, now: number): boolean 
 // Whether the reader should be offered "Delete": their own message at any time, or anyone's when they own or administer
 // the group. `role` is the reader's role when the member list has been loaded, else undefined.
 export function canDelete(message: Message, selfId: string, role: Member['role'] | undefined): boolean {
-  if (message.isDeleted) return false
+  // The row of a call is the server's record of it, and nobody's message to delete.
+  if (message.isDeleted || message.kind === 'Call') return false
 
   return message.senderId === selfId || role === 'Owner' || role === 'Admin'
 }
@@ -129,7 +133,7 @@ export function afterDeletion(
 
   let wasUnread: boolean
   if (held) {
-    const others = held.filter((m) => m.senderId !== selfId && !m.isDeleted)
+    const others = held.filter((m) => m.senderId !== selfId && !m.isDeleted && countsAsUnread(m))
     const index = others.findIndex((m) => m.id === deleted.id)
     wasUnread = index >= 0 && others.length - index <= conversation.unreadCount
   } else {

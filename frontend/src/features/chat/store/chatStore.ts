@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { compareTimestamps } from '../../../lib/time'
+import { countsAsUnread } from '../calls'
 import { afterDeletion, isNewer, isPreviewOf, latest, previewFrom, withChangedPreview } from '../messageChanges'
 import type {
   Attachment,
@@ -277,7 +278,7 @@ function afterOwnRead(
 ): Conversation {
   const unread = Math.min(
     conversation.unreadCount,
-    (messages ?? []).filter((m) => m.senderId !== selfId && compareTimestamps(m.createdAt, readAt) > 0).length,
+    (messages ?? []).filter((m) => m.senderId !== selfId && countsAsUnread(m) && compareTimestamps(m.createdAt, readAt) > 0).length,
   )
 
   return unread === conversation.unreadCount ? conversation : { ...conversation, unreadCount: unread }
@@ -563,8 +564,14 @@ export const useChatStore = create<ChatState>()((set) => ({
         }
       }
 
+      // A call's row is written by the server and is not something the caller said: it is no one's reading (the server leaves every read
+      // position where it was), and it is unread for the callee only when the call was missed.
+      const isCall = message.kind === 'Call'
+
       if (next && selfId !== undefined) {
-        if (message.senderId === selfId) {
+        if (isCall) {
+          if (isNew && message.senderId !== selfId && countsAsUnread(message)) next = { ...next, unreadCount: next.unreadCount + 1 }
+        } else if (message.senderId === selfId) {
           next = afterOwnRead(next, patch.messages?.[id] ?? known, message.createdAt, selfId)
         } else if (isNew) {
           next = { ...next, unreadCount: next.unreadCount + 1 }
@@ -573,7 +580,7 @@ export const useChatStore = create<ChatState>()((set) => ({
 
       if (next !== conversation) patch.conversations = { ...state.conversations, [id]: next! }
 
-      const members = withRead(state.members[id], message.senderId, message.createdAt)
+      const members = isCall ? state.members[id] : withRead(state.members[id], message.senderId, message.createdAt)
       if (members !== state.members[id]) patch.members = { ...state.members, [id]: members! }
 
       // Someone who just sent a message is no longer typing.

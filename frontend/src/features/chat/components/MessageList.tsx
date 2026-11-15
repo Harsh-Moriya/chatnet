@@ -16,6 +16,7 @@ import { useChatStore } from '../store/chatStore'
 import { buildTimeline } from '../timeline'
 import type { Conversation, Message, PendingMessage } from '../types'
 import { AttachmentGrid } from './AttachmentGrid'
+import { CallRow } from './CallRow'
 import { DeleteMessageDialog } from './DeleteMessageDialog'
 import { MessageBubble } from './MessageBubble'
 import { MessageEditor } from './MessageEditor'
@@ -283,6 +284,8 @@ export function MessageList({ conversation, isLoading, errorMessage, onRetry, ol
             </div>
           )
         }
+
+        if (item.kind === 'call') return <CallRow key={item.key} call={item.call} own={item.own} />
 
         if (item.kind === 'pending') {
           return (

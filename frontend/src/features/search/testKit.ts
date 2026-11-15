@@ -63,6 +63,8 @@ export function wireOf(overrides: Partial<MessageWire> = {}): MessageWire {
     editCount: 0,
     isDeleted: false,
     changeSeq: 1,
+    kind: 'Text',
+    call: null,
     ...overrides,
   }
 }

@@ -59,7 +59,8 @@ export function seenFor(
   currentUserId: string,
   isGroup: boolean,
 ): Seen | null {
-  const newestOwn = [...messages].reverse().find((m) => m.senderId === currentUserId)
+  // A call is not something the other person reads, so it is never the message that "seen" is shown under.
+  const newestOwn = [...messages].reverse().find((m) => m.senderId === currentUserId && m.kind !== 'Call')
   if (!newestOwn) return null
 
   const readers = readersOf(newestOwn, members, currentUserId)

@@ -214,3 +214,40 @@ describe('what an alert says', () => {
     expect(notificationAlertText(notification({ conversationId: null }), undefined).tag).toBe('notification-n1')
   })
 })
+
+// ##### Calls #####
+
+describe('a call', () => {
+  const callMessage = (overrides: Partial<NonNullable<Message['call']>> = {}): Message =>
+    message({
+      kind: 'Call',
+      content: null,
+      call: {
+        id: 'call-9',
+        media: 'Video',
+        startedAt: '2026-10-11T09:59:00Z',
+        answeredAt: null,
+        endedAt: '2026-10-11T10:00:00Z',
+        endReason: 'Missed',
+        isMissed: true,
+        ...overrides,
+      },
+    })
+
+  it('alerts when it was missed, and says so', () => {
+    expect(shouldAlertForMessage(callMessage(), 'me', conversation(), away)).toBe(true)
+    expect(messageAlertText(callMessage(), conversation({ type: 'Direct' }))).toEqual({
+      title: 'Bob',
+      body: 'Missed video call',
+      tag: 'call-call-9',
+    })
+  })
+
+  it('is no news when it was answered or turned down', () => {
+    const answered = callMessage({ answeredAt: '2026-10-11T09:59:05Z', endReason: 'Completed', isMissed: false })
+    const declined = callMessage({ endReason: 'Declined', isMissed: false })
+
+    expect(shouldAlertForMessage(answered, 'me', conversation(), away)).toBe(false)
+    expect(shouldAlertForMessage(declined, 'me', conversation(), away)).toBe(false)
+  })
+})

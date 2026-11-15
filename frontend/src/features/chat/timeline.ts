@@ -1,5 +1,5 @@
 import { formatDayLabel } from '../../lib/format'
-import type { Message, PendingMessage } from './types'
+import type { CallInfo, Message, PendingMessage } from './types'
 
 // Turns a conversation's messages into the list the screen draws: day headings, and for each
 // message whether it continues a run from the same sender. Pure, so the rules can be tested.
@@ -21,6 +21,8 @@ export type TimelineItem =
       continuing: boolean
     }
   | { kind: 'pending'; key: string; pending: PendingMessage; continuing: boolean }
+  // A finished call, as a line of its own between the messages. `own` is true when the signed-in user was the caller.
+  | { kind: 'call'; key: string; message: Message; call: CallInfo; own: boolean }
 
 export interface TimelineOptions {
   isGroup: boolean
@@ -60,6 +62,13 @@ export function buildTimeline(
     const day = enterDay(message.createdAt)
     const time = new Date(message.createdAt).getTime()
     const own = message.senderId === currentUserId
+
+    // A call is not part of anyone's run: whatever is said after it starts a new one.
+    if (message.kind === 'Call' && message.call) {
+      items.push({ kind: 'call', key: message.id, message, call: message.call, own })
+      last = null
+      continue
+    }
 
     const continuing =
       last !== null && last.senderId === message.senderId && last.day === day && time - last.time <= RUN_GAP_MS

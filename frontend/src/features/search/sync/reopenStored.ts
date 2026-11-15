@@ -21,6 +21,8 @@ function wireOf(message: StoredSealed): MessageWire {
     editCount: message.editCount,
     isDeleted: false,
     changeSeq: message.changeSeq,
+    kind: 'Text',
+    call: null,
   }
 }
 

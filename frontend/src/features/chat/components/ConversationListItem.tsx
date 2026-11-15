@@ -1,4 +1,4 @@
-import { BellOff, Paperclip } from 'lucide-react'
+import { BellOff, Paperclip, Phone, Video } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
 import { Avatar } from '../../../components/ui/Avatar'
 import { cn } from '../../../lib/cn'
@@ -6,6 +6,7 @@ import { formatListTime } from '../../../lib/format'
 import { usePresenceStore } from '../../presence/store/presenceStore'
 import { useChatStore } from '../store/chatStore'
 import { attachmentPreview } from '../attachments'
+import { callPreview } from '../calls'
 import { unreadLabel } from '../readState'
 import { typingLabel } from '../typingLabel'
 import type { Conversation } from '../types'
@@ -73,6 +74,15 @@ export function ConversationListItem({ conversation, currentUserId, now }: Conve
                     <span className="text-blue-600">{typing}</span>
                   ) : last === null ? (
                     <span className="italic">No messages yet</span>
+                  ) : last.kind === 'Call' && last.call ? (
+                    <>
+                      {last.call.media === 'Video' ? (
+                        <Video className="mr-1 inline h-3.5 w-3.5 align-text-bottom" aria-hidden="true" />
+                      ) : (
+                        <Phone className="mr-1 inline h-3.5 w-3.5 align-text-bottom" aria-hidden="true" />
+                      )}
+                      {callPreview(last.call, last.senderId === currentUserId)}
+                    </>
                   ) : last.unreadable ? (
                     <span className="italic">{unreadableText(last.unreadable)}</span>
                   ) : last.content === null ? (

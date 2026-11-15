@@ -230,3 +230,9 @@ describe('writing the messages the app opens', () => {
     expect(store.messages.size).toBe(1)
   })
 })
+
+describe('a call', () => {
+  it('is not kept for search: nobody said anything in it', () => {
+    expect(storedFrom(ANA, message({ kind: 'Call', content: null, ciphertext: null, keyEpoch: 0 }))).toBeNull()
+  })
+})
