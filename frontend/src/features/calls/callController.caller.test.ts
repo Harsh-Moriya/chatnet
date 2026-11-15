@@ -496,10 +496,45 @@ describe('when the media drops and comes back', () => {
     expect(offers()).toHaveLength(2)
   })
 
-  it('does not make the offer again when it was handed on', async () => {
+  it('makes the offer again when no answer comes, even though it was handed on: it may have gone to a connection that was closing', async () => {
     await answered()
 
-    expect(rig.timers.waiting((ms) => ms === RESTART_RETRY_MS)).toBe(0)
+    rig.timers.fire((ms) => ms === RESTART_RETRY_MS)
+
+    expect(await restarted()).toBe(1)
+    expect(offers()).toHaveLength(2)
+  })
+
+  it('does not make the offer again once the answer has come', async () => {
+    await answered()
+    rig.controller.onCallSignal(CALL, 'Answer', await signedByOther(rig, 'answer', ANSWER_SDP))
+    await settle()
+
+    rig.timers.fire((ms) => ms === RESTART_RETRY_MS)
+
+    expect(await restarted()).toBe(0)
+  })
+
+  it('ends the call as failed when the media is not up within the time after it was answered, whatever state the connection is in', async () => {
+    await answered()
+    rig.controller.onCallSignal(CALL, 'Answer', await signedByOther(rig, 'answer', ANSWER_SDP))
+    await settle()
+
+    rig.timers.fire((ms) => ms === MEDIA_DOWN_MS)
+
+    expect(store()).toMatchObject({ phase: 'ended', notice: 'The call could not be connected.' })
+    expect(rig.api.ended).toEqual([{ callId: CALL, failed: true }])
+    expect(stopped()).toBe(true)
+  })
+
+  it('does not end a call that connects in time', async () => {
+    await answered()
+
+    rig.peers.current.state('connected')
+    rig.timers.fire((ms) => ms === MEDIA_DOWN_MS)
+
+    expect(store().phase).toBe('active')
+    expect(rig.api.ended).toEqual([])
   })
 
   it('is still ended as dropped when the restart does not bring the media back in time', async () => {

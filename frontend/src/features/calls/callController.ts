@@ -24,7 +24,9 @@ import type { CallEnded, CallEvents, CallsApi, IceServer, IncomingCall, SignalTy
 //    until it does. A side sends its candidates only after the description they belong to, so the other side never has a candidate for a
 //    description it has not got.
 //  - When the media drops, the caller (only the caller, so the two never offer at once) restarts ICE with a new signed offer, and the call is
-//    ended as failed only if that does not bring the media back in time.
+//    ended as failed only if that does not bring the media back in time. The caller also offers again while it has no answer: a signal handed
+//    to a connection that was just closing is counted as delivered and never arrives.
+//  - A call that is not connected within MEDIA_DOWN_MS of being answered is ended as failed, whatever state its connection says it is in.
 
 // How long the media may be down (disconnected or failed) before the call is ended as failed. Long enough for the hub connection to come
 // back (it retries at 0, 2 and 7 seconds) and for a restart to follow.
@@ -110,6 +112,8 @@ interface Session {
   peerState: PeerState
   // How many times the caller has restarted ICE.
   restarts: number
+  // The caller has sent an offer and the answer has not been applied yet.
+  awaitingAnswer: boolean
   cancelRestart: (() => void) | null
   heldSignals: { type: SignalType; payload: string }[]
   chain: Promise<void>
@@ -210,10 +214,14 @@ export function createCallController(deps: CallDeps): CallController {
     try {
       const sdp = await make()
       const signature = await signCall(deps.identity.signer(), context(s, 'self'), type === 'Offer' ? 'offer' : 'answer', sdp)
-      const delivered = await send(s, type, encodeSdpSignal(sdp, signature))
+      await send(s, type, encodeSdpSignal(sdp, signature))
 
-      // The other side is away: the offer is made again until it is there to take it.
-      if (!delivered && type === 'Offer') armRestart(s, RESTART_RETRY_MS)
+      // Whether it was handed on is not proof that it arrived (the other side's connection may have been closing), so an offer that is not
+      // answered in time is made again.
+      if (type === 'Offer') {
+        s.awaitingAnswer = true
+        armRestart(s, RESTART_RETRY_MS)
+      }
     } finally {
       const queued = s.queuedCandidates
       s.queuedCandidates = null
@@ -238,6 +246,7 @@ export function createCallController(deps: CallDeps): CallController {
 
     local.getTracks().forEach((track) => peer.addTrack(track, local))
     s.peer = peer
+    armMediaDown(s)
   }
 
   function onPeerState(s: Session, state: PeerState) {
@@ -258,26 +267,32 @@ export function createCallController(deps: CallDeps): CallController {
 
     if (store().phase === 'active') store().setReconnecting(true)
 
-    if (s.cancelMediaDown === null) {
-      s.cancelMediaDown = deps.after(() => {
-        s.cancelMediaDown = null
-        if (session !== s) return
-
-        tellServerEnd(s, true)
-        finish(s, 'Failed', s.answered ? 'The call was dropped.' : 'The call could not be connected.')
-      }, MEDIA_DOWN_MS)
-    }
+    armMediaDown(s)
 
     // Only the caller offers, so the two sides never offer at once. A drop usually heals itself within a moment; a failure does not.
     if (s.outgoing && (s.cancelRestart === null || state === 'failed')) armRestart(s, state === 'failed' ? 0 : RESTART_AFTER_MS)
   }
 
-  // Restarts ICE after `ms` if the media is still not connected, and again every RESTART_RETRY_MS until it is.
+  // The call is ended as failed if the media is not up within MEDIA_DOWN_MS: of being answered, or of a drop.
+  function armMediaDown(s: Session) {
+    if (s.cancelMediaDown !== null) return
+
+    s.cancelMediaDown = deps.after(() => {
+      s.cancelMediaDown = null
+      if (session !== s) return
+
+      tellServerEnd(s, true)
+      finish(s, 'Failed', store().phase === 'active' ? 'The call was dropped.' : 'The call could not be connected.')
+    }, MEDIA_DOWN_MS)
+  }
+
+  // Restarts ICE after `ms` if the media is down or the offer has not been answered, and again every RESTART_RETRY_MS until it is back.
   function armRestart(s: Session, ms: number) {
     s.cancelRestart?.()
     s.cancelRestart = deps.after(() => {
       s.cancelRestart = null
-      if (session !== s || s.peerState === 'connected' || s.restarts >= MAX_RESTARTS) return
+      const down = s.peerState === 'disconnected' || s.peerState === 'failed'
+      if (session !== s || s.restarts >= MAX_RESTARTS || (!s.awaitingAnswer && !down)) return
 
       restart(s)
       armRestart(s, RESTART_RETRY_MS)
@@ -321,8 +336,12 @@ export function createCallController(deps: CallDeps): CallController {
     if (session !== s || s.peer === null) return
 
     const peer = s.peer
-    if (role === 'offer') await sendDescription(s, 'Answer', () => peer.acceptOffer(signal.sdp))
-    else await peer.acceptAnswer(signal.sdp)
+    if (role === 'offer') {
+      await sendDescription(s, 'Answer', () => peer.acceptOffer(signal.sdp))
+    } else {
+      await peer.acceptAnswer(signal.sdp)
+      s.awaitingAnswer = false
+    }
   }
 
   // ##### Starting and answering #####
@@ -347,6 +366,7 @@ export function createCallController(deps: CallDeps): CallController {
       queuedCandidates: null,
       peerState: 'connecting',
       restarts: 0,
+      awaitingAnswer: false,
       cancelRestart: null,
       heldSignals: [],
       chain: Promise.resolve(),
@@ -430,6 +450,7 @@ export function createCallController(deps: CallDeps): CallController {
       queuedCandidates: null,
       peerState: 'connecting',
       restarts: 0,
+      awaitingAnswer: false,
       cancelRestart: null,
       heldSignals: [],
       chain: Promise.resolve(),

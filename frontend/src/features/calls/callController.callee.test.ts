@@ -314,6 +314,16 @@ describe('the offer', () => {
 })
 
 describe('when the media drops', () => {
+  it('ends the call as failed when it is not connected within the time after it was answered, because no offer came or it never worked', async () => {
+    await accepted()
+
+    rig.timers.fire((ms) => ms === 15000)
+
+    expect(store()).toMatchObject({ phase: 'ended', notice: 'The call could not be connected.' })
+    expect(rig.api.ended).toEqual([{ callId: CALL, failed: true }])
+    expect(stopped()).toBe(true)
+  })
+
   it('never offers, however long it is down: only the caller restarts, so the two never offer at once', async () => {
     await accepted()
     rig.peers.current.state('connected')
