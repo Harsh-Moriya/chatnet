@@ -1,10 +1,15 @@
 using System.Text.Json;
 using ChatNET.API.Calls;
 using ChatNET.API.Calls.Models;
+using ChatNET.API.Common.Persistence;
 using ChatNET.API.Tests.Infrastructure;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace ChatNET.API.Tests.Calls;
 
@@ -396,6 +401,65 @@ public class CallHubTests : IAsyncLifetime
         Assert.Equal("Cancelled", (await callee.WaitForCallEndedAsync(callId, Long)).GetProperty("reason").GetString());
     }
 
+    // ##### When recording the call fails #####
+
+    // Refuses the first write of a call, as a database that was briefly unreachable would.
+    private sealed class FailCallWrites : SaveChangesInterceptor
+    {
+        private int _failures;
+
+        public FailCallWrites(int failures) => _failures = failures;
+
+        public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
+            DbContextEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
+        {
+            if (eventData.Context!.ChangeTracker.Entries<Call>().Any(e => e.State == EntityState.Added) && Interlocked.Decrement(ref _failures) >= 0)
+                throw new DbUpdateException("The database refused the call.");
+
+            return base.SavingChangesAsync(eventData, result, cancellationToken);
+        }
+    }
+
+    [Fact]
+    public async Task A_call_that_could_not_be_recorded_stays_ending_and_the_next_round_records_it_and_the_people_are_told_all_the_same()
+    {
+        var settings = CallHosts.QuickSettings(new()
+        {
+            ["Calls:RingTimeout"] = "00:00:30",
+            ["Calls:TickInterval"] = "01:00:00",
+            ["Calls:RenewInterval"] = "01:00:00",
+            ["Calls:Lease"] = "02:00:00",
+            ["Calls:EndingRetry"] = "00:00:01",
+        });
+        // One interceptor for the host: the options are built for every context, and each would otherwise have a failure of its own.
+        var refusesOnce = new FailCallWrites(1);
+        using var host = _factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(settings));
+            builder.ConfigureTestServices(services => services.ConfigureDbContext<AppDbContext>(options => options.AddInterceptors(refusesOnce)));
+        });
+        var (alice, bob, conversation) = await _factory.DirectChatAsync();
+        await using var caller = await HubClient.ConnectAsync(host, alice);
+        await using var callee = await HubClient.ConnectAsync(host, bob);
+        var callId = CallIdOf(await caller.StartCallAsync(conversation));
+        await callee.AcceptCallAsync(callId);
+
+        await caller.EndCallAsync(callId);
+
+        // The call is over for them, and the live state is kept until the call has been recorded.
+        await callee.WaitForCallEndedAsync(callId);
+        Assert.Empty(await CallsOfAsync(conversation));
+        var store = host.Services.GetRequiredService<CallStore>();
+        Assert.Equal(CallState.Ending, (await store.GetOfAsync(alice.Id, default))!.State);
+
+        await Task.Delay(TimeSpan.FromSeconds(1.3));
+        await host.Services.GetRequiredService<CallRefreshService>().RunOnceAsync(CancellationToken.None);
+
+        Assert.Equal(CallEndReason.Completed, Assert.Single(await CallsOfAsync(conversation)).EndReason);
+        Assert.Null(await store.GetOfAsync(alice.Id, default));
+        Assert.Null(await store.GetOfAsync(bob.Id, default));
+    }
+
     // ##### Opening a tab while it rings, and the limit on starting #####
 
     [Fact]
@@ -410,6 +474,10 @@ public class CallHubTests : IAsyncLifetime
         await using var lateTab = await HubClient.ConnectAsync(_factory, bob);
         var rung = await lateTab.WaitForIncomingCallAsync(callId);
         Assert.Equal(alice.DisplayName, rung.GetProperty("callerDisplayName").GetString());
+
+        // The caller's own other tab is not rung for the call it is making.
+        await using var callersOtherTab = await HubClient.ConnectAsync(_factory, alice);
+        Assert.False(await callersOtherTab.ReceivedIncomingCallAsync(callId));
 
         await firstTab.AcceptCallAsync(callId);
         await using var afterwards = await HubClient.ConnectAsync(_factory, bob);

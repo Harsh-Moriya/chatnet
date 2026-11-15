@@ -104,10 +104,9 @@ public class PushAlerts
         if (await _calls.GetAsync(call.CallId, cancellationToken) is not { State: CallState.Ringing })
             return;
 
-        // The people of the conversation the caller's alert may reach (it leaves out the caller and whoever muted it): the callee or nobody.
-        var recipients = (await _subscriptions.FindMessageRecipientsAsync(call.ConversationId, call.CallerId, [], cancellationToken))
-            .Where(person => person == call.CalleeId)
-            .ToList();
+        // The people of the conversation the alert may reach: it leaves out the caller and whoever muted the conversation, so in a direct
+        // conversation it is the callee or nobody.
+        var recipients = await _subscriptions.FindMessageRecipientsAsync(call.ConversationId, call.CallerId, [], cancellationToken);
 
         var away = await AwayAsync(recipients, cancellationToken);
         if (away.Count == 0)
