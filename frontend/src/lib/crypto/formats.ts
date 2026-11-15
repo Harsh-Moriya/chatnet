@@ -28,6 +28,7 @@ export const LABELS = {
   link: 'chatnet/v1/link',
   linkCode: 'chatnet/v1/link-code',
   safety: 'chatnet/v1/safety',
+  callSignature: 'chatnet/v1/call-signature',
 } as const
 
 export function labelled(label: string, ...parts: Uint8Array[]): Bytes {
