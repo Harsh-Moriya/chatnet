@@ -204,7 +204,11 @@ export function VideoViewer({ source, name, onDownload }: VideoViewerProps) {
           updateBuffered(event.currentTarget)
         }}
         onProgress={(event) => updateBuffered(event.currentTarget)}
-        onPlay={() => setPaused(false)}
+        onPlay={() => {
+          setPaused(false)
+          // The controls go away three seconds after it starts, not only after the first movement of the pointer.
+          wake()
+        }}
         onPause={() => setPaused(true)}
         onEnded={() => setPaused(true)}
         onWaiting={() => setWaiting(true)}
