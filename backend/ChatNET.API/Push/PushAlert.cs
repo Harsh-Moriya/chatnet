@@ -19,4 +19,5 @@ public static class PushAlertTypes
     public const string Mention = "mention";
     public const string Invitation = "invitation";
     public const string MissedCall = "missed-call";
+    public const string Call = "call";
 }

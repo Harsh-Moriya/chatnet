@@ -66,6 +66,9 @@ public sealed class BarrierConversationRepository : IConversationRepository
     public Task<bool> IsActiveMemberAsync(Guid conversationId, Guid userId, CancellationToken cancellationToken) =>
         _inner.IsActiveMemberAsync(conversationId, userId, cancellationToken);
 
+    public Task<ChatNET.API.Conversations.Models.DirectPeer?> GetDirectPeerAsync(Guid conversationId, Guid userId, CancellationToken cancellationToken) =>
+        _inner.GetDirectPeerAsync(conversationId, userId, cancellationToken);
+
     public Task<DateTime?> GetActiveMemberJoinedAtAsync(Guid conversationId, Guid userId, CancellationToken cancellationToken) =>
         _inner.GetActiveMemberJoinedAtAsync(conversationId, userId, cancellationToken);
 

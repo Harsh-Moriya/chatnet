@@ -124,6 +124,22 @@ public class ConversationRepository : IConversationRepository
             m => m.ConversationId == conversationId && m.UserId == userId && m.LeftAt == null,
             cancellationToken);
 
+    public async Task<DirectPeer?> GetDirectPeerAsync(Guid conversationId, Guid userId, CancellationToken cancellationToken)
+    {
+        var members = await _db.ConversationMembers
+            .AsNoTracking()
+            .Where(m => m.ConversationId == conversationId && m.LeftAt == null && m.Conversation.Type == ConversationType.Direct)
+            .Select(m => new { m.UserId, m.User.IsDeactivated })
+            .ToListAsync(cancellationToken);
+
+        var self = members.FirstOrDefault(m => m.UserId == userId);
+        var peer = members.FirstOrDefault(m => m.UserId != userId);
+
+        return members.Count == 2 && self is not null && peer is not null
+            ? new DirectPeer(peer.UserId, peer.IsDeactivated, self.IsDeactivated)
+            : null;
+    }
+
     public Task<DateTime?> GetActiveMemberJoinedAtAsync(Guid conversationId, Guid userId, CancellationToken cancellationToken)
         => _db.ConversationMembers
             .Where(m => m.ConversationId == conversationId && m.UserId == userId && m.LeftAt == null)

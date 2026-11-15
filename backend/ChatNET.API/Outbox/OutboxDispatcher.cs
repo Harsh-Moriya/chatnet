@@ -115,6 +115,10 @@ public class OutboxDispatcher
                     messageAlert.MessageId, messageAlert.ConversationId, messageAlert.MentionedUserIds, cancellationToken);
                 return;
 
+            case CallAlertRequested callAlert:
+                await _alerts.AlertForCallAsync(callAlert, cancellationToken);
+                return;
+
             case NotificationAlertRequested notificationAlert:
                 await _alerts.AlertForNotificationAsync(notificationAlert.NotificationId, notificationAlert.UserId, cancellationToken);
                 return;

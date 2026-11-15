@@ -82,6 +82,16 @@ Who is online is held in Redis: a sorted set of connections for each user, one s
 - Only **contacts** (people who share an active conversation) are told, never the user themselves. `GET /api/presence` is the snapshot and `PresenceChanged` is the push. The snapshot is loaded when the connection is ready, after every reconnect, and whenever the user gains a conversation, because pushes carry only changes.
 - The Lua scripts assume a single Redis node.
 
+## Calls
+
+A call is two people on two connections, so its state is the kind that has to be right when several instances act at once, and is held in Redis in the way presence is: a hash for each call (who, which connection is each side, the state, a lease for each side), a marker for each person in a call, and a sorted set of when each call is next due, changed only by Lua scripts that read Redis's own clock. Accepting, ending, rejoining and routing a signal are each one script, so an answer against a decline, two hang-ups, or an answer against the ring running out are settled by whichever runs first.
+
+- The call methods are a second part of `ChatHub` (`ChatHub.Calls.cs`) over a call service that holds the rules and writes the finished call through the call log. A signal goes to the other side's connection with `Clients.Client(connectionId)`, which the Redis backplane carries between instances.
+- Each instance renews the sides whose connections it holds every 10 seconds; a side whose lease (30 seconds) ran out is lost. Each instance also looks every second for calls that are due: a ring that ran out, a lease or a grace that ended, an ending that an instance left unfinished. Ending a call is moved to an `ending` state by one script (the one that gets there first decides the reason), then recorded (a repeat is a no-op), then its keys are removed, then both people are told; an instance that stops between the steps leaves the call `ending`, and another repeats the steps.
+- A person who is away (no live connection) is alerted by push when a call starts, through the outbox like any alert, if the call still rings when the push is made.
+
+The rules and the contract are on the [calls page](../features/calls.md).
+
 ## When someone stops being a member
 
 SignalR keeps a connection in a group once it has joined, so removal must act on the connections too. Each instance keeps a registry of its own connections by user. The outbox job that follows a leave or a removal (`MemberLeft`) publishes on the Redis channel `chatnet:connections:evict`, and every instance, the publisher included, removes the connections it holds from the conversation's group and from the typing check. `JoinConversation` asks again after it joins, and a new connection re-reads its conversations after its joins, so a join that a removal slipped in front of leaves the connection out.

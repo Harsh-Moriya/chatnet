@@ -30,6 +30,10 @@ public class PushAlertRows
                 .. ForNotifications(mentions),
             ];
 
+    // For a call that started: the row that asks for the callee to be alerted. It is not for the relay alone: the request pushes it at once
+    // and the relay takes it only if that failed, so it is made as the request's own rows are.
+    public OutboxMessage? ForCall(CallAlertRequested alert) => !_enabled ? null : _outbox.Create(alert);
+
     // For notifications that were stored (mentions, invitations): one row for each.
     public IReadOnlyList<OutboxMessage> ForNotifications(IEnumerable<Notification> notifications) =>
         !_enabled

@@ -1,3 +1,5 @@
+using ChatNET.API.Calls;
+using ChatNET.API.Calls.Models;
 using ChatNET.API.Common.Auth;
 using ChatNET.API.Conversations;
 using ChatNET.API.Conversations.Persistence;
@@ -15,7 +17,7 @@ namespace ChatNET.API.Messaging.Hubs;
 // Context.User exposes the JWT claims, including "display_name".
 // Context.ConnectionId identifies this one connection; a user with two tabs has two.
 [Authorize]
-public class ChatHub : Hub<IChatClient>
+public partial class ChatHub : Hub<IChatClient>
 {
     // The shortest time between two delivered "typing" events from one connection in one
     // conversation. A client should send one every couple of seconds while someone types.
@@ -24,14 +26,17 @@ public class ChatHub : Hub<IChatClient>
     private readonly IConversationRepository _conversations;
     private readonly PresenceService _presence;
     private readonly ConnectionRegistry _registry;
+    private readonly CallService _calls;
     private readonly ILogger<ChatHub> _logger;
 
     public ChatHub(
-        IConversationRepository conversations, PresenceService presence, ConnectionRegistry registry, ILogger<ChatHub> logger)
+        IConversationRepository conversations, PresenceService presence, ConnectionRegistry registry, CallService calls,
+        ILogger<ChatHub> logger)
     {
         _conversations = conversations;
         _presence = presence;
         _registry = registry;
+        _calls = calls;
         _logger = logger;
     }
 
@@ -67,6 +72,10 @@ public class ChatHub : Hub<IChatClient>
         // cannot fail the connection (the service logs and drops its own failures).
         await _presence.ConnectedAsync(userId, Context.ConnectionId);
 
+        // A tab that opens while a call is ringing for the person rings too: the event that rang the others went to the tabs that were open.
+        if (await _calls.IncomingForAsync(userId, Context.ConnectionAborted) is { } incoming)
+            await Clients.Caller.IncomingCall(incoming);
+
         await base.OnConnectedAsync();
     }
 
@@ -78,6 +87,10 @@ public class ChatHub : Hub<IChatClient>
         _registry.Remove(userId, Context.ConnectionId);
 
         await _presence.DisconnectedAsync(userId, Context.ConnectionId);
+
+        // A connection that was a side of a call gives that side the grace to come back on a new connection (RejoinCall).
+        if (ConnectionState.CallOf(Context.Items) is { } callId)
+            await _calls.DetachAsync(userId, Context.ConnectionId, callId);
 
         await base.OnDisconnectedAsync(exception);
     }

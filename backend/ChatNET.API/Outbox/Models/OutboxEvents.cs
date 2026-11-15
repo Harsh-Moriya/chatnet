@@ -1,3 +1,4 @@
+using ChatNET.API.Calls.Models;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -69,6 +70,18 @@ public sealed record MessageAlertRequested(
     Guid MessageId, Guid ConversationId, IReadOnlyList<Guid> MentionedUserIds) : IOutboxEvent
 {
     public const string Name = nameof(MessageAlertRequested);
+
+    [JsonIgnore]
+    public string Kind => Name;
+}
+
+// A call started and is ringing: its callee is alerted by push if they are away and have not muted the conversation. Saved when the call
+// starts and pushed at once; the relay takes it if that failed, and the push then checks the call still rings. The name and the kind of
+// call are in it because the call is in Redis and the alert says them.
+public sealed record CallAlertRequested(
+    Guid CallId, Guid ConversationId, Guid CallerId, Guid CalleeId, string CallerDisplayName, CallMedia Media) : IOutboxEvent
+{
+    public const string Name = nameof(CallAlertRequested);
 
     [JsonIgnore]
     public string Kind => Name;
@@ -201,6 +214,7 @@ public static class OutboxEvents
         NotificationCreated.Name => Deserialize<NotificationCreated>(payload),
         MessageAlertRequested.Name => Deserialize<MessageAlertRequested>(payload),
         NotificationAlertRequested.Name => Deserialize<NotificationAlertRequested>(payload),
+        CallAlertRequested.Name => Deserialize<CallAlertRequested>(payload),
         ConversationCreated.Name => Deserialize<ConversationCreated>(payload),
         ConversationRead.Name => Deserialize<ConversationRead>(payload),
         MembersChanged.Name => Deserialize<MembersChanged>(payload),

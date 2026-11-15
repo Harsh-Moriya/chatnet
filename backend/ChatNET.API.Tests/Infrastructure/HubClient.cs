@@ -14,6 +14,8 @@ public sealed record MuteEvent(Guid ConversationId, bool IsMuted);
 
 public sealed record RemovedEvent(Guid ConversationId, DateTime LeftAt);
 
+public sealed record CallSignalEvent(Guid CallId, string Type, string Payload);
+
 // A real SignalR client talking to the in-memory test server over WebSockets, as a browser would:
 // it negotiates over HTTP and then upgrades to a WebSocket, passing the token in the query string.
 // Every event the server pushes is recorded so a test can wait for it, or check that none came.
@@ -41,6 +43,10 @@ public sealed class HubClient : IAsyncDisposable
     private readonly ConcurrentQueue<JsonElement> _profileChanges = new();
     private readonly ConcurrentQueue<RemovedEvent> _removals = new();
     private readonly ConcurrentQueue<JsonElement> _keyChanges = new();
+    private readonly ConcurrentQueue<JsonElement> _incomingCalls = new();
+    private readonly ConcurrentQueue<Guid> _callsAnswered = new();
+    private readonly ConcurrentQueue<CallSignalEvent> _callSignals = new();
+    private readonly ConcurrentQueue<JsonElement> _callsEnded = new();
 
     private HubClient(HubConnection connection)
     {
@@ -66,6 +72,10 @@ public sealed class HubClient : IAsyncDisposable
         _connection.On<JsonElement>("ConversationKeyChanged", state => _keyChanges.Enqueue(state));
         _connection.On<Guid, DateTime>("RemovedFromConversation", (conversationId, leftAt) =>
             _removals.Enqueue(new RemovedEvent(conversationId, leftAt)));
+        _connection.On<JsonElement>("IncomingCall", call => _incomingCalls.Enqueue(call));
+        _connection.On<Guid>("CallAnswered", callId => _callsAnswered.Enqueue(callId));
+        _connection.On<Guid, string, string>("CallSignal", (callId, type, payload) => _callSignals.Enqueue(new CallSignalEvent(callId, type, payload)));
+        _connection.On<JsonElement>("CallEnded", ended => _callsEnded.Enqueue(ended));
     }
 
     public HubConnectionState State => _connection.State;
@@ -146,6 +156,65 @@ public sealed class HubClient : IAsyncDisposable
     public Task StopTypingAsync(Guid conversationId) => _connection.InvokeAsync("StopTyping", conversationId);
 
     public Task StopAsync() => _connection.StopAsync();
+
+    // ##### Calls #####
+
+    public IReadOnlyList<JsonElement> IncomingCalls => _incomingCalls.ToArray();
+
+    public IReadOnlyList<CallSignalEvent> CallSignals => _callSignals.ToArray();
+
+    public IReadOnlyList<JsonElement> CallsEnded => _callsEnded.ToArray();
+
+    // The answers to the call methods are kept as raw JSON, as a client reads them. A refusal surfaces as a HubException whose message
+    // carries the code.
+    public Task<JsonElement> StartCallAsync(Guid conversationId, string media = "Audio") =>
+        _connection.InvokeAsync<JsonElement>("StartCall", conversationId, media);
+
+    public Task<JsonElement> AcceptCallAsync(Guid callId) => _connection.InvokeAsync<JsonElement>("AcceptCall", callId);
+
+    public Task EndCallAsync(Guid callId, bool failed = false) => _connection.InvokeAsync("EndCall", callId, failed);
+
+    public Task<bool> SendCallSignalAsync(Guid callId, string type, string payload) =>
+        _connection.InvokeAsync<bool>("SendCallSignal", callId, type, payload);
+
+    public Task<JsonElement> RejoinCallAsync(Guid callId, string rejoinToken) =>
+        _connection.InvokeAsync<JsonElement>("RejoinCall", callId, rejoinToken);
+
+    public Task<JsonElement> WaitForIncomingCallAsync(Guid? callId = null, TimeSpan? timeout = null) =>
+        WaitAsync(_incomingCalls, c => callId is null || c.GetProperty("callId").GetGuid() == callId, timeout);
+
+    public async Task<bool> ReceivedIncomingCallAsync(Guid callId)
+    {
+        await Task.Delay(QuietPeriod);
+        return _incomingCalls.Any(c => c.GetProperty("callId").GetGuid() == callId);
+    }
+
+    public Task<Guid> WaitForCallAnsweredAsync(Guid callId, TimeSpan? timeout = null) =>
+        WaitAsync(_callsAnswered, id => id == callId, timeout);
+
+    public async Task<bool> ReceivedCallAnsweredAsync(Guid callId)
+    {
+        await Task.Delay(QuietPeriod);
+        return _callsAnswered.Any(id => id == callId);
+    }
+
+    public Task<CallSignalEvent> WaitForCallSignalAsync(Guid callId, Func<CallSignalEvent, bool>? match = null, TimeSpan? timeout = null) =>
+        WaitAsync(_callSignals, s => s.CallId == callId && (match?.Invoke(s) ?? true), timeout);
+
+    public async Task<bool> ReceivedCallSignalAsync(Guid callId)
+    {
+        await Task.Delay(QuietPeriod);
+        return _callSignals.Any(s => s.CallId == callId);
+    }
+
+    public Task<JsonElement> WaitForCallEndedAsync(Guid callId, TimeSpan? timeout = null) =>
+        WaitAsync(_callsEnded, e => e.GetProperty("callId").GetGuid() == callId, timeout);
+
+    public async Task<bool> ReceivedCallEndedAsync(Guid callId)
+    {
+        await Task.Delay(QuietPeriod);
+        return _callsEnded.Any(e => e.GetProperty("callId").GetGuid() == callId);
+    }
 
     // True if the server (or the network) closed the connection within the timeout. The test
     // connection has no automatic reconnect, so a close is final and reported at once.
