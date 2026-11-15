@@ -10,6 +10,7 @@ public static class ConnectionState
 {
     private const string JoinedKey = "joined-conversations";
     private const string TypingKey = "typing-started-at";
+    private const string CallKey = "call-id";
 
     // The conversations this connection has actually been put into. It is the authority for what the connection may do
     // later (such as sending typing events) without asking the database each time. A concurrent dictionary used as a set,
@@ -21,6 +22,19 @@ public static class ConnectionState
     // change of system time cannot affect it). Bounded by the number of conversations the connection joined.
     public static ConcurrentDictionary<Guid, long> TypingStartedAt(IDictionary<object, object?> items)
         => OfKind<Guid, long>(items, TypingKey);
+
+    // The call this connection is a side of, if any. Set when it starts, answers or rejoins a call, and cleared when the call is found to be
+    // over; the call service renews its lease and detaches it when the connection closes.
+    public static Guid? CallOf(IDictionary<object, object?> items)
+        => items.TryGetValue(CallKey, out var id) ? (Guid?)id : null;
+
+    public static void SetCall(IDictionary<object, object?> items, Guid? callId)
+    {
+        if (callId is { } id)
+            items[CallKey] = id;
+        else
+            items.Remove(CallKey);
+    }
 
     // The connection no longer belongs in this conversation: it may not type in it, and the next typing event is not
     // held back by what was delivered before.

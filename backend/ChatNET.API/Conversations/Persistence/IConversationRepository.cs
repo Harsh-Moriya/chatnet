@@ -26,6 +26,10 @@ public interface IConversationRepository
 
     Task<bool> IsActiveMemberAsync(Guid conversationId, Guid userId, CancellationToken cancellationToken);
 
+    // The other person of a direct conversation the user is an active member of, or null when the conversation is not a direct one, the user is
+    // not in it, or it does not have exactly two active members.
+    Task<DirectPeer?> GetDirectPeerAsync(Guid conversationId, Guid userId, CancellationToken cancellationToken);
+
     // When the user joined, if they are an active member; null if they are not in the conversation
     // or have left it. Doubles as the membership check for features that also need the join time.
     Task<DateTime?> GetActiveMemberJoinedAtAsync(Guid conversationId, Guid userId, CancellationToken cancellationToken);

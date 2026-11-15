@@ -342,6 +342,10 @@ try
         .ValidateOnStart();
     builder.Services.AddSingleton<IValidateOptions<CallOptions>, CallOptionsValidator>();
     builder.Services.AddSingleton<CallStore>();
+    builder.Services.AddSingleton<CallStartLimiter>();
+    builder.Services.AddSingleton<CallService>();
+    builder.Services.AddSingleton<CallRefreshService>();
+    builder.Services.AddHostedService(provider => provider.GetRequiredService<CallRefreshService>());
     builder.Services.AddOptions<TurnOptions>()
         .BindConfiguration(TurnOptions.SectionName)
         .ValidateOnStart();

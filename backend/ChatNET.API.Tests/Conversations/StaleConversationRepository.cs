@@ -32,6 +32,9 @@ public sealed class StaleConversationRepository : IConversationRepository
             ? Task.FromResult(stale)
             : _inner.IsActiveMemberAsync(conversationId, userId, cancellationToken);
 
+    public Task<ChatNET.API.Conversations.Models.DirectPeer?> GetDirectPeerAsync(Guid conversationId, Guid userId, CancellationToken cancellationToken) =>
+        _inner.GetDirectPeerAsync(conversationId, userId, cancellationToken);
+
     public async Task<List<Guid>> GetActiveConversationIdsForUserAsync(Guid userId, CancellationToken cancellationToken) =>
         _activeLists.TryDequeue(out var stale)
             ? stale.ToList()

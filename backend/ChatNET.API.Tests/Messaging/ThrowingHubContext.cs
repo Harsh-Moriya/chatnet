@@ -89,5 +89,13 @@ public sealed class ThrowingHubContext : IHubContext<ChatHub, IChatClient>
         public Task ProfileChanged(UserSummaryDto profile) => throw Failure();
 
         public Task RemovedFromConversation(Guid conversationId, DateTime leftAt) => throw Failure();
+
+        public Task IncomingCall(ChatNET.API.Calls.IncomingCallDto call) => throw Failure();
+
+        public Task CallAnswered(Guid callId) => throw Failure();
+
+        public Task CallSignal(Guid callId, ChatNET.API.Calls.CallSignalType type, string payload) => throw Failure();
+
+        public Task CallEnded(ChatNET.API.Calls.CallEndedDto ended) => throw Failure();
     }
 }

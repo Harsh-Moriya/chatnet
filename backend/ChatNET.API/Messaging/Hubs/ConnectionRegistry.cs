@@ -29,5 +29,9 @@ public sealed class ConnectionRegistry
     public IReadOnlyCollection<HubCallerContext> Of(Guid userId)
         => _byUser.TryGetValue(userId, out var connections) ? connections.Values.ToArray() : [];
 
+    // Every connection this instance holds, with its person: what renewing the calls of the connections that are in one walks through.
+    public IEnumerable<(Guid UserId, HubCallerContext Context)> All()
+        => _byUser.ToArray().SelectMany(user => user.Value.Values.Select(context => (user.Key, context)));
+
     public int UserCount => _byUser.Count;
 }

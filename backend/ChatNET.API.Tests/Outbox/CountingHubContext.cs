@@ -101,5 +101,13 @@ public sealed class CountingHubContext : IHubContext<ChatHub, IChatClient>
         public Task ProfileChanged(UserSummaryDto profile) => throw new NotSupportedException();
 
         public Task RemovedFromConversation(Guid conversationId, DateTime leftAt) => throw new NotSupportedException();
+
+        public Task IncomingCall(ChatNET.API.Calls.IncomingCallDto call) => throw new NotSupportedException();
+
+        public Task CallAnswered(Guid callId) => throw new NotSupportedException();
+
+        public Task CallSignal(Guid callId, ChatNET.API.Calls.CallSignalType type, string payload) => throw new NotSupportedException();
+
+        public Task CallEnded(ChatNET.API.Calls.CallEndedDto ended) => throw new NotSupportedException();
     }
 }

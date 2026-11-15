@@ -24,6 +24,10 @@ public static class RateLimitPolicies
     // which has not been read when the pipeline decides. It is not a policy an endpoint names, so the setup does not define it.
     public const string PasswordResetEmail = "password-reset-email";
 
+    // Counted per signed-in person, by the call service when a call is started: starting is a hub method, which the pipeline's limits do
+    // not see, so it is not a policy an endpoint names either.
+    public const string StartCall = "start-call";
+
     public static readonly IReadOnlyList<(string Name, string Section)> All =
     [
         (Auth, "RateLimiting:Auth"),
@@ -37,5 +41,6 @@ public static class RateLimitPolicies
         (ForgotPassword, "RateLimiting:ForgotPassword"),
         (ResetPassword, "RateLimiting:ResetPassword"),
         (PasswordResetEmail, "RateLimiting:PasswordResetEmail"),
+        (StartCall, "RateLimiting:StartCall"),
     ];
 }

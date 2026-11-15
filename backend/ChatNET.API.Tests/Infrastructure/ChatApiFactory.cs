@@ -118,7 +118,7 @@ public sealed class ChatApiFactory : WebApplicationFactory<Program>, IAsyncLifet
 
         // Effectively disables the rate limits for ordinary tests, which register many users from one address and send
         // and edit many times as one person. Rate limit tests build a host with a tight limit.
-        foreach (var policy in new[] { "Auth", "Refresh", "Send", "Uploads", "Edit", "Avatars", "Push", "Keys", "ForgotPassword", "ResetPassword", "PasswordResetEmail" })
+        foreach (var policy in new[] { "Auth", "Refresh", "Send", "Uploads", "Edit", "Avatars", "Push", "Keys", "ForgotPassword", "ResetPassword", "PasswordResetEmail", "StartCall" })
             Environment.SetEnvironmentVariable($"RateLimiting__{policy}__PermitLimit", "1000000");
 
         // Presence timers are set so they never fire by themselves while other tests run: the refresh loop
@@ -127,6 +127,12 @@ public sealed class ChatApiFactory : WebApplicationFactory<Program>, IAsyncLifet
         Environment.SetEnvironmentVariable("Presence__RefreshInterval", "01:00:00");
         Environment.SetEnvironmentVariable("Presence__Ttl", "03:00:00");
         Environment.SetEnvironmentVariable("Presence__OfflineGrace", "00:00:00");
+
+        // The same for the looking after of calls: no round runs by itself, and a test that wants one runs it (CallRefreshService.RunOnceAsync).
+        // The lease is set to match, since it must be at least twice the renew interval; a test about a lease sets its own.
+        Environment.SetEnvironmentVariable("Calls__TickInterval", "01:00:00");
+        Environment.SetEnvironmentVariable("Calls__RenewInterval", "01:00:00");
+        Environment.SetEnvironmentVariable("Calls__Lease", "02:00:00");
 
         // The outbox relay ticks once an hour so it never pushes by itself while other tests run; the request that wrote a
         // row has two minutes to push it before the relay may take it. Tests of the relay run a pass by hand and move

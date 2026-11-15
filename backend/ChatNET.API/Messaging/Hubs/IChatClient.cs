@@ -1,3 +1,4 @@
+using ChatNET.API.Calls;
 using ChatNET.API.Conversations.Models;
 using ChatNET.API.Messaging.Models;
 using ChatNET.API.Notifications.Models;
@@ -71,4 +72,18 @@ public interface IChatClient
 
     // This notification of the receiver was dismissed, in this tab or another.
     Task NotificationDismissed(Guid id);
+
+    // Someone is calling the receiver. Sent to every open tab of that person, and to a tab that opens while the call is still ringing.
+    Task IncomingCall(IncomingCallDto call);
+
+    // The call was answered. Sent to both people's tabs: the caller's tab then makes its offer, and a tab of the callee that did not
+    // answer (it is still ringing) stops ringing, because another one did.
+    Task CallAnswered(Guid callId);
+
+    // A signal from the other side of the call (an offer, an answer or an ICE candidate), as the other side sent it, to the connection that
+    // is that side of the call and to no other.
+    Task CallSignal(Guid callId, CallSignalType type, string payload);
+
+    // The call ended, for whatever reason. Sent to every open tab of both people, so each one stops ringing or tears the call down.
+    Task CallEnded(CallEndedDto ended);
 }
