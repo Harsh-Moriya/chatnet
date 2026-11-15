@@ -20,11 +20,24 @@ import type { CallEnded, CallEvents, CallsApi, IceServer, IncomingCall, SignalTy
 //  - The caller makes its offer only after the call was answered (CallAnswered), so nothing is captured or sent to someone who never answers.
 //  - Every session description is signed over its fingerprints and checked against the other person's identity key before it is used; a
 //    description that is not accepted ends the call as failed.
-//  - Signals are handled one after another, in the order they arrive; an offer that arrives before the answer's connection exists, and
-//    candidates that arrive before the remote description is set, are held until they can be used.
+//  - Signals are handled one after another, in the order they arrive; an offer that arrives before the answer's connection exists is held
+//    until it does. A side sends its candidates only after the description they belong to, so the other side never has a candidate for a
+//    description it has not got.
+//  - When the media drops, the caller (only the caller, so the two never offer at once) restarts ICE with a new signed offer, and the call is
+//    ended as failed only if that does not bring the media back in time.
 
-// How long the media may be down (disconnected or failed) before the call is ended as failed.
-export const MEDIA_DOWN_MS = 8000
+// How long the media may be down (disconnected or failed) before the call is ended as failed. Long enough for the hub connection to come
+// back (it retries at 0, 2 and 7 seconds) and for a restart to follow.
+export const MEDIA_DOWN_MS = 15000
+
+// How long the caller waits after the media went `disconnected` before restarting: a short drop often heals by itself. `failed` restarts at once.
+export const RESTART_AFTER_MS = 2000
+
+// How often the caller tries again while the media is still down (a restart that was not handed on, or did not work).
+export const RESTART_RETRY_MS = 4000
+
+// The most restarts of one call, so a connection that cannot be repaired does not fill the server's limit of signals for the call.
+export const MAX_RESTARTS = 20
 
 // How long a finished call stays on the screen, to say how it ended.
 export const ENDED_SHOWN_MS = 4000
@@ -88,9 +101,13 @@ interface Session {
   answered: boolean
   // This tab pressed Answer and is waiting for the server: the CallAnswered it will get is its own, not another tab's.
   accepting: boolean
-  // True once the other side's description is set: candidates can be added.
-  remoteReady: boolean
-  heldCandidates: CandidateInit[]
+  // The local candidates found while a description is being made and signed: they go out after it, never before.
+  queuedCandidates: CandidateInit[] | null
+  // What the connection last said about itself.
+  peerState: PeerState
+  // How many times the caller has restarted ICE.
+  restarts: number
+  cancelRestart: (() => void) | null
   heldSignals: { type: SignalType; payload: string }[]
   chain: Promise<void>
   cancelMediaDown: (() => void) | null
@@ -107,6 +124,8 @@ export function createCallController(deps: CallDeps): CallController {
   function teardown(s: Session) {
     s.cancelMediaDown?.()
     s.cancelMediaDown = null
+    s.cancelRestart?.()
+    s.cancelRestart = null
     s.cancelRingEnd?.()
     s.cancelRingEnd = null
     s.peer?.close()
@@ -174,15 +193,39 @@ export function createCallController(deps: CallDeps): CallController {
     }
   }
 
-  function send(s: Session, type: SignalType, payload: string) {
-    if (s.callId !== null) deps.api()?.sendSignal(s.callId, type, payload).catch(() => {})
+  // Whether the signal was handed to the other side: false when it is away, or when it could not be sent at all.
+  function send(s: Session, type: SignalType, payload: string): Promise<boolean> {
+    const sent = s.callId === null ? undefined : deps.api()?.sendSignal(s.callId, type, payload)
+    return sent === undefined ? Promise.resolve(false) : sent.catch(() => false)
+  }
+
+  // Makes a description, signs it and sends it, and only then the candidates that were found meanwhile: the other side would otherwise get
+  // candidates (with new credentials, after a restart) for a description it does not have yet.
+  async function sendDescription(s: Session, type: 'Offer' | 'Answer', make: () => Promise<string>) {
+    s.queuedCandidates = []
+
+    try {
+      const sdp = await make()
+      const signature = await signCall(deps.identity.signer(), context(s, 'self'), type === 'Offer' ? 'offer' : 'answer', sdp)
+      const delivered = await send(s, type, encodeSdpSignal(sdp, signature))
+
+      // The other side is away: the offer is made again until it is there to take it.
+      if (!delivered && type === 'Offer') armRestart(s, RESTART_RETRY_MS)
+    } finally {
+      const queued = s.queuedCandidates
+      s.queuedCandidates = null
+      if (session === s) for (const candidate of queued) void send(s, 'Candidate', encodeCandidate(candidate))
+    }
   }
 
   function connect(s: Session) {
     const local = s.local as MediaStream
     const peer = deps.peers(s.iceServers, {
       onCandidate: (candidate) => {
-        if (session === s) send(s, 'Candidate', encodeCandidate(candidate))
+        if (session !== s) return
+
+        if (s.queuedCandidates !== null) s.queuedCandidates.push(candidate)
+        else void send(s, 'Candidate', encodeCandidate(candidate))
       },
       onTrack: (stream) => {
         if (session === s) store().setStreams({ remote: stream })
@@ -196,15 +239,23 @@ export function createCallController(deps: CallDeps): CallController {
 
   function onPeerState(s: Session, state: PeerState) {
     if (session !== s) return
+    s.peerState = state
 
     if (state === 'connected') {
       s.cancelMediaDown?.()
       s.cancelMediaDown = null
+      s.cancelRestart?.()
+      s.cancelRestart = null
+      store().setReconnecting(false)
       store().connected()
       return
     }
 
-    if ((state === 'disconnected' || state === 'failed') && s.cancelMediaDown === null) {
+    if (state !== 'disconnected' && state !== 'failed') return
+
+    if (store().phase === 'active') store().setReconnecting(true)
+
+    if (s.cancelMediaDown === null) {
       s.cancelMediaDown = deps.after(() => {
         s.cancelMediaDown = null
         if (session !== s) return
@@ -213,6 +264,32 @@ export function createCallController(deps: CallDeps): CallController {
         finish(s, 'Failed', s.answered ? 'The call was dropped.' : 'The call could not be connected.')
       }, MEDIA_DOWN_MS)
     }
+
+    // Only the caller offers, so the two sides never offer at once. A drop usually heals itself within a moment; a failure does not.
+    if (s.outgoing && (s.cancelRestart === null || state === 'failed')) armRestart(s, state === 'failed' ? 0 : RESTART_AFTER_MS)
+  }
+
+  // Restarts ICE after `ms` if the media is still not connected, and again every RESTART_RETRY_MS until it is.
+  function armRestart(s: Session, ms: number) {
+    s.cancelRestart?.()
+    s.cancelRestart = deps.after(() => {
+      s.cancelRestart = null
+      if (session !== s || s.peerState === 'connected' || s.restarts >= MAX_RESTARTS) return
+
+      restart(s)
+      armRestart(s, RESTART_RETRY_MS)
+    }, ms)
+  }
+
+  // A new offer with new candidates, signed and checked like the first one.
+  function restart(s: Session) {
+    s.restarts++
+    enqueue(s, async () => {
+      const peer = s.peer
+      if (peer === null || session !== s) return
+
+      await sendDescription(s, 'Offer', () => peer.restartOffer(s.iceServers))
+    })
   }
 
   // One job after another, so an offer being answered is finished before a candidate after it is looked at.
@@ -225,10 +302,7 @@ export function createCallController(deps: CallDeps): CallController {
 
     if (type === 'Candidate') {
       const candidate = decodeCandidate(payload)
-      if (candidate === null) return
-
-      if (!s.remoteReady) s.heldCandidates.push(candidate)
-      else await s.peer.addCandidate(candidate).catch(() => {})
+      if (candidate !== null) await s.peer.addCandidate(candidate).catch(() => {})
       return
     }
 
@@ -243,16 +317,9 @@ export function createCallController(deps: CallDeps): CallController {
     if (!(await verifyCall(peerKey, context(s, 'peer'), role, signal.sdp, signal.signature).catch(() => false))) throw new NotVerified()
     if (session !== s || s.peer === null) return
 
-    if (role === 'offer') {
-      const answer = await s.peer.acceptOffer(signal.sdp)
-      const signature = await signCall(deps.identity.signer(), context(s, 'self'), 'answer', answer)
-      send(s, 'Answer', encodeSdpSignal(answer, signature))
-    } else {
-      await s.peer.acceptAnswer(signal.sdp)
-    }
-
-    s.remoteReady = true
-    for (const candidate of s.heldCandidates.splice(0)) await s.peer.addCandidate(candidate).catch(() => {})
+    const peer = s.peer
+    if (role === 'offer') await sendDescription(s, 'Answer', () => peer.acceptOffer(signal.sdp))
+    else await peer.acceptAnswer(signal.sdp)
   }
 
   // ##### Starting and answering #####
@@ -274,8 +341,10 @@ export function createCallController(deps: CallDeps): CallController {
       local: null,
       answered: false,
       accepting: false,
-      remoteReady: false,
-      heldCandidates: [],
+      queuedCandidates: null,
+      peerState: 'connecting',
+      restarts: 0,
+      cancelRestart: null,
       heldSignals: [],
       chain: Promise.resolve(),
       cancelMediaDown: null,
@@ -354,8 +423,10 @@ export function createCallController(deps: CallDeps): CallController {
       local: null,
       answered: false,
       accepting: false,
-      remoteReady: false,
-      heldCandidates: [],
+      queuedCandidates: null,
+      peerState: 'connecting',
+      restarts: 0,
+      cancelRestart: null,
       heldSignals: [],
       chain: Promise.resolve(),
       cancelMediaDown: null,
@@ -455,9 +526,7 @@ export function createCallController(deps: CallDeps): CallController {
         const peer = s.peer
         if (peer === null || session !== s) return
 
-        const sdp = await peer.createOffer()
-        const signature = await signCall(deps.identity.signer(), context(s, 'self'), 'offer', sdp)
-        send(s, 'Offer', encodeSdpSignal(sdp, signature))
+        await sendDescription(s, 'Offer', () => peer.createOffer())
       })
       return
     }
@@ -512,7 +581,12 @@ export function createCallController(deps: CallDeps): CallController {
 
     api.rejoinCall(s.callId, s.token).then(
       (rejoined) => {
-        if (session === s) s.iceServers = rejoined.iceServers
+        if (session !== s) return
+        s.iceServers = rejoined.iceServers
+
+        // What was signalled while this side was away did not arrive. A call whose media is not up is offered again (the caller drives) with the
+        // servers just given; one whose media stayed up through the drop needs nothing.
+        if (s.outgoing && s.peer !== null && s.peerState !== 'connected') restart(s)
       },
       (error: unknown) => {
         const code = callErrorCode(error)

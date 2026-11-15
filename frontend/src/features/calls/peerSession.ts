@@ -20,6 +20,9 @@ export interface PeerSession {
   // Takes the other side's offer, makes the answer and sets it; returns the answer's session description.
   acceptOffer: (sdp: string) => Promise<string>
   acceptAnswer: (sdp: string) => Promise<void>
+  // Starts the connection again with new candidates (after the network changed): the servers given are the ones to use from now on, and the
+  // offer returned is for the other side to answer, like the first.
+  restartOffer: (iceServers: IceServer[]) => Promise<string>
   addCandidate: (candidate: CandidateInit) => Promise<void>
   // Sends this track instead of the one of the same kind that is being sent.
   replaceTrack: (kind: 'audio' | 'video', track: MediaStreamTrack) => Promise<void>
@@ -66,6 +69,12 @@ export const createRtcPeer: PeerFactory = (iceServers, handlers) => {
     },
 
     acceptAnswer: (sdp) => connection.setRemoteDescription({ type: 'answer', sdp }),
+
+    async restartOffer(iceServers) {
+      connection.setConfiguration({ ...connection.getConfiguration(), iceServers })
+      await connection.setLocalDescription(await connection.createOffer({ iceRestart: true }))
+      return localSdp()
+    },
 
     addCandidate: (candidate) => connection.addIceCandidate(candidate),
 

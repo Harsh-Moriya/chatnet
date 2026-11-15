@@ -29,6 +29,8 @@ interface CallState extends Partial<CallPeople> {
   sendingVideo: boolean
   muted: boolean
   cameraOff: boolean
+  // The media dropped in a call that had connected, and is being brought back.
+  reconnecting: boolean
   endedReason: CallEndReason | null
   // What the person must be told (a refusal, a failure, how it ended), or null.
   notice: string | null
@@ -44,6 +46,7 @@ interface CallState extends Partial<CallPeople> {
   clear: () => void
   setMuted: (muted: boolean) => void
   setCameraOff: (off: boolean) => void
+  setReconnecting: (reconnecting: boolean) => void
   setStreams: (streams: { local?: MediaStream | null; remote?: MediaStream | null }) => void
   setNotice: (notice: string | null) => void
 }
@@ -57,6 +60,7 @@ const IDLE = {
   sendingVideo: false,
   muted: false,
   cameraOff: false,
+  reconnecting: false,
   endedReason: null,
   notice: null,
   localStream: null,
@@ -93,12 +97,15 @@ export const useCallStore = create<CallState>()((set) => ({
   connected: () => set((state) => (state.phase !== 'connecting' ? state : { phase: 'active' })),
 
   finish: (reason, notice) =>
-    set((state) => (state.phase === 'idle' || state.phase === 'ended' ? state : { phase: 'ended', endedReason: reason, notice, ringsUntil: null })),
+    set((state) =>
+      state.phase === 'idle' || state.phase === 'ended' ? state : { phase: 'ended', endedReason: reason, notice, ringsUntil: null, reconnecting: false },
+    ),
 
   clear: () => set((state) => (state.phase === 'idle' ? state : { ...IDLE })),
 
   setMuted: (muted) => set((state) => (state.muted === muted ? state : { muted })),
   setCameraOff: (cameraOff) => set((state) => (state.cameraOff === cameraOff ? state : { cameraOff })),
+  setReconnecting: (reconnecting) => set((state) => (state.reconnecting === reconnecting ? state : { reconnecting })),
   setStreams: ({ local, remote }) =>
     set((state) => ({
       localStream: local === undefined ? state.localStream : local,

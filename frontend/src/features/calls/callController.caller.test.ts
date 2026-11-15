@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { verifyCall } from '../../lib/crypto/call'
-import { ENDED_SHOWN_MS, MEDIA_DOWN_MS } from './callController'
+import { ENDED_SHOWN_MS, MAX_RESTARTS, MEDIA_DOWN_MS, RESTART_AFTER_MS, RESTART_RETRY_MS } from './callController'
 import { useCallStore } from './callStore'
 import { NOT_VERIFIED } from './callTexts'
 import {
@@ -9,6 +9,7 @@ import {
   CONVERSATION,
   OFFER_SDP,
   OTHER,
+  RESTART_SDP,
   SELF,
   createRig,
   identityChanged,
@@ -192,6 +193,17 @@ describe('when the call is answered', () => {
     expect(decodeCandidate(sent[0].payload)).toEqual(candidate)
   })
 
+  it('sends the candidates found while it makes the offer after the offer, never before it', async () => {
+    await ringing()
+    const found = { candidate: 'candidate:1 1 udp 1 10.0.0.1 5000 typ host', sdpMid: '0', sdpMLineIndex: 0, usernameFragment: 'f' }
+    rig.controller.onCallAnswered(CALL)
+    rig.peers.current.foundWhileDescribing = [found]
+    await settle()
+
+    expect(rig.api.signals.map((s) => s.type)).toEqual(['Offer', 'Candidate'])
+    expect(decodeCandidate(rig.api.signals[1].payload)).toEqual(found)
+  })
+
   it('shows what the other side sends as the remote picture', async () => {
     await answered()
     const remote = {} as MediaStream
@@ -213,25 +225,16 @@ describe('the answer', () => {
     expect(store().phase).toBe('connecting')
   })
 
-  it('holds candidates that arrive before it, and adds them once the connection has it', async () => {
+  it('has the candidates that follow it added, in order', async () => {
     await answered()
     const candidate = (n: number) => encodeCandidate({ candidate: `candidate:${n}`, sdpMid: '0', sdpMLineIndex: 0, usernameFragment: null })
 
-    rig.controller.onCallSignal(CALL, 'Candidate', candidate(1))
     rig.controller.onCallSignal(CALL, 'Answer', await signedByOther(rig, 'answer', ANSWER_SDP))
+    rig.controller.onCallSignal(CALL, 'Candidate', candidate(1))
     rig.controller.onCallSignal(CALL, 'Candidate', candidate(2))
     await settle()
 
     expect(rig.peers.current.log).toEqual(['createOffer', 'acceptAnswer', 'candidate candidate:1', 'candidate candidate:2'])
-  })
-
-  it('adds no candidate before it has the description, however many come', async () => {
-    await answered()
-
-    rig.controller.onCallSignal(CALL, 'Candidate', encodeCandidate({ candidate: 'candidate:1', sdpMid: null, sdpMLineIndex: null, usernameFragment: null }))
-    await settle()
-
-    expect(rig.peers.current.candidates).toEqual([])
   })
 
   it('ignores an offer, which is not for the caller, and a candidate that is not one', async () => {
@@ -378,6 +381,156 @@ describe('the media', () => {
   })
 })
 
+describe('when the media drops and comes back', () => {
+  const connected = async () => {
+    await answered()
+    rig.controller.onCallSignal(CALL, 'Answer', await signedByOther(rig, 'answer', ANSWER_SDP))
+    await settle()
+    rig.peers.current.state('connected')
+  }
+  const offers = () => rig.api.signals.filter((signal) => signal.type === 'Offer')
+  const restarted = async () => {
+    await settle()
+    return rig.peers.current.restartedWith.length
+  }
+
+  it('restarts ICE with a new signed offer after a drop that does not heal, and says it is reconnecting', async () => {
+    await connected()
+
+    rig.peers.current.state('disconnected')
+    expect(store().reconnecting).toBe(true)
+    expect(await restarted()).toBe(0)
+    rig.timers.fire((ms) => ms === RESTART_AFTER_MS)
+
+    expect(await restarted()).toBe(1)
+    expect(offers()).toHaveLength(2)
+    const signal = decodeSdpSignal(offers()[1].payload)!
+    expect(signal.sdp).toBe(RESTART_SDP)
+    const context = { callId: CALL, conversationId: CONVERSATION, signerId: SELF, peerId: OTHER }
+    expect(await verifyCall(rig.identity.keys.publicKey, context, 'offer', signal.sdp, signal.signature)).toBe(true)
+  })
+
+  it('restarts at once when the connection has failed', async () => {
+    await connected()
+
+    rig.peers.current.state('failed')
+    rig.timers.fire((ms) => ms === 0)
+
+    expect(await restarted()).toBe(1)
+  })
+
+  it('restarts nothing when the drop heals before the restart is due, and stops saying it is reconnecting', async () => {
+    await connected()
+
+    rig.peers.current.state('disconnected')
+    rig.peers.current.state('connected')
+    rig.timers.fire((ms) => ms === RESTART_AFTER_MS)
+
+    expect(await restarted()).toBe(0)
+    expect(store()).toMatchObject({ phase: 'active', reconnecting: false })
+  })
+
+  it('tries again while it is down, and gives up trying after the most restarts a call may have', async () => {
+    await connected()
+    rig.peers.current.state('disconnected')
+    rig.timers.fire((ms) => ms === RESTART_AFTER_MS)
+    expect(await restarted()).toBe(1)
+
+    for (let i = 0; i < MAX_RESTARTS + 5; i++) {
+      rig.timers.fire((ms) => ms === RESTART_RETRY_MS)
+      await settle()
+    }
+
+    expect(rig.peers.current.restartedWith).toHaveLength(MAX_RESTARTS)
+  })
+
+  it('stops trying once the media is back', async () => {
+    await connected()
+    rig.peers.current.state('failed')
+    rig.timers.fire((ms) => ms === 0)
+    expect(await restarted()).toBe(1)
+
+    rig.peers.current.state('connected')
+    rig.timers.fire((ms) => ms === RESTART_RETRY_MS)
+
+    expect(await restarted()).toBe(1)
+    expect(store().reconnecting).toBe(false)
+  })
+
+  it('restarts while the call is still connecting too, which is how a lost offer is made again', async () => {
+    await answered()
+
+    rig.peers.current.state('failed')
+    rig.timers.fire((ms) => ms === 0)
+
+    expect(await restarted()).toBe(1)
+    expect(store().phase).toBe('connecting')
+    expect(store().reconnecting).toBe(false)
+  })
+
+  it('takes the answer to the restart, and ends the call as unverifiable when that answer is not signed by the other person', async () => {
+    await connected()
+    rig.peers.current.state('failed')
+    rig.timers.fire((ms) => ms === 0)
+    await settle()
+
+    rig.controller.onCallSignal(CALL, 'Answer', await signedByOther(rig, 'answer', ANSWER_SDP))
+    await settle()
+    expect(rig.peers.current.acceptedAnswers).toEqual([ANSWER_SDP, ANSWER_SDP])
+
+    rig.controller.onCallSignal(CALL, 'Answer', await signedByOther(rig, 'answer', ANSWER_SDP, { key: rig.identity.keys }))
+    await settle()
+    expect(store()).toMatchObject({ phase: 'ended', notice: NOT_VERIFIED })
+    expect(rig.api.ended).toEqual([{ callId: CALL, failed: true }])
+  })
+
+  it('makes the offer again when the other side was away and did not get it', async () => {
+    rig.api.delivers = false
+    await answered()
+    expect(offers()).toHaveLength(1)
+
+    rig.api.delivers = true
+    rig.timers.fire((ms) => ms === RESTART_RETRY_MS)
+
+    expect(await restarted()).toBe(1)
+    expect(offers()).toHaveLength(2)
+  })
+
+  it('does not make the offer again when it was handed on', async () => {
+    await answered()
+
+    expect(rig.timers.waiting((ms) => ms === RESTART_RETRY_MS)).toBe(0)
+  })
+
+  it('is still ended as dropped when the restart does not bring the media back in time', async () => {
+    await connected()
+    rig.peers.current.state('failed')
+    rig.timers.fire((ms) => ms === 0)
+    await settle()
+
+    rig.timers.fire((ms) => ms === MEDIA_DOWN_MS)
+
+    expect(store()).toMatchObject({ phase: 'ended', notice: 'The call was dropped.' })
+    expect(rig.api.ended).toEqual([{ callId: CALL, failed: true }])
+    rig.timers.fire()
+    await settle()
+    expect(rig.peers.current.restartedWith).toHaveLength(1)
+  })
+
+  it('sends the candidates of a restart after its offer', async () => {
+    await connected()
+    const found = { candidate: 'candidate:9 1 udp 1 10.0.0.9 5000 typ host', sdpMid: '0', sdpMLineIndex: 0, usernameFragment: 'new' }
+    rig.peers.current.foundWhileDescribing = [found]
+    rig.api.signals.length = 0
+
+    rig.peers.current.state('failed')
+    rig.timers.fire((ms) => ms === 0)
+    await settle()
+
+    expect(rig.api.signals.map((signal) => signal.type)).toEqual(['Offer', 'Candidate'])
+  })
+})
+
 describe('when the call ends', () => {
   it('on the person’s hang-up, it tells the server, lets go of everything and shows that it ended', async () => {
     await answered()
@@ -499,6 +652,31 @@ describe('after the hub connection came back', () => {
     await settle()
 
     expect(store().phase).toBe('connecting')
+  })
+
+  it('makes the offer again with the servers it was just given when the media is not up', async () => {
+    await answered()
+    const fresh = [{ urls: ['turn:relay.example:3478'], username: '1:u', credential: 'c' }]
+    rig.api.rejoinResult = async () => ({ state: 'Active', media: 'Audio', iceServers: fresh })
+
+    rig.controller.onReconnected()
+    await settle()
+
+    expect(rig.peers.current.restartedWith).toEqual([fresh])
+    expect(rig.api.signals.filter((signal) => signal.type === 'Offer')).toHaveLength(2)
+  })
+
+  it('makes no offer when the media stayed up through the drop', async () => {
+    await answered()
+    rig.controller.onCallSignal(CALL, 'Answer', await signedByOther(rig, 'answer', ANSWER_SDP))
+    await settle()
+    rig.peers.current.state('connected')
+
+    rig.controller.onReconnected()
+    await settle()
+
+    expect(rig.api.rejoined).toHaveLength(1)
+    expect(rig.peers.current.restartedWith).toEqual([])
   })
 
   it('has nothing to rejoin when there is no call, or one that is only ringing here', async () => {
