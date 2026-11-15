@@ -63,7 +63,7 @@ A picture, a PDF or a video opens full screen on a dark background. The viewer i
 
 A picture is fitted to the screen (one smaller than the screen is shown at its own size, not enlarged).
 
-- **Zoom** from the fit up to four times the picture's own size: the mouse wheel, a pinch, the buttons (zoom out, actual size, zoom in, fit to screen) or the keys `+`, `-`, `1` (actual size) and `0` (fit). A double click or a double tap goes from the fit to actual size at that point, and back.
+- **Zoom** from the fit up to four times the picture's own size: the mouse wheel, a pinch, the buttons (zoom out, actual size, zoom in, fit to screen) or the keys `+`, `-`, `1` (actual size) and `0` (fit). A double click or a double tap goes from the fit to actual size at that point (twice its size for a picture that already fits at its own size), and back.
 - **Move** a zoomed picture by dragging it; it cannot be dragged off the screen.
 - **Next and previous** with the arrow keys, the buttons, or a sideways swipe on a picture that is not zoomed. They go through the pictures, the PDFs and the videos of the messages loaded in the conversation, oldest first, and stop at either end (a file opened from the gallery goes through the gallery's list instead, see below); the position is shown ("3 of 12"). Only files the sealed message describes are included, and nothing from a deleted message. If the file that is open is deleted, the viewer moves to the nearest one, or closes when there is none.
 - **Download** saves the file under its name as opaque bytes, as the chip does. **Escape** or the close button closes the viewer and returns focus to what opened it.
@@ -118,5 +118,5 @@ A deleted message's files are removed through the outbox job `MessageFilesRemove
 - Upload tickets are limited to 60 per hour per person.
 - The server, and the storage, see the size of each file and the times it is fetched, from which address. A file's size can say something about what it is.
 - A member can send a file whose bytes are not what the entry in the message says; readers refuse it and show that it could not be loaded. The server cannot tell.
-- No virus scan (the server cannot read the bytes), no thumbnails, and files are served from the storage host, not a separate origin. The encrypted bytes are not usable without a key, and the key is inside a message that only members can open.
+- No virus scan (the server cannot read the bytes), no thumbnails made by the server or kept in the bucket (the gallery draws them in the browser from the decrypted picture), and files are served from the storage host, not a separate origin. The encrypted bytes are not usable without a key, and the key is inside a message that only members can open.
 - The browser fetches the files itself, so the bucket needs a CORS rule that allows `PUT`, `GET` and `HEAD` from the app's origin and exposes the `ETag` header, and a lifecycle rule that expires `pending/` after a day; both are in `docker/storage` (`cors.json`, `lifecycle.json`).
