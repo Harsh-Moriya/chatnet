@@ -1,3 +1,4 @@
+using ChatNET.API.Calls.Models;
 using ChatNET.API.Messaging.Models;
 using ChatNET.API.Notifications.Models;
 
@@ -29,6 +30,18 @@ public static class PushAlertText
             message.ConversationId,
             message.Id);
     }
+
+    // A call that nobody answered, from the caller. The tag is the call's, so an alert that the call is ringing (and whatever else the
+    // call showed) is replaced by this one on the screen.
+    public static PushAlert ForMissedCall(MessageDto message, CallDto call) => new(
+        message.SenderDisplayName,
+        call.Media == CallMedia.Video ? "Missed video call" : "Missed audio call",
+        CallTag(call.Id),
+        PushAlertTypes.MissedCall,
+        message.ConversationId,
+        message.Id);
+
+    public static string CallTag(Guid callId) => $"call-{callId}";
 
     // Someone named the person in a message. It alerts in a muted conversation too. The title says it; there is no text.
     public static PushAlert ForMention(NotificationDto notification, Guid conversationId, string? groupName) => new(

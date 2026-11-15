@@ -147,3 +147,16 @@ describe('the "seen" mark under your newest message', () => {
     expect(seenFor([], [], 'me', false)).toBeNull()
   })
 })
+
+describe('the seen mark and a call', () => {
+  it('is not shown under a call the reader made, but under their newest message', () => {
+    const messages = [
+      message('said', { senderId: 'me', createdAt: '2026-10-11T10:00:00Z' }),
+      message('call', { senderId: 'me', createdAt: '2026-10-11T10:05:00Z', kind: 'Call', content: null }),
+    ]
+
+    const seen = seenFor(messages, [member('bob', '2026-10-11T10:10:00Z')], 'me', false)
+
+    expect(seen?.messageId).toBe('said')
+  })
+})

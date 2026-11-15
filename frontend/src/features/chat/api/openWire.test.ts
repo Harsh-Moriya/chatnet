@@ -36,6 +36,8 @@ function wireMessage(overrides: Partial<MessageWire> = {}): MessageWire {
     editCount: 0,
     isDeleted: false,
     changeSeq: 1,
+    kind: 'Text',
+    call: null,
     ...overrides,
   }
 }
@@ -49,6 +51,8 @@ function lastWire(overrides: Partial<LastMessageWire> = {}): LastMessageWire {
     editCount: 0,
     createdAt: '2026-10-11T10:00:00Z',
     attachmentCount: 0,
+    kind: 'Text',
+    call: null,
     ...overrides,
   }
 }
@@ -359,6 +363,8 @@ describe('the preview of a conversation as the list first shows it', () => {
       senderId: 'bob',
       createdAt: '2026-10-11T10:00:00Z',
       attachmentCount: 2,
+      kind: 'Text',
+      call: null,
       content: null,
       unreadable: 'pending',
       sealed: { ciphertext: sealed('hello'), keyEpoch: 2, clientMessageId: 'cid-1', editCount: 0 },
@@ -510,5 +516,38 @@ describe('taking pushes in the order they arrived', () => {
     await Promise.all([slow, quick])
 
     expect(order).toEqual(['quick', 'slow'])
+  })
+})
+
+describe('the row of a call', () => {
+  const callInfo = {
+    id: 'call-1',
+    media: 'Audio' as const,
+    startedAt: '2026-10-11T09:59:00Z',
+    answeredAt: null,
+    endedAt: '2026-10-11T10:00:00Z',
+    endReason: 'Missed' as const,
+    isMissed: true,
+  }
+
+  it('is passed on as it is: nothing is opened and it is not unreadable', async () => {
+    const wire = wireMessage({ ciphertext: null, keyEpoch: 0, kind: 'Call', call: callInfo })
+
+    const message = await openMessage(wire)
+
+    expect(message.kind).toBe('Call')
+    expect(message.call).toEqual(callInfo)
+    expect(message.content).toBeNull()
+    expect(message.unreadable).toBeNull()
+    expect(sealedOf(message)).toBeNull()
+  })
+
+  it('is the preview of a conversation without anything to open', () => {
+    const { lastMessage } = conversationOf(conversationWire(lastWire({ ciphertext: null, keyEpoch: 0, kind: 'Call', call: callInfo })))
+
+    expect(lastMessage?.kind).toBe('Call')
+    expect(lastMessage?.call).toEqual(callInfo)
+    expect(lastMessage?.unreadable).toBeNull()
+    expect(lastMessage?.sealed).toBeNull()
   })
 })

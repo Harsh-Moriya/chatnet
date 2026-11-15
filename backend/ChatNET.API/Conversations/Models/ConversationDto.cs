@@ -1,3 +1,6 @@
+using ChatNET.API.Calls.Models;
+using ChatNET.API.Messaging.Models;
+
 namespace ChatNET.API.Conversations.Models;
 
 // Name is resolved per viewer: for a Direct conversation it is the other participant's
@@ -33,7 +36,8 @@ public record ConversationDto(
 // The last message as the list shows it, sealed as it was sent: the server cannot read it, so the browser opens it with the key of
 // KeyEpoch to draw the preview, with the sender and the client message id and edit count it was signed for. Ciphertext is null when
 // the last message was deleted. AttachmentCount says how many files the message carries (0 for a deleted message), so a message of
-// only files can still be previewed.
+// only files can still be previewed. Kind is Call when the last message is the row of a finished call: then Ciphertext is null without
+// the message being deleted, and Call says how it went (see MessageDto).
 public record LastMessageDto(
     Guid SenderId,
     string? Ciphertext,
@@ -41,5 +45,7 @@ public record LastMessageDto(
     Guid ClientMessageId,
     int EditCount,
     DateTime CreatedAt,
-    int AttachmentCount
+    int AttachmentCount,
+    MessageKind Kind = MessageKind.Text,
+    CallDto? Call = null
 );

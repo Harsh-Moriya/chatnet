@@ -17,24 +17,35 @@ public class MessageConfiguration : IEntityTypeConfiguration<Message>
     // The messages that have files and are not deleted, newest first: what the gallery pages through.
     public const string FilesIndexName = "IX_Messages_ConversationId_CreatedAt_Files";
 
+    // The guarantee that a call is in the timeline once, whatever wrote it.
+    public const string CallIndexName = "IX_Messages_CallId";
+
     public void Configure(EntityTypeBuilder<Message> builder)
     {
         builder.HasKey(m => m.Id);
         builder.Property(m => m.Id).HasDefaultValueSql("gen_random_uuid()");
 
-        // Null exactly when the message is deleted: the text is removed and the row is kept so the message timeline has no gaps.
-        // A message that is not deleted holds a blob of a size the formats allow (see MessageBlob), whatever is inside it.
+        // For a Text row: null exactly when the message is deleted: the text is removed and the row is kept so the message timeline has
+        // no gaps. A message that is not deleted holds a blob of a size the formats allow (see MessageBlob), whatever is inside it.
+        // A Call row never has one.
         builder.Property(m => m.Ciphertext).HasColumnType("bytea");
         builder.Property(m => m.KeyEpoch).IsRequired();
         builder.Property(m => m.ClientMessageId).IsRequired();
         builder.Property(m => m.MentionedUserIds).HasColumnType("uuid[]").IsRequired().HasDefaultValueSql("'{}'");
 
+        // What someone said (Text) or the row of a finished call (Call). The call row's id is made by the server and it carries no
+        // text, so it is the one kind that is not deleted and has no ciphertext.
+        builder.Property(m => m.Kind).HasConversion<string>().HasMaxLength(8).IsRequired().HasDefaultValue(MessageKind.Text);
+
         builder.ToTable(table =>
         {
             table.HasCheckConstraint(
-                "CK_Messages_Ciphertext",
-                $"(\"IsDeleted\" AND \"Ciphertext\" IS NULL) OR (NOT \"IsDeleted\" AND \"Ciphertext\" IS NOT NULL AND length(\"Ciphertext\") BETWEEN {MessageBlob.MinBytes} AND {MessageBlob.MaxBytes})");
-            table.HasCheckConstraint("CK_Messages_KeyEpoch", "\"KeyEpoch\" >= 1");
+                "CK_Messages_Content",
+                $"(\"Kind\" = 'Text' AND \"CallId\" IS NULL AND ((\"IsDeleted\" AND \"Ciphertext\" IS NULL) OR (NOT \"IsDeleted\" AND \"Ciphertext\" IS NOT NULL AND length(\"Ciphertext\") BETWEEN {MessageBlob.MinBytes} AND {MessageBlob.MaxBytes}))) " +
+                "OR (\"Kind\" = 'Call' AND \"CallId\" IS NOT NULL AND \"Ciphertext\" IS NULL AND NOT \"IsDeleted\" AND \"EditCount\" = 0)");
+
+            // Nothing is sealed in a call row, and a conversation may have no key period yet (0), so only text must name one.
+            table.HasCheckConstraint("CK_Messages_KeyEpoch", "\"Kind\" = 'Call' OR \"KeyEpoch\" >= 1");
         });
 
         builder.Property(m => m.CreatedAt)
@@ -88,6 +99,17 @@ public class MessageConfiguration : IEntityTypeConfiguration<Message>
         builder.HasOne(m => m.Conversation)
             .WithMany()
             .HasForeignKey(m => m.ConversationId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        // A call has one row in the timeline, and the row goes with the call.
+        builder.HasIndex(m => m.CallId)
+            .IsUnique()
+            .HasFilter("\"CallId\" IS NOT NULL")
+            .HasDatabaseName(CallIndexName);
+
+        builder.HasOne(m => m.Call)
+            .WithOne()
+            .HasForeignKey<Message>(m => m.CallId)
             .OnDelete(DeleteBehavior.Cascade);
 
         builder.HasOne(m => m.Sender)

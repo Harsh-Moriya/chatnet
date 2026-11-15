@@ -1,5 +1,5 @@
 namespace ChatNET.API.Messaging.Models;
 
-// What deciding whether someone may edit or delete a message needs to know about it, without the rest of the row.
+// What deciding whether someone may edit or delete a message needs to know about it, without the rest of the row. IsCall is a call's row in the timeline, which nobody may edit or delete.
 public sealed record MessageForChange(
-    Guid Id, Guid SenderId, DateTime CreatedAt, bool IsDeleted, int EditCount, Guid[] MentionedUserIds);
+    Guid Id, Guid SenderId, DateTime CreatedAt, bool IsDeleted, int EditCount, Guid[] MentionedUserIds, bool IsCall);

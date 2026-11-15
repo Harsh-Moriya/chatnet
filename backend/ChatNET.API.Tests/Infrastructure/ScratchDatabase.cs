@@ -75,7 +75,7 @@ public sealed class ScratchDatabase : IAsyncDisposable
     // writes them on every insert, so they are added for the time of the insert and dropped again: the rows are as they would have
     // been, and the schema is the one the test asked for. (AvatarKeys renamed the picture columns; AddConversationKeyEpochs added
     // the key epoch of a conversation; EncryptMessages replaced the text of a message with a blob; AddChangeSequence numbered the changes of
-    // a conversation; AddMessageHasFiles marked the messages that have files.)
+    // a conversation; AddMessageHasFiles marked the messages that have files; AddCalls gave a message its kind and the call it records.)
     private static readonly (string Table, string Column, string Definition)[] ModelColumns =
     [
         ("AspNetUsers", "AvatarKey", "text"),
@@ -88,6 +88,8 @@ public sealed class ScratchDatabase : IAsyncDisposable
         ("Messages", "MentionedUserIds", "uuid[] NOT NULL DEFAULT ARRAY[]::uuid[]"),
         ("Messages", "ChangeSeq", "bigint NOT NULL DEFAULT 0"),
         ("Messages", "HasFiles", "boolean NOT NULL DEFAULT false"),
+        ("Messages", "Kind", "character varying(8) NOT NULL DEFAULT 'Text'"),
+        ("Messages", "CallId", "uuid"),
     ];
 
     private async Task WithModelColumnsAsync(Func<Task> insert)

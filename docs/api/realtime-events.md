@@ -60,10 +60,14 @@ Arguments are positional. The examples are real payloads as the JavaScript clien
     "editedAt": null,
     "editCount": 0,
     "isDeleted": false,
-    "changeSeq": 1
+    "changeSeq": 1,
+    "kind": "Text",
+    "call": null
   }
 ]
 ```
+
+A message whose `kind` is `Call` is the row of a finished call (see [messaging](../features/messaging.md#calls-in-the-timeline)): `ciphertext` is null, `keyEpoch` is 0, and `call` holds `id`, `media`, `startedAt`, `answeredAt`, `endedAt`, `endReason` and `isMissed`.
 
 **UserTyping**:
 

@@ -1,3 +1,4 @@
+using ChatNET.API.Calls.Models;
 using ChatNET.API.Common.Exceptions;
 using ChatNET.API.Common.Persistence;
 using ChatNET.API.Keys;
@@ -5,6 +6,7 @@ using ChatNET.API.Keys.Persistence;
 using ChatNET.API.Conversations.KeyEpochs;
 using ChatNET.API.Conversations.Models;
 using ChatNET.API.Media;
+using ChatNET.API.Messaging.Models;
 using ChatNET.API.Notifications.Models;
 using ChatNET.API.Outbox.Models;
 using Microsoft.EntityFrameworkCore;
@@ -287,7 +289,8 @@ public class ConversationRepository : IConversationRepository
     // The unread count is a correlated subquery over the same index: the messages of this conversation
     // since the viewer read it (or since they joined), from other people, that were not deleted since, counted by a
     // query that stops at @unreadCap rows. The viewer's own messages cannot pile up in front of the count, because
-    // sending moves the sender's read position to the message (MessageRepository.AddAsync).
+    // sending moves the sender's read position to the message (MessageRepository.AddAsync). The row of a call counts only when it was
+    // missed (CallDto.IsMissed): the one extra lookup is made for the rows that are calls, and the count still stops at @unreadCap.
     private const string ConversationSelect = """
         SELECT c."Id"        AS "Id",
                c."Type"      AS "Type",
@@ -301,6 +304,13 @@ public class ConversationRepository : IConversationRepository
                lm."ClientMessageId" AS "LastMessageClientMessageId",
                lm."EditCount" AS "LastMessageEditCount",
                lm."CreatedAt" AS "LastMessageCreatedAt",
+               lm."Kind"      AS "LastMessageKind",
+               lc."Id"        AS "LastCallId",
+               lc."Media"     AS "LastCallMedia",
+               lc."StartedAt" AS "LastCallStartedAt",
+               lc."AnsweredAt" AS "LastCallAnsweredAt",
+               lc."EndedAt"   AS "LastCallEndedAt",
+               lc."EndReason" AS "LastCallEndReason",
                CASE WHEN lm."Id" IS NULL OR lm."IsDeleted" THEN 0
                     ELSE (SELECT COUNT(*)::int FROM "MessageAttachments" a WHERE a."MessageId" = lm."Id") END
                    AS "LastMessageAttachmentCount",
@@ -313,6 +323,9 @@ public class ConversationRepository : IConversationRepository
                                   AND um."CreatedAt" > COALESCE(mine."LastReadAt", '-infinity'::timestamptz)
                                   AND um."SenderId" <> @viewerId
                                   AND NOT um."IsDeleted"
+                                  AND (um."CallId" IS NULL
+                                       OR EXISTS (SELECT 1 FROM "Calls" uc
+                                                  WHERE uc."Id" = um."CallId" AND uc."AnsweredAt" IS NULL AND uc."EndReason" <> 'Declined'))
                                 LIMIT @unreadCap) AS counted) END AS "UnreadCount",
                mine."IsMuted" AS "IsMuted",
                mine."LeftAt" AS "LeftAt",
@@ -334,7 +347,8 @@ public class ConversationRepository : IConversationRepository
             LIMIT 1
         ) other ON TRUE
         LEFT JOIN LATERAL (
-            SELECT m."Id", m."SenderId", m."Ciphertext", m."KeyEpoch", m."ClientMessageId", m."EditCount", m."IsDeleted", m."CreatedAt"
+            SELECT m."Id", m."SenderId", m."Ciphertext", m."KeyEpoch", m."ClientMessageId", m."EditCount", m."IsDeleted", m."CreatedAt",
+                   m."Kind", m."CallId"
             FROM "Messages" m
             WHERE m."ConversationId" = c."Id"
               AND m."CreatedAt" >= mine."JoinedAt"
@@ -342,6 +356,7 @@ public class ConversationRepository : IConversationRepository
             ORDER BY m."CreatedAt" DESC
             LIMIT 1
         ) lm ON TRUE
+        LEFT JOIN "Calls" lc ON lc."Id" = lm."CallId"
         """;
 
     // Every conversation the user is in or was in, the most recently active first. The name in ORDER BY is the output column
@@ -367,7 +382,10 @@ public class ConversationRepository : IConversationRepository
         }
             ? new LastMessageDto(
                 senderId, row.LastMessageCiphertext is { } blob ? KeyFormats.Encode(blob) : null, keyEpoch, clientMessageId, editCount,
-                createdAt, row.LastMessageAttachmentCount)
+                createdAt, row.LastMessageAttachmentCount, Enum.Parse<MessageKind>(row.LastMessageKind ?? nameof(MessageKind.Text)),
+                row is { LastCallId: { } callId, LastCallMedia: { } media, LastCallStartedAt: { } startedAt, LastCallEndedAt: { } endedAt, LastCallEndReason: { } endReason }
+                    ? new CallDto(callId, Enum.Parse<CallMedia>(media), startedAt, row.LastCallAnsweredAt, endedAt, Enum.Parse<CallEndReason>(endReason))
+                    : null)
             : null;
 
         return new ConversationDto(
@@ -390,6 +408,13 @@ public class ConversationRepository : IConversationRepository
         public Guid? LastMessageClientMessageId { get; set; }
         public int? LastMessageEditCount { get; set; }
         public DateTime? LastMessageCreatedAt { get; set; }
+        public string? LastMessageKind { get; set; }
+        public Guid? LastCallId { get; set; }
+        public string? LastCallMedia { get; set; }
+        public DateTime? LastCallStartedAt { get; set; }
+        public DateTime? LastCallAnsweredAt { get; set; }
+        public DateTime? LastCallEndedAt { get; set; }
+        public string? LastCallEndReason { get; set; }
         public int LastMessageAttachmentCount { get; set; }
         public int UnreadCount { get; set; }
         public Guid? OtherUserId { get; set; }

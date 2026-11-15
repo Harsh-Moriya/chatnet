@@ -8,7 +8,8 @@ import type { LocalStore, StoredMessage } from './store/types'
 // The message as the store keeps it, or null when there is nothing to keep: one the server has not confirmed (it has no change number
 // yet), or one that could not be opened and is not held sealed either.
 export function storedFrom(userId: string, message: Message): StoredMessage | null {
-  if (message.changeSeq === undefined) return null
+  // A call is not something anyone said: there is nothing in it to search, and it is read from the server again whenever it is needed.
+  if (message.changeSeq === undefined || message.kind === 'Call') return null
 
   const base = {
     userId,

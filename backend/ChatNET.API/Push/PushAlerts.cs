@@ -76,6 +76,13 @@ public class PushAlerts
         if (away.Count == 0)
             return;
 
+        // A call's row is only given an alert row when the call was missed (CallLog), and says so in its own words.
+        if (message.Call is { } call)
+        {
+            await SendAsync(away, PushAlertText.ForMissedCall(message, call), cancellationToken);
+            return;
+        }
+
         var group = await _conversations.GetUpdateAsync(conversationId, cancellationToken);
         var files = (await _attachments.GetForMessagesAsync([messageId], cancellationToken)).Count;
 

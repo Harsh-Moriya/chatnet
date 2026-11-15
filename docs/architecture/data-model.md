@@ -12,6 +12,9 @@ erDiagram
     AspNetUsers ||--o{ ConversationKeyEnvelopes : "can open"
     AspNetUsers ||--o{ Messages : "sends"
     Messages ||--o{ MessageAttachments : "carries"
+    Conversations ||--o{ Calls : "has"
+    AspNetUsers ||--o{ Calls : "makes or takes"
+    Calls ||--o| Messages : "has a row in the timeline as"
     AspNetUsers ||--o{ RefreshTokens : "holds"
     AspNetUsers ||--o{ PasswordResetTokens : "can reset with"
     AspNetUsers ||--o{ Notifications : "receives"
@@ -93,8 +96,10 @@ Someone added again after leaving reuses their row: `JoinedAt` is reset, `LeftAt
 |---|---|---|
 | `Id` | uuid | primary key |
 | `ConversationId`, `SenderId` | uuid | foreign keys; cascade on the conversation |
-| `Ciphertext` | bytea, null | the sealed text of the message, 98 to 32,768 bytes, in the [format](encryption-format.md) the sender's browser made; null exactly when the message is deleted. The server cannot read it |
-| `KeyEpoch` | integer | the epoch the message was sealed under, taken from the blob's header; at least 1 |
+| `Kind` | text | `Text` for what someone said, `Call` for the row the server writes when a call ends (then `SenderId` is the caller). Default `Text` |
+| `CallId` | uuid, null | the call a `Call` row records; null for `Text`. A call has one row, and the row goes with the call |
+| `Ciphertext` | bytea, null | the sealed text of a `Text` message, 98 to 32,768 bytes, in the [format](encryption-format.md) the sender's browser made; null exactly when the message is deleted. Always null for a `Call` row. The server cannot read it |
+| `KeyEpoch` | integer | the epoch a `Text` message was sealed under, taken from the blob's header; at least 1. 0 for a `Call` row, which seals nothing |
 | `MentionedUserIds` | uuid[] | the active members the latest version of the message named, other than the sender, so an edit notifies only new names |
 | `CreatedAt` | timestamptz | set by the server; with `Id` it orders messages |
 | `EditCount`, `EditedAt` | integer, timestamptz null | |
@@ -109,8 +114,24 @@ Indexes:
 - `IX_Messages_ConversationId_SenderId_ClientMessageId`: **unique**. Concurrent copies of one send are settled by this index.
 - `IX_Messages_ConversationId_CreatedAt_Files`: a partial index on `(ConversationId, CreatedAt DESC, Id DESC)` for the messages that have `HasFiles` and are not deleted. The gallery's list walks it from a cursor, so a page costs about its own rows; the query repeats the filter exactly so that Postgres can use it.
 - `IX_Messages_ConversationId_ChangeSeq`: **unique** on `(ConversationId, ChangeSeq)`. The changes feed reads the messages after a number in order from this index, and a change path that forgot to take a number would fail on it.
-- Two check constraints: `CK_Messages_Ciphertext` (a deleted message has no blob and every other message has one of 98 to 32,768 bytes) and `CK_Messages_KeyEpoch` (at least 1).
+- `IX_Messages_CallId`: **unique** where `CallId` is not null, so a call is in the timeline once.
+- Two check constraints: `CK_Messages_Content` (a `Text` row has no call, and a deleted one has no blob while every other one has one of 98 to 32,768 bytes; a `Call` row names its call, has no blob, is not deleted and was never edited) and `CK_Messages_KeyEpoch` (at least 1 for `Text`; a `Call` row seals nothing, and a conversation may have no key period yet).
 - Indexes on `SenderId` and `DeletedById` for the foreign keys.
+
+## Calls
+
+A call that has ended, written once by the server when it ends. While a call rings or runs it lives in Redis, not here.
+
+| Column | Type | Notes |
+|---|---|---|
+| `Id` | uuid | primary key, made when the call starts, so the live state and this row share it |
+| `ConversationId` | uuid | foreign key; cascade on the conversation |
+| `CallerId`, `CalleeId` | uuid | foreign keys to the two people; restricted |
+| `Media` | text | `Audio` or `Video`: what the call started as |
+| `StartedAt`, `AnsweredAt`, `EndedAt` | timestamptz, null, timestamptz | when it began to ring, when the callee accepted (null if nobody did), and when it ended |
+| `EndReason` | text | `Completed`, `Missed`, `Declined`, `Cancelled`, `Busy` or `Failed` |
+
+Check constraints: `CK_Calls_Times` (it cannot end before it started, nor be answered outside that span), `CK_Calls_Answer` (`Completed` was answered; `Missed`, `Declined`, `Cancelled` and `Busy` were not; `Failed` may be either) and `CK_Calls_People` (nobody calls themselves). Each call has one `Messages` row of kind `Call`, whose `CreatedAt` is the call's `EndedAt`, so it lands after whatever was said during the call. A call is **missed** when nobody answered and the callee did not turn it down: it counts as unread for the callee and alerts them when they are away.
 
 ## MessageAttachments
 

@@ -1,3 +1,4 @@
+using ChatNET.API.Calls;
 using System.Text;
 using System.Text.Json.Serialization;
 using ChatNET.API.Auth;
@@ -334,6 +335,7 @@ try
     builder.Services.AddSingleton<PushEndpointPolicy>();
     builder.Services.AddScoped<IPushSubscriptionRepository, PushSubscriptionRepository>();
     builder.Services.AddScoped<PushAlertRows>();
+    builder.Services.AddScoped<CallLog>();
     builder.Services.AddScoped<PushAlerts>();
     builder.Services.AddHostedService<PushSubscriptionCleanupService>();
 

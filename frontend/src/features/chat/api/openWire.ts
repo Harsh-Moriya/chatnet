@@ -126,6 +126,8 @@ export function sealedOf(message: Message): MessageWire | null {
     editCount: message.editCount,
     isDeleted: message.isDeleted,
     changeSeq: message.changeSeq,
+    kind: 'Text',
+    call: null,
   }
 }
 

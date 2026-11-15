@@ -10,6 +10,27 @@ export type Unreadable = UnreadableReason | 'pending'
 
 export type ConversationType = 'Direct' | 'Group'
 
+// What a row of the timeline is. A Text row is what someone said, sealed in their browser. A Call row is written by the server when a call
+// ends: nothing is sealed in it, it is never edited or deleted, `senderId` is the caller, and `call` says how the call went.
+export type MessageKind = 'Text' | 'Call'
+
+export type CallMedia = 'Audio' | 'Video'
+
+export type CallEndReason = 'Completed' | 'Missed' | 'Declined' | 'Cancelled' | 'Busy' | 'Failed'
+
+// A finished call as the server sends it. The callee is the other member of the conversation. `answeredAt` is null for a call nobody answered,
+// and the length of the call is `endedAt` minus `answeredAt`. `isMissed` is the server's rule for a missed call (nobody answered and the callee
+// did not turn it down): it is what counts as unread for the callee, so the browser goes by it and never works the rule out again.
+export interface CallInfo {
+  id: string
+  media: CallMedia
+  startedAt: string
+  answeredAt: string | null
+  endedAt: string
+  endReason: CallEndReason
+  isMissed: boolean
+}
+
 // A conversation as the signed-in user sees it: for a direct chat, `name` is the other person.
 export interface Conversation {
   id: string
@@ -58,6 +79,9 @@ export interface LastMessageWire {
   editCount: number
   createdAt: string
   attachmentCount: number
+  kind: MessageKind
+  // Set exactly when `kind` is 'Call'.
+  call: CallInfo | null
 }
 
 // What a message was sealed as, kept with what was opened from it so it can be opened again when its key arrives.
@@ -81,8 +105,11 @@ export interface LastMessage {
   createdAt: string
   // How many files the last message carries, so a message of only files can still be previewed.
   attachmentCount: number
-  // The message as sealed, to open it again. Null for a deleted message.
+  // The message as sealed, to open it again. Null for a deleted message and for a call.
   sealed?: SealedPreview | null
+  // Absent means Text, as for a message made here. `call` is set exactly when this is 'Call'.
+  kind?: MessageKind
+  call?: CallInfo | null
 }
 
 // A file attached to a confirmed message, as the server sends it. The file is encrypted: `sizeBytes` is the size of what is stored, and `url`
@@ -117,6 +144,9 @@ export interface MessageWire {
   isDeleted: boolean
   // The number of the latest change to this message in its conversation: a copy with the higher number is the newer.
   changeSeq: number
+  kind: MessageKind
+  // Set exactly when `kind` is 'Call'. A call row has no `ciphertext` and is not deleted.
+  call: CallInfo | null
 }
 
 export interface Message {
@@ -144,6 +174,10 @@ export interface Message {
   isDeleted: boolean
   // See MessageWire. Absent for a message made here before the server confirmed it.
   changeSeq?: number
+  // Absent means Text, as for a message made here before the server confirmed it. A call row has no text and nothing to open: `content` is
+  // null and `unreadable` is not set.
+  kind?: MessageKind
+  call?: CallInfo | null
 }
 
 // A file that finished uploading and is attached to a message that has not been confirmed yet. `uploadKey` is
