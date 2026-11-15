@@ -49,6 +49,14 @@ Messages are ordered by `CreatedAt`, set by the server that handled the send, th
 
 Every message carries `changeSeq`, the number its conversation gave to its latest change, and every conversation in the list carries the number of its latest change. `GET /api/conversations/{id}/changes?since=N` returns the messages changed after a number, which is how a client keeps a local copy current. See [searching messages](message-search.md#the-changes-feed).
 
+## Calls in the timeline
+
+When a call ends, the server writes one row into the conversation: a message with `kind` `Call` and a `call` object (`id`, `media`, `startedAt`, `answeredAt`, `endedAt`, `endReason` and `isMissed`). The caller is its `senderId`; `ciphertext` is null although `isDeleted` is false, `keyEpoch` is 0 and there are no files. The row is made when the call ends, with `createdAt` equal to `endedAt`, takes a change number like any other change, and is sent to the conversation as `ReceiveMessage`. Ordinary messages carry `kind` `Text` and `call` null.
+
+- It is the server's record, not something anyone said: it is not signed, cannot be edited or deleted (the answer is 409 with the code `call-row`), and is not searchable.
+- It counts as unread for the callee only when the call was missed (`isMissed`), and never moves anyone's read position. Marking read up to a call row works like any other message.
+- A missed call alerts a callee who has no live connection with a push saying "Missed audio call" or "Missed video call", tagged `call-{call id}`.
+
 ## Endpoints and events
 
 `POST` and `GET /api/conversations/{id}/messages`, `GET /api/conversations/{id}/changes`; hub events `ReceiveMessage` and `MessageUpdated`. See [endpoints](../api/endpoints.md) and [real-time events](../api/realtime-events.md).
