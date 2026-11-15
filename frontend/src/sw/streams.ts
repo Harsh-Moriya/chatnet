@@ -28,9 +28,12 @@ export interface StreamRegistry {
 
 // What the worker is willing to play: a key of the right length, sizes that agree with each other (the stored size is what a file of that size
 // is sealed to), a type a video may have, and a link to the web. A page that is not the application's cannot reach the worker, but a
-// descriptor that does not agree with itself would only fail later and further away.
+// descriptor that does not agree with itself would only fail later and further away. A message that carries no descriptor at all is
+// refused like any other that is not usable, and answered, so the page does not wait for a reply that never comes.
 function isUsable(stream: StreamDescriptor): boolean {
   return (
+    typeof stream === 'object' &&
+    stream !== null &&
     streamIdOf(streamUrl(stream.id)) === stream.id &&
     stream.key instanceof Uint8Array &&
     stream.key.length === KEY_BYTES &&

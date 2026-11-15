@@ -27,5 +27,5 @@ A video of up to 100 MiB, decrypted whole before the first frame, takes long to 
 
 - The worker is now part of playing video, and it is registered for every person. A browser that does not send media requests through a service worker plays the whole file instead; only Chrome has been tried.
 - A video of 100 MiB starts after the first range, and moving about in it fetches only the chunks it needs (a measured case read about 2.4 MB of 60 MiB).
-- An answer decrypts a few chunks per request, one chunk at a time per request, and no thread of the page is used.
+- An answer opens the chunks that hold its range (up to about 33 for the largest answer) together, in Web Crypto, and no thread of the page is used.
 - A script of the application can open a stream as the page can; the key is as exposed as it was in the page.

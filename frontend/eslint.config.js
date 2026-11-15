@@ -8,6 +8,11 @@ import { defineConfig, globalIgnores } from 'eslint/config'
 export default defineConfig([
   globalIgnores(['dist']),
   {
+    // A lint rule is fixed in the code, not switched off beside it: a directive comment has no effect, and the lint script fails on the
+    // warning that says so.
+    linterOptions: { noInlineConfig: true },
+  },
+  {
     files: ['**/*.{ts,tsx}'],
     extends: [
       js.configs.recommended,
