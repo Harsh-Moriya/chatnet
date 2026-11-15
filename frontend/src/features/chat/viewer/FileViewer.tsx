@@ -1,15 +1,19 @@
+import { useInfiniteQuery } from '@tanstack/react-query'
 import { ChevronLeft, ChevronRight, Download, LoaderCircle, X } from 'lucide-react'
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Dialog } from '../../../components/ui/Dialog'
 import { cn } from '../../../lib/cn'
 import { formatFileSize, formatListTime } from '../../../lib/format'
 import { saveFile } from '../files/openFiles'
+import { deletedIdsOf, galleryItemsOf } from '../gallery/galleryItems'
+import { galleryQueryOptions } from '../gallery/galleryQuery'
 import { useChatStore } from '../store/chatStore'
 import type { Message } from '../types'
 import { ImageViewer } from './ImageViewer'
 import { VideoViewer } from './VideoViewer'
 import { ViewerButton } from './ViewerButton'
 import { indexOfItem, neighbour, viewerItemsOf } from './viewerItems'
+import { positionLabel, shouldFetchMore } from './viewerPosition'
 import { useViewerStore } from './viewerStore'
 
 const NO_MESSAGES: Message[] = []
@@ -17,14 +21,25 @@ const NO_MESSAGES: Message[] = []
 // The PDF renderer brings pdf.js and its worker, so it is fetched when a PDF is first opened and not with the viewer.
 const PdfViewer = lazy(() => import('./PdfViewer').then((module) => ({ default: module.PdfViewer })))
 
-// The full-screen viewer of the pictures and the PDFs of a conversation. It shows the file the viewer store names, and moves through the
-// files of the messages that are loaded (the ones the list shows). A kind of file gets its own renderer here when it has one.
+// The full-screen viewer of the pictures, the PDFs and the videos of a conversation. It shows the file the viewer store names, and moves
+// through the files of the messages that are loaded (the ones the list shows) or, for a file opened from the gallery, through the gallery's
+// list, which reaches back through the whole history and reads its next page as the end of what is loaded comes near. A kind of file gets
+// its own renderer here when it has one.
 export function FileViewer({ conversationId }: { conversationId: string }) {
   const target = useViewerStore((state) => state.target)
   const open = useViewerStore((state) => state.open)
   const close = useViewerStore((state) => state.close)
   const messages = useChatStore((state) => state.messages[conversationId]) ?? NO_MESSAGES
-  const items = useMemo(() => viewerItemsOf(messages), [messages])
+  const from = target?.from ?? 'chat'
+
+  // The gallery's own query, which the gallery dialog under the viewer keeps current: this one only reads it and asks for its next page, it
+  // never starts it (it is not enabled), so opening the viewer does not read the pages again.
+  const gallery = useInfiniteQuery({ ...galleryQueryOptions(conversationId), enabled: false })
+  const items = useMemo(
+    () => (from === 'gallery' ? galleryItemsOf(gallery.data?.pages ?? [], deletedIdsOf(messages)) : viewerItemsOf(messages)),
+    [from, gallery.data, messages],
+  )
+  const hasMore = from === 'gallery' && gallery.hasNextPage
 
   const attachmentId = target?.conversationId === conversationId ? target.attachmentId : null
   const index = attachmentId === null ? -1 : indexOfItem(items, attachmentId)
@@ -35,10 +50,16 @@ export function FileViewer({ conversationId }: { conversationId: string }) {
   const step = useCallback(
     (direction: 1 | -1) => {
       const to = direction === 1 ? next : previous
-      if (to) open(conversationId, to.source.id)
+      if (to) open(conversationId, to.source.id, from)
     },
-    [next, previous, open, conversationId],
+    [next, previous, open, conversationId, from],
   )
+
+  // In the gallery's list the next page is read before the end of what is loaded is reached. A failed read is not repeated by itself.
+  const { isFetching, isFetchNextPageError, fetchNextPage } = gallery
+  useEffect(() => {
+    if (!isFetchNextPageError && shouldFetchMore(index, items.length, hasMore, isFetching)) void fetchNextPage()
+  }, [index, items.length, hasMore, isFetching, isFetchNextPageError, fetchNextPage])
 
   // The picture shown can leave the list (its message was deleted, or edited so that the file is gone): the viewer goes to the one in
   // its place, or closes when there is none.
@@ -51,9 +72,9 @@ export function FileViewer({ conversationId }: { conversationId: string }) {
     }
 
     const replacement = items[Math.min(lastIndex.current, items.length - 1)]
-    if (replacement) open(conversationId, replacement.source.id)
+    if (replacement) open(conversationId, replacement.source.id, from)
     else close()
-  }, [attachmentId, index, items, open, close, conversationId])
+  }, [attachmentId, index, items, open, close, conversationId, from])
 
   useEffect(() => {
     if (attachmentId === null) return
@@ -102,7 +123,7 @@ export function FileViewer({ conversationId }: { conversationId: string }) {
               </p>
             </div>
             <span aria-live="polite" className="shrink-0 text-xs text-slate-300">
-              {index + 1} of {items.length}
+              {positionLabel(index, items.length, hasMore)}
             </span>
             <ViewerButton aria-label="Download" isLoading={saving} onClick={save}>
               {!saving && <Download className="h-5 w-5" />}
@@ -134,9 +155,15 @@ export function FileViewer({ conversationId }: { conversationId: string }) {
                 <ChevronLeft className="h-6 w-6" />
               </ViewerButton>
             )}
-            {next && (
-              <ViewerButton aria-label="Next file" className="absolute right-2 top-1/2 -translate-y-1/2 bg-slate-800/70" onClick={() => step(1)}>
-                <ChevronRight className="h-6 w-6" />
+            {(next || hasMore) && (
+              <ViewerButton
+                aria-label="Next file"
+                // At the end of what is loaded, with more to come, it waits for the next page; after a failed read it asks again.
+                disabled={!next && isFetching}
+                className="absolute right-2 top-1/2 -translate-y-1/2 bg-slate-800/70"
+                onClick={() => (next ? step(1) : void fetchNextPage())}
+              >
+                {!next && isFetching ? <LoaderCircle className="h-6 w-6 animate-spin" aria-hidden="true" /> : <ChevronRight className="h-6 w-6" />}
               </ViewerButton>
             )}
           </div>
