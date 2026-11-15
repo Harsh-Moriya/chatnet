@@ -48,6 +48,7 @@ public class OpenApiDocumentTests
         ("post", "/api/users/me/avatar/uploads", "200", "UploadTicketDto", "400,401,403,429"),
         ("post", "/api/conversations/{conversationId}/avatar/uploads", "200", "UploadTicketDto", "400,401,403,429"),
         ("get", "/api/attachments/{attachmentId}/url", "200", "AttachmentLinkDto", "401,404"),
+        ("get", "/api/conversations/{conversationId}/attachments", "200", "MessageDto[]", "400,401,403"),
         ("get", "/api/notifications", "200", "NotificationListDto", "400,401"),
         ("post", "/api/notifications/read", "204", "", "400,401"),
         ("delete", "/api/notifications/{notificationId}", "204", "", "401,404"),

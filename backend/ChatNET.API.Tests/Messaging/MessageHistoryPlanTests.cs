@@ -180,9 +180,9 @@ public class MessageHistoryPlanTests
         _factory.ExecuteDbAsync(async db =>
         {
             await db.Database.ExecuteSqlInterpolatedAsync($@"
-                INSERT INTO ""Messages"" (""Id"", ""ConversationId"", ""SenderId"", ""Ciphertext"", ""KeyEpoch"", ""ClientMessageId"", ""CreatedAt"", ""ChangeSeq"")
+                INSERT INTO ""Messages"" (""Id"", ""ConversationId"", ""SenderId"", ""Ciphertext"", ""KeyEpoch"", ""ClientMessageId"", ""CreatedAt"", ""ChangeSeq"", ""HasFiles"")
                 SELECT gen_random_uuid(), {conversationId}, {senderId}, decode('0101' || '00000001' || repeat('00', 12), 'hex') || convert_to('bulk ' || (s - 1)::text, 'UTF8') || decode(repeat('00', 80), 'hex'), 1, gen_random_uuid(),
-                       now() - (s * interval '1 second'), {MessagesInTheConversation} + 1 - s
+                       now() - (s * interval '1 second'), {MessagesInTheConversation} + 1 - s, false
                 FROM generate_series(1, {MessagesInTheConversation}) s");
 
             await db.Database.ExecuteSqlInterpolatedAsync($@"UPDATE ""Conversations"" SET ""ChangeSeq"" = {MessagesInTheConversation} WHERE ""Id"" = {conversationId}");
@@ -193,8 +193,8 @@ public class MessageHistoryPlanTests
                 FROM generate_series(1, {NoiseConversations}) g");
 
             await db.Database.ExecuteSqlInterpolatedAsync($@"
-                INSERT INTO ""Messages"" (""Id"", ""ConversationId"", ""SenderId"", ""Ciphertext"", ""KeyEpoch"", ""ClientMessageId"", ""CreatedAt"", ""ChangeSeq"")
-                SELECT gen_random_uuid(), c.""Id"", {senderId}, decode('0101' || '00000001' || repeat('00', 12), 'hex') || convert_to('noise', 'UTF8') || decode(repeat('00', 80), 'hex'), 1, gen_random_uuid(), now() - (random() * interval '30 days'), s
+                INSERT INTO ""Messages"" (""Id"", ""ConversationId"", ""SenderId"", ""Ciphertext"", ""KeyEpoch"", ""ClientMessageId"", ""CreatedAt"", ""ChangeSeq"", ""HasFiles"")
+                SELECT gen_random_uuid(), c.""Id"", {senderId}, decode('0101' || '00000001' || repeat('00', 12), 'hex') || convert_to('noise', 'UTF8') || decode(repeat('00', 80), 'hex'), 1, gen_random_uuid(), now() - (random() * interval '30 days'), s, false
                 FROM ""Conversations"" c
                 CROSS JOIN generate_series(1, {MessagesPerNoiseConversation}) s
                 WHERE c.""Name"" LIKE {tag + "%"}");

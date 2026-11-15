@@ -1,5 +1,6 @@
 import { type ReactNode, useEffect, useRef } from 'react'
 import { X } from 'lucide-react'
+import { cn } from '../../lib/cn'
 import { Button } from './Button'
 
 interface DialogProps {
@@ -8,7 +9,8 @@ interface DialogProps {
   title: string
   children: ReactNode
   // `fullscreen` fills the screen and draws no box or header of its own, for content that brings its own controls (the file viewer).
-  variant?: 'default' | 'fullscreen'
+  // `wide` is the default box made large, for content that scrolls inside it (the gallery); on a phone it fills the screen.
+  variant?: 'default' | 'wide' | 'fullscreen'
 }
 
 // A modal built on the browser's own <dialog> element, which already provides what a hand-made
@@ -38,12 +40,17 @@ export function Dialog({ open, onClose, title, children, variant = 'default' }: 
       className={
         variant === 'fullscreen'
           ? 'm-0 h-dvh max-h-none w-dvw max-w-none rounded-none border-0 bg-slate-900 p-0 text-white backdrop:bg-slate-900'
-          : 'm-auto w-[calc(100%-2rem)] max-w-md rounded-lg border border-line bg-white p-0 shadow-xl backdrop:bg-slate-900/40'
+          : cn(
+              'm-auto w-[calc(100%-2rem)] rounded-lg border border-line bg-white p-0 shadow-xl backdrop:bg-slate-900/40',
+              variant === 'wide'
+                ? 'max-w-4xl max-sm:m-0 max-sm:h-dvh max-sm:max-h-none max-sm:w-dvw max-sm:max-w-none max-sm:rounded-none max-sm:border-0'
+                : 'max-w-md',
+            )
       }
     >
       {open && variant === 'fullscreen' && children}
-      {open && variant === 'default' && (
-        <div className="flex max-h-[85dvh] flex-col">
+      {open && variant !== 'fullscreen' && (
+        <div className={cn('flex flex-col', variant === 'wide' ? 'h-[85dvh] max-sm:h-dvh' : 'max-h-[85dvh]')}>
           <div className="flex items-center justify-between border-b border-line px-5 py-4">
             <h2 className="text-base font-semibold text-slate-900">{title}</h2>
             <Button variant="ghost" size="icon" aria-label="Close" onClick={onClose}>

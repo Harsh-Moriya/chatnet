@@ -95,6 +95,11 @@ public interface IMessageRepository
     Task<List<MessageDto>> GetAfterAsync(
         Guid conversationId, MemberWindow window, MessageCursor cursor, int take, CancellationToken cancellationToken);
 
+    // The messages that have files and are not deleted, newest first, inside the window: the newest "take" of them, or of those
+    // positioned before the cursor when there is one. A page shorter than "take" is the last.
+    Task<List<MessageDto>> GetWithFilesAsync(
+        Guid conversationId, MemberWindow window, MessageCursor? cursor, int take, CancellationToken cancellationToken);
+
     // The latest change number of the conversation, or null when there is no such conversation.
     Task<long?> GetChangeSeqAsync(Guid conversationId, CancellationToken cancellationToken);
 

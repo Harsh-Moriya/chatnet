@@ -82,6 +82,24 @@ public class SendWithAttachmentsTests
         Assert.Equal(content, await (await MediaApi.FollowAsync(file)).Content.ReadAsByteArrayAsync());
     }
 
+    // The gallery finds the messages that have files by this mark, so a send has to set it, and only when there are files.
+    [Fact]
+    public async Task A_message_sent_with_files_is_marked_as_having_files_and_one_without_is_not()
+    {
+        var (alice, _, conversation) = await _factory.DirectChatAsync();
+        using var client = _factory.CreateClientFor(alice);
+        var key = await client.UploadFileAsync(conversation, Bytes(64));
+
+        var withFiles = await client.SendMessageWithFilesAsync(conversation, "look", key);
+        var textOnly = await client.SendMessageAsync(conversation, "hello");
+
+        var marks = await _factory.QueryDbAsync(db => db.Messages
+            .Where(m => m.ConversationId == conversation)
+            .ToDictionaryAsync(m => m.Id, m => m.HasFiles));
+        Assert.True(marks[withFiles.MessageIdOf()]);
+        Assert.False(marks[textOnly.MessageIdOf()]);
+    }
+
     // The server cannot say what a file is, so a file says nothing but its id, its size and where to get it.
     [Fact]
     public async Task A_file_is_returned_as_an_id_a_size_and_a_link_and_nothing_else()

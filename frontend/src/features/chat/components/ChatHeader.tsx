@@ -1,6 +1,6 @@
 import { Suspense, lazy, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Bell, BellOff, Fingerprint, ShieldCheck, Users } from 'lucide-react'
+import { ArrowLeft, Bell, BellOff, Fingerprint, Images, ShieldCheck, Users } from 'lucide-react'
 import { Avatar } from '../../../components/ui/Avatar'
 import { Button } from '../../../components/ui/Button'
 import { cn } from '../../../lib/cn'
@@ -18,6 +18,7 @@ import type { Conversation } from '../types'
 
 // Opened by a click and not needed to show a conversation, so it is fetched when it is first wanted and not with the page.
 const GroupInfoDialog = lazy(() => import('./GroupInfoDialog').then((module) => ({ default: module.GroupInfoDialog })))
+const GalleryDialog = lazy(() => import('../gallery/GalleryDialog').then((module) => ({ default: module.GalleryDialog })))
 
 export function ChatHeader({ conversation }: { conversation: Conversation }) {
   const navigate = useNavigate()
@@ -33,6 +34,9 @@ export function ChatHeader({ conversation }: { conversation: Conversation }) {
   // The number two people compare to be sure nobody is between them, for a direct chat. Mounted from the first click on, as the group info is.
   const [safetyOpen, setSafetyOpen] = useState(false)
   const [safetyMounted, setSafetyMounted] = useState(false)
+  // The pictures, videos and PDFs of the conversation, mounted from the first click on as the others are.
+  const [galleryOpen, setGalleryOpen] = useState(false)
+  const [galleryMounted, setGalleryMounted] = useState(false)
   const verified = useVerified(isGroup ? null : conversation.otherUserId)
 
   // The people other than the signed-in user, for counting who is online in a group. Their presence is
@@ -95,50 +99,72 @@ export function ChatHeader({ conversation }: { conversation: Conversation }) {
         </p>
       </div>
 
-      {!left && (
-        <div className="ml-auto flex items-center gap-1">
-          {!isGroup && conversation.otherUserId !== null && (
+      <div className="ml-auto flex items-center gap-1">
+        {/* Outside the guard for a group that was left: its history is still read, so its files are still looked at. */}
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label="Pictures, videos and PDFs"
+          title="Every picture, video and PDF in this conversation"
+          onClick={() => {
+            setGalleryMounted(true)
+            setGalleryOpen(true)
+          }}
+        >
+          <Images className="h-5 w-5" />
+        </Button>
+
+        {!left && (
+          <>
+            {!isGroup && conversation.otherUserId !== null && (
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label={verified ? 'Safety number, verified' : 'Safety number'}
+                title={verified ? 'Verified: you compared the safety number' : 'Compare the safety number to be sure nobody is between you'}
+                onClick={() => {
+                  setSafetyMounted(true)
+                  setSafetyOpen(true)
+                }}
+              >
+                {verified ? <ShieldCheck className="h-5 w-5 text-blue-600" /> : <Fingerprint className="h-5 w-5" />}
+              </Button>
+            )}
+
+            {isGroup && (
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Group info"
+                title="Who is in this group, and what you can do about it"
+                onClick={() => {
+                  setInfoMounted(true)
+                  setInfoOpen(true)
+                }}
+              >
+                <Users className="h-5 w-5" />
+              </Button>
+            )}
+
             <Button
               variant="ghost"
               size="icon"
-              aria-label={verified ? 'Safety number, verified' : 'Safety number'}
-              title={verified ? 'Verified: you compared the safety number' : 'Compare the safety number to be sure nobody is between you'}
-              onClick={() => {
-                setSafetyMounted(true)
-                setSafetyOpen(true)
-              }}
+              aria-label={conversation.isMuted ? 'Unmute conversation' : 'Mute conversation'}
+              aria-pressed={conversation.isMuted}
+              title={conversation.isMuted ? 'Muted: no alerts for new messages. Mentions still alert.' : 'Mute alerts for new messages'}
+              disabled={changingMute}
+              onClick={() => void toggleMute()}
             >
-              {verified ? <ShieldCheck className="h-5 w-5 text-blue-600" /> : <Fingerprint className="h-5 w-5" />}
+              {conversation.isMuted ? <BellOff className="h-5 w-5" /> : <Bell className="h-5 w-5" />}
             </Button>
-          )}
+          </>
+        )}
+      </div>
 
-          {isGroup && (
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label="Group info"
-              title="Who is in this group, and what you can do about it"
-              onClick={() => {
-                setInfoMounted(true)
-                setInfoOpen(true)
-              }}
-            >
-              <Users className="h-5 w-5" />
-            </Button>
-          )}
-
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label={conversation.isMuted ? 'Unmute conversation' : 'Mute conversation'}
-            aria-pressed={conversation.isMuted}
-            title={conversation.isMuted ? 'Muted: no alerts for new messages. Mentions still alert.' : 'Mute alerts for new messages'}
-            disabled={changingMute}
-            onClick={() => void toggleMute()}
-          >
-            {conversation.isMuted ? <BellOff className="h-5 w-5" /> : <Bell className="h-5 w-5" />}
-          </Button>
-        </div>
+      {galleryMounted && (
+        <Suspense fallback={null}>
+          <GalleryDialog conversationId={conversation.id} open={galleryOpen} onClose={() => setGalleryOpen(false)} />
+        </Suspense>
       )}
 
       {!isGroup && !left && safetyMounted && conversation.otherUserId !== null && (

@@ -104,6 +104,7 @@ Authentication column: **Bearer** needs an access token; **Refresh cookie** need
 |---|---|---|---|---|
 | `POST /api/conversations/{conversationId}/uploads` | Bearer | uploads | 200, 400, 401, 403, 429 | Ticket for uploading one encrypted attachment straight to the bucket (`sizeBytes`, the size of the encrypted file: 29 bytes to what a file of `Storage:MaxFileBytes` becomes). The upload is signed for `application/octet-stream`. |
 | `GET /api/attachments/{attachmentId}/url` | Bearer |  | 200, 401, 404 | A new signed link for a file the caller may read. One 404 for every refusal. |
+| `GET /api/conversations/{conversationId}/attachments` | Bearer |  | 200, 400, 401, 403 | The messages of the conversation that have files, for a gallery: **newest first** (the history is oldest first), at most 50, from the part of the history the caller may read. Without `before` it is the newest page; `before` is the id of the oldest message the caller already has from this list, and the page just older comes back. Any message of the conversation the caller may read is a valid `before`. A page shorter than 50 is the last. Each element is a [Message](#message) with its attachments; a deleted message is left out. 400 for a `before` that is not a message the caller may read. |
 
 ## Notifications
 

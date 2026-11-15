@@ -79,6 +79,10 @@ public sealed class ForgetfulMessageRepository : IMessageRepository
         Guid conversationId, MemberWindow window, MessageCursor cursor, int take, CancellationToken cancellationToken)
         => _inner.GetBeforeAsync(conversationId, window, cursor, take, cancellationToken);
 
+    public Task<List<MessageDto>> GetWithFilesAsync(
+        Guid conversationId, MemberWindow window, MessageCursor? cursor, int take, CancellationToken cancellationToken)
+        => _inner.GetWithFilesAsync(conversationId, window, cursor, take, cancellationToken);
+
     public Task<List<MessageDto>> GetAfterAsync(
         Guid conversationId, MemberWindow window, MessageCursor cursor, int take, CancellationToken cancellationToken)
         => _inner.GetAfterAsync(conversationId, window, cursor, take, cancellationToken);

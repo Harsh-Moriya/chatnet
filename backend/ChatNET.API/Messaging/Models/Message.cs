@@ -38,6 +38,10 @@ public class Message
     // hands out.
     public long ChangeSeq { get; set; }
 
+    // True when the message was sent with files. Set once, where the files are attached (a message's files never change afterwards),
+    // so the gallery can find the messages that have files by an index instead of looking at every message of a conversation.
+    public bool HasFiles { get; set; }
+
     public bool IsDeleted { get; set; }
     public DateTime? DeletedAt { get; set; }
 
