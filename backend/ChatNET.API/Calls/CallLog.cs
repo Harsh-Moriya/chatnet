@@ -53,8 +53,9 @@ public class CallLog
         if (await _db.Calls.AnyAsync(c => c.Id == call.Id, cancellationToken))
             return false;
 
-        // The id of the call is also the client message id of its row: it is unique per call, which is what the unique index on
-        // (conversation, sender, client message id) needs of every row.
+        // The client message id of the row is made here and not taken from the call: a client chooses the client message id of its text
+        // messages, and one that chose the id of its own call would make this row break the unique index on (conversation, sender, client
+        // message id) and leave the call unrecorded. Recording twice is stopped by the call's own id, above.
         var message = new Message
         {
             Id = Guid.CreateVersion7(),
@@ -65,7 +66,7 @@ public class CallLog
             Ciphertext = null,
             KeyEpoch = 0,
             CreatedAt = call.EndedAt,
-            ClientMessageId = call.Id,
+            ClientMessageId = Guid.CreateVersion7(),
             ChangeSeq = seq.Value,
         };
 

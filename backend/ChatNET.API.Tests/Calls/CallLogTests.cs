@@ -142,6 +142,19 @@ public class CallLogTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_message_the_caller_gave_the_id_of_the_call_does_not_stop_the_call_from_being_recorded()
+    {
+        var (alice, bob, conversation) = await _factory.DirectChatAsync();
+        var call = Ended(conversation, alice, bob, CallEndReason.Completed, answered: true);
+        using var client = _factory.CreateClientFor(alice);
+        await client.SendMessageAsync(conversation, "the id of your call, as the client message id", clientMessageId: call.Id);
+
+        Assert.True(await RecordAsync(call));
+
+        Assert.Equal((1, 1), await RowsOfAsync(call));
+    }
+
+    [Fact]
     public async Task Two_instances_that_see_one_call_end_at_the_same_moment_write_it_once()
     {
         var (alice, bob, conversation) = await _factory.DirectChatAsync();
