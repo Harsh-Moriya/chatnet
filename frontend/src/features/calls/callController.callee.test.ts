@@ -11,7 +11,9 @@ import {
   RESTART_SDP,
   SELF,
   createRig,
+  identityChanged,
   incomingCall,
+  keysUnavailable,
   refusal,
   settle,
   signedByOther,
@@ -97,6 +99,44 @@ describe('a call coming in', () => {
   })
 })
 
+describe('the alert raised for a ring', () => {
+  it('is taken down when the call is answered here', async () => {
+    await accepted()
+
+    expect(rig.alertsClosed).toEqual([CALL])
+  })
+
+  it('is taken down when the person declines', () => {
+    rig.controller.onIncomingCall(incomingCall())
+
+    rig.controller.end()
+
+    expect(rig.alertsClosed).toEqual([CALL])
+  })
+
+  it('is taken down when another tab answered, or the caller gave up', () => {
+    rig.controller.onIncomingCall(incomingCall())
+    rig.controller.onCallAnswered(CALL)
+    expect(rig.alertsClosed).toEqual([CALL])
+  })
+
+  it('is taken down when the server says the call ended, and not before', () => {
+    rig.controller.onIncomingCall(incomingCall())
+    expect(rig.alertsClosed).toEqual([])
+
+    rig.controller.onCallEnded({ callId: CALL, reason: 'Cancelled', endedAt: 'x' })
+
+    expect(rig.alertsClosed).toEqual([CALL])
+  })
+
+  it('is taken down once, however the call ends', async () => {
+    await accepted()
+    rig.controller.onCallEnded({ callId: CALL, reason: 'Completed', endedAt: 'x' })
+
+    expect(rig.alertsClosed).toEqual([CALL])
+  })
+})
+
 describe('answering', () => {
   it('opens the microphone first, then tells the server, then makes the connection', async () => {
     rig.controller.onIncomingCall(incomingCall())
@@ -128,6 +168,25 @@ describe('answering', () => {
     await settle()
     expect(rig.media.captures).toEqual([true, false])
     expect(store().sendingVideo).toBe(false)
+  })
+
+  it.each([
+    ['has no keys', keysUnavailable, 'Ben Caller has not set up encryption, so this call cannot be answered.'],
+    ['has a key that changed', identityChanged, 'The security keys of Ben Caller changed. Compare the safety number before answering.'],
+  ])('does not answer, opens nothing and keeps ringing when the caller %s, and the person can still decline', async (_, failure, notice) => {
+    rig.controller.onIncomingCall(incomingCall())
+    rig.identity.failWith = failure()
+
+    await rig.controller.accept()
+    await settle()
+
+    expect(rig.api.calls).not.toContain(`acceptCall:${CALL}`)
+    expect(rig.media.captures).toEqual([])
+    expect(store()).toMatchObject({ phase: 'incoming', notice })
+    expect(rig.ringtone.ringing).toBe('incoming')
+
+    rig.controller.end()
+    expect(rig.api.ended).toEqual([{ callId: CALL, failed: false }])
   })
 
   it('does not answer, and keeps ringing, when the microphone cannot be opened, and the person can still decline', async () => {

@@ -34,9 +34,9 @@ export function useBrowserAlerts() {
 
     return {
       call(call: IncomingCall) {
-        if (!shouldAlertForIncomingCall(currentView(latest.current.open))) return
+        if (!shouldAlertForIncomingCall(currentView(latest.current.open))) return undefined
 
-        showAlert(incomingCallAlertText(call), () => openConversation(call.conversationId, null))
+        return showAlert(incomingCallAlertText(call), () => openConversation(call.conversationId, null)) ?? undefined
       },
       message(message: Message) {
         const conversation = useChatStore.getState().conversations[message.conversationId]

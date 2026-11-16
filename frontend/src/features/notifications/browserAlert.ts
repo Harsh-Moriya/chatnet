@@ -25,9 +25,10 @@ export function currentView(openConversationId: string | null): Viewing {
   return { looking: isLooking(), openConversationId }
 }
 
-// Shows the alert if the user allowed alerts. Clicking it brings the window forward and calls onOpen.
-export function showAlert(text: AlertText, onOpen: () => void): void {
-  if (alertPermission() !== 'granted') return
+// Shows the alert if the user allowed alerts. Clicking it brings the window forward and calls onOpen. Returns what takes the alert down
+// again, for one that should not outlive what it announces (a ringing call), or null when none was shown.
+export function showAlert(text: AlertText, onOpen: () => void): (() => void) | null {
+  if (alertPermission() !== 'granted') return null
 
   try {
     const alert = new Notification(text.title, { body: text.body, tag: text.tag, requireInteraction: text.persistent === true })
@@ -36,8 +37,10 @@ export function showAlert(text: AlertText, onOpen: () => void): void {
       window.focus()
       onOpen()
     }
+    return () => alert.close()
   } catch {
     // Some browsers (Chrome on Android) only show a notification through a service worker and throw here.
     // The bell and the unread counts still show everything.
+    return null
   }
 }
