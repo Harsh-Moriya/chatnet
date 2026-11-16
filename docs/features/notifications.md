@@ -9,7 +9,7 @@ A bell with an unread count and a panel, `@mentions`, invitations to groups, bro
 | A message names a member | `Mention` | that member |
 | Someone is added to a group, or a group is created with them in it | `MemberAdded` | the person added (not the creator) |
 
-New messages are not notification rows; they are counted as unread (see [read state](read-state.md)).
+New messages are not notification rows; they are counted as unread (see [read state](read-state.md)). Calls are not either: a call that ends unanswered is a row in the conversation that counts as unread, and a ringing call alerts through the in-page alert or a push (see [calls](calls.md) and [web push](web-push.md)).
 
 ## Mentions
 

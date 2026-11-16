@@ -55,7 +55,7 @@ When a call ends, the server writes one row into the conversation: a message wit
 
 - It is the server's record, not something anyone said: it is not signed, cannot be edited or deleted (the answer is 409 with the code `call-row`), and is not searchable.
 - It counts as unread for the callee only when the call was missed (`isMissed`), and never moves anyone's read position. Marking read up to a call row works like any other message.
-- A missed call alerts a callee who has no live connection with a push saying "Missed audio call" or "Missed video call", tagged `call-{call id}`.
+- A missed call alerts a callee who has no live connection, and has not muted the conversation, with a push saying "Missed audio call" or "Missed video call", tagged `call-{call id}`.
 
 ## Endpoints and events
 

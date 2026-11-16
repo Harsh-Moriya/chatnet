@@ -25,7 +25,7 @@ flowchart LR
 ## The two channels
 
 - **REST** loads data (conversations, history) and performs every change that must be confirmed (sign in, send a message, edit, add a member).
-- **SignalR** only pushes events to connected clients. Clients never send messages or fetch history through the hub. The hub accepts three calls (join a conversation, start and stop typing).
+- **SignalR** only pushes events to connected clients. Clients never send messages or fetch history through the hub. The hub accepts eight calls: join a conversation, start and stop typing, and the five that make a call (start, accept, end, signal and rejoin; see [calls](../features/calls.md)).
 
 The browser follows the same split: TanStack Query owns REST data, and hub events patch the Zustand store directly. A hub event never triggers a refetch.
 
