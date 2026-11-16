@@ -639,7 +639,7 @@ export function createCallController(deps: CallDeps): CallController {
 
         // The callee may have answered while this side was away, and the news of it did not arrive: the server says the call is active, so it
         // is answered, and the offer is made as it is on any answer.
-        if (s.outgoing && s.callId !== null && store().phase === 'outgoing' && rejoined.state === 'Active') {
+        if (s.callId !== null && store().phase === 'outgoing' && rejoined.state === 'Active') {
           onCallAnswered(s.callId)
           return
         }

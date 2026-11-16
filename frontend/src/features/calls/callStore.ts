@@ -21,7 +21,7 @@ interface CallState extends Partial<CallPeople> {
   callId: string | null
   // True when this browser made the call.
   outgoing: boolean
-  // When it stops ringing, an ISO time; the server ends it, this is for the countdown shown.
+  // When it stops ringing, an ISO time. The server ends the ring; this is kept for a screen that shows a countdown, which none does yet.
   ringsUntil: string | null
   // The browser's clock when it was answered, for the time shown.
   answeredAt: number | null
