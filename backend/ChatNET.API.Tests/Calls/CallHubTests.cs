@@ -121,6 +121,65 @@ public class CallHubTests : IAsyncLifetime
         Assert.Equal(CallEndReason.Completed, recorded.EndReason);
     }
 
+    [Theory]
+    [InlineData(100000000)]
+    [InlineData(7)]
+    [InlineData(-1)]
+    public async Task A_media_kind_that_does_not_exist_is_refused_and_leaves_nobody_busy(int media)
+    {
+        var (alice, bob, conversation) = await _factory.DirectChatAsync();
+        await using var caller = await HubClient.ConnectAsync(_factory, alice);
+
+        AssertCode("invalid-request", await RefusedAsync(() => caller.InvokeRawAsync("StartCall", conversation, media)));
+
+        var started = await caller.StartCallAsync(conversation);
+        await caller.EndCallAsync(CallIdOf(started));
+    }
+
+    [Fact]
+    public async Task A_signal_of_a_type_that_does_not_exist_or_with_no_payload_is_refused_and_the_call_goes_on()
+    {
+        var (alice, bob, conversation) = await _factory.DirectChatAsync();
+        await using var caller = await HubClient.ConnectAsync(_factory, alice);
+        await using var callee = await HubClient.ConnectAsync(_factory, bob);
+        var callId = CallIdOf(await caller.StartCallAsync(conversation));
+        await callee.WaitForIncomingCallAsync(callId);
+        await callee.AcceptCallAsync(callId);
+        await caller.WaitForCallAnsweredAsync(callId);
+
+        AssertCode("invalid-request", await RefusedAsync(() => caller.InvokeRawAsync("SendCallSignal", callId, 99, "sdp")));
+        AssertCode("invalid-request", await RefusedAsync(() => caller.InvokeRawAsync("SendCallSignal", callId, "Offer", null)));
+
+        Assert.True(await caller.SendCallSignalAsync(callId, "Offer", "sdp"));
+        await caller.EndCallAsync(callId);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public async Task A_rejoin_with_no_token_is_refused(string? token)
+    {
+        var (alice, bob, conversation) = await _factory.DirectChatAsync();
+        await using var caller = await HubClient.ConnectAsync(_factory, alice);
+        var callId = CallIdOf(await caller.StartCallAsync(conversation));
+
+        AssertCode("invalid-request", await RefusedAsync(() => caller.InvokeRawAsync("RejoinCall", callId, token)));
+
+        await caller.EndCallAsync(callId);
+    }
+
+    [Fact]
+    public async Task A_rejoin_with_a_token_far_longer_than_any_is_refused()
+    {
+        var (alice, bob, conversation) = await _factory.DirectChatAsync();
+        await using var caller = await HubClient.ConnectAsync(_factory, alice);
+        var callId = CallIdOf(await caller.StartCallAsync(conversation));
+
+        AssertCode("invalid-request", await RefusedAsync(() => caller.InvokeRawAsync("RejoinCall", callId, new string('x', 5000))));
+
+        await caller.EndCallAsync(callId);
+    }
+
     [Fact]
     public async Task Every_tab_of_the_callee_rings_and_when_one_answers_the_others_stop_and_signals_go_to_that_one_only()
     {

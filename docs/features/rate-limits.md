@@ -17,10 +17,11 @@ Limits slow down password guessing, mass account creation and flooding. The coun
 | `forgot-password` | `POST /api/auth/forgot-password` | client address | 5 per 900 s |
 | `reset-password` | `POST /api/auth/reset-password` | client address | 10 per 900 s |
 | `password-reset-email` | the emails sent for a reset link (counted by the handler, not the pipeline) | email address | 3 per 3,600 s |
+| `start-call` | starting a call (counted by the hub method, not the pipeline; the refusal is the hub error `rate-limited`, not a 429) | person | 10 per 60 s |
 
 The per-email count is made by the handler that asks for a link, because the address is in the request body, which the limiter in the pipeline has not read. Its key holds a keyed hash of the normalised address, never the address. Going over it gives the same `202` and no email; see [account recovery](account-recovery.md).
 
-Not covered by these policies: reading, marking read, muting, deleting and presence. Typing is not counted in Redis; the hub delivers at most one start event per second per conversation per connection.
+Not covered by these policies: reading, marking read, muting, deleting and presence. Typing is not counted in Redis, and the other call methods are limited by what a call may carry (see [calls](calls.md)), not by this table; the hub delivers at most one start event per second per conversation per connection.
 
 Configure each as `RateLimiting:<Policy>:PermitLimit` and `WindowSeconds` (for example `RateLimiting__Send__PermitLimit`). Values are validated at startup.
 

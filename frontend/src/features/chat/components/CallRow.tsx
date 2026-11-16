@@ -1,4 +1,5 @@
 import { Phone, PhoneMissed, Video } from 'lucide-react'
+import { Button } from '../../../components/ui/Button'
 import { cn } from '../../../lib/cn'
 import { formatClock } from '../../../lib/format'
 import { callDuration, callLabel } from '../calls'
@@ -34,13 +35,15 @@ export function CallRow({ call, own, onCallBack }: CallRowProps) {
           {formatClock(call.endedAt)}
         </time>
         {onCallBack !== undefined && (
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="sm"
             onClick={onCallBack}
-            className="rounded-full px-2 py-0.5 font-semibold text-blue-600 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            className="h-auto! rounded-full! px-2! py-0.5! text-xs font-semibold text-blue-600! hover:bg-blue-50!"
           >
             Call back
-          </button>
+          </Button>
         )}
       </span>
     </div>

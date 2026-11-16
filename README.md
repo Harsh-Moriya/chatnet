@@ -48,6 +48,7 @@ REST loads data and performs every change that must be confirmed. SignalR only p
 | Live state | SignalR with a Redis 7 backplane; presence and rate-limit counters in Redis |
 | Auth | ASP.NET Core Identity, JWT access tokens, rotating refresh tokens |
 | Encryption | Web Crypto in the browser: X25519 and Ed25519 keys, AES-256-GCM, HKDF-SHA256 and PBKDF2; IndexedDB for the keys and a local copy of messages |
+| Calls | WebRTC between the two browsers, set up through the same SignalR hub, with a coturn (TURN) relay for networks where they cannot reach each other |
 | Files | Any S3-compatible bucket through the S3 API (designed for Cloudflare R2; RustFS locally) |
 | Observability | Serilog, OpenTelemetry, Jaeger |
 | Tests | xUnit, `WebApplicationFactory`, Testcontainers; Vitest |
@@ -57,7 +58,7 @@ REST loads data and performs every change that must be confirmed. SignalR only p
 
 You need the [.NET 10 SDK](https://dotnet.microsoft.com/download), a current [Node.js](https://nodejs.org) LTS, [Docker](https://www.docker.com/products/docker-desktop), and the EF Core CLI (`dotnet tool install --global dotnet-ef`).
 
-**1. Infrastructure.** Copy `.env.example` to `.env`, fill in the values (the file explains them), and start Postgres, Redis, object storage, Jaeger, Adminer and a local mail catcher (Mailpit):
+**1. Infrastructure.** Copy `.env.example` to `.env`, fill in the values (the file explains them), and start Postgres, Redis, object storage, Jaeger, Adminer, a local mail catcher (Mailpit) and a TURN relay (coturn, which needs `TURN_SECRET` in `.env`):
 
 ```bash
 cp .env.example .env
@@ -93,7 +94,7 @@ Open `http://localhost:5173`. Vite proxies `/api` and `/hubs` to the backend.
 
 The first time a person signs in they choose a **recovery passphrase** (at least 12 characters), and the browser makes their keys. Two people can only chat once each has set up keys, so to try the app as two people, register and set up in two different browser origins (`localhost` and `127.0.0.1`). The browser needs Web Crypto with X25519 and Ed25519 (Chrome 137, Firefox 130, Safari 17 or later), IndexedDB and a secure context (`https`, or `localhost`).
 
-[Running locally](docs/operations/running-locally.md) covers password reset emails, optional push alerts, traces and trying the app as two people at once.
+[Running locally](docs/operations/running-locally.md) covers password reset emails, the relay and its secrets for calls, optional push alerts, traces and trying the app as two people at once.
 
 ## Tests
 

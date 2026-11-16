@@ -34,7 +34,16 @@ export function Dialog({ open, onClose, title, children, variant = 'default', di
     <dialog
       ref={ref}
       aria-label={title}
-      onClose={onClose}
+      onClose={() => {
+        // A dialog that must be answered can still be closed by Escape: a browser lets a page cancel Escape only once per click, and not at
+        // all for a dialog that opened without one (a ringing call). It is opened again, so the call never loses the only screen it has.
+        const dialog = ref.current
+        if (!dismissible && open && dialog && !dialog.open) {
+          dialog.showModal()
+          return
+        }
+        onClose()
+      }}
       onCancel={(event) => {
         if (!dismissible) event.preventDefault()
       }}

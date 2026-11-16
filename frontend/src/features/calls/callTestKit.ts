@@ -317,6 +317,8 @@ export interface Rig {
   // The other person's keys, to sign what they send.
   other: KeyPair
   incoming: IncomingCall[]
+  // The calls whose alert was taken down.
+  alertsClosed: string[]
   clock: { now: number }
 }
 
@@ -331,6 +333,7 @@ export async function createRig(): Promise<Rig> {
   const timers = new ManualTimers()
   const identity = new FakeIdentity(SELF, self, other.publicKey)
   const incoming: IncomingCall[] = []
+  const alertsClosed: string[] = []
   const clock = { now: Date.parse('2030-01-01T00:00:00Z') }
 
   const controller = createCallController({
@@ -341,10 +344,13 @@ export async function createRig(): Promise<Rig> {
     identity,
     now: () => clock.now,
     after: timers.after,
-    onIncoming: (call) => void incoming.push(call),
+    onIncoming: (call) => {
+      incoming.push(call)
+      return () => void alertsClosed.push(call.callId)
+    },
   })
 
-  return { controller, api, peers, media, ringtone, timers, identity, other, incoming, clock }
+  return { controller, api, peers, media, ringtone, timers, identity, other, incoming, alertsClosed, clock }
 }
 
 // What the other person's browser would send: a description signed by their key for this call, in the direction given.

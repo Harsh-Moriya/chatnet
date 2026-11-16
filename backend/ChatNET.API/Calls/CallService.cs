@@ -70,6 +70,10 @@ public sealed class CallService
     public async Task<CallStartedDto> StartAsync(
         Guid callerId, string connectionId, Guid conversationId, CallMedia media, CancellationToken cancellationToken)
     {
+        // The hub's JSON reads a number as an enum too, so a value that is no media kind arrives here, and would be kept as it is.
+        if (!Enum.IsDefined(media))
+            throw new HubException(CallErrors.InvalidRequest);
+
         if (!await _limiter.MayStartAsync(callerId, cancellationToken))
         {
             _logger.LogWarning("User {UserId} started calls faster than allowed", callerId);
@@ -173,6 +177,9 @@ public sealed class CallService
     public async Task<bool> RouteSignalAsync(
         Guid userId, string connectionId, Guid callId, CallSignalType type, string payload, CancellationToken cancellationToken)
     {
+        if (payload is null || !Enum.IsDefined(type))
+            throw new HubException(CallErrors.InvalidRequest);
+
         if (Encoding.UTF8.GetByteCount(payload) > _options.MaxSignalBytes)
             throw new HubException(CallErrors.SignalTooLarge);
 
@@ -199,6 +206,10 @@ public sealed class CallService
     public async Task<CallRejoinedDto> RejoinAsync(
         Guid userId, string connectionId, Guid callId, string rejoinToken, CancellationToken cancellationToken)
     {
+        // A token is 43 characters; anything longer is not one, and need not be hashed.
+        if (string.IsNullOrEmpty(rejoinToken) || rejoinToken.Length > 128)
+            throw new HubException(CallErrors.InvalidRequest);
+
         var result = await RedisAsync(step => _store.RejoinAsync(callId, userId, connectionId, HashOf(rejoinToken), step), cancellationToken);
 
         switch (result.Outcome)

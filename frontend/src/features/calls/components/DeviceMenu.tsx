@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Camera, Check, Mic, Settings } from 'lucide-react'
-import { cn } from '../../../lib/cn'
+import { Button } from '../../../components/ui/Button'
 import { useCallStore } from '../callStore'
 import type { CallActions } from '../../chat/hooks/chatConnectionContext'
 
@@ -84,16 +84,17 @@ export function DeviceMenu({ video, onSwitch }: DeviceMenuProps) {
         setOpen(false)
       }}
     >
-      <button
-        type="button"
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-12! w-12! rounded-full! bg-slate-700! text-white! hover:bg-slate-600!"
         aria-label="Choose microphone or camera"
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
-        className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-700 text-white transition-colors hover:bg-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
       >
         <Settings className="h-5 w-5" aria-hidden="true" />
-      </button>
+      </Button>
 
       {open && (
         <div
@@ -104,24 +105,21 @@ export function DeviceMenu({ video, onSwitch }: DeviceMenuProps) {
           {choices.map((group) => (
             <div key={group.kind} role="group" aria-label={group.kind === 'audio' ? 'Microphone' : 'Camera'}>
               {group.devices.map((device) => (
-                <button
+                <Button
                   key={device.id}
-                  type="button"
+                  variant="ghost"
                   role="menuitemradio"
                   aria-checked={inUse[device.kind] === device.id}
                   onClick={() => {
                     setOpen(false)
                     void onSwitch(device.kind, device.id)
                   }}
-                  className={cn(
-                    'flex w-full items-center gap-2 px-3 py-2 text-left text-slate-100 transition-colors',
-                    'hover:bg-slate-700 focus-visible:bg-slate-700 focus-visible:outline-none',
-                  )}
+                  className="h-auto! w-full! justify-start! rounded-none! px-3! py-2! text-left text-slate-100! hover:bg-slate-700!"
                 >
                   {device.kind === 'audio' ? <Mic className="h-4 w-4 shrink-0" aria-hidden="true" /> : <Camera className="h-4 w-4 shrink-0" aria-hidden="true" />}
                   <span className="min-w-0 flex-1 truncate">{device.label}</span>
                   {inUse[device.kind] === device.id && <Check className="h-4 w-4 shrink-0" aria-hidden="true" />}
-                </button>
+                </Button>
               ))}
             </div>
           ))}

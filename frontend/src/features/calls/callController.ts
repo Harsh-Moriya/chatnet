@@ -56,8 +56,9 @@ export interface CallDeps {
   now: () => number
   // Runs `run` after `ms`; returns what cancels it.
   after: (run: () => void, ms: number) => () => void
-  // A call is ringing here: the place to alert the person if the page is not in front.
-  onIncoming?: (call: IncomingCall) => void
+  // A call is ringing here: the place to alert the person if the page is not in front. What it returns, if anything, takes the alert down,
+  // which is done when the call is answered or over.
+  onIncoming?: (call: IncomingCall) => void | (() => void)
 }
 
 export interface StartCallInput {
@@ -119,6 +120,8 @@ interface Session {
   chain: Promise<void>
   cancelMediaDown: (() => void) | null
   cancelRingEnd: (() => void) | null
+  // Takes down the alert raised for the ring, if there was one.
+  closeAlert: (() => void) | null
 }
 
 export function createCallController(deps: CallDeps): CallController {
@@ -135,6 +138,8 @@ export function createCallController(deps: CallDeps): CallController {
     s.cancelRestart = null
     s.cancelRingEnd?.()
     s.cancelRingEnd = null
+    s.closeAlert?.()
+    s.closeAlert = null
     s.peer?.close()
     s.peer = null
     stopStream(s.local)
@@ -372,6 +377,7 @@ export function createCallController(deps: CallDeps): CallController {
       chain: Promise.resolve(),
       cancelMediaDown: null,
       cancelRingEnd: null,
+      closeAlert: null,
     }
     session = s
     store().begin(input)
@@ -456,6 +462,7 @@ export function createCallController(deps: CallDeps): CallController {
       chain: Promise.resolve(),
       cancelMediaDown: null,
       cancelRingEnd: null,
+      closeAlert: null,
     }
     session = s
 
@@ -468,7 +475,8 @@ export function createCallController(deps: CallDeps): CallController {
       ringsUntil: call.ringsUntil,
     })
     deps.ringtone.start('incoming')
-    deps.onIncoming?.(call)
+    const closeAlert = deps.onIncoming?.(call)
+    if (typeof closeAlert === 'function') s.closeAlert = closeAlert
 
     // The server ends a call that nobody answers; if it could not say so (the connection dropped), the screen is not left up for ever.
     const untilEnd = Math.max(0, Date.parse(call.ringsUntil) - deps.now()) + RING_GRACE_MS
@@ -485,6 +493,23 @@ export function createCallController(deps: CallDeps): CallController {
     if (api === null) return store().setNotice('You are not connected. Try again in a moment.')
 
     s.accepting = true
+
+    // The caller's keys, as the caller checks the callee's before it rings: a call that could not be verified is not answered, and keeps
+    // ringing so the person can decline it.
+    try {
+      await deps.identity.peerIdentity(s.peerId)
+    } catch (error) {
+      s.accepting = false
+      if (session !== s) return
+      return store().setNotice(
+        error instanceof PeerKeysUnavailable
+          ? `${s.peerName} has not set up encryption, so this call cannot be answered.`
+          : error instanceof PeerIdentityChanged
+            ? `The security keys of ${s.peerName} changed. Compare the safety number before answering.`
+            : 'The call could not be answered.',
+      )
+    }
+    if (session !== s || store().phase !== 'incoming') return
 
     let local: MediaStream
     try {
@@ -517,6 +542,8 @@ export function createCallController(deps: CallDeps): CallController {
     s.answered = true
     s.cancelRingEnd?.()
     s.cancelRingEnd = null
+    s.closeAlert?.()
+    s.closeAlert = null
     deps.ringtone.stop()
     store().answered(deps.now(), local.getVideoTracks().length > 0)
     store().setStreams({ local })
@@ -609,6 +636,13 @@ export function createCallController(deps: CallDeps): CallController {
       (rejoined) => {
         if (session !== s) return
         s.iceServers = rejoined.iceServers
+
+        // The callee may have answered while this side was away, and the news of it did not arrive: the server says the call is active, so it
+        // is answered, and the offer is made as it is on any answer.
+        if (s.callId !== null && store().phase === 'outgoing' && rejoined.state === 'Active') {
+          onCallAnswered(s.callId)
+          return
+        }
 
         // What was signalled while this side was away did not arrive. A call whose media is not up is offered again (the caller drives) with the
         // servers just given; one whose media stayed up through the drop needs nothing.

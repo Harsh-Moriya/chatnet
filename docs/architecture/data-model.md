@@ -120,7 +120,7 @@ Indexes:
 
 ## Calls
 
-A call that has ended, written once by the server when it ends. While a call rings or runs it lives in Redis, not here: a hash `chatnet:call:{id}` (the two people, the media, the state `ringing`, `active` or `ending`, the times, the connection of each side, the SHA-256 of each side's rejoin token, a lease for each side, a signal counter), a marker `chatnet:call:user:{userId}` holding the id of the call a person is in (what makes them busy), and a sorted set `chatnet:calls:deadlines` of call ids by when each is next due. They are changed only by Lua scripts, expire on their own after six hours if nobody finishes them, and are removed when the call is recorded here.
+A call that has ended, written once by the server when it ends. While a call rings or runs it lives in Redis, not here: a hash `chatnet:call:{id}` (the two people, the media, the state `ringing`, `active` or `ending`, the times, the connection of each side, the SHA-256 of each side's rejoin token, a lease for each side, a signal counter), a marker `chatnet:call:user:{userId}` holding the id of the call a person is in (what makes them busy), and a sorted set `chatnet:calls:deadlines` of call ids by when each is next due. They are changed only by Lua scripts, expire on their own after six hours (a call that ran longer would lose its live state) if nobody finishes them, and are removed when the call is recorded here.
 
 | Column | Type | Notes |
 |---|---|---|

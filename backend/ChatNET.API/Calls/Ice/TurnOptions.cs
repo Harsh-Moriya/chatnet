@@ -22,8 +22,9 @@ public sealed class TurnOptions
     // Where a browser can learn its own public address, "stun:chat.example.com:3478" (the relay answers these too). Optional.
     public List<string> StunUrls { get; set; } = [];
 
-    // How long a credential works. A call that goes on longer keeps its allocation alive; the credential is only checked when an
-    // allocation is made or refreshed, so an hour covers the longest call, and a stolen one is of use for no longer than that.
+    // How long a credential works for making an allocation, which is what a stolen or leaked one can be used for. An allocation that
+    // already exists was seen to keep relaying past its credential's end (a call relayed for 15 minutes on a 75 second credential), so this
+    // is not the length of a call.
     public TimeSpan CredentialLifetime { get; set; } = TimeSpan.FromHours(1);
 
     public bool Enabled => Secret.Length > 0;

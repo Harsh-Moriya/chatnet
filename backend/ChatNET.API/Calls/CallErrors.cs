@@ -14,6 +14,9 @@ public static class CallErrors
     // Any method, when the live state could not be reached.
     public const string Unavailable = "calls-unavailable";
 
+    // Any method, when an argument is not one the method can take: a media kind or signal type that does not exist, a missing payload or token.
+    public const string InvalidRequest = "invalid-request";
+
     // The others
     public const string CallNotFound = "call-not-found";
     public const string CallNotRinging = "call-not-ringing";
