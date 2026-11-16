@@ -823,6 +823,30 @@ describe('after the hub connection came back', () => {
     expect(rig.api.signals.filter((signal) => signal.type === 'Offer')).toHaveLength(2)
   })
 
+  it('takes the call as answered when it was answered while this side was away, which the server says by returning it as active', async () => {
+    await ringing()
+    rig.api.rejoinResult = async () => ({ state: 'Active', media: 'Audio', iceServers: [] })
+
+    rig.controller.onReconnected()
+    await settle()
+
+    expect(store().phase).toBe('connecting')
+    expect(rig.peers.current.offersMade).toBe(1)
+    expect(rig.api.signals.filter((signal) => signal.type === 'Offer')).toHaveLength(1)
+    expect(rig.ringtone.ringing).toBeNull()
+  })
+
+  it('goes on ringing when the server says it still rings', async () => {
+    await ringing()
+    rig.api.rejoinResult = async () => ({ state: 'Ringing', media: 'Audio', iceServers: [] })
+
+    rig.controller.onReconnected()
+    await settle()
+
+    expect(store().phase).toBe('outgoing')
+    expect(rig.peers.peers).toHaveLength(0)
+  })
+
   it('makes no offer when the media stayed up through the drop', async () => {
     await answered()
     rig.controller.onCallSignal(CALL, 'Answer', await signedByOther(rig, 'answer', ANSWER_SDP))

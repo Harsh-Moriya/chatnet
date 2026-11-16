@@ -610,6 +610,13 @@ export function createCallController(deps: CallDeps): CallController {
         if (session !== s) return
         s.iceServers = rejoined.iceServers
 
+        // The callee may have answered while this side was away, and the news of it did not arrive: the server says the call is active, so it
+        // is answered, and the offer is made as it is on any answer.
+        if (s.outgoing && s.callId !== null && store().phase === 'outgoing' && rejoined.state === 'Active') {
+          onCallAnswered(s.callId)
+          return
+        }
+
         // What was signalled while this side was away did not arrive. A call whose media is not up is offered again (the caller drives) with the
         // servers just given; one whose media stayed up through the drop needs nothing.
         if (s.outgoing && s.peer !== null && s.peerState !== 'connected') restart(s)
