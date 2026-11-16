@@ -170,6 +170,9 @@ public sealed class HubClient : IAsyncDisposable
     public Task<JsonElement> StartCallAsync(Guid conversationId, string media = "Audio") =>
         _connection.InvokeAsync<JsonElement>("StartCall", conversationId, media);
 
+    // A call method with arguments exactly as given, for what a well-behaved client never sends.
+    public Task<JsonElement> InvokeRawAsync(string method, params object?[] arguments) => _connection.InvokeCoreAsync<JsonElement>(method, arguments);
+
     public Task<JsonElement> AcceptCallAsync(Guid callId) => _connection.InvokeAsync<JsonElement>("AcceptCall", callId);
 
     public Task EndCallAsync(Guid callId, bool failed = false) => _connection.InvokeAsync("EndCall", callId, failed);
