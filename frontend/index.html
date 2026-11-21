@@ -11,6 +11,25 @@
     <title>ChatNET</title>
     <meta name="description" content="ChatNET: private chat, calls and files with your people." />
     <meta name="theme-color" content="#2563eb" />
+
+    <!-- The preview a link to the site gets (LinkedIn, Slack, WhatsApp, X): a crawler reads these from this file and runs no script, so they
+         live here and not in the application. The address is absolute because a crawler has no page to resolve it against; change it
+         with the domain. -->
+    <link rel="canonical" href="https://chatnet.harshmoriya.com/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="ChatNET" />
+    <meta property="og:title" content="ChatNET: say hi, keep it between you" />
+    <meta property="og:description" content="Private chat, calls and files with your people, end-to-end encrypted." />
+    <meta property="og:url" content="https://chatnet.harshmoriya.com/" />
+    <meta property="og:image" content="https://chatnet.harshmoriya.com/og-image.png" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="ChatNET: Say hi. Keep it between you. Private chat, calls and files, end-to-end encrypted." />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="ChatNET: say hi, keep it between you" />
+    <meta name="twitter:description" content="Private chat, calls and files with your people, end-to-end encrypted." />
+    <meta name="twitter:image" content="https://chatnet.harshmoriya.com/og-image.png" />
     <script>
       // Puts the dark theme on the page before it is drawn, so a person who chose it never sees a light page first. The same rule as
       // src/features/theme/themePreference.ts (and the same key); that module takes over once the application starts.
