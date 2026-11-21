@@ -19,8 +19,10 @@ export type TimelineItem =
       // at the start of a run: in a direct chat it is obvious who is talking.
       showSender: boolean
       continuing: boolean
+      // The last message of a run: the next item is not a message of the same run. It carries the time and the corner toward the sender.
+      endsRun: boolean
     }
-  | { kind: 'pending'; key: string; pending: PendingMessage; continuing: boolean }
+  | { kind: 'pending'; key: string; pending: PendingMessage; continuing: boolean; endsRun: boolean }
   // A finished call, as a line of its own between the messages. `own` is true when the signed-in user was the caller.
   | { kind: 'call'; key: string; message: Message; call: CallInfo; own: boolean }
 
@@ -82,6 +84,7 @@ export function buildTimeline(
       own,
       showSender: isGroup && !own && !continuing,
       continuing,
+      endsRun: true,
     })
 
     last = { senderId: message.senderId, time, day }
@@ -94,10 +97,19 @@ export function buildTimeline(
     const day = enterDay(waiting.createdAt)
     const continuing = last !== null && last.senderId === currentUserId && last.day === day
 
-    items.push({ kind: 'pending', key: waiting.clientMessageId, pending: waiting, continuing })
+    items.push({ kind: 'pending', key: waiting.clientMessageId, pending: waiting, continuing, endsRun: true })
 
     last = { senderId: currentUserId, time: new Date(waiting.createdAt).getTime(), day }
   }
+
+  // A message ends its run unless the item after it continues it. Done once the list is whole, because a run is only known to end when the
+  // next item has been seen.
+  items.forEach((item, index) => {
+    const next = items[index + 1]
+    if (item.kind === 'message' || item.kind === 'pending') {
+      item.endsRun = !(next !== undefined && (next.kind === 'message' || next.kind === 'pending') && next.continuing)
+    }
+  })
 
   return items
 }

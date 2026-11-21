@@ -1,5 +1,6 @@
 import { AlertCircle, CheckCheck, Clock, Lock, RotateCw } from 'lucide-react'
 import type { ReactNode } from 'react'
+import { Avatar } from '../../../components/ui/Avatar'
 import { Button } from '../../../components/ui/Button'
 import { Menu, type MenuItem } from '../../../components/ui/Menu'
 import { cn } from '../../../lib/cn'
@@ -20,6 +21,10 @@ interface MessageBubbleProps {
   selfUserName?: string
   own: boolean
   continuing: boolean
+  // The last message of a run: its corner toward the sender is small, and it is the one that shows the time.
+  endsRun: boolean
+  // In a group, for a message of someone else: the sender's picture beside the first message of a run, and room for it beside the rest.
+  leading?: 'indent' | { name: string; src: string | null }
   // Shown above the bubble; only set when the sender should be named.
   senderName?: string
   // Null for a deleted message and for one whose text cannot be shown (see `unreadable`). Empty for a message of only files.
@@ -51,6 +56,8 @@ export function MessageBubble({
   selfUserName,
   own,
   continuing,
+  endsRun,
+  leading,
   senderName,
   content,
   unreadable,
@@ -71,12 +78,20 @@ export function MessageBubble({
   const editing = editor !== undefined && !deleted
   // The colour of the bubble decides the colour of the ring drawn inside it.
   const onBlue = own && !failed && !editing
+  // The time stays in the page for a screen reader on every message and is drawn on the last of a run, and wherever it carries news.
+  const showFooter = endsRun || status === 'sending' || (editedAt != null && !deleted)
 
   return (
     <div
       id={messageId ? messageDomId(messageId) : undefined}
-      className={cn('flex flex-col', own ? 'items-end' : 'items-start', continuing ? 'mt-0.5' : 'mt-3')}
+      className={cn('relative flex flex-col', own ? 'items-end' : 'items-start', continuing ? 'mt-0.5' : 'mt-4', leading && 'pl-9')}
     >
+      {leading && leading !== 'indent' && (
+        <div className="absolute left-0 top-0">
+          <Avatar size="xs" name={leading.name} src={leading.src} />
+        </div>
+      )}
+
       {senderName && <p className="mb-1 px-1 text-xs font-medium text-fg-muted">{senderName}</p>}
 
       {/* The menu sits beside the bubble, on the side facing the middle of the page, and shows when the pointer is
@@ -84,7 +99,9 @@ export function MessageBubble({
       <div className={cn('group flex max-w-[85%] items-start gap-1 sm:max-w-[75%]', own && 'flex-row-reverse')}>
         <div
           className={cn(
-            'min-w-0 rounded-lg px-3 py-2 text-sm transition-shadow',
+            'min-w-0 rounded-bubble px-3.5 py-2 text-body transition-shadow',
+            // The corner toward the sender is small on the last message of a run, which is what joins a run into one speaker.
+            endsRun && (own ? 'rounded-br-bubble-tail' : 'rounded-bl-bubble-tail'),
             // Inside the bubble and not around it: messages of one sender sit 2 pixels apart, and a ring outside would be drawn
             // over the next message.
             highlighted && cn('ring-2 ring-inset', onBlue ? 'ring-sky-300' : 'ring-blue-500'),
@@ -94,7 +111,7 @@ export function MessageBubble({
               ? 'border border-red-400 bg-danger-soft text-fg'
               : onBlue
                 ? 'bg-blue-600 text-white'
-                : 'border border-line bg-surface text-fg',
+                : 'bg-surface text-fg shadow-card',
             status === 'sending' && 'opacity-70',
           )}
         >
@@ -120,6 +137,7 @@ export function MessageBubble({
           <p
             className={cn(
               'mt-1 flex items-center justify-end gap-1 text-[11px] leading-none',
+              !showFooter && 'sr-only',
               own && !failed && !editing ? 'text-blue-50' : 'text-fg-faint',
             )}
           >

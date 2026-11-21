@@ -6,7 +6,7 @@ import { colourFor } from './avatarColour'
 interface AvatarProps {
   name: string
   src?: string | null
-  size?: 'sm' | 'md' | 'lg'
+  size?: 'xs' | 'sm' | 'md' | 'xl' | 'lg'
   // A group shows a people icon instead of initials.
   isGroup?: boolean
   // A green dot on the corner. The dot is a picture; the text for a screen reader is inside it.
@@ -22,8 +22,17 @@ function initials(name: string): string {
   return (first + last).toUpperCase()
 }
 
-const BOX = { sm: 'h-8 w-8 text-xs', md: 'h-10 w-10 text-sm', lg: 'h-20 w-20 text-2xl' }
-const GROUP_ICON = { sm: 'h-4 w-4', md: 'h-5 w-5', lg: 'h-8 w-8' }
+const BOX = {
+  xs: 'h-7 w-7 text-[11px]',
+  sm: 'h-8 w-8 text-xs',
+  md: 'h-10 w-10 text-sm',
+  xl: 'h-11 w-11 text-base',
+  lg: 'h-20 w-20 text-2xl',
+}
+const GROUP_ICON = { xs: 'h-3.5 w-3.5', sm: 'h-4 w-4', md: 'h-5 w-5', xl: 'h-5 w-5', lg: 'h-8 w-8' }
+// The dot for being online grows with the picture. A hairline ring inside the edge keeps a pale picture or colour readable on any surface.
+const DOT = { xs: 'h-2 w-2', sm: 'h-2.5 w-2.5', md: 'h-3 w-3', xl: 'h-3 w-3', lg: 'h-4 w-4' }
+const EDGE = 'ring-1 ring-inset ring-fg/10'
 
 export function Avatar({ name, src, size = 'md', isGroup = false, online = false }: AvatarProps) {
   const box = BOX[size]
@@ -33,12 +42,13 @@ export function Avatar({ name, src, size = 'md', isGroup = false, online = false
   const [failedSrc, setFailedSrc] = useState<string | null>(null)
 
   const face = src && src !== failedSrc ? (
-    <img src={src} alt="" onError={() => setFailedSrc(src)} className={cn('shrink-0 rounded-full object-cover', box)} />
+    <img src={src} alt="" onError={() => setFailedSrc(src)} className={cn('shrink-0 rounded-full object-cover', EDGE, box)} />
   ) : (
     <div
       aria-hidden="true"
       className={cn(
         'flex shrink-0 select-none items-center justify-center rounded-full font-semibold',
+        EDGE,
         box,
         isGroup ? 'bg-strong text-fg-soft' : colourFor(name),
       )}
@@ -53,10 +63,7 @@ export function Avatar({ name, src, size = 'md', isGroup = false, online = false
     <span className="relative inline-flex shrink-0">
       {face}
       <span
-        className={cn(
-          'absolute bottom-0 right-0 rounded-full bg-emerald-500 ring-2 ring-surface',
-          size === 'md' ? 'h-3 w-3' : 'h-2.5 w-2.5',
-        )}
+        className={cn('absolute bottom-0 right-0 rounded-full bg-emerald-500 ring-2 ring-surface', DOT[size])}
       >
         <span className="sr-only">Online</span>
       </span>

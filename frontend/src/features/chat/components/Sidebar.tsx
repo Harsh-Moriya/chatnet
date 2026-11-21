@@ -87,7 +87,7 @@ export function Sidebar() {
         >
           <Avatar name={user?.displayName ?? ''} src={user?.avatarUrl} />
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-fg">{user?.displayName}</p>
+            <p className="truncate text-base font-semibold tracking-tight text-fg">{user?.displayName}</p>
             <p className="truncate text-xs text-fg-muted">@{user?.userName}</p>
           </div>
         </button>

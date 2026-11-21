@@ -22,6 +22,7 @@ import { activeMention, applyMention, suggestMembers } from '../mentions'
 import { useChatStore } from '../store/chatStore'
 import type { Member } from '../types'
 import { canSend, toPendingAttachments } from '../uploads'
+import { TypingIndicator } from './TypingIndicator'
 import { UploadChips } from './UploadChips'
 
 // The most a message may hold, counted in UTF-16 code units, which is also what the browser's maxLength counts. The server cannot read
@@ -171,6 +172,8 @@ export function MessageComposer({ conversationId }: { conversationId: string }) 
 
   return (
     <div className="relative shrink-0 border-t border-line bg-surface p-3">
+      <TypingIndicator conversationId={conversationId} />
+
       {listOpen && (
         <ul
           id={SUGGESTIONS_ID}
