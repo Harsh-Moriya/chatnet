@@ -6,7 +6,7 @@ export function EmptyState() {
       <Logo tile size={64} />
       <h2 className="text-base font-semibold text-fg">Select a conversation</h2>
       <p className="max-w-xs text-sm text-fg-muted">
-        Pick one from the list, or start a new one with the pen icon.
+        Pick one from the list, or choose New conversation in the bar under it.
       </p>
     </div>
   )

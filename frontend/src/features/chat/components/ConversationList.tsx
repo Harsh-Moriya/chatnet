@@ -5,10 +5,18 @@ import { getApiError } from '../../../lib/errors'
 import { useNow } from '../../../lib/useNow'
 import { useAuth } from '../../auth/hooks/useAuth'
 import { useConversations } from '../api/useConversations'
+import { filterConversations } from '../conversationFilter'
 import { sortedConversations, useChatStore } from '../store/chatStore'
 import { ConversationListItem } from './ConversationListItem'
 
-export function ConversationList({ onNewConversation }: { onNewConversation: () => void }) {
+interface ConversationListProps {
+  // What is typed in the box above the list: only the conversations with it in their name are shown.
+  filter: string
+  // Starts something new, from the list when it is empty or when nothing matches.
+  onNewConversation: () => void
+}
+
+export function ConversationList({ filter, onNewConversation }: ConversationListProps) {
   const query = useConversations()
   const { user } = useAuth()
   const now = useNow()
@@ -17,6 +25,7 @@ export function ConversationList({ onNewConversation }: { onNewConversation: () 
   // Sorted here, not in a store selector: a selector that builds a new array on every call makes
   // React re-render without end.
   const list = useMemo(() => sortedConversations(conversations), [conversations])
+  const shown = useMemo(() => filterConversations(list, filter), [list, filter])
 
   if (list.length === 0) {
     if (query.isPending) return <ListSkeleton />
@@ -46,10 +55,21 @@ export function ConversationList({ onNewConversation }: { onNewConversation: () 
     )
   }
 
+  if (shown.length === 0) {
+    return (
+      <div className="flex flex-col items-center gap-3 p-8 text-center">
+        <p className="text-sm text-fg-muted">No conversation matches &ldquo;{filter.trim()}&rdquo;.</p>
+        <Button variant="secondary" size="sm" onClick={onNewConversation}>
+          Find someone new
+        </Button>
+      </div>
+    )
+  }
+
   return (
     <nav aria-label="Conversations" className="flex-1 overflow-y-auto">
       <ul className="divide-y divide-line-subtle">
-        {list.map((conversation) => (
+        {shown.map((conversation) => (
           <ConversationListItem
             key={conversation.id}
             conversation={conversation}

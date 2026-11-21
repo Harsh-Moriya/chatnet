@@ -24,10 +24,9 @@ export function ChatLayout() {
       <CallLayer />
 
       <div className="flex min-h-0 flex-1">
-        {/* Relative, so the notification panel can cover the list below the sidebar's header. */}
         <aside
           className={cn(
-            'relative w-full shrink-0 flex-col border-r border-line bg-surface md:flex md:w-80 lg:w-96',
+            'w-full shrink-0 flex-col border-r border-line bg-surface md:flex md:w-80 lg:w-96',
             conversationOpen ? 'hidden' : 'flex',
           )}
         >

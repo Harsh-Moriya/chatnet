@@ -5,15 +5,17 @@ import { MAX_TERM_LENGTH } from '../searchRules'
 interface SearchBoxProps {
   value: string
   onChange: (value: string) => void
+  // What the box is for, as its label and its hint: it searches the messages, or filters the conversations.
+  label?: string
 }
 
-// The box above the list of conversations. Escape, or the cross, empties it, which brings the list back.
-export function SearchBox({ value, onChange }: SearchBoxProps) {
+// The box at the top of a sidebar panel. Escape, or the cross, empties it.
+export function SearchBox({ value, onChange, label = 'Search messages' }: SearchBoxProps) {
   return (
     <div role="search" className="shrink-0 border-b border-line px-4 py-3">
       <Input
-        aria-label="Search messages"
-        placeholder="Search messages"
+        aria-label={label}
+        placeholder={label}
         autoComplete="off"
         enterKeyHint="search"
         maxLength={MAX_TERM_LENGTH}
