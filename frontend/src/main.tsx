@@ -8,8 +8,11 @@ import { reloadForStaleChunk } from './lib/staleChunks'
 import { registerWorker } from './sw/register'
 import { setDeviceIdProvider, startSession } from './features/auth/session'
 import { indexedDbDeviceStore } from './features/encryption/deviceStore'
+import { startTheme } from './features/theme/themeStore'
 import App from './App'
 import './index.css'
+
+startTheme()
 
 // Asks the server whether this browser still has a working session. The access token is only kept in memory,
 // so every page load starts without one. Routes show a loading state until this is answered.

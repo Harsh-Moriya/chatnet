@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Bell, BellOff, Fingerprint, Images, Phone, ShieldCheck, Users, Video } from 'lucide-react'
 import { Avatar } from '../../../components/ui/Avatar'
 import { Button } from '../../../components/ui/Button'
+import { Tooltip } from '../../../components/ui/Tooltip'
 import { cn } from '../../../lib/cn'
 import { getApiError } from '../../../lib/errors'
 import { useNow } from '../../../lib/useNow'
@@ -73,7 +74,7 @@ export function ChatHeader({ conversation }: { conversation: Conversation }) {
   }
 
   return (
-    <header className="flex h-16 shrink-0 items-center gap-3 border-b border-line bg-white px-4">
+    <header className="flex h-16 shrink-0 items-center gap-3 border-b border-line bg-surface px-4">
       {/* On a phone the list and the conversation are separate screens; this goes back to the list. */}
       <Button
         variant="ghost"
@@ -93,97 +94,103 @@ export function ChatHeader({ conversation }: { conversation: Conversation }) {
       />
 
       <div className="min-w-0">
-        <h1 className="truncate text-sm font-semibold text-slate-900">{conversation.name}</h1>
+        <h1 className="truncate text-sm font-semibold text-fg">{conversation.name}</h1>
         {/* Typing wins over presence: it is what is happening now. Where nothing is known about
             presence yet, the plain description of the conversation stays. */}
-        <p className={cn('truncate text-xs', muteError ? 'text-red-500' : 'text-slate-500')} aria-live="polite">
+        <p className={cn('truncate text-xs', muteError ? 'text-danger-fg' : 'text-fg-muted')} aria-live="polite">
           {muteError ?? (left ? 'You left this group' : (typing ?? presence ?? (isGroup ? 'Group conversation' : 'Direct message')))}
         </p>
       </div>
 
       <div className="ml-auto flex items-center gap-1">
         {/* Outside the guard for a group that was left: its history is still read, so its files are still looked at. */}
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label="Pictures, videos and PDFs"
-          title="Every picture, video and PDF in this conversation"
-          onClick={() => {
-            setGalleryMounted(true)
-            setGalleryOpen(true)
-          }}
-        >
-          <Images className="h-5 w-5" />
-        </Button>
+        <Tooltip label="Every picture, video and PDF in this conversation">
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Pictures, videos and PDFs"
+            onClick={() => {
+              setGalleryMounted(true)
+              setGalleryOpen(true)
+            }}
+          >
+            <Images className="h-5 w-5" />
+          </Button>
+        </Tooltip>
 
         {!left && (
           <>
             {!isGroup && conversation.otherUserId !== null && (
               <>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  aria-label="Audio call"
-                  title="Call by voice"
-                  disabled={!canCall}
-                  onClick={() => call('Audio')}
-                >
-                  <Phone className="h-5 w-5" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  aria-label="Video call"
-                  title="Call with video"
-                  disabled={!canCall}
-                  onClick={() => call('Video')}
-                >
-                  <Video className="h-5 w-5" />
-                </Button>
+                <Tooltip label="Call by voice">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Audio call"
+                    disabled={!canCall}
+                    onClick={() => call('Audio')}
+                  >
+                    <Phone className="h-5 w-5" />
+                  </Button>
+                </Tooltip>
+                <Tooltip label="Call with video">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Video call"
+                    disabled={!canCall}
+                    onClick={() => call('Video')}
+                  >
+                    <Video className="h-5 w-5" />
+                  </Button>
+                </Tooltip>
               </>
             )}
 
             {!isGroup && conversation.otherUserId !== null && (
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label={verified ? 'Safety number, verified' : 'Safety number'}
-                title={verified ? 'Verified: you compared the safety number' : 'Compare the safety number to be sure nobody is between you'}
-                onClick={() => {
-                  setSafetyMounted(true)
-                  setSafetyOpen(true)
-                }}
-              >
-                {verified ? <ShieldCheck className="h-5 w-5 text-blue-600" /> : <Fingerprint className="h-5 w-5" />}
-              </Button>
+              <Tooltip label={verified ? 'Verified: you compared the safety number' : 'Compare the safety number to be sure nobody is between you'}>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label={verified ? 'Safety number, verified' : 'Safety number'}
+                  onClick={() => {
+                    setSafetyMounted(true)
+                    setSafetyOpen(true)
+                  }}
+                >
+                  {verified ? <ShieldCheck className="h-5 w-5 text-accent-fg" /> : <Fingerprint className="h-5 w-5" />}
+                </Button>
+              </Tooltip>
             )}
 
             {isGroup && (
+              <Tooltip label="Who is in this group, and what you can do about it">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Group info"
+                  onClick={() => {
+                    setInfoMounted(true)
+                    setInfoOpen(true)
+                  }}
+                >
+                  <Users className="h-5 w-5" />
+                </Button>
+              </Tooltip>
+            )}
+
+            <Tooltip label={conversation.isMuted ? 'Muted: no alerts for new messages. Mentions still alert.' : 'Mute alerts for new messages'}>
               <Button
                 variant="ghost"
                 size="icon"
-                aria-label="Group info"
-                title="Who is in this group, and what you can do about it"
-                onClick={() => {
-                  setInfoMounted(true)
-                  setInfoOpen(true)
-                }}
+                aria-label={conversation.isMuted ? 'Unmute conversation' : 'Mute conversation'}
+                aria-pressed={conversation.isMuted}
+                disabled={changingMute}
+                onClick={() => void toggleMute()}
               >
-                <Users className="h-5 w-5" />
+                {conversation.isMuted ? <BellOff className="h-5 w-5" /> : <Bell className="h-5 w-5" />}
               </Button>
-            )}
-
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label={conversation.isMuted ? 'Unmute conversation' : 'Mute conversation'}
-              aria-pressed={conversation.isMuted}
-              title={conversation.isMuted ? 'Muted: no alerts for new messages. Mentions still alert.' : 'Mute alerts for new messages'}
-              disabled={changingMute}
-              onClick={() => void toggleMute()}
-            >
-              {conversation.isMuted ? <BellOff className="h-5 w-5" /> : <Bell className="h-5 w-5" />}
-            </Button>
+            </Tooltip>
           </>
         )}
       </div>

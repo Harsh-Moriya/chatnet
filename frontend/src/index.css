@@ -1,16 +1,185 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   --font-sans: 'Inter', system-ui, sans-serif;
-
-  --color-line: var(--color-slate-300);
-  --color-line-subtle: var(--color-slate-200);
 }
 
+/* ##### Colour tokens ##### */
+
+/* The utilities (bg-surface, text-fg-muted, border-line) read the --t-* variables, which differ by theme. `inline` makes them point at
+   the variable itself instead of a copy taken at the root, so the .dark class on <html> is enough to change them all. */
+@theme inline {
+  --color-page: var(--t-page);
+  --color-surface: var(--t-surface);
+  --color-hover: var(--t-hover);
+  --color-subtle: var(--t-subtle);
+  --color-strong: var(--t-strong);
+
+  --color-line: var(--t-line);
+  --color-line-subtle: var(--t-line-subtle);
+
+  --color-fg: var(--t-fg);
+  --color-fg-soft: var(--t-fg-soft);
+  --color-fg-muted: var(--t-fg-muted);
+  --color-fg-faint: var(--t-fg-faint);
+
+  --color-accent-soft: var(--t-accent-soft);
+  --color-accent-soft-strong: var(--t-accent-soft-strong);
+  --color-accent-fg: var(--t-accent-fg);
+
+  --color-danger-soft: var(--t-danger-soft);
+  --color-danger-line: var(--t-danger-line);
+  --color-danger-fg: var(--t-danger-fg);
+  --color-warn-soft: var(--t-warn-soft);
+  --color-warn-line: var(--t-warn-line);
+  --color-warn-fg: var(--t-warn-fg);
+  --color-ok-fg: var(--t-ok-fg);
+}
+
+/* Light is the Tailwind palette the application was built with, so the light theme looks as it always did. */
+:root {
+  --t-page: var(--color-slate-50);
+  --t-surface: var(--color-white);
+  --t-hover: var(--color-slate-50);
+  --t-subtle: var(--color-slate-100);
+  --t-strong: var(--color-slate-200);
+
+  --t-line: var(--color-slate-300);
+  --t-line-subtle: var(--color-slate-200);
+
+  --t-fg: var(--color-slate-900);
+  --t-fg-soft: var(--color-slate-700);
+  --t-fg-muted: var(--color-slate-500);
+  --t-fg-faint: var(--color-slate-400);
+
+  --t-accent-soft: var(--color-blue-50);
+  --t-accent-soft-strong: var(--color-blue-100);
+  --t-accent-fg: var(--color-blue-600);
+
+  --t-danger-soft: var(--color-red-50);
+  --t-danger-line: var(--color-red-200);
+  --t-danger-fg: var(--color-red-600);
+  --t-warn-soft: var(--color-amber-50);
+  --t-warn-line: var(--color-amber-200);
+  --t-warn-fg: var(--color-amber-800);
+  --t-ok-fg: var(--color-emerald-700);
+}
+
+/* Dark: blue-tinted slate. Surfaces step up from the page (#0b1220) through the surface to the raised and strong fills. */
+.dark {
+  --t-page: #0b1220;
+  --t-surface: #0f172a;
+  --t-hover: #131c31;
+  --t-subtle: #1e293b;
+  --t-strong: #334155;
+
+  --t-line: #334155;
+  --t-line-subtle: #1e293b;
+
+  --t-fg: #f1f5f9;
+  --t-fg-soft: #cbd5e1;
+  --t-fg-muted: #94a3b8;
+  --t-fg-faint: #7d8ca6;
+
+  --t-accent-soft: #16233f;
+  --t-accent-soft-strong: #1e3a6e;
+  --t-accent-fg: #93c5fd;
+
+  --t-danger-soft: color-mix(in srgb, #ef4444 14%, transparent);
+  --t-danger-line: #7f1d1d;
+  --t-danger-fg: #fca5a5;
+  --t-warn-soft: color-mix(in srgb, #f59e0b 12%, transparent);
+  --t-warn-line: #78350f;
+  --t-warn-fg: #fcd34d;
+  --t-ok-fg: #6ee7b7;
+}
+
+/* ##### Base ##### */
+
 @layer base {
+  /* Tells the browser which theme the page is in, so scrollbars, form controls and the native dialog follow it. */
+  :root {
+    color-scheme: light;
+  }
+
+  .dark {
+    color-scheme: dark;
+    color: var(--t-fg);
+  }
+
+  /* The page behind everything (an overscroll, a short page) is the page colour. It is set on <html>, which the canvas takes. */
+  html {
+    background-color: var(--t-page);
+  }
+
+  /* A <dialog> sets its own text colour; it takes the page's instead. */
+  dialog {
+    color: inherit;
+  }
+
+  /* The halo a focus ring leaves between a control and its ring is the surface it is on, not white. */
+  *,
+  ::before,
+  ::after {
+    --tw-ring-offset-color: var(--t-surface);
+  }
+
   body {
     font-family: 'Inter', system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+/* ##### Scrollbars ##### */
+
+/* A slim rounded thumb that floats in its lane (a transparent border around it) with no track and no arrow buttons, instead of the browser's
+   blocky bar. The thumb is the muted text colour at partial strength, so it shows on any surface and changes with the theme. */
+:root {
+  --t-scroll-thumb: color-mix(in srgb, var(--t-fg-muted) 45%, transparent);
+  --t-scroll-thumb-hover: color-mix(in srgb, var(--t-fg-muted) 75%, transparent);
+}
+
+/* A scrolling area that is dark in both themes (the PDF viewer) gets a light thumb. */
+.on-dark {
+  --t-scroll-thumb: rgb(255 255 255 / 0.3);
+  --t-scroll-thumb-hover: rgb(255 255 255 / 0.5);
+}
+
+/* Chrome, Edge and Safari style the bar through pseudo-elements, which they ignore as soon as scrollbar-width or scrollbar-color is set,
+   so the two rules are kept apart. Firefox has only the standard properties, which give it a thin bar with the same colours. */
+@supports selector(::-webkit-scrollbar) {
+  ::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+  }
+
+  ::-webkit-scrollbar-track,
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-button {
+    display: none;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background-color: var(--t-scroll-thumb);
+    background-clip: content-box;
+    border: 3px solid transparent;
+    border-radius: 9999px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: var(--t-scroll-thumb-hover);
+  }
+}
+
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--t-scroll-thumb) transparent;
   }
 }

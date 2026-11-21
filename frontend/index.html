@@ -10,6 +10,16 @@
     <title>ChatNET</title>
     <meta name="description" content="ChatNET: private chat, calls and files with your people." />
     <meta name="theme-color" content="#2563eb" />
+    <script>
+      // Puts the dark theme on the page before it is drawn, so a person who chose it never sees a light page first. The same rule as
+      // src/features/theme/themePreference.ts (and the same key); that module takes over once the application starts.
+      try {
+        var choice = localStorage.getItem('chatnet-theme')
+        if (choice === 'dark' || (choice === 'system' && matchMedia('(prefers-color-scheme: dark)').matches)) {
+          document.documentElement.classList.add('dark')
+        }
+      } catch (error) {}
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />

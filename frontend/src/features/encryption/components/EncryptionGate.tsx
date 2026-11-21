@@ -31,8 +31,8 @@ export function EncryptionGate({ children }: { children: ReactNode }) {
   if (screen === 'loading') return <SessionLoading />
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-50 px-4 py-8">
-      <div className="w-full max-w-md space-y-4 rounded-lg border border-line bg-white p-6">
+    <main className="flex min-h-screen items-center justify-center bg-page px-4 py-8">
+      <div className="w-full max-w-md space-y-4 rounded-lg border border-line bg-surface p-6">
         <GateContent screen={screen} />
         <div className="border-t border-line pt-3">
           <Button variant="ghost" size="sm" onClick={() => void requestSignOut()}>
@@ -48,8 +48,8 @@ export function EncryptionGate({ children }: { children: ReactNode }) {
 function Heading({ children }: { children: ReactNode }) {
   return (
     <div className="flex items-center gap-2">
-      <LockKeyhole className="h-5 w-5 text-blue-600" aria-hidden="true" />
-      <h1 className="text-lg font-semibold text-slate-900">{children}</h1>
+      <LockKeyhole className="h-5 w-5 text-accent-fg" aria-hidden="true" />
+      <h1 className="text-lg font-semibold text-fg">{children}</h1>
     </div>
   )
 }
@@ -61,7 +61,7 @@ function GateContent({ screen }: { screen: Exclude<GateScreen, 'chat' | 'loading
     return (
       <>
         <Heading>This browser cannot keep encryption keys</Heading>
-        <p className="text-sm text-slate-500">
+        <p className="text-sm text-fg-muted">
           Your messages are encrypted, and this browser cannot hold the keys that open them. It may be a private window, or it does not
           support the algorithms the app uses. Open the app in a current version of Chrome, Edge, Firefox or Safari.
         </p>
@@ -73,7 +73,7 @@ function GateContent({ screen }: { screen: Exclude<GateScreen, 'chat' | 'loading
     return (
       <>
         <Heading>Checking your encryption keys</Heading>
-        <div role="alert" className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
+        <div role="alert" className="flex items-start gap-2 rounded-lg border border-danger-line bg-danger-soft px-3 py-2 text-sm text-danger-fg">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
           <span>Your keys could not be checked. Check your connection and try again.</span>
         </div>
@@ -89,7 +89,7 @@ function GateContent({ screen }: { screen: Exclude<GateScreen, 'chat' | 'loading
       <>
         <Heading>Unlock your messages</Heading>
         {removedElsewhere && (
-          <div role="status" className="flex items-start justify-between gap-2 rounded-lg border border-line bg-slate-50 px-3 py-2 text-xs text-slate-700">
+          <div role="status" className="flex items-start justify-between gap-2 rounded-lg border border-line bg-page px-3 py-2 text-xs text-fg-soft">
             <span>This browser was removed from your devices, so its keys were deleted.</span>
             <Button variant="ghost" size="sm" onClick={() => useEncryptionStore.getState().acknowledgeRemoval()}>
               Dismiss

@@ -62,7 +62,7 @@ export function SearchResults({ input }: { input: string }) {
     case 'failed':
       return (
         <div className="flex flex-col items-center gap-3 p-6 text-center">
-          <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
+          <div className="flex items-start gap-2 rounded-lg border border-danger-line bg-danger-soft px-3 py-2 text-sm text-danger-fg">
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
             <span>The messages on this device could not be searched.</span>
           </div>
@@ -98,7 +98,7 @@ export function SearchResults({ input }: { input: string }) {
           )}
 
           {view.stillReading && (
-            <p role="status" className="px-4 pb-4 pt-1 text-center text-xs text-slate-500">
+            <p role="status" className="px-4 pb-4 pt-1 text-center text-xs text-fg-muted">
               <StillReading />
             </p>
           )}
@@ -115,7 +115,7 @@ function StillReading() {
 // role="status" so a screen reader hears that the search is running or found nothing.
 function Notice({ children }: { children: ReactNode }) {
   return (
-    <p role="status" className="p-6 text-center text-sm text-slate-500">
+    <p role="status" className="p-6 text-center text-sm text-fg-muted">
       {children}
     </p>
   )

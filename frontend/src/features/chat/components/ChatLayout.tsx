@@ -19,7 +19,7 @@ export function ChatLayout() {
   useDocumentTitle()
 
   return (
-    <div className="flex h-dvh flex-col bg-slate-50">
+    <div className="flex h-dvh flex-col bg-page">
       {/* A call put away as a bar takes a row above both panes, so it never covers the header or the message box. */}
       <CallLayer />
 
@@ -27,7 +27,7 @@ export function ChatLayout() {
         {/* Relative, so the notification panel can cover the list below the sidebar's header. */}
         <aside
           className={cn(
-            'relative w-full shrink-0 flex-col border-r border-line bg-white md:flex md:w-80 lg:w-96',
+            'relative w-full shrink-0 flex-col border-r border-line bg-surface md:flex md:w-80 lg:w-96',
             conversationOpen ? 'hidden' : 'flex',
           )}
         >

@@ -89,11 +89,11 @@ function ResetForm({ token }: { token: string | null }) {
   if (token === null || linkRejected) {
     return (
       <AuthLayout title="This link cannot be used" subtitle="It may have expired, or it was already used">
-        <p className="text-sm text-slate-600">
+        <p className="text-sm text-fg-soft">
           Open the link from your email again, or ask for a new one.
         </p>
-        <p className="mt-6 text-center text-sm text-slate-500">
-          <Link to="/forgot-password" className="font-medium text-blue-600 hover:underline">
+        <p className="mt-6 text-center text-sm text-fg-muted">
+          <Link to="/forgot-password" className="font-medium text-accent-fg hover:underline">
             Send me a new link
           </Link>
         </p>
@@ -105,8 +105,8 @@ function ResetForm({ token }: { token: string | null }) {
     return (
       <AuthLayout title="Password changed" subtitle="Everyone who was signed in to that account was signed out">
         <AuthNotice>Your password was changed.</AuthNotice>
-        <p className="mt-6 text-center text-sm text-slate-500">
-          <Link to="/" className="font-medium text-blue-600 hover:underline">
+        <p className="mt-6 text-center text-sm text-fg-muted">
+          <Link to="/" className="font-medium text-accent-fg hover:underline">
             Continue
           </Link>
         </p>
@@ -120,9 +120,9 @@ function ResetForm({ token }: { token: string | null }) {
     <AuthLayout title="Choose a new password" subtitle="You will be signed out everywhere and asked to sign in again">
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         {generalError && (
-          <div className="flex items-start gap-2.5 rounded-lg border border-red-200 bg-red-50 px-3.5 py-3">
-            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-500" />
-            <p className="text-sm text-red-700">{generalError}</p>
+          <div className="flex items-start gap-2.5 rounded-lg border border-danger-line bg-danger-soft px-3.5 py-3">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-danger-fg" />
+            <p className="text-sm text-danger-fg">{generalError}</p>
           </div>
         )}
 
@@ -139,7 +139,7 @@ function ResetForm({ token }: { token: string | null }) {
             <button
               type="button"
               onClick={() => setShowPassword(v => !v)}
-              className="text-slate-400 hover:text-slate-600 transition-colors"
+              className="text-fg-faint hover:text-fg-soft transition-colors"
               aria-label={showPassword ? 'Hide password' : 'Show password'}
             >
               {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}

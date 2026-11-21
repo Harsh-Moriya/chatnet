@@ -61,7 +61,7 @@ export function MessageEditor({ initial, mayBeEmpty, onSave, onCancel }: Message
         disabled={saving}
         aria-label="Edit message"
         error={error ?? undefined}
-        className="text-slate-900"
+        className="text-fg"
         onChange={(event) => setText(event.target.value)}
         onKeyDown={(event) => {
           if (event.key === 'Escape') {

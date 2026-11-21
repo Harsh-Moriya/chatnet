@@ -16,7 +16,7 @@ export function PendingAttachments({ attachments }: { attachments: PendingAttach
       {pictures.length > 0 && (
         <div className={cn('grid w-64 max-w-full gap-1', pictures.length === 1 ? 'grid-cols-1' : 'grid-cols-2')}>
           {pictures.map((attachment) => (
-            <div key={attachment.uploadKey} className="overflow-hidden rounded-lg bg-slate-100">
+            <div key={attachment.uploadKey} className="overflow-hidden rounded-lg bg-subtle">
               <PreviewImage
                 file={attachment.file}
                 alt={cleanFileName(attachment.ref.name)}

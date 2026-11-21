@@ -9,6 +9,7 @@ import {
 } from 'react'
 import { AlertCircle, Lock, Paperclip, Send } from 'lucide-react'
 import { Button } from '../../../components/ui/Button'
+import { Tooltip } from '../../../components/ui/Tooltip'
 import { Textarea } from '../../../components/ui/Textarea'
 import { cn } from '../../../lib/cn'
 import { useAuth } from '../../auth/hooks/useAuth'
@@ -169,13 +170,13 @@ export function MessageComposer({ conversationId }: { conversationId: string }) 
   }
 
   return (
-    <div className="relative shrink-0 border-t border-line bg-white p-3">
+    <div className="relative shrink-0 border-t border-line bg-surface p-3">
       {listOpen && (
         <ul
           id={SUGGESTIONS_ID}
           role="listbox"
           aria-label="People you can mention"
-          className="absolute inset-x-3 bottom-full z-10 mb-1 overflow-hidden rounded-lg border border-line bg-white shadow-md"
+          className="absolute inset-x-3 bottom-full z-10 mb-1 overflow-hidden rounded-lg border border-line bg-surface shadow-md"
         >
           {suggestions.map((member, index) => (
             <li
@@ -191,18 +192,18 @@ export function MessageComposer({ conversationId }: { conversationId: string }) 
               }}
               className={cn(
                 'flex cursor-pointer items-baseline gap-2 px-3 py-2 text-sm',
-                index === active ? 'bg-blue-50' : 'hover:bg-slate-50',
+                index === active ? 'bg-accent-soft' : 'hover:bg-hover',
               )}
             >
-              <span className="truncate font-medium text-slate-900">{member.displayName}</span>
-              <span className="truncate text-slate-500">@{member.userName}</span>
+              <span className="truncate font-medium text-fg">{member.displayName}</span>
+              <span className="truncate text-fg-muted">@{member.userName}</span>
             </li>
           ))}
         </ul>
       )}
 
       {blocked && (
-        <p className="mb-2 flex items-start gap-1.5 text-xs text-slate-600" role="status">
+        <p className="mb-2 flex items-start gap-1.5 text-xs text-fg-soft" role="status">
           <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
           <span>
             Waiting for {waitingNames.join(', ')} to set up encryption. You can write here once they have.
@@ -211,7 +212,7 @@ export function MessageComposer({ conversationId }: { conversationId: string }) 
       )}
 
       {uploads.rejected.length > 0 && (
-        <ul className="mb-2 space-y-0.5 text-xs text-red-500" role="alert">
+        <ul className="mb-2 space-y-0.5 text-xs text-danger-fg" role="alert">
           {uploads.rejected.map((problem) => (
             <li key={problem} className="flex items-start gap-1.5">
               <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
@@ -223,7 +224,15 @@ export function MessageComposer({ conversationId }: { conversationId: string }) 
 
       {uploads.items.length > 0 && <UploadChips items={uploads.items} onRemove={uploads.remove} />}
 
-      <div className="flex items-end gap-2">
+      {/* One bar: the attach button, the box and the send button share a container, a height (36 px) and the focus ring. The buttons
+          stay at the bottom edge as the box grows. */}
+      <div
+        className={cn(
+          'flex items-end gap-1 rounded-2xl border border-line bg-surface p-1.5 transition-colors',
+          'focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/20',
+          blocked && 'opacity-60',
+        )}
+      >
         <input
           ref={picker}
           type="file"
@@ -233,19 +242,21 @@ export function MessageComposer({ conversationId }: { conversationId: string }) 
           aria-label="Choose files to attach"
           onChange={handlePicked}
         />
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label="Attach files"
-          title={`Attach files (up to ${MAX_FILES_PER_MESSAGE})`}
-          disabled={blocked || uploads.items.length >= MAX_FILES_PER_MESSAGE}
-          onClick={() => picker.current?.click()}
-          className="mb-0.5 h-10 w-10"
-        >
-          <Paperclip className="h-4 w-4" />
-        </Button>
+        <Tooltip side="top" label={`Attach files (up to ${MAX_FILES_PER_MESSAGE})`}>
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Attach files"
+            disabled={blocked || uploads.items.length >= MAX_FILES_PER_MESSAGE}
+            onClick={() => picker.current?.click()}
+            className="rounded-xl"
+          >
+            <Paperclip className="h-4 w-4" />
+          </Button>
+        </Tooltip>
 
         <Textarea
+          bare
           ref={box}
           rows={1}
           value={text}
@@ -268,19 +279,13 @@ export function MessageComposer({ conversationId }: { conversationId: string }) 
             typing.stop()
           }}
         />
-        <Button
-          size="icon"
-          aria-label="Send message"
-          disabled={!sendable}
-          onClick={submit}
-          className="mb-0.5 h-10 w-10"
-        >
+        <Button size="icon" aria-label="Send message" disabled={!sendable} onClick={submit} className="rounded-xl">
           <Send className="h-4 w-4" />
         </Button>
       </div>
 
       {text.length >= SHOW_COUNTER_FROM && (
-        <p className={cn('mt-1 text-right text-xs', text.length >= MAX_LENGTH ? 'text-red-500' : 'text-slate-500')}>
+        <p className={cn('mt-1 text-right text-xs', text.length >= MAX_LENGTH ? 'text-danger-fg' : 'text-fg-muted')}>
           {text.length} / {MAX_LENGTH}
         </p>
       )}

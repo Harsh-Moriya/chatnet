@@ -34,7 +34,7 @@ export function ConversationView() {
 
   if (list.isPending) {
     return (
-      <div className="flex flex-1 items-center justify-center gap-2 text-sm text-slate-500">
+      <div className="flex flex-1 items-center justify-center gap-2 text-sm text-fg-muted">
         <LoaderCircle className="h-4 w-4 animate-spin" />
         Loading…
       </div>
@@ -43,16 +43,16 @@ export function ConversationView() {
 
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
-      <AlertCircle className="h-8 w-8 text-slate-400" />
-      <h2 className="text-base font-semibold text-slate-900">
+      <AlertCircle className="h-8 w-8 text-fg-faint" />
+      <h2 className="text-base font-semibold text-fg">
         {list.isError ? 'Could not load your conversations' : 'Conversation not found'}
       </h2>
-      <p className="max-w-xs text-sm text-slate-500">
+      <p className="max-w-xs text-sm text-fg-muted">
         {list.isError
           ? getApiError(list.error)
           : 'It may not exist, or you may not be a member of it.'}
       </p>
-      <Link to="/chat" className="text-sm font-medium text-blue-600 hover:text-blue-700">
+      <Link to="/chat" className="text-sm font-medium text-accent-fg hover:text-accent-fg">
         Back to conversations
       </Link>
     </div>
@@ -129,7 +129,7 @@ function ConversationPane({ conversation }: { conversation: Conversation }) {
       <ChatHeader conversation={conversation} />
       <KeyChangedBanner conversationId={conversation.id} />
       {focusError && (
-        <div role="alert" className="flex shrink-0 items-start gap-2 border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-600">
+        <div role="alert" className="flex shrink-0 items-start gap-2 border-b border-danger-line bg-danger-soft px-4 py-2 text-sm text-danger-fg">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
           <span>{focusError}</span>
         </div>
@@ -159,7 +159,7 @@ function ConversationPane({ conversation }: { conversation: Conversation }) {
 // Where the composer would be, for a group the reader is no longer in.
 function LeftNotice({ leftAt }: { leftAt: string }) {
   return (
-    <p className="shrink-0 border-t border-line bg-white px-4 py-4 text-center text-sm text-slate-500">
+    <p className="shrink-0 border-t border-line bg-surface px-4 py-4 text-center text-sm text-fg-muted">
       You are no longer a member of this group. You can read what was said until {formatDayLabel(leftAt, new Date())} at{' '}
       {formatClock(leftAt)}.
     </p>

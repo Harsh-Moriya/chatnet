@@ -27,8 +27,8 @@ export function MessageText({ content, members, selfUserName, own }: MessageText
               own
                 ? 'underline decoration-white/60 underline-offset-2'
                 : part.mention.isSelf
-                  ? 'rounded bg-blue-100 px-0.5 text-blue-700'
-                  : 'text-blue-600',
+                  ? 'rounded bg-accent-soft-strong px-0.5 text-accent-fg'
+                  : 'text-accent-fg',
             )}
           >
             {part.text}

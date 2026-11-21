@@ -19,15 +19,15 @@ export function EncryptionSection() {
 
   return (
     <section aria-labelledby="encryption-heading" className="space-y-3 border-t border-line pt-4">
-      <h3 id="encryption-heading" className="text-sm font-medium text-slate-700">
+      <h3 id="encryption-heading" className="text-sm font-medium text-fg-soft">
         Encryption keys
       </h3>
 
-      {(status === 'idle' || status === 'loading') && <p className="text-xs text-slate-500">Checking your keys...</p>}
+      {(status === 'idle' || status === 'loading') && <p className="text-xs text-fg-muted">Checking your keys...</p>}
 
       {status === 'error' && (
         <div className="space-y-2">
-          <div role="alert" className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-600">
+          <div role="alert" className="flex items-start gap-2 rounded-lg border border-danger-line bg-danger-soft px-3 py-2 text-xs text-danger-fg">
             <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
             <span>Your keys could not be checked. Check your connection and try again.</span>
           </div>
@@ -39,7 +39,7 @@ export function EncryptionSection() {
 
       {status === 'ready' && (
         <div className="space-y-4">
-          <p className="text-xs text-slate-500">Your keys are on this browser. Your recovery passphrase restores them on another.</p>
+          <p className="text-xs text-fg-muted">Your keys are on this browser. Your recovery passphrase restores them on another.</p>
           <DevicesPanel />
           <ApproveDevicePanel />
           <ChangePassphrasePanel />

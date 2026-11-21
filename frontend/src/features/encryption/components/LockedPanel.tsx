@@ -20,7 +20,7 @@ export function LockedPanel() {
 
   return (
     <div className="space-y-3">
-      <p className="text-xs text-slate-500">
+      <p className="text-xs text-fg-muted">
         Your encryption keys are not on this browser. Enter your recovery passphrase to restore them, or link this browser from another
         device where you are signed in.
       </p>

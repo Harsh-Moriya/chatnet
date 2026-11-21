@@ -10,7 +10,7 @@ export function ConnectionBanner() {
 
   if (status === 'disconnected') {
     return (
-      <div role="status" className="flex items-center gap-2 border-b border-red-200 bg-red-50 px-4 py-2 text-xs text-red-600">
+      <div role="status" className="flex items-center gap-2 border-b border-danger-line bg-danger-soft px-4 py-2 text-xs text-danger-fg">
         <AlertCircle className="h-4 w-4 shrink-0" />
         <span>Can&apos;t reach the server. Trying again.</span>
       </div>
@@ -18,7 +18,7 @@ export function ConnectionBanner() {
   }
 
   return (
-    <div role="status" className="flex items-center gap-2 border-b border-line bg-slate-50 px-4 py-2 text-xs text-slate-500">
+    <div role="status" className="flex items-center gap-2 border-b border-line bg-page px-4 py-2 text-xs text-fg-muted">
       <LoaderCircle className="h-4 w-4 shrink-0 animate-spin" />
       <span>{status === 'connecting' ? 'Connecting…' : 'Connection lost. Reconnecting…'}</span>
     </div>

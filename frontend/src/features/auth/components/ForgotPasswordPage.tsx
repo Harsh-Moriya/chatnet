@@ -36,9 +36,9 @@ export function ForgotPasswordPage() {
       ) : (
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           {request.error && !fieldError && (
-            <div className="flex items-start gap-2.5 rounded-lg border border-red-200 bg-red-50 px-3.5 py-3">
-              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-500" />
-              <p className="text-sm text-red-700">{getApiError(request.error)}</p>
+            <div className="flex items-start gap-2.5 rounded-lg border border-danger-line bg-danger-soft px-3.5 py-3">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-danger-fg" />
+              <p className="text-sm text-danger-fg">{getApiError(request.error)}</p>
             </div>
           )}
 
@@ -59,8 +59,8 @@ export function ForgotPasswordPage() {
         </form>
       )}
 
-      <p className="mt-6 text-center text-sm text-slate-500">
-        <Link to="/" className="font-medium text-blue-600 hover:underline">
+      <p className="mt-6 text-center text-sm text-fg-muted">
+        <Link to="/" className="font-medium text-accent-fg hover:underline">
           Back to sign in
         </Link>
       </p>

@@ -67,7 +67,7 @@ export function AttachmentGrid({ attachments, own, conversationId, messageId }: 
           key={attachment.id}
           className={cn(
             'flex w-64 max-w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-xs italic',
-            own ? 'border-white/30 bg-white/15 text-blue-100' : 'border-line bg-slate-50 text-slate-500',
+            own ? 'border-white/30 bg-white/15 text-blue-100' : 'border-line bg-page text-fg-muted',
           )}
         >
           <Lock className="h-4 w-4 shrink-0" aria-hidden="true" />
@@ -84,13 +84,13 @@ function PictureTile({ item, alone, onOpen }: { item: Opened; alone: boolean; on
   const name = cleanFileName(item.file.name)
 
   return (
-    <div ref={attach} className="overflow-hidden rounded-lg bg-slate-100">
+    <div ref={attach} className="overflow-hidden rounded-lg bg-subtle">
       {state.status === 'ready' ? (
         <Button variant="ghost" aria-label={`Open ${name}`} className="h-auto w-full rounded-none p-0 hover:bg-transparent active:bg-transparent" onClick={onOpen}>
           <img src={state.url} alt={name} decoding="async" className={cn('w-full object-cover', alone ? 'max-h-72 min-h-16' : 'aspect-square')} />
         </Button>
       ) : state.status === 'failed' ? (
-        <Button variant="ghost" className={cn('h-auto w-full flex-col py-4 text-xs text-slate-500', alone ? 'min-h-24' : 'aspect-square')} onClick={retry}>
+        <Button variant="ghost" className={cn('h-auto w-full flex-col py-4 text-xs text-fg-muted', alone ? 'min-h-24' : 'aspect-square')} onClick={retry}>
           <AlertCircle className="h-4 w-4" aria-hidden="true" />
           <span>Couldn&apos;t load {name}. Tap to try again.</span>
         </Button>
@@ -149,13 +149,13 @@ function ChipButton({ own, icon, name, detail, busy, label, trailing, onClick }:
       onClick={onClick}
       className={cn(
         'h-auto w-64 max-w-full justify-start rounded-lg border px-2.5 py-2 text-left text-xs',
-        own ? 'border-white/30 bg-white/15 text-white hover:bg-white/25 active:bg-white/30' : 'border-line bg-slate-50 text-slate-900 hover:bg-slate-100',
+        own ? 'border-white/30 bg-white/15 text-white hover:bg-white/25 active:bg-white/30' : 'border-line bg-page text-fg hover:bg-subtle',
       )}
     >
       {icon}
       <span className="min-w-0 flex-1">
         <span className="block truncate font-medium">{name}</span>
-        <span className={own ? 'text-blue-100' : 'text-slate-500'}>{detail}</span>
+        <span className={own ? 'text-blue-100' : 'text-fg-muted'}>{detail}</span>
       </span>
       {trailing}
     </Button>

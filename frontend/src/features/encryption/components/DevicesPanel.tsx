@@ -42,31 +42,31 @@ export function DevicesPanel() {
 
   return (
     <div className="space-y-2">
-      <h4 className="text-sm font-medium text-slate-700">Devices with your keys</h4>
+      <h4 className="text-sm font-medium text-fg-soft">Devices with your keys</h4>
       <Problem message={problem} />
       {done !== null && (
-        <p role="status" className="flex items-start gap-2 text-xs text-emerald-700">
+        <p role="status" className="flex items-start gap-2 text-xs text-ok-fg">
           <CircleCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
           <span>{done}</span>
         </p>
       )}
-      {devices === null && problem === null && <p className="text-xs text-slate-500">Loading...</p>}
+      {devices === null && problem === null && <p className="text-xs text-fg-muted">Loading...</p>}
       {devices && (
         <ul className="divide-y divide-line-subtle rounded-lg border border-line">
           {devices.map((device) => (
             <li key={device.id} className="px-3 py-2">
               <div className="flex items-center gap-3">
                 {device.kind === 'Web' ? (
-                  <Laptop className="h-4 w-4 shrink-0 text-slate-500" aria-hidden="true" />
+                  <Laptop className="h-4 w-4 shrink-0 text-fg-muted" aria-hidden="true" />
                 ) : (
-                  <Smartphone className="h-4 w-4 shrink-0 text-slate-500" aria-hidden="true" />
+                  <Smartphone className="h-4 w-4 shrink-0 text-fg-muted" aria-hidden="true" />
                 )}
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm text-slate-900">
+                  <p className="truncate text-sm text-fg">
                     {device.name}
-                    {device.id === thisDevice && <span className="ml-2 rounded bg-blue-50 px-1.5 py-0.5 text-xs text-blue-700">This browser</span>}
+                    {device.id === thisDevice && <span className="ml-2 rounded bg-accent-soft px-1.5 py-0.5 text-xs text-accent-fg">This browser</span>}
                   </p>
-                  <p className="text-xs text-slate-500">Added {when(device.createdAt)}, last used {when(device.lastActiveAt)}</p>
+                  <p className="text-xs text-fg-muted">Added {when(device.createdAt)}, last used {when(device.lastActiveAt)}</p>
                 </div>
                 {device.id !== thisDevice && removing !== device.id && (
                   <Button

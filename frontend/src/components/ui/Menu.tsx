@@ -85,10 +85,10 @@ export function Menu({ label, items, align = 'end', className }: MenuProps) {
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
         className={cn(
-          'flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 transition-colors',
-          'hover:bg-slate-100 hover:text-slate-700',
+          'flex h-7 w-7 items-center justify-center rounded-lg text-fg-faint transition-colors',
+          'hover:bg-subtle hover:text-fg-soft',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500',
-          open && 'bg-slate-100 text-slate-700',
+          open && 'bg-subtle text-fg-soft',
         )}
       >
         <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
@@ -100,7 +100,7 @@ export function Menu({ label, items, align = 'end', className }: MenuProps) {
           role="menu"
           aria-label={label}
           className={cn(
-            'absolute top-full z-20 mt-1 min-w-36 rounded-lg border border-line bg-white py-1 shadow-lg',
+            'absolute top-full z-20 mt-1 min-w-36 rounded-lg border border-line bg-surface py-1 shadow-lg',
             align === 'end' ? 'right-0' : 'left-0',
           )}
         >
@@ -114,11 +114,11 @@ export function Menu({ label, items, align = 'end', className }: MenuProps) {
                 item.onSelect()
               }}
               className={cn(
-                'flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-700 transition-colors',
-                'hover:bg-slate-100 focus-visible:bg-slate-100 focus-visible:outline-none',
+                'flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-fg-soft transition-colors',
+                'hover:bg-subtle focus-visible:bg-subtle focus-visible:outline-none',
               )}
             >
-              <span className="text-slate-500" aria-hidden="true">
+              <span className="text-fg-muted" aria-hidden="true">
                 {item.icon}
               </span>
               {item.label}

@@ -77,7 +77,7 @@ export function MessageBubble({
       id={messageId ? messageDomId(messageId) : undefined}
       className={cn('flex flex-col', own ? 'items-end' : 'items-start', continuing ? 'mt-0.5' : 'mt-3')}
     >
-      {senderName && <p className="mb-1 px-1 text-xs font-medium text-slate-500">{senderName}</p>}
+      {senderName && <p className="mb-1 px-1 text-xs font-medium text-fg-muted">{senderName}</p>}
 
       {/* The menu sits beside the bubble, on the side facing the middle of the page, and shows when the pointer is
           over the row or focus is inside it (always on a touch screen, which has no pointer to hover with). */}
@@ -91,17 +91,17 @@ export function MessageBubble({
             // One tone only. Two background or text colours in the same class list would be decided
             // by their order in the stylesheet, and a failed message once ended up white on pale red.
             failed
-              ? 'border border-red-400 bg-red-50 text-slate-900'
+              ? 'border border-red-400 bg-danger-soft text-fg'
               : onBlue
                 ? 'bg-blue-600 text-white'
-                : 'border border-line bg-white text-slate-900',
+                : 'border border-line bg-surface text-fg',
             status === 'sending' && 'opacity-70',
           )}
         >
           {deleted ? (
-            <p className={cn('italic', own ? 'text-blue-100' : 'text-slate-400')}>This message was deleted</p>
+            <p className={cn('italic', own ? 'text-blue-50' : 'text-fg-faint')}>This message was deleted</p>
           ) : unreadable ? (
-            <p className={cn('flex items-center gap-1.5 italic', own ? 'text-blue-100' : 'text-slate-500')}>
+            <p className={cn('flex items-center gap-1.5 italic', own ? 'text-blue-50' : 'text-fg-muted')}>
               <Lock className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
               {unreadableText(unreadable)}
             </p>
@@ -120,7 +120,7 @@ export function MessageBubble({
           <p
             className={cn(
               'mt-1 flex items-center justify-end gap-1 text-[11px] leading-none',
-              own && !failed && !editing ? 'text-blue-100' : 'text-slate-400',
+              own && !failed && !editing ? 'text-blue-50' : 'text-fg-faint',
             )}
           >
             {status === 'sending' ? (
@@ -150,14 +150,14 @@ export function MessageBubble({
       </div>
 
       {seen && (
-        <p className="mt-0.5 flex items-center gap-1 px-1 text-[11px] text-slate-400" title={seen.title}>
+        <p className="mt-0.5 flex items-center gap-1 px-1 text-[11px] text-fg-faint" title={seen.title}>
           <CheckCheck className="h-3 w-3" aria-hidden="true" />
           {seen.label}
         </p>
       )}
 
       {failed && (
-        <div className="mt-1 flex flex-wrap items-center justify-end gap-x-2 gap-y-1 text-xs text-red-500" role="alert">
+        <div className="mt-1 flex flex-wrap items-center justify-end gap-x-2 gap-y-1 text-xs text-danger-fg" role="alert">
           <AlertCircle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
           <span>{error ?? 'Could not send.'}</span>
           <Button variant="ghost" size="sm" onClick={onRetry}>

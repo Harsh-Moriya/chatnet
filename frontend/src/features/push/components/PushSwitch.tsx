@@ -11,21 +11,21 @@ export function PushSwitch() {
 
   return (
     <section aria-labelledby="push-heading" className="space-y-2 border-t border-line pt-4">
-      <h3 id="push-heading" className="text-sm font-medium text-slate-700">
+      <h3 id="push-heading" className="text-sm font-medium text-fg-soft">
         Alerts when the app is closed
       </h3>
 
-      {state === 'unsupported' && <p className="text-xs text-slate-500">This browser cannot show alerts while the app is closed.</p>}
+      {state === 'unsupported' && <p className="text-xs text-fg-muted">This browser cannot show alerts while the app is closed.</p>}
 
       {state === 'blocked' && (
-        <p className="text-xs text-slate-500">
+        <p className="text-xs text-fg-muted">
           Alerts are blocked for this site. Allow notifications in your browser settings to turn them on.
         </p>
       )}
 
       {(state === 'off' || state === 'on') && (
         <div className="flex items-center justify-between gap-3">
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-fg-muted">
             {state === 'on'
               ? 'This browser gets an alert for a message, a mention or an invitation when you are away.'
               : 'Get an alert in this browser for a message, a mention or an invitation when you are away.'}
@@ -45,7 +45,7 @@ export function PushSwitch() {
       {problem && (
         <div
           role="alert"
-          className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-600"
+          className="flex items-start gap-2 rounded-lg border border-danger-line bg-danger-soft px-3 py-2 text-xs text-danger-fg"
         >
           <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
           <span>{problem}</span>

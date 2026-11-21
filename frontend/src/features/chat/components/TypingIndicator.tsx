@@ -7,14 +7,14 @@ export function TypingIndicator({ conversationId }: { conversationId: string }) 
   const label = typingLabel(useChatStore((state) => state.typing[conversationId]))
 
   return (
-    <div className="h-6 shrink-0 px-4 text-xs text-slate-500" aria-live="polite">
+    <div className="h-6 shrink-0 px-4 text-xs text-fg-muted" aria-live="polite">
       {label && (
         <span className="inline-flex items-center gap-1.5">
           <span className="flex gap-0.5" aria-hidden="true">
             {[0, 150, 300].map((delay) => (
               <span
                 key={delay}
-                className="h-1 w-1 animate-bounce rounded-full bg-slate-400"
+                className="h-1 w-1 animate-bounce rounded-full bg-fg-faint"
                 style={{ animationDelay: `${delay}ms` }}
               />
             ))}

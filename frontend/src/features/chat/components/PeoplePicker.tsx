@@ -37,14 +37,14 @@ export function PeoplePicker({ onPick, selectedIds, excludeIds, disabled = false
       />
 
       <div className="min-h-24 flex-1 overflow-y-auto">
-        {!enoughToSearch && <p className="py-4 text-center text-sm text-slate-500">Type at least 2 letters.</p>}
+        {!enoughToSearch && <p className="py-4 text-center text-sm text-fg-muted">Type at least 2 letters.</p>}
 
         {enoughToSearch && search.isError && (
-          <p className="py-4 text-center text-sm text-red-500">{getApiError(search.error)}</p>
+          <p className="py-4 text-center text-sm text-danger-fg">{getApiError(search.error)}</p>
         )}
 
         {enoughToSearch && !search.isError && results.length === 0 && (
-          <p className="py-4 text-center text-sm text-slate-500">{search.isFetching ? 'Searching…' : 'No one found.'}</p>
+          <p className="py-4 text-center text-sm text-fg-muted">{search.isFetching ? 'Searching…' : 'No one found.'}</p>
         )}
 
         {enoughToSearch && results.length > 0 && (
@@ -59,14 +59,14 @@ export function PeoplePicker({ onPick, selectedIds, excludeIds, disabled = false
                     disabled={disabled}
                     onClick={() => onPick(person)}
                     aria-pressed={selectedIds ? selected : undefined}
-                    className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-50"
+                    className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition-colors hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-50"
                   >
                     <Avatar name={person.displayName} src={person.avatarUrl} />
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-medium text-slate-900">{person.displayName}</span>
-                      <span className="block truncate text-xs text-slate-500">@{person.userName}</span>
+                      <span className="block truncate text-sm font-medium text-fg">{person.displayName}</span>
+                      <span className="block truncate text-xs text-fg-muted">@{person.userName}</span>
                     </span>
-                    {selected && <Check className="h-4 w-4 shrink-0 text-blue-600" />}
+                    {selected && <Check className="h-4 w-4 shrink-0 text-accent-fg" />}
                   </button>
                 </li>
               )

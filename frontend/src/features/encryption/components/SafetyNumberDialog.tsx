@@ -54,10 +54,10 @@ function Comparing({ contactId, contactName, onDone }: { contactId: string; cont
   return (
     <div className="space-y-4 overflow-y-auto p-5">
       <Problem message={loadProblem ?? problem} />
-      {view === null && loadProblem === null && <p className="text-sm text-slate-500">Working out the number…</p>}
+      {view === null && loadProblem === null && <p className="text-sm text-fg-muted">Working out the number…</p>}
 
       {view?.changedTo != null && (
-        <div role="alert" className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+        <div role="alert" className="flex items-start gap-2 rounded-lg border border-warn-line bg-warn-soft px-3 py-2 text-sm text-warn-fg">
           <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
           <p>
             {contactName} has a different security key from the one this browser trusted before. That happens when they reset their
@@ -68,7 +68,7 @@ function Comparing({ contactId, contactName, onDone }: { contactId: string; cont
 
       {view && (
         <>
-          <ul aria-label="Safety number" className="grid grid-cols-3 gap-x-4 gap-y-2 rounded-lg border border-line bg-slate-50 px-4 py-3 font-mono text-base text-slate-900 sm:grid-cols-4">
+          <ul aria-label="Safety number" className="grid grid-cols-3 gap-x-4 gap-y-2 rounded-lg border border-line bg-page px-4 py-3 font-mono text-base text-fg sm:grid-cols-4">
             {view.number.split(' ').map((group, index) => (
               <li key={index} className="tracking-wider">
                 {group}
@@ -76,13 +76,13 @@ function Comparing({ contactId, contactName, onDone }: { contactId: string; cont
             ))}
           </ul>
 
-          <p className="text-sm text-slate-600">
+          <p className="text-sm text-fg-soft">
             Ask {contactName} to open this screen and read their number to you, or show it to you. If every group matches, you are talking
             to each other and nobody is between you. Use a call, or meet, so the number does not travel through this app.
           </p>
 
           {view.changedTo === null && view.verifiedAt !== null && (
-            <p className="flex items-center gap-2 text-sm text-blue-700">
+            <p className="flex items-center gap-2 text-sm text-accent-fg">
               <ShieldCheck className="h-4 w-4" aria-hidden="true" />
               You marked {contactName} as verified on {new Date(view.verifiedAt).toLocaleDateString()}.
             </p>

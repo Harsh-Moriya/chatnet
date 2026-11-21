@@ -31,22 +31,22 @@ export function SearchHitRow({ hit, currentUserId, now }: SearchHitRowProps) {
         state={focusState(hit.messageId)}
         aria-current={opened ? 'true' : undefined}
         className={cn(
-          'flex items-center gap-3 px-4 py-3 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500',
-          opened && 'bg-blue-50 hover:bg-blue-50',
+          'flex items-center gap-3 px-4 py-3 transition-colors hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500',
+          opened && 'bg-accent-soft hover:bg-accent-soft',
         )}
       >
         <Avatar name={name} src={conversation?.avatarUrl ?? null} isGroup={conversation?.type === 'Group'} />
 
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline justify-between gap-2">
-            <p className="truncate text-sm font-semibold text-slate-900">{name}</p>
-            <time className="shrink-0 text-xs text-slate-500" dateTime={hit.createdAt}>
+            <p className="truncate text-sm font-semibold text-fg">{name}</p>
+            <time className="shrink-0 text-xs text-fg-muted" dateTime={hit.createdAt}>
               {formatListTime(hit.createdAt, now)}
             </time>
           </div>
 
           {/* Two lines, so the matching word is still in view when it is not near the start of a long message. */}
-          <p className="line-clamp-2 break-words text-sm text-slate-500">
+          <p className="line-clamp-2 break-words text-sm text-fg-muted">
             <span>{hit.senderId === currentUserId ? 'You' : hit.senderDisplayName}: </span>
             {hit.fileName !== null ? (
               <span className="inline-flex max-w-full items-center gap-1 align-bottom">
@@ -69,7 +69,7 @@ function Snippet({ parts }: { parts: SnippetPart[] }) {
     <>
       {parts.map((part, index) =>
         part.match ? (
-          <mark key={index} className="rounded bg-blue-100 px-0.5 font-medium text-slate-900">
+          <mark key={index} className="rounded bg-accent-soft-strong px-0.5 font-medium text-fg">
             {part.text}
           </mark>
         ) : (

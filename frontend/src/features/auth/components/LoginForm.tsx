@@ -24,9 +24,9 @@ export function LoginForm({ onSubmit, isLoading, error }: Props) {
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
       {error && (
-        <div className="flex items-start gap-2.5 rounded-lg border border-red-200 bg-red-50 px-3.5 py-3">
-          <AlertCircle className="h-4 w-4 shrink-0 text-red-500 mt-0.5" />
-          <p className="text-sm text-red-700">{error}</p>
+        <div className="flex items-start gap-2.5 rounded-lg border border-danger-line bg-danger-soft px-3.5 py-3">
+          <AlertCircle className="h-4 w-4 shrink-0 text-danger-fg mt-0.5" />
+          <p className="text-sm text-danger-fg">{error}</p>
         </div>
       )}
 
@@ -52,7 +52,7 @@ export function LoginForm({ onSubmit, isLoading, error }: Props) {
           <button
             type="button"
             onClick={() => setShowPassword(v => !v)}
-            className="text-slate-400 hover:text-slate-600 transition-colors"
+            className="text-fg-faint hover:text-fg-soft transition-colors"
             aria-label={showPassword ? 'Hide password' : 'Show password'}
           >
             {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -61,7 +61,7 @@ export function LoginForm({ onSubmit, isLoading, error }: Props) {
       />
 
       <div className="-mt-2 text-right">
-        <Link to="/forgot-password" className="text-sm font-medium text-blue-600 hover:underline">
+        <Link to="/forgot-password" className="text-sm font-medium text-accent-fg hover:underline">
           Forgot password?
         </Link>
       </div>

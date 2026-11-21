@@ -14,7 +14,7 @@ export function FormField({ label, error, id, rightElement, ...inputProps }: For
 
   return (
     <div className="space-y-1.5">
-      <label htmlFor={fieldId} className="block text-sm font-medium text-slate-700">
+      <label htmlFor={fieldId} className="block text-sm font-medium text-fg-soft">
         {label}
       </label>
       <Input id={fieldId} error={error} rightElement={rightElement} {...inputProps} />

@@ -40,17 +40,17 @@ export function AuthLayout({ title, subtitle, children }: Props) {
     <div className="min-h-screen flex">
       <BrandPanel />
 
-      <div className="flex-1 flex flex-col items-center justify-center p-8 bg-slate-50">
+      <div className="flex-1 flex flex-col items-center justify-center p-8 bg-page">
         <div className="w-full max-w-sm">
           {/* Logo shown only on mobile where BrandPanel is hidden */}
           <div className="mb-8 flex items-center gap-2 lg:hidden">
             <Logo tile size={32} />
-            <span className="font-semibold text-slate-900">ChatNET</span>
+            <span className="font-semibold text-fg">ChatNET</span>
           </div>
 
           <div className="mb-7">
-            <h2 className="text-2xl font-semibold text-slate-900">{title}</h2>
-            <p className="mt-1 text-sm text-slate-500">{subtitle}</p>
+            <h2 className="text-2xl font-semibold text-fg">{title}</h2>
+            <p className="mt-1 text-sm text-fg-muted">{subtitle}</p>
           </div>
 
           {children}

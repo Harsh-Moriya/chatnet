@@ -155,7 +155,7 @@ function GroupInfo({ conversation, onDone }: { conversation: Conversation; onDon
   return (
     <div className="flex min-h-0 flex-col gap-4 overflow-y-auto p-5">
       {error && (
-        <div role="alert" className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
+        <div role="alert" className="flex items-start gap-2 rounded-lg border border-danger-line bg-danger-soft px-3 py-2 text-sm text-danger-fg">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
           <span>{error}</span>
         </div>
@@ -189,15 +189,15 @@ function GroupInfo({ conversation, onDone }: { conversation: Conversation; onDon
           </Button>
         </form>
       ) : (
-        <h3 className="truncate text-base font-semibold text-slate-900">{conversation.name}</h3>
+        <h3 className="truncate text-base font-semibold text-fg">{conversation.name}</h3>
       )}
 
       <section aria-label="People in this group">
-        <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+        <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-fg-muted">
           {members ? `${members.length} ${members.length === 1 ? 'person' : 'people'}` : 'People'}
         </h3>
 
-        {!members && <p className="py-3 text-sm text-slate-500">Loading people…</p>}
+        {!members && <p className="py-3 text-sm text-fg-muted">Loading people…</p>}
 
         <ul className="divide-y divide-line-subtle">
           {(members ?? []).map((member) => {
@@ -207,14 +207,14 @@ function GroupInfo({ conversation, onDone }: { conversation: Conversation; onDon
               <li key={member.userId} className="flex items-center gap-3 py-2">
                 <Avatar name={member.displayName} src={member.avatarUrl} />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-slate-900">
+                  <p className="truncate text-sm font-medium text-fg">
                     {member.displayName}
-                    {member.userId === selfId && <span className="font-normal text-slate-500"> (you)</span>}
+                    {member.userId === selfId && <span className="font-normal text-fg-muted"> (you)</span>}
                   </p>
-                  <p className="truncate text-xs text-slate-500">@{member.userName}</p>
+                  <p className="truncate text-xs text-fg-muted">@{member.userName}</p>
                 </div>
                 {member.role !== 'Member' && (
-                  <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">
+                  <span className="rounded-full bg-accent-soft px-2 py-0.5 text-xs font-medium text-accent-fg">
                     {member.role}
                   </span>
                 )}
@@ -237,12 +237,12 @@ function GroupInfo({ conversation, onDone }: { conversation: Conversation; onDon
           {chosen.length > 0 && (
             <ul className="flex flex-wrap gap-2" aria-label="People to add">
               {chosen.map((person) => (
-                <li key={person.id} className="flex items-center gap-1 rounded-full bg-blue-50 py-1 pl-3 pr-1 text-xs text-blue-700">
+                <li key={person.id} className="flex items-center gap-1 rounded-full bg-accent-soft py-1 pl-3 pr-1 text-xs text-accent-fg">
                   {person.displayName}
                   <button
                     type="button"
                     aria-label={`Do not add ${person.displayName}`}
-                    className="rounded-full p-1 hover:bg-blue-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                    className="rounded-full p-1 hover:bg-accent-soft-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                     onClick={() => togglePerson(person)}
                   >
                     <X className="h-3 w-3" />
@@ -254,7 +254,7 @@ function GroupInfo({ conversation, onDone }: { conversation: Conversation; onDon
 
           <PeoplePicker onPick={togglePerson} selectedIds={chosenIds} excludeIds={memberIds} disabled={busy} />
 
-          <p className="text-xs text-slate-500">{room} more {room === 1 ? 'person fits' : 'people fit'} in this group.</p>
+          <p className="text-xs text-fg-muted">{room} more {room === 1 ? 'person fits' : 'people fit'} in this group.</p>
 
           <div className="flex gap-2">
             <Button
@@ -283,8 +283,8 @@ function GroupInfo({ conversation, onDone }: { conversation: Conversation; onDon
       )}
 
       {confirming && (
-        <div role="alertdialog" aria-label="Confirm" className="rounded-lg border border-line bg-slate-50 p-3">
-          <p className="text-sm text-slate-900">{confirmationText(confirming, role === 'Owner')}</p>
+        <div role="alertdialog" aria-label="Confirm" className="rounded-lg border border-line bg-page p-3">
+          <p className="text-sm text-fg">{confirmationText(confirming, role === 'Owner')}</p>
           <div className="mt-3 flex gap-2">
             <Button size="sm" isLoading={busy} onClick={() => void confirm()}>
               {confirming.kind === 'leave' ? 'Leave' : confirming.kind === 'remove' ? 'Remove' : 'Make owner'}
@@ -297,7 +297,7 @@ function GroupInfo({ conversation, onDone }: { conversation: Conversation; onDon
       )}
 
       {!confirming && (
-        <Button variant="ghost" className="text-red-500" disabled={busy} onClick={() => setConfirming({ kind: 'leave' })}>
+        <Button variant="ghost" className="text-danger-fg" disabled={busy} onClick={() => setConfirming({ kind: 'leave' })}>
           <LogOut className="h-4 w-4" />
           Leave group
         </Button>

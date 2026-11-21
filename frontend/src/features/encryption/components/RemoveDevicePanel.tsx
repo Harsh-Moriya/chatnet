@@ -20,8 +20,8 @@ export function RemoveDevicePanel({ device, onCancel, onRemoved }: RemoveDeviceP
   const [lost, setLost] = useState(false)
 
   return (
-    <div className="mt-2 space-y-3 rounded-lg border border-line bg-slate-50 p-3">
-      <p className="text-xs text-slate-600">
+    <div className="mt-2 space-y-3 rounded-lg border border-line bg-page p-3">
+      <p className="text-xs text-fg-soft">
         Removing {device.name} signs it out of your account. If it is only a device you no longer use, that is enough.
       </p>
       <Problem message={problem} />
@@ -45,7 +45,7 @@ export function RemoveDevicePanel({ device, onCancel, onRemoved }: RemoveDeviceP
           >
             It was lost or stolen
           </Button>
-          <Button variant="ghost" size="sm" onClick={onCancel}>
+          <Button variant="secondary" size="sm" onClick={onCancel}>
             Cancel
           </Button>
         </div>
@@ -53,7 +53,7 @@ export function RemoveDevicePanel({ device, onCancel, onRemoved }: RemoveDeviceP
 
       {lost && (
         <div className="space-y-3">
-          <p className="text-xs text-slate-600">
+          <p className="text-xs text-fg-soft">
             A lost device still holds your keys. Renewing them means that, once its sign-in runs out in a few minutes, it cannot open anything
             sent from now on. It can still read what it already had, and until its sign-in runs out, if it is online, it can still act as
             you. Your other devices will ask for your recovery passphrase once, to get the new keys, and the people you talk to see nothing
@@ -70,7 +70,7 @@ export function RemoveDevicePanel({ device, onCancel, onRemoved }: RemoveDeviceP
               )
             }
           />
-          <Button variant="ghost" size="sm" onClick={onCancel}>
+          <Button variant="secondary" size="sm" onClick={onCancel}>
             Cancel
           </Button>
         </div>

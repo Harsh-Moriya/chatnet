@@ -59,9 +59,9 @@ export function NotificationPanel({ id, onClose }: NotificationPanelProps) {
   }
 
   return (
-    <section id={id} aria-label="Notifications" className="absolute inset-x-0 bottom-0 top-16 z-20 flex flex-col bg-white">
+    <section id={id} aria-label="Notifications" className="absolute inset-x-0 bottom-0 top-16 z-20 flex flex-col bg-surface">
       <div className="flex shrink-0 items-center justify-between gap-2 border-b border-line px-4 py-2">
-        <h2 className="text-sm font-semibold text-slate-900">Notifications</h2>
+        <h2 className="text-sm font-semibold text-fg">Notifications</h2>
         <div className="flex items-center gap-1">
           <Button
             variant="ghost"
@@ -79,8 +79,8 @@ export function NotificationPanel({ id, onClose }: NotificationPanelProps) {
       </div>
 
       {permission === 'default' && (
-        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-line bg-slate-50 px-4 py-2">
-          <p className="text-xs text-slate-500">Get an alert when something arrives while you are away.</p>
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-line bg-page px-4 py-2">
+          <p className="text-xs text-fg-muted">Get an alert when something arrives while you are away.</p>
           <Button variant="ghost" size="sm" onClick={() => void request()}>
             <BellRing className="h-3.5 w-3.5" />
             Turn on alerts
@@ -89,14 +89,14 @@ export function NotificationPanel({ id, onClose }: NotificationPanelProps) {
       )}
 
       {permission === 'denied' && (
-        <p className="shrink-0 border-b border-line bg-slate-50 px-4 py-2 text-xs text-slate-500">
+        <p className="shrink-0 border-b border-line bg-page px-4 py-2 text-xs text-fg-muted">
           Alerts are blocked for this site. Allow notifications in your browser settings to turn them on.
         </p>
       )}
 
       {problem && (
         <div
-          className="m-3 flex shrink-0 items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600"
+          className="m-3 flex shrink-0 items-start gap-2 rounded-lg border border-danger-line bg-danger-soft px-3 py-2 text-sm text-danger-fg"
           role="alert"
         >
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
@@ -106,7 +106,7 @@ export function NotificationPanel({ id, onClose }: NotificationPanelProps) {
 
       <div className="flex-1 overflow-y-auto">
         {!loaded && query.isPending && (
-          <div className="flex items-center justify-center gap-2 p-8 text-sm text-slate-500">
+          <div className="flex items-center justify-center gap-2 p-8 text-sm text-fg-muted">
             <LoaderCircle className="h-4 w-4 animate-spin" />
             Loading…
           </div>
@@ -114,7 +114,7 @@ export function NotificationPanel({ id, onClose }: NotificationPanelProps) {
 
         {!loaded && query.isError && (
           <div className="flex flex-col items-center gap-3 p-8 text-center">
-            <p className="text-sm text-slate-500">{getApiError(query.error)}</p>
+            <p className="text-sm text-fg-muted">{getApiError(query.error)}</p>
             <Button variant="ghost" size="sm" onClick={() => void query.refetch()}>
               Try again
             </Button>
@@ -122,7 +122,7 @@ export function NotificationPanel({ id, onClose }: NotificationPanelProps) {
         )}
 
         {loaded && items.length === 0 && (
-          <p className="p-8 text-center text-sm text-slate-500">You are all caught up.</p>
+          <p className="p-8 text-center text-sm text-fg-muted">You are all caught up.</p>
         )}
 
         {items.length > 0 && (

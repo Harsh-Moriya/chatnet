@@ -74,25 +74,25 @@ export function LinkNewDevicePanel({ onCancel }: { onCancel: () => void }) {
 
       {attempt && problem === null && (
         <>
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-fg-muted">
             On a device where you are signed in, open your profile and enter this code under Link code. This browser gets your keys as
             soon as you approve.
           </p>
           <p
             aria-label="Link code"
-            className="rounded-lg border border-line bg-slate-50 px-3 py-3 text-center font-mono text-2xl font-semibold tracking-widest text-slate-900"
+            className="rounded-lg border border-line bg-page px-3 py-3 text-center font-mono text-2xl font-semibold tracking-widest text-fg"
           >
             {formatLinkCode(attempt.code)}
           </p>
           {qr && <img src={qr} width={QR_SIZE} height={QR_SIZE} alt="QR code with the same request" className="mx-auto rounded-lg border border-line" />}
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-fg-muted">
             Waiting for approval. The code works until{' '}
             {new Date(attempt.expiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.
           </p>
         </>
       )}
 
-      {attempt === null && problem === null && <p className="text-xs text-slate-500">Asking for a code...</p>}
+      {attempt === null && problem === null && <p className="text-xs text-fg-muted">Asking for a code...</p>}
 
       <div className="flex gap-2">
         {problem !== null && (
@@ -100,7 +100,7 @@ export function LinkNewDevicePanel({ onCancel }: { onCancel: () => void }) {
             Try again
           </Button>
         )}
-        <Button variant="ghost" size="sm" onClick={onCancel}>
+        <Button variant="secondary" size="sm" onClick={onCancel}>
           Cancel
         </Button>
       </div>
