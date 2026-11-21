@@ -111,6 +111,8 @@ else
   echo "FAIL  the page names the manifest and the touch icon"; failures=$((failures + 1))
 fi
 expect_header "the manifest is served as json" "$public" /site.webmanifest "content-type: application/"
+# Safari, link previews and some tools ask for this address by name, and without the file the page's fallback would answer with html.
+expect_header "favicon.ico is served as a picture, not as the page" "$public" /favicon.ico "content-type: image/"
 for icon in icon-192.png icon-512.png icon-maskable-512.png apple-touch-icon.png badge-96.png; do
   expect_header "the icon $icon is served as a picture" "$public" "/icons/$icon" "content-type: image/png"
 done
