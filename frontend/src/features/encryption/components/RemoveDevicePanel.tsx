@@ -45,7 +45,7 @@ export function RemoveDevicePanel({ device, onCancel, onRemoved }: RemoveDeviceP
           >
             It was lost or stolen
           </Button>
-          <Button variant="ghost" size="sm" onClick={onCancel}>
+          <Button variant="secondary" size="sm" onClick={onCancel}>
             Cancel
           </Button>
         </div>
@@ -70,7 +70,7 @@ export function RemoveDevicePanel({ device, onCancel, onRemoved }: RemoveDeviceP
               )
             }
           />
-          <Button variant="ghost" size="sm" onClick={onCancel}>
+          <Button variant="secondary" size="sm" onClick={onCancel}>
             Cancel
           </Button>
         </div>

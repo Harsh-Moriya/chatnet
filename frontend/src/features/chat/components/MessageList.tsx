@@ -243,7 +243,7 @@ export function MessageList({ conversation, isLoading, errorMessage, onRetry, ol
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
             <span>{olderError}</span>
           </div>
-          <Button variant="ghost" size="sm" onClick={loadOlder}>
+          <Button variant="secondary" size="sm" onClick={loadOlder}>
             Try again
           </Button>
         </div>
@@ -266,7 +266,7 @@ export function MessageList({ conversation, isLoading, errorMessage, onRetry, ol
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
             <span>{errorMessage}</span>
           </div>
-          <Button variant="ghost" size="sm" onClick={onRetry}>
+          <Button variant="secondary" size="sm" onClick={onRetry}>
             Try again
           </Button>
         </div>
@@ -383,7 +383,7 @@ export function MessageList({ conversation, isLoading, errorMessage, onRetry, ol
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
             <span>{newerError}</span>
           </div>
-          <Button variant="ghost" size="sm" onClick={loadNewer}>
+          <Button variant="secondary" size="sm" onClick={loadNewer}>
             Try again
           </Button>
         </div>

@@ -100,7 +100,7 @@ export function LinkNewDevicePanel({ onCancel }: { onCancel: () => void }) {
             Try again
           </Button>
         )}
-        <Button variant="ghost" size="sm" onClick={onCancel}>
+        <Button variant="secondary" size="sm" onClick={onCancel}>
           Cancel
         </Button>
       </div>

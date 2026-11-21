@@ -23,7 +23,7 @@ export function ThemeSwitch() {
         {OPTIONS.map(({ value, label, Icon }) => (
           <Button
             key={value}
-            variant={choice === value ? 'primary' : 'ghost'}
+            variant={choice === value ? 'primary' : 'secondary'}
             size="sm"
             aria-pressed={choice === value}
             onClick={() => setChoice(value)}

@@ -57,7 +57,7 @@ export function DeleteMessageDialog({ open, someoneElses, onConfirm, onClose }: 
         )}
 
         <div className="flex justify-end gap-2">
-          <Button variant="ghost" onClick={close} disabled={deleting}>
+          <Button variant="secondary" onClick={close} disabled={deleting}>
             Cancel
           </Button>
           <Button onClick={() => void confirm()} isLoading={deleting}>

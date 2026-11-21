@@ -1,7 +1,7 @@
 import { type ButtonHTMLAttributes, type ReactNode } from 'react'
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'ghost' | 'success' | 'danger'
+  variant?: 'primary' | 'ghost' | 'secondary' | 'success' | 'danger'
   size?: 'md' | 'sm' | 'icon'
   isLoading?: boolean
   fullWidth?: boolean
@@ -29,6 +29,7 @@ export function Button({
     success: 'bg-emerald-600 text-white hover:bg-emerald-700 active:bg-emerald-800',
     danger: 'bg-red-600 text-white hover:bg-red-700 active:bg-red-800',
     ghost: 'bg-transparent text-fg-soft hover:bg-subtle active:bg-strong',
+    secondary: 'border border-line bg-surface text-fg hover:bg-subtle active:bg-strong',
   }
 
   const sizes = {

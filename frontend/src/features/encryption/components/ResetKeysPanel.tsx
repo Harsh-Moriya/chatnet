@@ -72,7 +72,7 @@ export function ResetKeysPanel({ onCancel }: { onCancel: () => void }) {
         <Button type="submit" isLoading={busy}>
           Start over with new keys
         </Button>
-        <Button type="button" variant="ghost" onClick={onCancel}>
+        <Button type="button" variant="secondary" onClick={onCancel}>
           Cancel
         </Button>
       </div>

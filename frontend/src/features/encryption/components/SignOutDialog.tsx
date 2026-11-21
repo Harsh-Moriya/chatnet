@@ -49,7 +49,7 @@ function Asking({ onCancel }: { onCancel: () => void }) {
         </p>
       )}
       <div className="flex justify-end gap-2">
-        <Button variant="ghost" onClick={onCancel}>
+        <Button variant="secondary" onClick={onCancel}>
           Cancel
         </Button>
         <Button onClick={() => void session.signOut()}>Sign out</Button>

@@ -94,7 +94,7 @@ function ErrorBanner({ message, onRetry }: { message: string; onRetry: () => voi
     <div role="alert" className="flex w-full items-center gap-2 rounded-lg border border-danger-line bg-danger-soft px-3 py-2 text-sm text-danger-fg">
       <AlertCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
       <span className="min-w-0 flex-1">{message}</span>
-      <Button variant="ghost" size="sm" onClick={onRetry}>
+      <Button variant="secondary" size="sm" onClick={onRetry}>
         Try again
       </Button>
     </div>
