@@ -8,6 +8,10 @@ People can change their display name and give themselves, or a group they own or
 - `PATCH /api/users/me` with `{ displayName }` changes the display name: trimmed, 1 to 100 characters. The handle never changes. The same name again is a 200 that stores and says nothing.
 - A change is pushed as `ProfileChanged { id, userName, displayName, avatarUrl }` to everyone who shares an active conversation with the person and to their own tabs, through the outbox. The browser patches direct chats, lists of people and the names on messages.
 
+## Appearance
+
+The web client's profile dialog has an Appearance control: System, Light or Dark. It is a setting of the browser and not of the account: it is kept in the browser's local storage under `chatnet-theme` (`system`, `light` or `dark`), also applies to the pages a signed-out person sees, and is light until someone chooses otherwise. System follows the device's light or dark setting while it is open. Nothing about it is sent to the server, so the API has no endpoint for it.
+
 ## Pictures
 
 PNG, JPEG, WebP or GIF, at most 2 MB, never SVG. The flow has three calls:
