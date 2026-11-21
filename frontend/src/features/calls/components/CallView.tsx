@@ -1,5 +1,4 @@
-import { useEffect, useRef } from 'react'
-import { Mic, MicOff, PhoneOff, ShieldCheck, Video, VideoOff } from 'lucide-react'
+import { Mic, MicOff, Minimize2, PhoneOff, ShieldCheck, Video, VideoOff } from 'lucide-react'
 import { Avatar } from '../../../components/ui/Avatar'
 import { Button } from '../../../components/ui/Button'
 import { Dialog } from '../../../components/ui/Dialog'
@@ -9,6 +8,7 @@ import type { CallActions } from '../../chat/hooks/chatConnectionContext'
 import { useVerified } from '../../encryption/hooks/useVerified'
 import { useCallStore } from '../callStore'
 import { callStatus } from '../callTexts'
+import { useStream } from '../useStream'
 import { DeviceMenu } from './DeviceMenu'
 
 interface CallViewProps {
@@ -16,20 +16,8 @@ interface CallViewProps {
   calls: CallActions
 }
 
-// A stream is attached to a <video> through a property, not an attribute, so it is set in an effect.
-function useStream(stream: MediaStream | null) {
-  const ref = useRef<HTMLVideoElement>(null)
-
-  useEffect(() => {
-    const element = ref.current
-    if (element) element.srcObject = stream
-  }, [stream])
-
-  return ref
-}
-
 // The call from the first tap on "call" to the moment it has ended: who it is with, what is happening, and the buttons. Full screen, and it
-// cannot be dismissed: hanging up is the red button.
+// cannot be dismissed: hanging up is the red button, and the call can be put away as a bar with the minimise button (not with Escape).
 export function CallView({ open, calls }: CallViewProps) {
   const phase = useCallStore((state) => state.phase)
   const peerId = useCallStore((state) => state.peerId)
@@ -43,11 +31,12 @@ export function CallView({ open, calls }: CallViewProps) {
   const notice = useCallStore((state) => state.notice)
   const localStream = useCallStore((state) => state.localStream)
   const remoteStream = useCallStore((state) => state.remoteStream)
+  const setMinimised = useCallStore((state) => state.setMinimised)
   const verified = useVerified(peerId ?? null)
   const now = useNow(1000)
 
-  const remoteRef = useStream(remoteStream)
-  const localRef = useStream(localStream)
+  const remoteRef = useStream<HTMLVideoElement>(remoteStream)
+  const localRef = useStream<HTMLVideoElement>(localStream)
 
   const video = media === 'Video'
   const running = phase === 'active' || phase === 'connecting'
@@ -60,11 +49,12 @@ export function CallView({ open, calls }: CallViewProps) {
   return (
     <Dialog open={open} onClose={() => undefined} title="Call" variant="fullscreen" dismissible={false}>
       <div className="relative flex h-full flex-col">
-        {/* Also plays the sound of an audio call: a hidden element still plays, so the stream is always attached to one. */}
+        {/* The picture only: the sound is CallSound's, which also carries on when this screen is put away. */}
         <video
           ref={remoteRef}
           autoPlay
           playsInline
+          muted
           aria-label={`${peerName}'s video`}
           className={cn('absolute inset-0 h-full w-full bg-slate-900 object-cover', !showRemoteVideo && 'invisible')}
         />
@@ -133,6 +123,18 @@ export function CallView({ open, calls }: CallViewProps) {
               {phase === 'starting' || phase === 'outgoing' ? 'Cancel' : 'Hang up'}
             </Button>
           </div>
+        )}
+
+        {!ended && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="absolute right-4 top-[max(1rem,env(safe-area-inset-top))] rounded-full! bg-slate-900/60! text-white! hover:bg-slate-700!"
+            aria-label="Minimise call"
+            onClick={() => setMinimised(true)}
+          >
+            <Minimize2 className="h-5 w-5" />
+          </Button>
         )}
       </div>
     </Dialog>
