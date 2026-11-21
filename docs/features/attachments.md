@@ -94,7 +94,7 @@ Where no worker controls the page (a browser without service workers, one that r
 
 ### The gallery
 
-A button in the conversation header (kept by a group the person has left, whose history can still be read) opens every picture, video and PDF of the conversation in a wide dialog, newest first, as a grid. It fills the screen on a phone.
+A button in the conversation header (kept by a group the person has left, whose history can still be read) opens every picture, video and PDF of the conversation in a wide dialog, newest first, as a grid. It fills the screen on a phone. On a header narrower than 480 px it is an item of the header's three-dot menu instead of a button.
 
 - **What is shown.** Pictures up to 10 MiB are drawn as thumbnails when they come near the view, and let go of when they are far from it, so a long history does not keep every picture in memory. A video, a PDF and a larger picture are a tile with its name and size; nothing of them is fetched until it is opened. Files the message does not vouch for, other types and SVG are not listed, as in the viewer.
 - **Paging.** The newest page is read when the dialog opens, and the next one when the end of the grid comes near, until the history ends. A page may add no tile (a conversation of many files that are not shown), in which case the next is read at once. A page that fails stops the reading and offers Try again. Each opening starts from the newest page, so a file sent since the last opening is in it; a file sent while it is open is not shown until it is opened again, and a message deleted while it is open leaves it when the conversation has that message loaded in the chat, and otherwise on the next opening.
