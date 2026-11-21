@@ -83,14 +83,9 @@ export function NewConversationPanel({ onDone, seed }: NewConversationPanelProps
                 {members.map((member) => (
                   <li key={member.id} className="flex items-center gap-1 rounded-full bg-accent-soft py-1 pl-3 pr-1 text-xs text-accent-fg">
                     {member.displayName}
-                    <button
-                      type="button"
-                      aria-label={`Remove ${member.displayName}`}
-                      className="rounded-full p-1 hover:bg-accent-soft-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                      onClick={() => toggle(member)}
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
+                    <Button type="button" variant="ghost" size="icon-xs" aria-label={`Remove ${member.displayName}`} className="text-accent-fg! hover:bg-accent-soft-strong!" onClick={() => toggle(member)}>
+<X className="h-3 w-3" />
+</Button>
                   </li>
                 ))}
               </ul>

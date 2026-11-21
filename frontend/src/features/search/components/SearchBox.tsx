@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { Search, X } from 'lucide-react'
 import { Input } from '../../../components/ui/Input'
 import { MAX_TERM_LENGTH } from '../searchRules'
+import { Button } from '../../../components/ui/Button'
 
 interface SearchBoxProps {
   value: string
@@ -32,14 +33,9 @@ export function SearchBox({ value, onChange, label = 'Search messages' }: Search
         leftIcon={<Search className="h-4 w-4" />}
         rightElement={
           value !== '' ? (
-            <button
-              type="button"
-              aria-label="Clear search"
-              onClick={() => onChange('')}
-              className="rounded text-fg-faint transition-colors hover:text-fg-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-            >
+            <Button type="button" variant="ghost" size="icon-sm" aria-label="Clear search" onClick={() => onChange('')}>
               <X className="h-4 w-4" />
-            </button>
+            </Button>
           ) : undefined
         }
         value={value}
