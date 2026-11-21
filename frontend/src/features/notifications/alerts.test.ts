@@ -219,6 +219,27 @@ describe('what an alert says', () => {
 
 // ##### Calls #####
 
+describe('where a click on an alert goes', () => {
+  it('is the conversation and the message for a new message', () => {
+    expect(messageAlertText(message(), conversation())).toMatchObject({ conversationId: 'c1', messageId: 'm1' })
+  })
+
+  it('is the conversation and the message that mentions the person', () => {
+    expect(notificationAlertText(notification(), 'Team')).toMatchObject({ conversationId: 'c1', messageId: expect.any(String) })
+  })
+
+  it('is the conversation alone when the notification is not about a message, and neither when it is about no conversation', () => {
+    expect(notificationAlertText(notification({ type: 'MemberAdded', messageId: null }), 'Team')).toMatchObject({
+      conversationId: 'c1',
+      messageId: null,
+    })
+    expect(notificationAlertText(notification({ conversationId: null, messageId: null }), undefined)).toMatchObject({
+      conversationId: null,
+      messageId: null,
+    })
+  })
+})
+
 describe('a call', () => {
   const callMessage = (overrides: Partial<NonNullable<Message['call']>> = {}): Message =>
     message({
@@ -242,6 +263,8 @@ describe('a call', () => {
       title: 'Bob',
       body: 'Missed video call',
       tag: 'call-call-9',
+      conversationId: 'c1',
+      messageId: 'm1',
     })
   })
 
@@ -276,7 +299,14 @@ describe('an incoming call', () => {
   })
 
   it('says who is calling and what kind of call, under the tag of the server’s push for the same call, and stays until it is dealt with', () => {
-    expect(incomingCallAlertText(call)).toEqual({ title: 'Bob', body: 'Incoming video call', tag: 'call-k1', persistent: true })
+    expect(incomingCallAlertText(call)).toEqual({
+      title: 'Bob',
+      body: 'Incoming video call',
+      tag: 'call-k1',
+      persistent: true,
+      conversationId: 'c1',
+      messageId: null,
+    })
     expect(incomingCallAlertText({ ...call, media: 'Audio' }).body).toBe('Incoming audio call')
   })
 })

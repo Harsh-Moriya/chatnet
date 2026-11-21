@@ -42,9 +42,29 @@ The page decides what to do from facts (permission, existing subscription, the s
 
 The API container must be able to reach the push services on port 443 (`fcm.googleapis.com`, `updates.push.services.mozilla.com`, `push.apple.com`, `notify.windows.com`).
 
+## On an Android phone
+
+The app installed to the home screen from Chrome on Android gets alerts in the notification shade like any other app: pushed ones when the app is closed, and its own when it is open but not in front. A few things are particular to Android:
+
+- **The permission is the phone's.** Turning the switch on in the profile asks for it; if it was refused, the phone's own settings (Settings, Apps, ChatNET, Notifications) are where to allow it again.
+- **The page's own alerts go through the service worker.** Chrome for Android refuses `new Notification` (it throws), so the page raises an alert with `registration.showNotification`, the way the worker does for a push; both use one look (`frontend/src/lib/alertLook.ts`: the picture, the small white status bar badge, a vibration pattern, and a tag so a conversation shows one alert that sounds again for each new message). A click opens the conversation.
+- **A phone that has just left the app is still "connected" for a while.** The server pushes only to a person with no live connection, and the page keeps its connection after the person leaves it, until the connection drops or its 90 second entry expires. In that time the page raises the alert itself; after it, the server pushes. Swiping the app away drops the connection at once.
+- The manifest has a stable `id`, so Android treats the installed app as one app across updates.
+
+### If nothing arrives on a phone
+
+Check in this order:
+
+1. The deployment has `PUSH_PUBLIC_KEY`, `PUSH_PRIVATE_KEY` and `PUSH_SUBJECT` in `.env.prod` (they are optional, and without them the feature is off), and the API containers were recreated after they were set (`docker compose --env-file .env.prod -f docker-compose.prod.yml up -d`). With them set, the profile shows the closed-app alerts switch; without them it is not offered.
+2. The switch is on **inside the installed app**, and the phone allows notifications for it.
+3. `docker compose --env-file .env.prod -f docker-compose.prod.yml logs api | grep -i push` shows the pushes that were sent, or the push service's refusals ("was refused", "was not taken").
+4. The API container can reach `fcm.googleapis.com` on port 443.
+5. A phone in battery saver or restricted background mode may delay a push; the app's entry in Android's battery settings should be unrestricted.
+
 ## Limits
 
 - Tried against Chrome and Google's push service. Firefox, Safari and Edge use the same standard but have not been tried.
-- An iPhone needs the app installed to the home screen, which needs a web app manifest and icons that the app does not have yet.
+- An iPhone needs the app installed to the home screen (the manifest and icons are there now); this has not been tried on an iPhone.
+- Tried against Chrome on a computer; **nothing has been tried on a real Android phone yet**. The page's side was checked in a desktop browser made to behave as Chrome for Android does (its constructor throws).
 - Changing the key pair makes every browser subscribe again, which they do by themselves the next time the page is open.
 - 20 registration calls per minute per person.
