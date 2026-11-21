@@ -124,6 +124,59 @@ describe('runs of messages from one sender', () => {
   })
 })
 
+describe('which message ends a run', () => {
+  const ends = (items: TimelineItem[]) =>
+    items.filter((i) => i.kind === 'message' || i.kind === 'pending').map((i) => (i as { endsRun: boolean }).endsRun)
+
+  it('is the last of the messages that continue each other', () => {
+    const items = build([message('a', 'bob', at(11, 9, 0)), message('b', 'bob', at(11, 9, 1)), message('c', 'bob', at(11, 9, 2))])
+
+    expect(ends(items)).toEqual([false, false, true])
+  })
+
+  it('is every message when the sender changes each time', () => {
+    const items = build([message('a', 'bob', at(11, 9, 0)), message('b', 'carol', at(11, 9, 1)), message('c', 'bob', at(11, 9, 2))])
+
+    expect(ends(items)).toEqual([true, true, true])
+  })
+
+  it('is the message before a pause longer than the run gap', () => {
+    const start = new Date(2026, 9, 11, 9, 0, 0).getTime()
+    const later = new Date(start + RUN_GAP_MS + 1000).toISOString()
+
+    expect(ends(build([message('a', 'bob', at(11, 9, 0)), message('b', 'bob', later)]))).toEqual([true, true])
+  })
+
+  it('is the message before a new day, even a minute later', () => {
+    const items = build([
+      message('a', 'bob', new Date(2026, 9, 10, 23, 59, 30).toISOString()),
+      message('b', 'bob', new Date(2026, 9, 11, 0, 0, 30).toISOString()),
+    ])
+
+    expect(ends(items)).toEqual([true, true])
+  })
+
+  it('is the message before a call, which is part of no run', () => {
+    const call = message('c', 'bob', at(11, 9, 1), {
+      kind: 'Call',
+      content: null,
+      call: { id: 'k', media: 'Audio', startedAt: at(11, 9, 1), answeredAt: null, endedAt: at(11, 9, 1), endReason: 'Missed', isMissed: true },
+    })
+
+    expect(ends(build([message('a', 'bob', at(11, 9, 0)), call, message('b', 'bob', at(11, 9, 2))]))).toEqual([true, true])
+  })
+
+  it('puts the end of the run on the last unconfirmed message of the user', () => {
+    const items = build([message('a', 'me', at(11, 9, 0))], [pending('p1', at(11, 9, 1)), pending('p2', at(11, 9, 2))])
+
+    expect(ends(items)).toEqual([false, false, true])
+  })
+
+  it('is a message on its own', () => {
+    expect(ends(build([message('a', 'bob', at(11, 9, 0))]))).toEqual([true])
+  })
+})
+
 describe('who is named above a message', () => {
   it('names the sender of the first message of a run in a group, for other people only', () => {
     const items = messages(
