@@ -1,5 +1,4 @@
 import type { ReactNode } from 'react'
-import { LoaderCircle } from 'lucide-react'
 import { Button } from '../../../components/ui/Button'
 import { cn } from '../../../lib/cn'
 import { useDebouncedValue } from '../../../lib/useDebouncedValue'
@@ -11,6 +10,7 @@ import { viewOf } from '../searchState'
 import { useSyncStatus } from '../sync/status'
 import { SearchHitRow } from './SearchHitRow'
 import { Alert } from '../../../components/ui/Alert'
+import { Spinner } from '../../../components/ui/Spinner'
 
 // A search over what is on this device is quick, so it waits only as long as typing takes to pause.
 const TYPING_PAUSE_MS = 150
@@ -54,7 +54,7 @@ export function SearchResults({ input }: { input: string }) {
       return (
         <Notice>
           <span className="inline-flex items-center gap-2">
-            <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />
+            <Spinner />
             Searching…
           </span>
         </Notice>

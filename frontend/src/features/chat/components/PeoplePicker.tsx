@@ -9,6 +9,7 @@ import { SearchRow } from '../../search/components/SearchBox'
 import { useUserSearch } from '../api/useUserSearch'
 import { newPeopleFirst } from '../peopleOrder'
 import type { UserSummary } from '../types'
+import { Pill } from '../../../components/ui/Pill'
 
 const NO_ONE: ReadonlySet<string> = new Set()
 
@@ -85,7 +86,7 @@ export function PeoplePicker({ onPick, selectedIds, excludeIds, disabled = false
                       <span className="block truncate text-sm font-medium text-fg">{person.displayName}</span>
                       <span className="block truncate text-xs text-fg-muted">@{person.userName}</span>
                     </span>
-                    {chatted && <span className="shrink-0 rounded-full bg-subtle px-2 py-0.5 text-[11px] text-fg-muted">In your chats</span>}
+                    {chatted && <Pill>In your chats</Pill>}
                     {selectedIds && (
                       <span
                         aria-hidden="true"

@@ -1,5 +1,6 @@
-import { AlertCircle, LoaderCircle } from 'lucide-react'
+import { AlertCircle } from 'lucide-react'
 import { useChatStore } from '../store/chatStore'
+import { Spinner } from '../../../components/ui/Spinner'
 
 // Tells the user when messages are not live. REST still works while the connection is down, so this
 // is a status, not a block: sending and reading carry on.
@@ -19,7 +20,7 @@ export function ConnectionBanner() {
 
   return (
     <div role="status" className="flex items-center gap-2 border-b border-line bg-page px-4 py-2 text-xs text-fg-muted">
-      <LoaderCircle className="h-4 w-4 shrink-0 animate-spin" />
+      <Spinner />
       <span>{status === 'connecting' ? 'Connecting…' : 'Connection lost. Reconnecting…'}</span>
     </div>
   )

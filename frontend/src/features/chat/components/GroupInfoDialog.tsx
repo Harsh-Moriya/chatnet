@@ -18,6 +18,7 @@ import { useChatStore } from '../store/chatStore'
 import type { Conversation, Member, UserSummary } from '../types'
 import { PeoplePicker } from './PeoplePicker'
 import { Alert } from '../../../components/ui/Alert'
+import { Pill } from '../../../components/ui/Pill'
 
 interface GroupInfoDialogProps {
   conversation: Conversation
@@ -212,9 +213,7 @@ function GroupInfo({ conversation, onDone }: { conversation: Conversation; onDon
                   <p className="truncate text-xs text-fg-muted">@{member.userName}</p>
                 </div>
                 {member.role !== 'Member' && (
-                  <span className="rounded-full bg-accent-soft px-2 py-0.5 text-xs font-medium text-accent-fg">
-                    {member.role}
-                  </span>
+                  <Pill tone="accent">{member.role}</Pill>
                 )}
                 {items.length > 0 && <Menu label={`Actions for ${member.displayName}`} items={items} />}
               </li>

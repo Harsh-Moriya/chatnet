@@ -4,6 +4,7 @@ import { cn } from '../../../lib/cn'
 import { formatClock } from '../../../lib/format'
 import { callDuration, callLabel } from '../calls'
 import type { CallInfo } from '../types'
+import { Pill } from '../../../components/ui/Pill'
 
 interface CallRowProps {
   call: CallInfo
@@ -22,12 +23,7 @@ export function CallRow({ call, own, onCallBack }: CallRowProps) {
 
   return (
     <div className="my-2 flex justify-center">
-      <span
-        className={cn(
-          'inline-flex items-center gap-1.5 rounded-full bg-strong/70 px-3 py-1 text-xs font-medium',
-          missedByMe ? 'text-danger-fg' : 'text-fg-muted',
-        )}
-      >
+      <Pill tone="chip" size="md" className={cn(missedByMe && 'text-danger-fg')}>
         <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
         <span>{callLabel(call, own)}</span>
         {duration !== null && <span>{duration}</span>}
@@ -45,7 +41,7 @@ export function CallRow({ call, own, onCallBack }: CallRowProps) {
             Call back
           </Button>
         )}
-      </span>
+      </Pill>
     </div>
   )
 }

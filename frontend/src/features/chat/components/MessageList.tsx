@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { ChevronDown, LoaderCircle, Pencil, Trash2 } from 'lucide-react'
+import { ChevronDown, Pencil, Trash2 } from 'lucide-react'
 import { Button } from '../../../components/ui/Button'
 import { useStartCall } from '../../calls/useStartCall'
 import type { MenuItem } from '../../../components/ui/Menu'
@@ -23,6 +23,8 @@ import { MessageBubble } from './MessageBubble'
 import { MessageEditor } from './MessageEditor'
 import { PendingAttachments } from './PendingAttachments'
 import { Alert } from '../../../components/ui/Alert'
+import { Pill } from '../../../components/ui/Pill'
+import { Spinner } from '../../../components/ui/Spinner'
 
 // How long the message a notification pointed at keeps its ring.
 const HIGHLIGHT_MS = 2500
@@ -233,7 +235,7 @@ export function MessageList({ conversation, isLoading, errorMessage, onRetry, ol
     <div ref={scroller} onScroll={handleScroll} className="flex-1 overflow-y-auto px-4 py-4 [overflow-anchor:none]">
       {!nothingToShow && loadingOlder && (
         <div className="flex h-8 items-center justify-center gap-2 text-xs text-fg-muted">
-          <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
+          <Spinner size="xs" />
           Loading earlier messages…
         </div>
       )}
@@ -253,7 +255,7 @@ export function MessageList({ conversation, isLoading, errorMessage, onRetry, ol
 
       {nothingToShow && isLoading && (
         <div className="flex h-full items-center justify-center gap-2 text-sm text-fg-muted">
-          <LoaderCircle className="h-4 w-4 animate-spin" />
+          <Spinner />
           Loading messages…
         </div>
       )}
@@ -275,9 +277,9 @@ export function MessageList({ conversation, isLoading, errorMessage, onRetry, ol
         if (item.kind === 'day') {
           return (
             <div key={item.key} className="my-4 flex justify-center">
-              <span className="rounded-full bg-strong/70 px-3 py-1 text-xs font-medium text-fg-muted">
+              <Pill tone="chip" size="md">
                 {item.label}
-              </span>
+              </Pill>
             </div>
           )
         }
@@ -377,7 +379,7 @@ export function MessageList({ conversation, isLoading, errorMessage, onRetry, ol
 
       {inWindow && loadingNewer && (
         <div className="flex h-8 items-center justify-center gap-2 text-xs text-fg-muted">
-          <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
+          <Spinner size="xs" />
           Loading newer messages…
         </div>
       )}

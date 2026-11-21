@@ -1,5 +1,5 @@
 import { useInfiniteQuery } from '@tanstack/react-query'
-import { AlertCircle, FileText, Image as ImageIcon, LoaderCircle, Play } from 'lucide-react'
+import { AlertCircle, FileText, Image as ImageIcon, Play } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Alert } from '../../../components/ui/Alert'
 import { Button } from '../../../components/ui/Button'
@@ -15,6 +15,7 @@ import type { ViewerItem } from '../viewer/viewerItems'
 import { useViewerStore } from '../viewer/viewerStore'
 import { deletedIdsOf, galleryItemsOf } from './galleryItems'
 import { galleryQueryOptions } from './galleryQuery'
+import { Spinner } from '../../../components/ui/Spinner'
 
 interface GalleryDialogProps {
   conversationId: string
@@ -51,7 +52,7 @@ function GalleryContent({ conversationId }: { conversationId: string }) {
   if (query.isPending) {
     return (
       <div role="status" aria-label="Loading" className="flex flex-1 items-center justify-center p-8">
-        <LoaderCircle className="h-8 w-8 animate-spin text-fg-muted" aria-hidden="true" />
+        <Spinner size="lg" className="text-fg-muted" />
       </div>
     )
   }
@@ -83,7 +84,7 @@ function GalleryContent({ conversationId }: { conversationId: string }) {
         {isFetchNextPageError ? (
           <ErrorBanner message={getApiError(query.error)} onRetry={() => void fetchNextPage()} />
         ) : hasNextPage ? (
-          <LoaderCircle role="status" aria-label="Loading more" className="h-5 w-5 animate-spin text-fg-muted" />
+          <Spinner size="md" label="Loading more" className="text-fg-muted" />
         ) : null}
       </div>
     </div>
