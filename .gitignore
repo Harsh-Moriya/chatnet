@@ -34,9 +34,8 @@ Thumbs.db
 *.swp
 
 # ##### Local working docs #####
+# The development documents (notes, session log, decision log, roadmap, architecture, check scripts) are all in docs/development/.
 AGENTS.md
 CLAUDE.md
-ARCHITECTURE.md
-SESSION_LOG.md
-docs/notes/
+docs/development/
 .claude/
