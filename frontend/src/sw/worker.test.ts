@@ -109,6 +109,8 @@ describe('showing a push', () => {
       body: 'see you at 5',
       tag: `conversation-${CONVERSATION}`,
       data: { conversationId: CONVERSATION, messageId: MESSAGE },
+      icon: '/icons/icon-192.png',
+      badge: '/icons/badge-96.png',
     })
   })
 
@@ -197,6 +199,8 @@ describe('showing a push', () => {
     expect(worker.scope.registration.showNotification).toHaveBeenCalledExactlyOnceWith('ChatNET', {
       body: 'Something new is waiting for you.',
       tag: 'chatnet',
+      icon: '/icons/icon-192.png',
+      badge: '/icons/badge-96.png',
     })
   })
 

@@ -102,6 +102,24 @@ else
   echo "ok    the service worker is one classic script"
 fi
 
+# The app's icons and manifest. A file that is not there is answered with the page (the fallback for routes), so a missing icon would
+# show as html where a picture is expected, and a browser that cannot read the manifest silently does not offer to install the app.
+page=$(curl -s -H "Host: $public" "http://localhost:$port/")
+if echo "$page" | grep -q 'rel="manifest"' && echo "$page" | grep -q 'rel="apple-touch-icon"'; then
+  echo "ok    the page names the manifest and the touch icon"
+else
+  echo "FAIL  the page names the manifest and the touch icon"; failures=$((failures + 1))
+fi
+expect_header "the manifest is served as json" "$public" /site.webmanifest "content-type: application/"
+for icon in icon-192.png icon-512.png icon-maskable-512.png apple-touch-icon.png badge-96.png; do
+  expect_header "the icon $icon is served as a picture" "$public" "/icons/$icon" "content-type: image/png"
+done
+if curl -s -H "Host: $public" "http://localhost:$port/site.webmanifest" | grep -q '"display": "standalone"'; then
+  echo "ok    the manifest is the built one"
+else
+  echo "FAIL  the manifest is the built one (it does not say display standalone)"; failures=$((failures + 1))
+fi
+
 # The PDF viewer's worker is a module worker, which a browser refuses to start unless it is served with a script type, and what pdf.js reads
 # while it draws (the character maps and the image decoders) is built as files like the rest. Only the viewer's own script names them, so
 # they are found in the image. Their absence would show as a PDF that does not open, or as a Japanese one with the wrong glyphs.
