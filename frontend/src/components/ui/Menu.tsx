@@ -93,7 +93,7 @@ export function Menu({ label, items, align = 'end', variant = 'inline', classNam
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
         className={cn(
-          'flex items-center justify-center rounded-lg transition-colors',
+          'flex items-center justify-center rounded-control transition-colors',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500',
           variant === 'toolbar'
             ? 'h-9 w-9 shrink-0 text-fg-soft hover:bg-subtle active:bg-strong'
@@ -114,7 +114,7 @@ export function Menu({ label, items, align = 'end', variant = 'inline', classNam
           role="menu"
           aria-label={label}
           className={cn(
-            'absolute top-full z-20 mt-1 rounded-lg border border-line bg-surface py-1 shadow-lg',
+            'absolute top-full z-20 mt-1.5 rounded-xl bg-surface p-1.5 shadow-pop',
             variant === 'toolbar' ? 'min-w-56' : 'min-w-36',
             align === 'end' ? 'right-0' : 'left-0',
           )}
@@ -130,7 +130,7 @@ export function Menu({ label, items, align = 'end', variant = 'inline', classNam
                 item.onSelect()
               }}
               className={cn(
-                'flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-fg-soft transition-colors pointer-coarse:py-3',
+                'flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-fg-soft transition-colors pointer-coarse:py-3',
                 'hover:bg-subtle focus-visible:bg-subtle focus-visible:outline-none',
                 'disabled:pointer-events-none disabled:opacity-50',
               )}
