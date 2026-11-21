@@ -62,7 +62,7 @@ export function NotificationPanel({ id, onClose }: NotificationPanelProps) {
   }
 
   return (
-    <section id={id} aria-label="Notifications" className="absolute inset-0 z-20 flex flex-col bg-surface">
+    <section id={id} aria-label="Notifications" className="absolute inset-0 z-20 flex animate-fade flex-col bg-surface">
       <div className="flex shrink-0 items-center justify-between gap-2 border-b border-line px-4 py-2">
         <h2 className="text-sm font-semibold text-fg">Notifications</h2>
         <div className="flex items-center gap-1">
@@ -83,8 +83,8 @@ export function NotificationPanel({ id, onClose }: NotificationPanelProps) {
 
       {permission === 'default' && (
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-line bg-page px-4 py-2">
-          <p className="text-xs text-fg-muted">Get an alert when something arrives while you are away.</p>
-          <Button variant="ghost" size="sm" onClick={() => void request()}>
+          <p className="min-w-0 text-xs text-fg-muted">Get an alert when something arrives while you are away.</p>
+          <Button variant="ghost" size="sm" className="shrink-0 whitespace-nowrap" onClick={() => void request()}>
             <BellRing className="h-3.5 w-3.5" />
             Turn on alerts
           </Button>

@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Eye, EyeOff } from 'lucide-react'
 import type { LoginRequest } from '../types'
 import { FormField } from '../../../components/ui/FormField'
 import { Button } from '../../../components/ui/Button'
 import { Alert } from '../../../components/ui/Alert'
+import { PasswordToggle } from './PasswordToggle'
 
 interface Props {
   onSubmit: (data: LoginRequest) => void
@@ -47,14 +47,7 @@ export function LoginForm({ onSubmit, isLoading, error }: Props) {
         autoComplete="current-password"
         required
         rightElement={
-          <button
-            type="button"
-            onClick={() => setShowPassword(v => !v)}
-            className="text-fg-faint hover:text-fg-soft transition-colors"
-            aria-label={showPassword ? 'Hide password' : 'Show password'}
-          >
-            {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-          </button>
+          <PasswordToggle shown={showPassword} onToggle={() => setShowPassword(v => !v)} />
         }
       />
 

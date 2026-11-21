@@ -12,6 +12,7 @@ import { useAuth } from '../hooks/useAuth'
 import { useAuthStore } from '../store/authStore'
 import { wasPasswordChanged } from '../notice'
 import type { AuthResponse } from '../types'
+import { Button } from '../../../components/ui/Button'
 
 // ##### Auth page #####
 
@@ -79,13 +80,9 @@ export function AuthPage() {
 
       <p className="mt-6 text-center text-sm text-fg-muted">
         {mode === 'login' ? "Don't have an account?" : 'Already have an account?'}{' '}
-        <button
-          type="button"
-          onClick={toggleMode}
-          className="font-medium text-accent-fg hover:underline"
-        >
+        <Button type="button" variant="link" onClick={toggleMode}>
           {mode === 'login' ? 'Register' : 'Sign in'}
-        </button>
+        </Button>
       </p>
     </AuthLayout>
   )

@@ -65,7 +65,7 @@ export function Tooltip({ label, side = 'bottom', children }: TooltipProps) {
         id={id}
         role="tooltip"
         className={cn(
-          'pointer-events-none absolute left-1/2 z-30 w-max max-w-64 -translate-x-1/2 rounded-lg bg-fg px-2.5 py-1 text-center text-xs font-medium text-page shadow-pop',
+          'pointer-events-none absolute left-1/2 z-30 w-max max-w-64 animate-fade -translate-x-1/2 rounded-lg bg-fg px-2.5 py-1 text-center text-xs font-medium text-page shadow-pop',
           side === 'bottom' ? 'top-full mt-1.5' : 'bottom-full mb-1.5',
           // Not drawn while closed, so a tooltip that would hang over the edge of the window cannot make the page scroll sideways.
           // A control can still be described by it: a description may come from an element that is not displayed.

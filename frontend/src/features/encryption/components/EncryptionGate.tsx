@@ -33,7 +33,7 @@ export function EncryptionGate({ children }: { children: ReactNode }) {
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-page px-4 py-8">
-      <div className="w-full max-w-md space-y-4 rounded-lg border border-line bg-surface p-6">
+      <div className="w-full max-w-md animate-enter space-y-4 rounded-2xl bg-surface p-6 shadow-card">
         <GateContent screen={screen} />
         <div className="border-t border-line pt-3">
           <Button variant="ghost" size="sm" onClick={() => void requestSignOut()}>

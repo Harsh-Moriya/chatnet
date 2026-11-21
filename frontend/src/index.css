@@ -14,6 +14,39 @@
   /* The text of a message and of a conversation's name. */
   --text-body: 0.9375rem;
   --text-body--line-height: 1.4;
+
+  /* Motion is short and quiet: a fade, or a small rise, that plays when something appears and never when it goes. Nothing bounces. */
+  --animate-fade: fade 150ms ease-out both;
+  --animate-enter: enter 180ms ease-out both;
+  --animate-pop: pop 160ms ease-out both;
+  --animate-message-in: message-in 180ms ease-out both;
+
+  @keyframes fade {
+    from {
+      opacity: 0;
+    }
+  }
+
+  @keyframes enter {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+  }
+
+  @keyframes pop {
+    from {
+      opacity: 0;
+      transform: scale(0.96);
+    }
+  }
+
+  @keyframes message-in {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+  }
 }
 
 /* ##### Colour tokens ##### */
@@ -202,5 +235,28 @@
   * {
     scrollbar-width: thin;
     scrollbar-color: var(--t-scroll-thumb) transparent;
+  }
+}
+
+/* ##### Reduced motion ##### */
+
+/* A device that asks for less motion gets none: every animation and transition is over at once. The spinner is left turning, because it is
+   the answer to "is it working", which a still picture cannot give. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after,
+  ::backdrop {
+    transition-duration: 0.01ms !important;
+    transition-delay: 0s !important;
+    animation-delay: 0s !important;
+  }
+
+  *:not(.animate-spin),
+  ::before,
+  ::after,
+  ::backdrop {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
   }
 }

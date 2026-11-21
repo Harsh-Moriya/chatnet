@@ -236,14 +236,9 @@ function GroupInfo({ conversation, onDone }: { conversation: Conversation; onDon
               {chosen.map((person) => (
                 <li key={person.id} className="flex items-center gap-1 rounded-full bg-accent-soft py-1 pl-3 pr-1 text-xs text-accent-fg">
                   {person.displayName}
-                  <button
-                    type="button"
-                    aria-label={`Do not add ${person.displayName}`}
-                    className="rounded-full p-1 hover:bg-accent-soft-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                    onClick={() => togglePerson(person)}
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
+                  <Button type="button" variant="ghost" size="icon-xs" aria-label={`Do not add ${person.displayName}`} className="text-accent-fg! hover:bg-accent-soft-strong!" onClick={() => togglePerson(person)}>
+<X className="h-3 w-3" />
+</Button>
                 </li>
               ))}
             </ul>

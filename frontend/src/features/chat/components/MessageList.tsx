@@ -9,6 +9,7 @@ import { useAuth } from '../../auth/hooks/useAuth'
 import { focusedMessageId } from '../../notifications/navigation'
 import { deleteMessage, dismissMessage, editMessage, retryMessage } from '../api/chatApi'
 import { type ReadingMore, followsEnd, justSent, returnsToEnd, scrollTopAfterPrepend, wasPrepended } from '../history'
+import { arrivingKeys } from '../arrivals'
 import { useMarkRead } from '../hooks/useMarkRead'
 import { canDelete, canEdit } from '../messageChanges'
 import { messageDomId } from '../messageDom'
@@ -34,6 +35,7 @@ const HIGHLIGHT_MS = 2500
 // Stable empty values, so a conversation with nothing in it does not look like a change on every render.
 const NO_MESSAGES: Message[] = []
 const NO_PENDING: PendingMessage[] = []
+const NO_ARRIVALS: ReadonlySet<string> = new Set()
 
 // How close to the bottom still counts as "at the bottom", in pixels.
 const BOTTOM_THRESHOLD = 96
@@ -86,6 +88,16 @@ export function MessageList({ conversation, isLoading, errorMessage, onRetry, ol
       }),
     [messages, pending, conversation.type, user?.userId, now],
   )
+
+  // What arrived since the reader last looked is drawn with a short entrance. It is worked out while rendering, from the keys of the render
+  // before: a conversation that has only just been opened, and a page of older messages, have no arrivals (see `arrivingKeys`).
+  const [tracked, setTracked] = useState<{ conversationId: string; items: typeof items; keys: string[]; arriving: ReadonlySet<string> } | null>(null)
+  if (tracked?.items !== items) {
+    const keys = items.map((item) => item.key)
+    const previous = tracked?.conversationId === conversation.id ? tracked.keys : null
+    setTracked({ conversationId: conversation.id, items, keys, arriving: arrivingKeys(previous, keys) })
+  }
+  const arriving = tracked?.arriving ?? NO_ARRIVALS
 
   // Follows new messages only while the reader is at the bottom, so reading older ones is not
   // interrupted. A message the reader just sent always scrolls into view.
@@ -296,6 +308,7 @@ export function MessageList({ conversation, isLoading, errorMessage, onRetry, ol
               own
               continuing={item.continuing}
               endsRun={item.endsRun}
+              arriving={arriving.has(item.key)}
               content={item.pending.content}
               attachments={
                 item.pending.attachments.length > 0 ? (
@@ -346,6 +359,7 @@ export function MessageList({ conversation, isLoading, errorMessage, onRetry, ol
             own={item.own}
             continuing={item.continuing}
             endsRun={item.endsRun}
+            arriving={arriving.has(item.key)}
             leading={leading}
             senderName={item.showSender ? item.message.senderDisplayName : undefined}
             content={item.message.content}
