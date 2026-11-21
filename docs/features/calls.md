@@ -40,7 +40,7 @@ The server relays signals and trusts nobody's media. The client is what makes th
 
 **Several devices.** `IncomingCall` reaches each device the callee has open. A device that sees `CallAnswered` for a call it is still ringing for, without having accepted it, stops ringing; it does not take part in the call.
 
-**Showing the call.** The web client shows a ringing call as a dialog that is answered with its own buttons (Escape and a click outside do nothing, and no button has the focus when it opens, so a key press meant for something else cannot decline or answer it), and a call in progress full screen. Accept is green, and decline, cancel and hang up are red. A page that is open but hidden raises an operating system notification for an incoming call, and one that is closed is reached by the push alert described above; both stay until they are used or dismissed.
+**Showing the call.** The web client shows a ringing call as a dialog that is answered with its own buttons (Escape and a click outside do nothing, and no button has the focus when it opens, so a key press meant for something else cannot decline or answer it), and a call in progress full screen, which a minimise button puts away as a bar above the conversations (who it is with, the time, mute and hang up; the name brings the full screen back), so messages can be read and sent during the call. Escape does not minimise or end a call. Accept is green, and decline, cancel and hang up are red. A page that is open but hidden raises an operating system notification for an incoming call, and one that is closed is reached by the push alert described above; both stay until they are used or dismissed.
 
 ## How it ended
 

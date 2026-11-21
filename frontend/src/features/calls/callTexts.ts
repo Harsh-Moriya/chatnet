@@ -1,6 +1,24 @@
 import type { CallEndReason } from '../chat/types'
+import { formatTime } from '../chat/viewer/videoView'
+import type { CallPhase } from './callStore'
 
 // The words the person is told about a call, as plain functions so they can be tested.
+
+// The line under the other person's name, on the call screen and in the bar: what is happening, or how long it has lasted.
+export function callStatus(input: { phase: CallPhase; reconnecting: boolean; elapsedSeconds: number }): string {
+  switch (input.phase) {
+    case 'starting':
+      return 'Starting the call'
+    case 'outgoing':
+      return 'Calling'
+    case 'connecting':
+      return 'Connecting'
+    case 'ended':
+      return 'Call ended'
+    default:
+      return input.reconnecting ? 'Reconnecting' : formatTime(input.elapsedSeconds)
+  }
+}
 
 export const NOT_VERIFIED = 'This call could not be verified.'
 

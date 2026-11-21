@@ -1,6 +1,27 @@
 import { describe, expect, it } from 'vitest'
 import { callErrorCode } from './callErrors'
-import { endedNotice, startRefusal } from './callTexts'
+import { callStatus, endedNotice, startRefusal } from './callTexts'
+
+describe('the line under the other person\'s name', () => {
+  it.each([
+    ['starting', 'Starting the call'],
+    ['outgoing', 'Calling'],
+    ['connecting', 'Connecting'],
+    ['ended', 'Call ended'],
+  ] as const)('says what is happening while %s', (phase, words) => {
+    expect(callStatus({ phase, reconnecting: false, elapsedSeconds: 0 })).toBe(words)
+  })
+
+  it('shows how long an active call has lasted', () => {
+    expect(callStatus({ phase: 'active', reconnecting: false, elapsedSeconds: 75 })).toBe('1:15')
+    expect(callStatus({ phase: 'active', reconnecting: false, elapsedSeconds: 3725 })).toBe('1:02:05')
+  })
+
+  it('says a call whose media dropped is reconnecting, and a call that ended is not', () => {
+    expect(callStatus({ phase: 'active', reconnecting: true, elapsedSeconds: 75 })).toBe('Reconnecting')
+    expect(callStatus({ phase: 'ended', reconnecting: true, elapsedSeconds: 75 })).toBe('Call ended')
+  })
+})
 
 describe('what a call that ended says', () => {
   const base = { outgoing: true, answered: false, peerName: 'Ben' }

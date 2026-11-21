@@ -114,6 +114,58 @@ describe('what the person controls and is told', () => {
     expect(store().remoteStream).toBe(stream)
   })
 
+  it('keeps a call minimised only while it is one this person is part of', () => {
+    store().begin(people)
+    store().setMinimised(true)
+    expect(store().minimised).toBe(true)
+
+    for (const step of [() => store().calling('call-1', 'x'), () => store().answered(1), () => store().connected()]) {
+      step()
+      expect(store().minimised).toBe(true)
+    }
+
+    store().setMinimised(false)
+    expect(store().minimised).toBe(false)
+  })
+
+  it.each(['starting', 'outgoing', 'connecting', 'active'] as const)('can be minimised while %s', (phase) => {
+    store().begin(people)
+    if (phase !== 'starting') store().calling('call-1', 'x')
+    if (phase === 'connecting' || phase === 'active') store().answered(1)
+    if (phase === 'active') store().connected()
+    expect(store().phase).toBe(phase)
+
+    store().setMinimised(true)
+
+    expect(store().minimised).toBe(true)
+  })
+
+  it('cannot minimise a call that is ringing, has not begun or has ended', () => {
+    store().setMinimised(true)
+    expect(store().minimised).toBe(false)
+
+    store().ring({ ...people, callId: 'call-2', ringsUntil: 'x' })
+    store().setMinimised(true)
+    expect(store().minimised).toBe(false)
+
+    store().answered(1)
+    store().connected()
+    store().finish('Completed', null)
+    store().setMinimised(true)
+    expect(store().minimised).toBe(false)
+  })
+
+  it('says a call that ends while minimised has ended, and starts the next call full screen', () => {
+    store().begin(people)
+    store().setMinimised(true)
+    store().finish('Declined', 'Ben declined the call.')
+    expect(store()).toMatchObject({ phase: 'ended', minimised: true })
+
+    store().clear()
+    store().begin(people)
+    expect(store().minimised).toBe(false)
+  })
+
   it('counts a call as in progress from the moment it starts until it has ended', () => {
     expect(inCall('idle')).toBe(false)
     expect(inCall('ended')).toBe(false)

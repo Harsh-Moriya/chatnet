@@ -36,6 +36,8 @@ interface CallState extends Partial<CallPeople> {
   notice: string | null
   localStream: MediaStream | null
   remoteStream: MediaStream | null
+  // The call is shown as a bar over the chat instead of the full screen. A choice for this call only: the next one starts full screen.
+  minimised: boolean
 
   begin: (people: CallPeople) => void
   ring: (call: CallPeople & { callId: string; ringsUntil: string }) => void
@@ -49,6 +51,7 @@ interface CallState extends Partial<CallPeople> {
   setReconnecting: (reconnecting: boolean) => void
   setStreams: (streams: { local?: MediaStream | null; remote?: MediaStream | null }) => void
   setNotice: (notice: string | null) => void
+  setMinimised: (minimised: boolean) => void
 }
 
 const IDLE = {
@@ -65,11 +68,14 @@ const IDLE = {
   notice: null,
   localStream: null,
   remoteStream: null,
+  minimised: false,
   conversationId: undefined,
   peerId: undefined,
   peerName: undefined,
   media: undefined,
 }
+
+const HOLDS_A_CALL: ReadonlySet<CallPhase> = new Set(['starting', 'outgoing', 'connecting', 'active'])
 
 export const useCallStore = create<CallState>()((set) => ({
   ...IDLE,
@@ -112,6 +118,11 @@ export const useCallStore = create<CallState>()((set) => ({
       remoteStream: remote === undefined ? state.remoteStream : remote,
     })),
   setNotice: (notice) => set((state) => (state.notice === notice ? state : { notice })),
+
+  // Only a call this person is part of can be put away: a ringing call must be answered where it rings, and one that has ended has nothing
+  // left to hold. An ended call keeps the flag, so a call that ends while minimised says so in the bar.
+  setMinimised: (minimised) =>
+    set((state) => (state.minimised === minimised || !HOLDS_A_CALL.has(state.phase) ? state : { minimised })),
 }))
 
 // Whether a call is being made, rung, or running: what decides whether another can be started or rung.
