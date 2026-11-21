@@ -16,6 +16,10 @@ describe('who the signed-in user already chats with', () => {
     expect(contactIdsOf({ g: conversation('g', 'Group', null), h: conversation('h', 'Group', 'ben') }).size).toBe(0)
   })
 
+  it('ignores a direct conversation that has no other person recorded', () => {
+    expect(contactIdsOf({ a: conversation('a', 'Direct', null) }).size).toBe(0)
+  })
+
   it('is nobody when there are no conversations', () => {
     expect(contactIdsOf({}).size).toBe(0)
   })
