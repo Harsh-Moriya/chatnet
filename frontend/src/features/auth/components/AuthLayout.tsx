@@ -41,7 +41,8 @@ export function AuthLayout({ title, subtitle, children }: Props) {
       <BrandPanel />
 
       <div className="flex-1 flex flex-col items-center justify-center p-8 bg-page">
-        <div className="w-full max-w-sm">
+        {/* From a tablet up the form is a card over the page colour; on a phone it stays flat, to keep the width. */}
+        <div className="w-full max-w-sm animate-enter sm:max-w-md sm:rounded-2xl sm:bg-surface sm:p-8 sm:shadow-card">
           {/* Logo shown only on mobile where BrandPanel is hidden */}
           <div className="mb-8 flex items-center gap-2 lg:hidden">
             <Logo tile size={32} />
@@ -49,7 +50,7 @@ export function AuthLayout({ title, subtitle, children }: Props) {
           </div>
 
           <div className="mb-7">
-            <h2 className="text-2xl font-semibold text-fg">{title}</h2>
+            <h2 className="text-2xl font-semibold tracking-tight text-fg">{title}</h2>
             <p className="mt-1 text-sm text-fg-muted">{subtitle}</p>
           </div>
 
