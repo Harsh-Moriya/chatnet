@@ -36,6 +36,10 @@ describe('which items are new arrivals', () => {
     expect(keys(['a', 'b'], ['x', 'y', 'z'])).toEqual([])
   })
 
+  it('is nothing when the last item that was shown has gone, even if an earlier one is still there', () => {
+    expect(keys(['a', 'b'], ['a', 'x'])).toEqual([])
+  })
+
   it('is nothing for an item that was already known, such as a message that moved', () => {
     expect(keys(['a', 'b', 'c'], ['a', 'c', 'b'])).toEqual([])
   })
