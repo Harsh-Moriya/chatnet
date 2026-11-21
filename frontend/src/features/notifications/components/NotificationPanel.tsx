@@ -83,8 +83,8 @@ export function NotificationPanel({ id, onClose }: NotificationPanelProps) {
 
       {permission === 'default' && (
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-line bg-page px-4 py-2">
-          <p className="text-xs text-fg-muted">Get an alert when something arrives while you are away.</p>
-          <Button variant="ghost" size="sm" onClick={() => void request()}>
+          <p className="min-w-0 text-xs text-fg-muted">Get an alert when something arrives while you are away.</p>
+          <Button variant="ghost" size="sm" className="shrink-0 whitespace-nowrap" onClick={() => void request()}>
             <BellRing className="h-3.5 w-3.5" />
             Turn on alerts
           </Button>
