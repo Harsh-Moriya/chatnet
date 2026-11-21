@@ -6,7 +6,7 @@ The number is specified in the [encryption formats](../architecture/encryption-f
 
 ## Behaviour
 
-- **Where.** A direct chat has a Safety number button in its header. In a group, each other member has a Safety number item in their menu in the group info.
+- **Where.** A direct chat has a Safety number button in its header (an item of the header's three-dot menu when the header is narrower than 480 px). In a group, each other member has a Safety number item in their menu in the group info.
 - **What is shown.** Sixty digits in twelve groups of five, the name of the person, and how to compare. The number is made from the identity key of the person looking and the identity key this browser remembers for the other person, so it is the same on the other person's screen. If the server had given either of them a key that is not the other's real one, the two numbers differ.
 - **How to compare.** Out loud on a call, in person, or over another channel the server does not carry. If every group matches, nobody is between the two people.
 - **Verified.** After comparing, the person looking can mark the other as verified, and take the mark away again. A verified person shows a mark on the button in the header of a direct chat. The mark belongs to the key it was made for, and it is kept in this browser only: another device of the same person starts without it.

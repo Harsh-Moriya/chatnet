@@ -1,8 +1,9 @@
 import { Suspense, lazy, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Bell, BellOff, Fingerprint, Images, Phone, ShieldCheck, Users, Video } from 'lucide-react'
+import { ArrowLeft, Bell, BellOff, Fingerprint, Images, type LucideIcon, Phone, ShieldCheck, Users, Video } from 'lucide-react'
 import { Avatar } from '../../../components/ui/Avatar'
 import { Button } from '../../../components/ui/Button'
+import { Menu } from '../../../components/ui/Menu'
 import { Tooltip } from '../../../components/ui/Tooltip'
 import { cn } from '../../../lib/cn'
 import { getApiError } from '../../../lib/errors'
@@ -14,6 +15,7 @@ import { useVerified } from '../../encryption/hooks/useVerified'
 import { countOnline, directStatus, groupStatus } from '../../presence/presenceLabel'
 import { usePresenceStore } from '../../presence/store/presenceStore'
 import { setMuted } from '../api/chatApi'
+import { actionsInMenu } from '../headerActions'
 import { useChatStore } from '../store/chatStore'
 import { typingLabel } from '../typingLabel'
 import type { Conversation } from '../types'
@@ -21,6 +23,25 @@ import type { Conversation } from '../types'
 // Opened by a click and not needed to show a conversation, so it is fetched when it is first wanted and not with the page.
 const GroupInfoDialog = lazy(() => import('./GroupInfoDialog').then((module) => ({ default: module.GroupInfoDialog })))
 const GalleryDialog = lazy(() => import('../gallery/GalleryDialog').then((module) => ({ default: module.GalleryDialog })))
+
+// One action of the header: a button, and on a narrow header (see `actionsInMenu`) an item of the three-dot menu as well.
+interface HeaderAction {
+  key: string
+  // The button's name for a screen reader.
+  label: string
+  // What the tooltip says, which is more than the label.
+  description: string
+  // The words in the menu, where the label of a toggle would read oddly.
+  menuLabel: string
+  Icon: LucideIcon
+  // In the accent colour, for a safety number that was compared.
+  accent?: boolean
+  onSelect: () => void
+  disabled?: boolean
+  pressed?: boolean
+  // Always a button, whatever the width: a call, or the group's info.
+  essential: boolean
+}
 
 export function ChatHeader({ conversation }: { conversation: Conversation }) {
   const navigate = useNavigate()
@@ -73,8 +94,77 @@ export function ChatHeader({ conversation }: { conversation: Conversation }) {
     }
   }
 
+  const direct = !isGroup && conversation.otherUserId !== null
+  // In the order of the header. A group that was left keeps only its pictures: its history is still read, so its files are still looked at.
+  const actions: HeaderAction[] = [
+    {
+      key: 'gallery',
+      label: 'Pictures, videos and PDFs',
+      description: 'Every picture, video and PDF in this conversation',
+      menuLabel: 'Pictures, videos and PDFs',
+      Icon: Images,
+      onSelect: () => {
+        setGalleryMounted(true)
+        setGalleryOpen(true)
+      },
+      essential: false,
+    },
+    ...(left
+      ? []
+      : [
+          ...(direct
+            ? [
+                { key: 'audio', label: 'Audio call', description: 'Call by voice', menuLabel: 'Audio call', Icon: Phone, onSelect: () => call('Audio'), disabled: !canCall, essential: true },
+                { key: 'video', label: 'Video call', description: 'Call with video', menuLabel: 'Video call', Icon: Video, onSelect: () => call('Video'), disabled: !canCall, essential: true },
+                {
+                  key: 'safety',
+                  label: verified ? 'Safety number, verified' : 'Safety number',
+                  description: verified ? 'Verified: you compared the safety number' : 'Compare the safety number to be sure nobody is between you',
+                  menuLabel: verified ? 'Safety number, verified' : 'Safety number',
+                  Icon: verified ? ShieldCheck : Fingerprint,
+                  accent: verified,
+                  onSelect: () => {
+                    setSafetyMounted(true)
+                    setSafetyOpen(true)
+                  },
+                  essential: false,
+                },
+              ]
+            : []),
+          ...(isGroup
+            ? [
+                {
+                  key: 'group',
+                  label: 'Group info',
+                  description: 'Who is in this group, and what you can do about it',
+                  menuLabel: 'Group info',
+                  Icon: Users,
+                  onSelect: () => {
+                    setInfoMounted(true)
+                    setInfoOpen(true)
+                  },
+                  essential: true,
+                },
+              ]
+            : []),
+          {
+            key: 'mute',
+            label: conversation.isMuted ? 'Unmute conversation' : 'Mute conversation',
+            description: conversation.isMuted ? 'Muted: no alerts for new messages. Mentions still alert.' : 'Mute alerts for new messages',
+            menuLabel: conversation.isMuted ? 'Unmute alerts' : 'Mute alerts',
+            Icon: conversation.isMuted ? BellOff : Bell,
+            pressed: conversation.isMuted,
+            disabled: changingMute,
+            onSelect: () => void toggleMute(),
+            essential: false,
+          },
+        ]),
+  ]
+  const inMenu = actionsInMenu(actions)
+  const menuKeys = new Set(inMenu.map((action) => action.key))
+
   return (
-    <header className="flex h-16 shrink-0 items-center gap-3 border-b border-line bg-surface px-4">
+    <header className="@container relative z-20 flex h-16 shrink-0 items-center gap-3 border-b border-line bg-surface px-4">
       {/* On a phone the list and the conversation are separate screens; this goes back to the list. */}
       <Button
         variant="ghost"
@@ -103,95 +193,41 @@ export function ChatHeader({ conversation }: { conversation: Conversation }) {
       </div>
 
       <div className="ml-auto flex items-center gap-1">
-        {/* Outside the guard for a group that was left: its history is still read, so its files are still looked at. */}
-        <Tooltip label="Every picture, video and PDF in this conversation">
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label="Pictures, videos and PDFs"
-            onClick={() => {
-              setGalleryMounted(true)
-              setGalleryOpen(true)
-            }}
-          >
-            <Images className="h-5 w-5" />
-          </Button>
-        </Tooltip>
-
-        {!left && (
-          <>
-            {!isGroup && conversation.otherUserId !== null && (
-              <>
-                <Tooltip label="Call by voice">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    aria-label="Audio call"
-                    disabled={!canCall}
-                    onClick={() => call('Audio')}
-                  >
-                    <Phone className="h-5 w-5" />
-                  </Button>
-                </Tooltip>
-                <Tooltip label="Call with video">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    aria-label="Video call"
-                    disabled={!canCall}
-                    onClick={() => call('Video')}
-                  >
-                    <Video className="h-5 w-5" />
-                  </Button>
-                </Tooltip>
-              </>
-            )}
-
-            {!isGroup && conversation.otherUserId !== null && (
-              <Tooltip label={verified ? 'Verified: you compared the safety number' : 'Compare the safety number to be sure nobody is between you'}>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  aria-label={verified ? 'Safety number, verified' : 'Safety number'}
-                  onClick={() => {
-                    setSafetyMounted(true)
-                    setSafetyOpen(true)
-                  }}
-                >
-                  {verified ? <ShieldCheck className="h-5 w-5 text-accent-fg" /> : <Fingerprint className="h-5 w-5" />}
-                </Button>
-              </Tooltip>
-            )}
-
-            {isGroup && (
-              <Tooltip label="Who is in this group, and what you can do about it">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  aria-label="Group info"
-                  onClick={() => {
-                    setInfoMounted(true)
-                    setInfoOpen(true)
-                  }}
-                >
-                  <Users className="h-5 w-5" />
-                </Button>
-              </Tooltip>
-            )}
-
-            <Tooltip label={conversation.isMuted ? 'Muted: no alerts for new messages. Mentions still alert.' : 'Mute alerts for new messages'}>
+        {actions.map((action) => (
+          // `contents` leaves the button where it was in the row; the ones that live in the menu on a narrow header are not shown there.
+          // `@md` is 28rem of the header's content, a header 480 px wide with its padding, and it is the header that is measured, not the window:
+          // with the sidebar open the header is much narrower than the window.
+          <span key={action.key} className={menuKeys.has(action.key) ? 'hidden @md:contents' : 'contents'}>
+            <Tooltip label={action.description}>
               <Button
                 variant="ghost"
                 size="icon"
-                aria-label={conversation.isMuted ? 'Unmute conversation' : 'Mute conversation'}
-                aria-pressed={conversation.isMuted}
-                disabled={changingMute}
-                onClick={() => void toggleMute()}
+                aria-label={action.label}
+                aria-pressed={action.pressed}
+                disabled={action.disabled}
+                onClick={action.onSelect}
               >
-                {conversation.isMuted ? <BellOff className="h-5 w-5" /> : <Bell className="h-5 w-5" />}
+                <action.Icon className={cn('h-5 w-5', action.accent && 'text-accent-fg')} />
               </Button>
             </Tooltip>
-          </>
+          </span>
+        ))}
+
+        {inMenu.length > 0 && (
+          <div className="@md:hidden">
+            <Tooltip label="More actions">
+              <Menu
+                variant="toolbar"
+                label="More actions"
+                items={inMenu.map((action) => ({
+                  label: action.menuLabel,
+                  icon: <action.Icon className={cn('h-4 w-4', action.accent && 'text-accent-fg')} />,
+                  onSelect: action.onSelect,
+                  disabled: action.disabled,
+                }))}
+              />
+            </Tooltip>
+          </div>
         )}
       </div>
 
