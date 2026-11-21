@@ -49,8 +49,8 @@ export function AuthPage() {
 
   return (
     <AuthLayout
-      title={mode === 'login' ? 'Welcome back' : 'Create your account'}
-      subtitle={mode === 'login' ? 'Sign in to continue to ChatNET' : 'Get started with ChatNET today'}
+      title={mode === 'login' ? 'Welcome back' : 'Join ChatNET'}
+      subtitle={mode === 'login' ? 'Sign in to pick up where you left off' : 'Pick a name and say hi.'}
     >
       {passwordChanged && mode === 'login' && (
         <div className="mb-4">

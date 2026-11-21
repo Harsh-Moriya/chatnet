@@ -13,10 +13,10 @@ function BrandPanel() {
 
       <div>
         <h1 className="text-3xl font-bold leading-snug">
-          Real-time conversations<br />for your team.
+          Say hi.<br />Keep it between you.
         </h1>
         <p className="mt-3 max-w-xs text-sm leading-relaxed text-blue-100">
-          Simple, fast, and reliable messaging. Built for how teams actually work.
+          Chats, calls and files with your people, end-to-end encrypted. No work talk required.
         </p>
       </div>
 
