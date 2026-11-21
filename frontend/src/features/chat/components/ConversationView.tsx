@@ -18,7 +18,6 @@ import { LazyFileViewer } from '../viewer/LazyFileViewer'
 import { ChatHeader } from './ChatHeader'
 import { MessageComposer } from './MessageComposer'
 import { MessageList, type OlderMessages } from './MessageList'
-import { TypingIndicator } from './TypingIndicator'
 
 // The route element for /chat/:conversationId. It finds the conversation in the store (which the
 // sidebar's request fills) and decides what to show while that is unknown.
@@ -146,10 +145,7 @@ function ConversationPane({ conversation }: { conversation: Conversation }) {
       {conversation.leftAt !== null ? (
         <LeftNotice leftAt={conversation.leftAt} />
       ) : (
-        <>
-          <TypingIndicator conversationId={conversation.id} />
-          <MessageComposer conversationId={conversation.id} />
-        </>
+        <MessageComposer conversationId={conversation.id} />
       )}
       <LazyFileViewer conversationId={conversation.id} />
     </>
