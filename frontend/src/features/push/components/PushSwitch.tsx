@@ -1,5 +1,7 @@
 import { BellOff, BellRing } from 'lucide-react'
 import { Button } from '../../../components/ui/Button'
+import { Tooltip } from '../../../components/ui/Tooltip'
+import { cn } from '../../../lib/cn'
 import { usePushSwitch } from '../hooks/usePushSwitch'
 import { Alert } from '../../../components/ui/Alert'
 
@@ -26,20 +28,25 @@ export function PushSwitch() {
 
       {(state === 'off' || state === 'on') && (
         <div className="flex items-center justify-between gap-3">
-          <p className="text-xs text-fg-muted">
+          <p className="min-w-0 text-xs text-fg-muted">
             {state === 'on'
               ? 'This browser gets an alert for a message, a mention or an invitation when you are away.'
               : 'Get an alert in this browser for a message, a mention or an invitation when you are away.'}
           </p>
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={busy}
-            onClick={() => void (state === 'on' ? turnOff() : turnOn())}
-          >
-            {state === 'on' ? <BellOff className="h-3.5 w-3.5" /> : <BellRing className="h-3.5 w-3.5" />}
-            {state === 'on' ? 'Turn off' : 'Turn on'}
-          </Button>
+          {/* An icon, so it never wraps on a narrow screen: the words beside it already say what it is for, and its colour says whether it is on. */}
+          <Tooltip label={state === 'on' ? 'Turn alerts off' : 'Turn alerts on'}>
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Alerts when the app is closed"
+              aria-pressed={state === 'on'}
+              disabled={busy}
+              onClick={() => void (state === 'on' ? turnOff() : turnOn())}
+              className={cn(state === 'on' ? 'bg-accent-soft! text-accent-fg! hover:bg-accent-soft-strong!' : 'text-fg-muted!')}
+            >
+              {state === 'on' ? <BellRing className="h-5 w-5" /> : <BellOff className="h-5 w-5" />}
+            </Button>
+          </Tooltip>
         </div>
       )}
 
