@@ -114,9 +114,9 @@ export function Menu({ label, items, align = 'end', variant = 'inline', classNam
           role="menu"
           aria-label={label}
           className={cn(
-            'absolute top-full z-20 mt-1.5 rounded-xl bg-surface p-1.5 shadow-pop',
+            'absolute top-full z-20 mt-1.5 animate-pop rounded-xl bg-surface p-1.5 shadow-pop',
             variant === 'toolbar' ? 'min-w-56' : 'min-w-36',
-            align === 'end' ? 'right-0' : 'left-0',
+            align === 'end' ? 'right-0 origin-top-right' : 'left-0 origin-top-left',
           )}
         >
           {items.map((item) => (

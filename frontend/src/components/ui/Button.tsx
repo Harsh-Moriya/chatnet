@@ -20,7 +20,7 @@ export function Button({
   ...rest
 }: ButtonProps) {
   const base = [
-    'inline-flex items-center justify-center gap-2 font-medium rounded-control transition-colors',
+    'inline-flex items-center justify-center gap-2 font-medium rounded-control transition active:scale-[0.97]',
     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-surface',
     'disabled:opacity-50 disabled:pointer-events-none',
   ].join(' ')

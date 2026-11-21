@@ -75,7 +75,7 @@ export function Sidebar() {
     return () => document.removeEventListener('keydown', closeOnEscape)
   }, [panelOpen])
 
-  const panel = (tab: SidebarView) => cn('min-h-0 flex-1 flex-col', view === tab ? 'flex' : 'hidden')
+  const panel = (tab: SidebarView) => cn('min-h-0 flex-1 flex-col', view === tab ? 'flex animate-fade' : 'hidden')
 
   return (
     <>

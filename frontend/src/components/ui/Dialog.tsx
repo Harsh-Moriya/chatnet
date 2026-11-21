@@ -53,10 +53,10 @@ export function Dialog({ open, onClose, title, children, variant = 'default', di
       }}
       className={
         variant === 'fullscreen'
-          ? 'm-0 h-dvh max-h-none w-dvw max-w-none rounded-none border-0 bg-slate-900 p-0 text-white backdrop:bg-slate-900'
+          ? 'm-0 h-dvh max-h-none w-dvw max-w-none animate-fade rounded-none border-0 bg-slate-900 p-0 text-white backdrop:bg-slate-900'
           : cn(
               // The pop shadow draws the hairline edge too, so there is no border. The box clips what is inside it to its corners.
-              'm-auto w-[calc(100%-2rem)] overflow-hidden rounded-2xl bg-surface p-0 shadow-pop backdrop:bg-slate-900/55 backdrop:backdrop-blur-sm',
+              'm-auto w-[calc(100%-2rem)] animate-pop overflow-hidden rounded-2xl bg-surface p-0 shadow-pop backdrop:animate-fade backdrop:bg-slate-900/55 backdrop:backdrop-blur-sm',
               variant === 'wide'
                 ? 'max-w-4xl max-sm:m-0 max-sm:h-dvh max-sm:max-h-none max-sm:w-dvw max-sm:max-w-none max-sm:rounded-none max-sm:shadow-none'
                 : 'max-w-md',
