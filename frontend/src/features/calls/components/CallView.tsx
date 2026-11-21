@@ -5,10 +5,10 @@ import { Button } from '../../../components/ui/Button'
 import { Dialog } from '../../../components/ui/Dialog'
 import { cn } from '../../../lib/cn'
 import { useNow } from '../../../lib/useNow'
-import { formatTime } from '../../chat/viewer/videoView'
 import type { CallActions } from '../../chat/hooks/chatConnectionContext'
 import { useVerified } from '../../encryption/hooks/useVerified'
 import { useCallStore } from '../callStore'
+import { callStatus } from '../callTexts'
 import { DeviceMenu } from './DeviceMenu'
 
 interface CallViewProps {
@@ -55,18 +55,7 @@ export function CallView({ open, calls }: CallViewProps) {
   const showRemoteVideo = video && phase === 'active'
   const elapsed = answeredAt === null ? 0 : Math.max(0, Math.floor((now.getTime() - answeredAt) / 1000))
 
-  const status =
-    phase === 'starting'
-      ? 'Starting the call'
-      : phase === 'outgoing'
-        ? 'Calling'
-        : phase === 'connecting'
-          ? 'Connecting'
-          : ended
-            ? 'Call ended'
-            : reconnecting
-              ? 'Reconnecting'
-              : formatTime(elapsed)
+  const status = callStatus({ phase, reconnecting, elapsedSeconds: elapsed })
 
   return (
     <Dialog open={open} onClose={() => undefined} title="Call" variant="fullscreen" dismissible={false}>
