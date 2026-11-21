@@ -1,5 +1,4 @@
 import type { ReactNode } from 'react'
-import { AlertCircle, LoaderCircle } from 'lucide-react'
 import { Button } from '../../../components/ui/Button'
 import { cn } from '../../../lib/cn'
 import { useDebouncedValue } from '../../../lib/useDebouncedValue'
@@ -10,6 +9,8 @@ import { MIN_TERM_LENGTH, searchTermFrom } from '../searchRules'
 import { viewOf } from '../searchState'
 import { useSyncStatus } from '../sync/status'
 import { SearchHitRow } from './SearchHitRow'
+import { Alert } from '../../../components/ui/Alert'
+import { Spinner } from '../../../components/ui/Spinner'
 
 // A search over what is on this device is quick, so it waits only as long as typing takes to pause.
 const TYPING_PAUSE_MS = 150
@@ -53,7 +54,7 @@ export function SearchResults({ input }: { input: string }) {
       return (
         <Notice>
           <span className="inline-flex items-center gap-2">
-            <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />
+            <Spinner />
             Searching…
           </span>
         </Notice>
@@ -62,10 +63,7 @@ export function SearchResults({ input }: { input: string }) {
     case 'failed':
       return (
         <div className="flex flex-col items-center gap-3 p-6 text-center">
-          <div className="flex items-start gap-2 rounded-lg border border-danger-line bg-danger-soft px-3 py-2 text-sm text-danger-fg">
-            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-            <span>The messages on this device could not be searched.</span>
-          </div>
+          <Alert>The messages on this device could not be searched.</Alert>
           <Button variant="ghost" size="sm" onClick={() => void search.refetch()}>
             Try again
           </Button>

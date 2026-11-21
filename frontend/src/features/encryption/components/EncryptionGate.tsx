@@ -1,5 +1,5 @@
 import { useEffect, type ReactNode } from 'react'
-import { AlertCircle, LockKeyhole } from 'lucide-react'
+import { LockKeyhole } from 'lucide-react'
 import { Button } from '../../../components/ui/Button'
 import { SessionLoading } from '../../../components/SessionLoading'
 import { loadEncryption } from '../controller'
@@ -10,6 +10,7 @@ import { useEncryptionStore } from '../store'
 import { LockedPanel } from './LockedPanel'
 import { OutdatedPanel } from './OutdatedPanel'
 import { SetUpPanel } from './SetUpPanel'
+import { Alert } from '../../../components/ui/Alert'
 
 // Between signing in and the chat: a person whose browser does not hold their keys sets them up, restores them or links this browser
 // before anything else, because every conversation is sealed to the keys. Once this browser holds them the chat stays, however the state
@@ -73,10 +74,7 @@ function GateContent({ screen }: { screen: Exclude<GateScreen, 'chat' | 'loading
     return (
       <>
         <Heading>Checking your encryption keys</Heading>
-        <div role="alert" className="flex items-start gap-2 rounded-lg border border-danger-line bg-danger-soft px-3 py-2 text-sm text-danger-fg">
-          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-          <span>Your keys could not be checked. Check your connection and try again.</span>
-        </div>
+        <Alert role="alert">Your keys could not be checked. Check your connection and try again.</Alert>
         <Button size="sm" onClick={() => void loadEncryption()}>
           Try again
         </Button>

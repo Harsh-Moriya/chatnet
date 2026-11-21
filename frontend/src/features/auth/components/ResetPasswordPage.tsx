@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
-import { AlertCircle, Eye, EyeOff } from 'lucide-react'
+import { Eye, EyeOff } from 'lucide-react'
 import { AuthLayout } from './AuthLayout'
 import { AuthNotice } from './AuthNotice'
 import { resetPassword } from '../api/passwordResetApi'
@@ -13,6 +13,7 @@ import { useAuthStore } from '../store/authStore'
 import { Button } from '../../../components/ui/Button'
 import { FormField } from '../../../components/ui/FormField'
 import { getApiError, getFieldErrors } from '../../../lib/errors'
+import { Alert } from '../../../components/ui/Alert'
 
 // ##### Reset password #####
 
@@ -120,10 +121,7 @@ function ResetForm({ token }: { token: string | null }) {
     <AuthLayout title="Choose a new password" subtitle="You will be signed out everywhere and asked to sign in again">
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         {generalError && (
-          <div className="flex items-start gap-2.5 rounded-lg border border-danger-line bg-danger-soft px-3.5 py-3">
-            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-danger-fg" />
-            <p className="text-sm text-danger-fg">{generalError}</p>
-          </div>
+          <Alert>{generalError}</Alert>
         )}
 
         <FormField

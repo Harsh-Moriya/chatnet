@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { Eye, EyeOff, AlertCircle } from 'lucide-react'
+import { Eye, EyeOff } from 'lucide-react'
 import type { RegisterRequest } from '../types'
 import { FormField } from '../../../components/ui/FormField'
 import { Button } from '../../../components/ui/Button'
+import { Alert } from '../../../components/ui/Alert'
 
 interface Props {
   onSubmit: (data: RegisterRequest) => void
@@ -25,10 +26,7 @@ export function RegisterForm({ onSubmit, isLoading, error }: Props) {
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
       {error && (
-        <div className="flex items-start gap-2.5 rounded-lg border border-danger-line bg-danger-soft px-3.5 py-3">
-          <AlertCircle className="h-4 w-4 shrink-0 text-danger-fg mt-0.5" />
-          <p className="text-sm text-danger-fg">{error}</p>
-        </div>
+        <Alert>{error}</Alert>
       )}
 
       <div className="grid grid-cols-2 gap-3">

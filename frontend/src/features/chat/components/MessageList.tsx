@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { AlertCircle, ChevronDown, LoaderCircle, Pencil, Trash2 } from 'lucide-react'
+import { ChevronDown, MessageCircle, Pencil, Trash2 } from 'lucide-react'
 import { Button } from '../../../components/ui/Button'
 import { useStartCall } from '../../calls/useStartCall'
 import type { MenuItem } from '../../../components/ui/Menu'
@@ -22,6 +22,11 @@ import { DeleteMessageDialog } from './DeleteMessageDialog'
 import { MessageBubble } from './MessageBubble'
 import { MessageEditor } from './MessageEditor'
 import { PendingAttachments } from './PendingAttachments'
+import { Alert } from '../../../components/ui/Alert'
+import { Pill } from '../../../components/ui/Pill'
+import { Spinner } from '../../../components/ui/Spinner'
+import { EmptyState } from '../../../components/ui/EmptyState'
+import { Skeleton } from '../../../components/ui/Skeleton'
 
 // How long the message a notification pointed at keeps its ring.
 const HIGHLIGHT_MS = 2500
@@ -232,17 +237,14 @@ export function MessageList({ conversation, isLoading, errorMessage, onRetry, ol
     <div ref={scroller} onScroll={handleScroll} className="flex-1 overflow-y-auto px-4 py-4 [overflow-anchor:none]">
       {!nothingToShow && loadingOlder && (
         <div className="flex h-8 items-center justify-center gap-2 text-xs text-fg-muted">
-          <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
+          <Spinner size="xs" />
           Loading earlier messages…
         </div>
       )}
 
       {!nothingToShow && !loadingOlder && olderError && (
         <div className="mb-2 flex flex-col items-center gap-2 text-center">
-          <div className="flex items-start gap-2 rounded-lg border border-danger-line bg-danger-soft px-3 py-2 text-sm text-danger-fg">
-            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-            <span>{olderError}</span>
-          </div>
+          <Alert>{olderError}</Alert>
           <Button variant="secondary" size="sm" onClick={loadOlder}>
             Try again
           </Button>
@@ -254,18 +256,12 @@ export function MessageList({ conversation, isLoading, errorMessage, onRetry, ol
       {reachedStart && <p className="flex h-8 items-center justify-center text-xs text-fg-faint">Beginning of the conversation</p>}
 
       {nothingToShow && isLoading && (
-        <div className="flex h-full items-center justify-center gap-2 text-sm text-fg-muted">
-          <LoaderCircle className="h-4 w-4 animate-spin" />
-          Loading messages…
-        </div>
+        <ThreadSkeleton />
       )}
 
       {nothingToShow && !isLoading && errorMessage && (
         <div className="mx-auto mt-8 flex max-w-sm flex-col items-center gap-3 text-center">
-          <div className="flex items-start gap-2 rounded-lg border border-danger-line bg-danger-soft px-3 py-2 text-sm text-danger-fg">
-            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-            <span>{errorMessage}</span>
-          </div>
+          <Alert>{errorMessage}</Alert>
           <Button variant="secondary" size="sm" onClick={onRetry}>
             Try again
           </Button>
@@ -273,16 +269,18 @@ export function MessageList({ conversation, isLoading, errorMessage, onRetry, ol
       )}
 
       {nothingToShow && !isLoading && !errorMessage && (
-        <p className="mt-8 text-center text-sm text-fg-muted">No messages yet. Say hello.</p>
+        <EmptyState icon={MessageCircle} title="No messages yet" className="mt-8">
+          Say hello to start the conversation.
+        </EmptyState>
       )}
 
       {items.map((item) => {
         if (item.kind === 'day') {
           return (
             <div key={item.key} className="my-4 flex justify-center">
-              <span className="rounded-full bg-strong/70 px-3 py-1 text-xs font-medium text-fg-muted">
+              <Pill tone="chip" size="md">
                 {item.label}
-              </span>
+              </Pill>
             </div>
           )
         }
@@ -382,17 +380,14 @@ export function MessageList({ conversation, isLoading, errorMessage, onRetry, ol
 
       {inWindow && loadingNewer && (
         <div className="flex h-8 items-center justify-center gap-2 text-xs text-fg-muted">
-          <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
+          <Spinner size="xs" />
           Loading newer messages…
         </div>
       )}
 
       {inWindow && !loadingNewer && newerError && (
         <div className="mt-2 flex flex-col items-center gap-2 text-center">
-          <div className="flex items-start gap-2 rounded-lg border border-danger-line bg-danger-soft px-3 py-2 text-sm text-danger-fg">
-            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-            <span>{newerError}</span>
-          </div>
+          <Alert>{newerError}</Alert>
           <Button variant="secondary" size="sm" onClick={loadNewer}>
             Try again
           </Button>
@@ -431,6 +426,20 @@ export function MessageList({ conversation, isLoading, errorMessage, onRetry, ol
         }
         onClose={() => setDeleting(null)}
       />
+    </div>
+  )
+}
+
+// The shape of a conversation while its messages load: a few bubbles from each side.
+function ThreadSkeleton() {
+  return (
+    <div role="status" className="space-y-3 pt-4">
+      <span className="sr-only">Loading messages</span>
+      <Skeleton className="h-10 w-48 rounded-bubble" />
+      <Skeleton className="h-16 w-64 rounded-bubble opacity-60" />
+      <Skeleton className="ml-auto h-10 w-40 rounded-bubble" />
+      <Skeleton className="h-10 w-56 rounded-bubble opacity-60" />
+      <Skeleton className="ml-auto h-16 w-52 rounded-bubble" />
     </div>
   )
 }

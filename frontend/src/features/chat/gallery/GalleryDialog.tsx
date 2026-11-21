@@ -1,6 +1,7 @@
 import { useInfiniteQuery } from '@tanstack/react-query'
-import { AlertCircle, FileText, Image as ImageIcon, LoaderCircle, Play } from 'lucide-react'
+import { AlertCircle, FileText, Image as ImageIcon, Images, Play } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
+import { Alert } from '../../../components/ui/Alert'
 import { Button } from '../../../components/ui/Button'
 import { Dialog } from '../../../components/ui/Dialog'
 import { cn } from '../../../lib/cn'
@@ -14,6 +15,9 @@ import type { ViewerItem } from '../viewer/viewerItems'
 import { useViewerStore } from '../viewer/viewerStore'
 import { deletedIdsOf, galleryItemsOf } from './galleryItems'
 import { galleryQueryOptions } from './galleryQuery'
+import { Spinner } from '../../../components/ui/Spinner'
+import { EmptyState } from '../../../components/ui/EmptyState'
+import { Skeleton } from '../../../components/ui/Skeleton'
 
 interface GalleryDialogProps {
   conversationId: string
@@ -49,8 +53,13 @@ function GalleryContent({ conversationId }: { conversationId: string }) {
 
   if (query.isPending) {
     return (
-      <div role="status" aria-label="Loading" className="flex flex-1 items-center justify-center p-8">
-        <LoaderCircle className="h-8 w-8 animate-spin text-fg-muted" aria-hidden="true" />
+      <div role="status" className="min-h-0 flex-1 overflow-hidden p-2">
+        <span className="sr-only">Loading</span>
+        <div className="grid grid-cols-3 gap-1 sm:grid-cols-4 md:grid-cols-5">
+          {Array.from({ length: 15 }, (_, index) => (
+            <Skeleton key={index} className="aspect-square rounded-lg" />
+          ))}
+        </div>
       </div>
     )
   }
@@ -64,7 +73,11 @@ function GalleryContent({ conversationId }: { conversationId: string }) {
   }
 
   if (items.length === 0 && !hasNextPage) {
-    return <p className="p-8 text-center text-sm text-fg-muted">No pictures, videos or PDFs here yet.</p>
+    return (
+      <EmptyState icon={Images} title="No pictures, videos or PDFs">
+        Files shared in this conversation will show up here.
+      </EmptyState>
+    )
   }
 
   return (
@@ -82,7 +95,7 @@ function GalleryContent({ conversationId }: { conversationId: string }) {
         {isFetchNextPageError ? (
           <ErrorBanner message={getApiError(query.error)} onRetry={() => void fetchNextPage()} />
         ) : hasNextPage ? (
-          <LoaderCircle role="status" aria-label="Loading more" className="h-5 w-5 animate-spin text-fg-muted" />
+          <Spinner size="md" label="Loading more" className="text-fg-muted" />
         ) : null}
       </div>
     </div>
@@ -91,13 +104,17 @@ function GalleryContent({ conversationId }: { conversationId: string }) {
 
 function ErrorBanner({ message, onRetry }: { message: string; onRetry: () => void }) {
   return (
-    <div role="alert" className="flex w-full items-center gap-2 rounded-lg border border-danger-line bg-danger-soft px-3 py-2 text-sm text-danger-fg">
-      <AlertCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
-      <span className="min-w-0 flex-1">{message}</span>
-      <Button variant="secondary" size="sm" onClick={onRetry}>
-        Try again
-      </Button>
-    </div>
+    <Alert
+      role="alert"
+      className="w-full"
+      action={
+        <Button variant="secondary" size="sm" onClick={onRetry}>
+          Try again
+        </Button>
+      }
+    >
+      {message}
+    </Alert>
   )
 }
 

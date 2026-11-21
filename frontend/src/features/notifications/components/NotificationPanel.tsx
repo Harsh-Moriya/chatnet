@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { AlertCircle, BellRing, CheckCheck, LoaderCircle, X } from 'lucide-react'
+import { Bell, BellRing, CheckCheck, X } from 'lucide-react'
+import { Alert } from '../../../components/ui/Alert'
 import { Button } from '../../../components/ui/Button'
 import { getApiError } from '../../../lib/errors'
 import { useNow } from '../../../lib/useNow'
@@ -11,6 +12,8 @@ import { useNotificationStore } from '../store/notificationStore'
 import type { NotificationItem } from '../types'
 import { useAlertPermission } from '../useAlertPermission'
 import { NotificationRow } from './NotificationRow'
+import { EmptyState } from '../../../components/ui/EmptyState'
+import { RowsSkeleton } from '../../../components/ui/Skeleton'
 
 interface NotificationPanelProps {
   id: string
@@ -95,21 +98,14 @@ export function NotificationPanel({ id, onClose }: NotificationPanelProps) {
       )}
 
       {problem && (
-        <div
-          className="m-3 flex shrink-0 items-start gap-2 rounded-lg border border-danger-line bg-danger-soft px-3 py-2 text-sm text-danger-fg"
-          role="alert"
-        >
-          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-          <span>{problem}</span>
-        </div>
+        <Alert role="alert" className="m-3 shrink-0">
+          {problem}
+        </Alert>
       )}
 
       <div className="flex-1 overflow-y-auto">
         {!loaded && query.isPending && (
-          <div className="flex items-center justify-center gap-2 p-8 text-sm text-fg-muted">
-            <LoaderCircle className="h-4 w-4 animate-spin" />
-            Loading…
-          </div>
+          <RowsSkeleton rows={4} label="Loading notifications" />
         )}
 
         {!loaded && query.isError && (
@@ -122,7 +118,9 @@ export function NotificationPanel({ id, onClose }: NotificationPanelProps) {
         )}
 
         {loaded && items.length === 0 && (
-          <p className="p-8 text-center text-sm text-fg-muted">You are all caught up.</p>
+          <EmptyState icon={Bell} title="You are all caught up">
+            New alerts will show up here.
+          </EmptyState>
         )}
 
         {items.length > 0 && (

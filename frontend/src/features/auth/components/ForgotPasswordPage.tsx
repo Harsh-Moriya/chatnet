@@ -1,13 +1,13 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
-import { AlertCircle } from 'lucide-react'
 import { AuthLayout } from './AuthLayout'
 import { AuthNotice } from './AuthNotice'
 import { requestPasswordReset } from '../api/passwordResetApi'
 import { Button } from '../../../components/ui/Button'
 import { FormField } from '../../../components/ui/FormField'
 import { getApiError, getFieldErrors } from '../../../lib/errors'
+import { Alert } from '../../../components/ui/Alert'
 
 // ##### Forgot password #####
 
@@ -36,10 +36,7 @@ export function ForgotPasswordPage() {
       ) : (
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           {request.error && !fieldError && (
-            <div className="flex items-start gap-2.5 rounded-lg border border-danger-line bg-danger-soft px-3.5 py-3">
-              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-danger-fg" />
-              <p className="text-sm text-danger-fg">{getApiError(request.error)}</p>
-            </div>
+            <Alert>{getApiError(request.error)}</Alert>
           )}
 
           <FormField

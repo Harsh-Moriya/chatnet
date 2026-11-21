@@ -11,6 +11,7 @@ import { unreadLabel } from '../readState'
 import { typingLabel } from '../typingLabel'
 import type { Conversation } from '../types'
 import { unreadableText } from '../unreadable'
+import { Pill } from '../../../components/ui/Pill'
 
 interface ConversationListItemProps {
   conversation: Conversation
@@ -59,9 +60,7 @@ export function ConversationListItem({ conversation, currentUserId, now }: Conve
                     <BellOff className="h-3.5 w-3.5 shrink-0 text-fg-faint" role="img" aria-label="Muted" />
                   )}
                   {conversation.leftAt !== null && (
-                    <span className="shrink-0 rounded-full bg-subtle px-1.5 py-0.5 text-[10px] font-medium text-fg-muted">
-                      Left
-                    </span>
+                    <Pill>Left</Pill>
                   )}
                 </p>
                 <time className={cn('shrink-0 text-xs', unread ? 'font-medium text-accent-fg' : 'text-fg-muted')} dateTime={last?.createdAt ?? conversation.updatedAt}>
@@ -102,16 +101,10 @@ export function ConversationListItem({ conversation, currentUserId, now }: Conve
                 {/* Not shown for the conversation that is open: its messages are in front of the reader,
                     and the jump button in the list says how many are below. */}
                 {unread && !isActive && (
-                  <span
-                    className={cn(
-                      'inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full px-1.5 text-[11px] font-semibold text-white',
-                      // A muted conversation still counts what is unread, but does not ask for attention.
-                      conversation.isMuted ? 'bg-slate-500' : 'bg-blue-600',
-                    )}
-                    aria-label={`${unreadLabel(conversation.unreadCount)} unread`}
-                  >
+                  // A muted conversation still counts what is unread, but does not ask for attention.
+                  <Pill tone={conversation.isMuted ? 'quiet' : 'solid'} size="count" aria-label={`${unreadLabel(conversation.unreadCount)} unread`}>
                     {unreadLabel(conversation.unreadCount)}
-                  </span>
+                  </Pill>
                 )}
               </div>
             </div>

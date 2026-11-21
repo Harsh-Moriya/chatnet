@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { AlertCircle, X } from 'lucide-react'
+import { X } from 'lucide-react'
 import { Button } from '../../../components/ui/Button'
 import { Input } from '../../../components/ui/Input'
 import { getApiError } from '../../../lib/errors'
@@ -11,6 +11,7 @@ import { contactIdsOf } from '../peopleOrder'
 import { useChatStore } from '../store/chatStore'
 import type { Conversation, UserSummary } from '../types'
 import { PeoplePicker } from './PeoplePicker'
+import { Alert } from '../../../components/ui/Alert'
 
 interface NewConversationPanelProps {
   // Called once a conversation has been made and opened, so the sidebar can show its list again.
@@ -73,10 +74,7 @@ export function NewConversationPanel({ onDone, seed }: NewConversationPanelProps
       {(failure || members.length > 0) && (
         <div className="flex shrink-0 flex-col gap-3 border-t border-line p-4">
           {failure && (
-            <div role="alert" className="flex items-start gap-2 rounded-lg border border-danger-line bg-danger-soft px-3 py-2 text-sm text-danger-fg">
-              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-              <span>{describeKeyFailure(failure, nameOf) ?? getApiError(failure)}</span>
-            </div>
+            <Alert role="alert">{describeKeyFailure(failure, nameOf) ?? getApiError(failure)}</Alert>
           )}
 
           {members.length > 0 && (

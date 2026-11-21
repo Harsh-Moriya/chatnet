@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Check, Search } from 'lucide-react'
+import { Check, Search, SearchX } from 'lucide-react'
 import { Avatar } from '../../../components/ui/Avatar'
 import { Input } from '../../../components/ui/Input'
 import { cn } from '../../../lib/cn'
@@ -9,6 +9,8 @@ import { SearchRow } from '../../search/components/SearchBox'
 import { useUserSearch } from '../api/useUserSearch'
 import { newPeopleFirst } from '../peopleOrder'
 import type { UserSummary } from '../types'
+import { Pill } from '../../../components/ui/Pill'
+import { EmptyState } from '../../../components/ui/EmptyState'
 
 const NO_ONE: ReadonlySet<string> = new Set()
 
@@ -59,7 +61,13 @@ export function PeoplePicker({ onPick, selectedIds, excludeIds, disabled = false
         )}
 
         {enoughToSearch && !search.isError && results.length === 0 && (
-          <p className="py-4 text-center text-sm text-fg-muted">{search.isFetching ? 'Searching…' : 'No one found.'}</p>
+          search.isFetching ? (
+            <p className="py-4 text-center text-sm text-fg-muted">Searching…</p>
+          ) : (
+            <EmptyState icon={SearchX} title="No one found" className="px-0">
+              Check the spelling, or try a username.
+            </EmptyState>
+          )
         )}
 
         {enoughToSearch && results.length > 0 && (
@@ -85,7 +93,7 @@ export function PeoplePicker({ onPick, selectedIds, excludeIds, disabled = false
                       <span className="block truncate text-sm font-medium text-fg">{person.displayName}</span>
                       <span className="block truncate text-xs text-fg-muted">@{person.userName}</span>
                     </span>
-                    {chatted && <span className="shrink-0 rounded-full bg-subtle px-2 py-0.5 text-[11px] text-fg-muted">In your chats</span>}
+                    {chatted && <Pill>In your chats</Pill>}
                     {selectedIds && (
                       <span
                         aria-hidden="true"

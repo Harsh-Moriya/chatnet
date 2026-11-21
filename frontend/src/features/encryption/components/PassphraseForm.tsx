@@ -12,10 +12,12 @@ interface PassphraseFormProps {
   // that already exists and the backup decides whether it is right.
   confirm?: boolean
   busy: boolean
+  // The button is red, for a form whose answer destroys something (a device is removed and the keys renewed).
+  destructive?: boolean
   onSubmit: (passphrase: string) => void
 }
 
-export function PassphraseForm({ idPrefix, label, submitLabel, confirm = false, busy, onSubmit }: PassphraseFormProps) {
+export function PassphraseForm({ idPrefix, label, submitLabel, confirm = false, busy, destructive = false, onSubmit }: PassphraseFormProps) {
   const [passphrase, setPassphrase] = useState('')
   const [repeat, setRepeat] = useState('')
   const [attempted, setAttempted] = useState(false)
@@ -54,7 +56,7 @@ export function PassphraseForm({ idPrefix, label, submitLabel, confirm = false, 
           {problem}
         </p>
       )}
-      <Button type="submit" isLoading={busy}>
+      <Button type="submit" variant={destructive ? 'danger' : 'primary'} isLoading={busy}>
         {submitLabel}
       </Button>
     </form>

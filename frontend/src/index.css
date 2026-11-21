@@ -69,7 +69,7 @@
 
   --t-accent-soft: var(--color-blue-50);
   --t-accent-soft-strong: var(--color-blue-100);
-  --t-accent-fg: var(--color-blue-600);
+  --t-accent-fg: var(--color-blue-700);
 
   --t-danger-soft: var(--color-red-50);
   --t-danger-line: var(--color-red-200);

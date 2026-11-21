@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Link, useLocation, useParams } from 'react-router-dom'
-import { AlertCircle, LoaderCircle } from 'lucide-react'
+import { AlertCircle } from 'lucide-react'
 import { getApiError } from '../../../lib/errors'
 import { formatClock, formatDayLabel } from '../../../lib/format'
 import { focusedMessageId } from '../../notifications/navigation'
@@ -18,6 +18,7 @@ import { LazyFileViewer } from '../viewer/LazyFileViewer'
 import { ChatHeader } from './ChatHeader'
 import { MessageComposer } from './MessageComposer'
 import { MessageList, type OlderMessages } from './MessageList'
+import { Spinner } from '../../../components/ui/Spinner'
 
 // The route element for /chat/:conversationId. It finds the conversation in the store (which the
 // sidebar's request fills) and decides what to show while that is unknown.
@@ -34,7 +35,7 @@ export function ConversationView() {
   if (list.isPending) {
     return (
       <div className="flex flex-1 items-center justify-center gap-2 text-sm text-fg-muted">
-        <LoaderCircle className="h-4 w-4 animate-spin" />
+        <Spinner />
         Loading…
       </div>
     )

@@ -1,5 +1,5 @@
 import { type FormEvent, useState } from 'react'
-import { AlertCircle, Crown, Fingerprint, LogOut, ShieldCheck, User, UserMinus, UserPlus, X } from 'lucide-react'
+import { Crown, Fingerprint, LogOut, ShieldCheck, User, UserMinus, UserPlus, X } from 'lucide-react'
 import { Avatar } from '../../../components/ui/Avatar'
 import { AvatarPicker } from '../../../components/ui/AvatarPicker'
 import { Button } from '../../../components/ui/Button'
@@ -17,6 +17,8 @@ import { MAX_GROUP_NAME_LENGTH, canManage, memberActions, roleOf, roomLeft } fro
 import { useChatStore } from '../store/chatStore'
 import type { Conversation, Member, UserSummary } from '../types'
 import { PeoplePicker } from './PeoplePicker'
+import { Alert } from '../../../components/ui/Alert'
+import { Pill } from '../../../components/ui/Pill'
 
 interface GroupInfoDialogProps {
   conversation: Conversation
@@ -155,10 +157,7 @@ function GroupInfo({ conversation, onDone }: { conversation: Conversation; onDon
   return (
     <div className="flex min-h-0 flex-col gap-4 overflow-y-auto p-5">
       {error && (
-        <div role="alert" className="flex items-start gap-2 rounded-lg border border-danger-line bg-danger-soft px-3 py-2 text-sm text-danger-fg">
-          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-          <span>{error}</span>
-        </div>
+        <Alert role="alert">{error}</Alert>
       )}
 
       {manager ? (
@@ -214,9 +213,7 @@ function GroupInfo({ conversation, onDone }: { conversation: Conversation; onDon
                   <p className="truncate text-xs text-fg-muted">@{member.userName}</p>
                 </div>
                 {member.role !== 'Member' && (
-                  <span className="rounded-full bg-accent-soft px-2 py-0.5 text-xs font-medium text-accent-fg">
-                    {member.role}
-                  </span>
+                  <Pill tone="accent">{member.role}</Pill>
                 )}
                 {items.length > 0 && <Menu label={`Actions for ${member.displayName}`} items={items} />}
               </li>
@@ -286,7 +283,7 @@ function GroupInfo({ conversation, onDone }: { conversation: Conversation; onDon
         <div role="alertdialog" aria-label="Confirm" className="rounded-lg border border-line bg-page p-3">
           <p className="text-sm text-fg">{confirmationText(confirming, role === 'Owner')}</p>
           <div className="mt-3 flex gap-2">
-            <Button size="sm" isLoading={busy} onClick={() => void confirm()}>
+            <Button size="sm" variant={confirming.kind === 'owner' ? 'primary' : 'danger'} isLoading={busy} onClick={() => void confirm()}>
               {confirming.kind === 'leave' ? 'Leave' : confirming.kind === 'remove' ? 'Remove' : 'Make owner'}
             </Button>
             <Button size="sm" variant="ghost" disabled={busy} onClick={() => setConfirming(null)}>
