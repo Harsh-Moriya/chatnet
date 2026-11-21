@@ -123,6 +123,12 @@ Password reset needs a mail relay. Without `SMTP_HOST` in `.env.prod` the stack 
 
 The API container must reach the relay on its port, outbound. The reset link points at `https://<DOMAIN>/reset-password`. Mail is sent by the outbox relay within a few seconds of the request, and a request that waits more than ten minutes (the relay was down) is dropped.
 
+## Link previews
+
+A link to the site shows a title, a line and a picture on LinkedIn, Slack, WhatsApp and X. Those services fetch the page once and read the Open Graph tags in `frontend/index.html` (`og:title`, `og:description`, `og:url`, `og:image`, and `twitter:card` for X); they run no script, so the tags are in that file and not in the application. The picture is `frontend/public/og-image.png`, 1200 x 630 pixels. Both addresses in the tags are absolute and name the public domain: **change them in `index.html` when the domain changes**. `robots.txt` allows every crawler.
+
+The tags reach the world when the web image is rebuilt and deployed (see [Updating](#updating)). A service keeps the preview it first made for a link, so a link that was shared before the tags existed shows nothing or the old preview until it is refreshed: for LinkedIn open the [Post Inspector](https://www.linkedin.com/post-inspector/), enter the address and press Inspect; it fetches the page again and the preview is renewed for new posts.
+
 ## Limits
 
 - The relay does not speak TLS (`turns:`), so a network that lets out only port 443 cannot relay a call. At most about 300 relay ports are in use at once (see [Calls](#calls-the-turn-server)).
