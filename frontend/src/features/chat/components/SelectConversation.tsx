@@ -1,6 +1,6 @@
 import { Logo } from '../../../components/Logo'
 
-export function EmptyState() {
+export function SelectConversation() {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
       <Logo tile size={64} />

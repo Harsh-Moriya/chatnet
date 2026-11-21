@@ -1,5 +1,5 @@
 import { useInfiniteQuery } from '@tanstack/react-query'
-import { AlertCircle, FileText, Image as ImageIcon, Play } from 'lucide-react'
+import { AlertCircle, FileText, Image as ImageIcon, Images, Play } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Alert } from '../../../components/ui/Alert'
 import { Button } from '../../../components/ui/Button'
@@ -16,6 +16,8 @@ import { useViewerStore } from '../viewer/viewerStore'
 import { deletedIdsOf, galleryItemsOf } from './galleryItems'
 import { galleryQueryOptions } from './galleryQuery'
 import { Spinner } from '../../../components/ui/Spinner'
+import { EmptyState } from '../../../components/ui/EmptyState'
+import { Skeleton } from '../../../components/ui/Skeleton'
 
 interface GalleryDialogProps {
   conversationId: string
@@ -51,8 +53,13 @@ function GalleryContent({ conversationId }: { conversationId: string }) {
 
   if (query.isPending) {
     return (
-      <div role="status" aria-label="Loading" className="flex flex-1 items-center justify-center p-8">
-        <Spinner size="lg" className="text-fg-muted" />
+      <div role="status" className="min-h-0 flex-1 overflow-hidden p-2">
+        <span className="sr-only">Loading</span>
+        <div className="grid grid-cols-3 gap-1 sm:grid-cols-4 md:grid-cols-5">
+          {Array.from({ length: 15 }, (_, index) => (
+            <Skeleton key={index} className="aspect-square rounded-lg" />
+          ))}
+        </div>
       </div>
     )
   }
@@ -66,7 +73,11 @@ function GalleryContent({ conversationId }: { conversationId: string }) {
   }
 
   if (items.length === 0 && !hasNextPage) {
-    return <p className="p-8 text-center text-sm text-fg-muted">No pictures, videos or PDFs here yet.</p>
+    return (
+      <EmptyState icon={Images} title="No pictures, videos or PDFs">
+        Files shared in this conversation will show up here.
+      </EmptyState>
+    )
   }
 
   return (

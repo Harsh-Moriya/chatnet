@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { ChevronDown, Pencil, Trash2 } from 'lucide-react'
+import { ChevronDown, MessageCircle, Pencil, Trash2 } from 'lucide-react'
 import { Button } from '../../../components/ui/Button'
 import { useStartCall } from '../../calls/useStartCall'
 import type { MenuItem } from '../../../components/ui/Menu'
@@ -25,6 +25,8 @@ import { PendingAttachments } from './PendingAttachments'
 import { Alert } from '../../../components/ui/Alert'
 import { Pill } from '../../../components/ui/Pill'
 import { Spinner } from '../../../components/ui/Spinner'
+import { EmptyState } from '../../../components/ui/EmptyState'
+import { Skeleton } from '../../../components/ui/Skeleton'
 
 // How long the message a notification pointed at keeps its ring.
 const HIGHLIGHT_MS = 2500
@@ -254,10 +256,7 @@ export function MessageList({ conversation, isLoading, errorMessage, onRetry, ol
       {reachedStart && <p className="flex h-8 items-center justify-center text-xs text-fg-faint">Beginning of the conversation</p>}
 
       {nothingToShow && isLoading && (
-        <div className="flex h-full items-center justify-center gap-2 text-sm text-fg-muted">
-          <Spinner />
-          Loading messages…
-        </div>
+        <ThreadSkeleton />
       )}
 
       {nothingToShow && !isLoading && errorMessage && (
@@ -270,7 +269,9 @@ export function MessageList({ conversation, isLoading, errorMessage, onRetry, ol
       )}
 
       {nothingToShow && !isLoading && !errorMessage && (
-        <p className="mt-8 text-center text-sm text-fg-muted">No messages yet. Say hello.</p>
+        <EmptyState icon={MessageCircle} title="No messages yet" className="mt-8">
+          Say hello to start the conversation.
+        </EmptyState>
       )}
 
       {items.map((item) => {
@@ -425,6 +426,20 @@ export function MessageList({ conversation, isLoading, errorMessage, onRetry, ol
         }
         onClose={() => setDeleting(null)}
       />
+    </div>
+  )
+}
+
+// The shape of a conversation while its messages load: a few bubbles from each side.
+function ThreadSkeleton() {
+  return (
+    <div role="status" className="space-y-3 pt-4">
+      <span className="sr-only">Loading messages</span>
+      <Skeleton className="h-10 w-48 rounded-bubble" />
+      <Skeleton className="h-16 w-64 rounded-bubble opacity-60" />
+      <Skeleton className="ml-auto h-10 w-40 rounded-bubble" />
+      <Skeleton className="h-10 w-56 rounded-bubble opacity-60" />
+      <Skeleton className="ml-auto h-16 w-52 rounded-bubble" />
     </div>
   )
 }

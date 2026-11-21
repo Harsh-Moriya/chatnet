@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect, useState } from 'react'
-import { LogOut } from 'lucide-react'
+import { LogOut, Search } from 'lucide-react'
 import { Avatar } from '../../../components/ui/Avatar'
 import { Button } from '../../../components/ui/Button'
 import { cn } from '../../../lib/cn'
@@ -16,6 +16,7 @@ import { ConnectionBanner } from './ConnectionBanner'
 import { ConversationList } from './ConversationList'
 import { NewConversationPanel } from './NewConversationPanel'
 import { SidebarBar } from './SidebarBar'
+import { EmptyState } from '../../../components/ui/EmptyState'
 
 // Opened by a click and not needed to show the list, so it is fetched when it is first wanted and not with the page.
 const ProfileDialog = lazy(() =>
@@ -122,7 +123,9 @@ export function Sidebar() {
           {searching ? (
             <SearchResults input={searchInput} />
           ) : (
-            <p className="p-8 text-center text-sm text-fg-muted">Search the messages kept on this device.</p>
+            <EmptyState icon={Search} title="Search your messages">
+              Looks through the messages kept on this device.
+            </EmptyState>
           )}
         </div>
 

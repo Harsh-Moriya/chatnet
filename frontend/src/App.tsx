@@ -3,7 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 import { AuthPage } from './features/auth/components/AuthPage'
 import { ChatPage } from './features/chat/components/ChatPage'
 import { ConversationView } from './features/chat/components/ConversationView'
-import { EmptyState } from './features/chat/components/EmptyState'
+import { SelectConversation } from './features/chat/components/SelectConversation'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { SessionLoading } from './components/SessionLoading'
 
@@ -56,7 +56,7 @@ export default function App() {
           </ProtectedRoute>
         }
       >
-        <Route index element={<EmptyState />} />
+        <Route index element={<SelectConversation />} />
         <Route path=":conversationId" element={<ConversationView />} />
       </Route>
 
