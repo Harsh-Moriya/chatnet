@@ -30,6 +30,7 @@ export function RemoveDevicePanel({ device, onCancel, onRemoved }: RemoveDeviceP
         <div className="flex flex-wrap gap-2">
           <Button
             size="sm"
+            variant="danger"
             isLoading={busy}
             onClick={() => void run(() => removeDevice(device.id)).then((worked) => worked && onRemoved(`${device.name} was removed.`))}
           >
@@ -63,6 +64,7 @@ export function RemoveDevicePanel({ device, onCancel, onRemoved }: RemoveDeviceP
             idPrefix={`lost-${device.id}`}
             label="Recovery passphrase"
             submitLabel="Remove it and renew my keys"
+            destructive
             busy={busy}
             onSubmit={(passphrase) =>
               void run(() => removeLostDevice(passphrase, device.id)).then(

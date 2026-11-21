@@ -283,7 +283,7 @@ function GroupInfo({ conversation, onDone }: { conversation: Conversation; onDon
         <div role="alertdialog" aria-label="Confirm" className="rounded-lg border border-line bg-page p-3">
           <p className="text-sm text-fg">{confirmationText(confirming, role === 'Owner')}</p>
           <div className="mt-3 flex gap-2">
-            <Button size="sm" isLoading={busy} onClick={() => void confirm()}>
+            <Button size="sm" variant={confirming.kind === 'owner' ? 'primary' : 'danger'} isLoading={busy} onClick={() => void confirm()}>
               {confirming.kind === 'leave' ? 'Leave' : confirming.kind === 'remove' ? 'Remove' : 'Make owner'}
             </Button>
             <Button size="sm" variant="ghost" disabled={busy} onClick={() => setConfirming(null)}>

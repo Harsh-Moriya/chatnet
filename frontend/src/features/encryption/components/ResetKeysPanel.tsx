@@ -68,7 +68,7 @@ export function ResetKeysPanel({ onCancel }: { onCancel: () => void }) {
         </p>
       )}
       <div className="flex flex-wrap gap-2">
-        <Button type="submit" isLoading={busy}>
+        <Button type="submit" variant="danger" isLoading={busy}>
           Start over with new keys
         </Button>
         <Button type="button" variant="secondary" onClick={onCancel}>

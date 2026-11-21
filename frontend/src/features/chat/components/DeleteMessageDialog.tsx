@@ -54,7 +54,7 @@ export function DeleteMessageDialog({ open, someoneElses, onConfirm, onClose }: 
           <Button variant="secondary" onClick={close} disabled={deleting}>
             Cancel
           </Button>
-          <Button onClick={() => void confirm()} isLoading={deleting}>
+          <Button variant="danger" onClick={() => void confirm()} isLoading={deleting}>
             Delete
           </Button>
         </div>
