@@ -135,18 +135,51 @@
 
 /* ##### Scrollbars ##### */
 
-/* Thin, with a rounded translucent thumb and no track, instead of the browser's blocky bar with arrow buttons. The thumb is the muted
-   text colour at partial strength, so it shows on any surface and changes with the theme. */
+/* A slim rounded thumb that floats in its lane (a transparent border around it) with no track and no arrow buttons, instead of the browser's
+   blocky bar. The thumb is the muted text colour at partial strength, so it shows on any surface and changes with the theme. */
 :root {
   --t-scroll-thumb: color-mix(in srgb, var(--t-fg-muted) 45%, transparent);
-}
-
-* {
-  scrollbar-width: thin;
-  scrollbar-color: var(--t-scroll-thumb) transparent;
+  --t-scroll-thumb-hover: color-mix(in srgb, var(--t-fg-muted) 75%, transparent);
 }
 
 /* A scrolling area that is dark in both themes (the PDF viewer) gets a light thumb. */
 .on-dark {
   --t-scroll-thumb: rgb(255 255 255 / 0.3);
+  --t-scroll-thumb-hover: rgb(255 255 255 / 0.5);
+}
+
+/* Chrome, Edge and Safari style the bar through pseudo-elements, which they ignore as soon as scrollbar-width or scrollbar-color is set,
+   so the two rules are kept apart. Firefox has only the standard properties, which give it a thin bar with the same colours. */
+@supports selector(::-webkit-scrollbar) {
+  ::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+  }
+
+  ::-webkit-scrollbar-track,
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-button {
+    display: none;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background-color: var(--t-scroll-thumb);
+    background-clip: content-box;
+    border: 3px solid transparent;
+    border-radius: 9999px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: var(--t-scroll-thumb-hover);
+  }
+}
+
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--t-scroll-thumb) transparent;
+  }
 }
