@@ -50,6 +50,9 @@ export interface AlertText {
   tag: string
   // Stays on the screen until the person deals with it, as a ringing phone does, instead of going by itself.
   persistent?: boolean
+  // Where a click on the alert goes: the conversation, and the message in it when the alert is about one.
+  conversationId: string | null
+  messageId: string | null
 }
 
 const PREVIEW_LENGTH = 100
@@ -72,6 +75,8 @@ export function incomingCallAlertText(call: IncomingCall): AlertText {
     body: call.media === 'Video' ? 'Incoming video call' : 'Incoming audio call',
     tag: `call-${call.callId}`,
     persistent: true,
+    conversationId: call.conversationId,
+    messageId: null,
   }
 }
 
@@ -82,7 +87,13 @@ export function conversationTag(conversationId: string): string {
 export function messageAlertText(message: Message, conversation: Conversation | undefined): AlertText {
   // The tag is the one the server's push for the same call carries, so the two are one alert on the screen.
   if (message.kind === 'Call' && message.call) {
-    return { title: message.senderDisplayName, body: callLabel(message.call, false), tag: `call-${message.call.id}` }
+    return {
+      title: message.senderDisplayName,
+      body: callLabel(message.call, false),
+      tag: `call-${message.call.id}`,
+      conversationId: message.conversationId,
+      messageId: message.id,
+    }
   }
 
   const inGroup = conversation?.type === 'Group'
@@ -101,6 +112,8 @@ export function messageAlertText(message: Message, conversation: Conversation | 
           ? 'New message'
           : '',
     tag: conversationTag(message.conversationId),
+    conversationId: message.conversationId,
+    messageId: message.id,
   }
 }
 
@@ -108,14 +121,16 @@ export function messageAlertText(message: Message, conversation: Conversation | 
 export function notificationAlertText(notification: NotificationItem, conversationName: string | undefined): AlertText {
   const tag = notification.conversationId ? conversationTag(notification.conversationId) : `notification-${notification.id}`
   const actor = notification.actorDisplayName
+  const where = { conversationId: notification.conversationId, messageId: notification.messageId }
 
   if (notification.type === 'Mention') {
     return {
       title: `${actor} mentioned you in ${conversationName ?? 'a conversation'}`,
       body: notification.messagePreview ? preview(notification.messagePreview) : '',
       tag,
+      ...where,
     }
   }
 
-  return { title: `${actor} added you to ${conversationName ?? 'a group'}`, body: '', tag }
+  return { title: `${actor} added you to ${conversationName ?? 'a group'}`, body: '', tag, ...where }
 }
