@@ -38,12 +38,12 @@ function Asking({ onCancel }: { onCancel: () => void }) {
 
   return (
     <div className="space-y-4 p-5">
-      <p className="text-sm text-slate-700">
+      <p className="text-sm text-fg-soft">
         Signing out deletes your encryption keys from this browser. To read your messages here again you will need your recovery
         passphrase, or another device where you are signed in.
       </p>
       {onlyDevice !== false && (
-        <p role="alert" className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+        <p role="alert" className="rounded-lg border border-warn-line bg-warn-soft px-3 py-2 text-sm text-warn-fg">
           {onlyDevice === true ? 'This is the only device with your keys. ' : 'This may be the only device with your keys. '}
           Without your recovery passphrase, your messages could not be read again.
         </p>

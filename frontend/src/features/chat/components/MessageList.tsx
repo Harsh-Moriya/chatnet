@@ -231,7 +231,7 @@ export function MessageList({ conversation, isLoading, errorMessage, onRetry, ol
   return (
     <div ref={scroller} onScroll={handleScroll} className="flex-1 overflow-y-auto px-4 py-4 [overflow-anchor:none]">
       {!nothingToShow && loadingOlder && (
-        <div className="flex h-8 items-center justify-center gap-2 text-xs text-slate-500">
+        <div className="flex h-8 items-center justify-center gap-2 text-xs text-fg-muted">
           <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
           Loading earlier messages…
         </div>
@@ -239,7 +239,7 @@ export function MessageList({ conversation, isLoading, errorMessage, onRetry, ol
 
       {!nothingToShow && !loadingOlder && olderError && (
         <div className="mb-2 flex flex-col items-center gap-2 text-center">
-          <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
+          <div className="flex items-start gap-2 rounded-lg border border-danger-line bg-danger-soft px-3 py-2 text-sm text-danger-fg">
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
             <span>{olderError}</span>
           </div>
@@ -251,10 +251,10 @@ export function MessageList({ conversation, isLoading, errorMessage, onRetry, ol
 
       {!nothingToShow && !loadingOlder && !olderError && hasMore && <div ref={topOfList} className="h-8" />}
 
-      {reachedStart && <p className="flex h-8 items-center justify-center text-xs text-slate-400">Beginning of the conversation</p>}
+      {reachedStart && <p className="flex h-8 items-center justify-center text-xs text-fg-faint">Beginning of the conversation</p>}
 
       {nothingToShow && isLoading && (
-        <div className="flex h-full items-center justify-center gap-2 text-sm text-slate-500">
+        <div className="flex h-full items-center justify-center gap-2 text-sm text-fg-muted">
           <LoaderCircle className="h-4 w-4 animate-spin" />
           Loading messages…
         </div>
@@ -262,7 +262,7 @@ export function MessageList({ conversation, isLoading, errorMessage, onRetry, ol
 
       {nothingToShow && !isLoading && errorMessage && (
         <div className="mx-auto mt-8 flex max-w-sm flex-col items-center gap-3 text-center">
-          <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
+          <div className="flex items-start gap-2 rounded-lg border border-danger-line bg-danger-soft px-3 py-2 text-sm text-danger-fg">
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
             <span>{errorMessage}</span>
           </div>
@@ -273,14 +273,14 @@ export function MessageList({ conversation, isLoading, errorMessage, onRetry, ol
       )}
 
       {nothingToShow && !isLoading && !errorMessage && (
-        <p className="mt-8 text-center text-sm text-slate-500">No messages yet. Say hello.</p>
+        <p className="mt-8 text-center text-sm text-fg-muted">No messages yet. Say hello.</p>
       )}
 
       {items.map((item) => {
         if (item.kind === 'day') {
           return (
             <div key={item.key} className="my-4 flex justify-center">
-              <span className="rounded-full bg-slate-200/70 px-3 py-1 text-xs font-medium text-slate-500">
+              <span className="rounded-full bg-strong/70 px-3 py-1 text-xs font-medium text-fg-muted">
                 {item.label}
               </span>
             </div>
@@ -371,7 +371,7 @@ export function MessageList({ conversation, isLoading, errorMessage, onRetry, ol
       })}
 
       {inWindow && loadingNewer && (
-        <div className="flex h-8 items-center justify-center gap-2 text-xs text-slate-500">
+        <div className="flex h-8 items-center justify-center gap-2 text-xs text-fg-muted">
           <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
           Loading newer messages…
         </div>
@@ -379,7 +379,7 @@ export function MessageList({ conversation, isLoading, errorMessage, onRetry, ol
 
       {inWindow && !loadingNewer && newerError && (
         <div className="mt-2 flex flex-col items-center gap-2 text-center">
-          <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
+          <div className="flex items-start gap-2 rounded-lg border border-danger-line bg-danger-soft px-3 py-2 text-sm text-danger-fg">
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
             <span>{newerError}</span>
           </div>

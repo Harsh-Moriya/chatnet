@@ -24,7 +24,7 @@ export function ConversationList({ onNewConversation }: { onNewConversation: () 
     if (query.isError) {
       return (
         <div className="flex flex-col items-center gap-3 p-6 text-center">
-          <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
+          <div className="flex items-start gap-2 rounded-lg border border-danger-line bg-danger-soft px-3 py-2 text-sm text-danger-fg">
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
             <span>{getApiError(query.error)}</span>
           </div>
@@ -37,8 +37,8 @@ export function ConversationList({ onNewConversation }: { onNewConversation: () 
 
     return (
       <div className="flex flex-col items-center gap-3 p-8 text-center">
-        <p className="text-sm font-medium text-slate-900">No conversations yet</p>
-        <p className="text-sm text-slate-500">Find someone by name to start chatting.</p>
+        <p className="text-sm font-medium text-fg">No conversations yet</p>
+        <p className="text-sm text-fg-muted">Find someone by name to start chatting.</p>
         <Button size="sm" onClick={onNewConversation}>
           Start a conversation
         </Button>
@@ -67,10 +67,10 @@ function ListSkeleton() {
     <div className="space-y-1 p-4" aria-hidden="true">
       {Array.from({ length: 6 }, (_, index) => (
         <div key={index} className="flex animate-pulse items-center gap-3 py-2">
-          <div className="h-10 w-10 shrink-0 rounded-full bg-slate-200" />
+          <div className="h-10 w-10 shrink-0 rounded-full bg-strong" />
           <div className="flex-1 space-y-2">
-            <div className="h-3 w-1/2 rounded bg-slate-200" />
-            <div className="h-3 w-3/4 rounded bg-slate-100" />
+            <div className="h-3 w-1/2 rounded bg-strong" />
+            <div className="h-3 w-3/4 rounded bg-subtle" />
           </div>
         </div>
       ))}

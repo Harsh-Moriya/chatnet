@@ -15,9 +15,9 @@ interface AvatarProps {
 // Colours stay inside the design tokens (blue, sky, slate). The same name always gets the same one,
 // so a person keeps their colour everywhere.
 const PALETTE = [
-  'bg-blue-100 text-blue-700',
+  'bg-accent-soft-strong text-accent-fg',
   'bg-sky-100 text-sky-700',
-  'bg-slate-200 text-slate-700',
+  'bg-strong text-fg-soft',
   'bg-blue-200 text-blue-800',
 ]
 
@@ -54,7 +54,7 @@ export function Avatar({ name, src, size = 'md', isGroup = false, online = false
       className={cn(
         'flex shrink-0 select-none items-center justify-center rounded-full font-semibold',
         box,
-        isGroup ? 'bg-slate-200 text-slate-600' : colourFor(name),
+        isGroup ? 'bg-strong text-fg-soft' : colourFor(name),
       )}
     >
       {isGroup ? <Users className={GROUP_ICON[size]} /> : initials(name)}
@@ -68,7 +68,7 @@ export function Avatar({ name, src, size = 'md', isGroup = false, online = false
       {face}
       <span
         className={cn(
-          'absolute bottom-0 right-0 rounded-full bg-emerald-500 ring-2 ring-white',
+          'absolute bottom-0 right-0 rounded-full bg-emerald-500 ring-2 ring-surface',
           size === 'md' ? 'h-3 w-3' : 'h-2.5 w-2.5',
         )}
       >

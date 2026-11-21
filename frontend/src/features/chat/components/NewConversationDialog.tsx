@@ -96,7 +96,7 @@ function NewConversationForm({ onDone }: { onDone: () => void }) {
       </div>
 
       {failure && (
-        <div role="alert" className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
+        <div role="alert" className="flex items-start gap-2 rounded-lg border border-danger-line bg-danger-soft px-3 py-2 text-sm text-danger-fg">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
           <span>{describeKeyFailure(failure, nameOf) ?? getApiError(failure)}</span>
         </div>
@@ -115,12 +115,12 @@ function NewConversationForm({ onDone }: { onDone: () => void }) {
       {mode === 'group' && members.length > 0 && (
         <ul className="flex flex-wrap gap-2" aria-label="Selected members">
           {members.map((member) => (
-            <li key={member.id} className="flex items-center gap-1 rounded-full bg-blue-50 py-1 pl-3 pr-1 text-xs text-blue-700">
+            <li key={member.id} className="flex items-center gap-1 rounded-full bg-accent-soft py-1 pl-3 pr-1 text-xs text-accent-fg">
               {member.displayName}
               <button
                 type="button"
                 aria-label={`Remove ${member.displayName}`}
-                className="rounded-full p-1 hover:bg-blue-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                className="rounded-full p-1 hover:bg-accent-soft-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                 onClick={() => pick(member)}
               >
                 <X className="h-3 w-3" />

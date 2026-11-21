@@ -29,10 +29,10 @@ export class ErrorBoundary extends Component<Props, State> {
     if (!this.state.failed) return this.props.children
 
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-slate-50 p-8 text-center">
-        <AlertCircle className="h-10 w-10 text-slate-400" />
-        <h1 className="text-lg font-semibold text-slate-900">Something went wrong</h1>
-        <p className="max-w-sm text-sm text-slate-500">
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-page p-8 text-center">
+        <AlertCircle className="h-10 w-10 text-fg-faint" />
+        <h1 className="text-lg font-semibold text-fg">Something went wrong</h1>
+        <p className="max-w-sm text-sm text-fg-muted">
           The page ran into a problem and could not continue. Reloading usually fixes it.
         </p>
         <Button onClick={() => window.location.reload()}>Reload the page</Button>

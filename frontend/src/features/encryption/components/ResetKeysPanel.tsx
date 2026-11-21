@@ -27,7 +27,7 @@ export function ResetKeysPanel({ onCancel }: { onCancel: () => void }) {
 
   return (
     <form onSubmit={submit} noValidate className="space-y-3">
-      <div role="note" className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+      <div role="note" className="flex items-start gap-2 rounded-lg border border-warn-line bg-warn-soft px-3 py-2 text-xs text-warn-fg">
         <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
         <div className="space-y-1">
           <p className="font-medium">Starting over cannot be undone.</p>
@@ -64,7 +64,7 @@ export function ResetKeysPanel({ onCancel }: { onCancel: () => void }) {
         onChange={(event) => setPassword(event.target.value)}
       />
       {attempted && (passphraseIssue ?? passwordIssue) !== null && (
-        <p role="alert" className="text-xs text-red-500">
+        <p role="alert" className="text-xs text-danger-fg">
           {passphraseIssue ?? passwordIssue}
         </p>
       )}

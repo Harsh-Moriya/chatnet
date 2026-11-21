@@ -55,7 +55,7 @@ export function Dialog({ open, onClose, title, children, variant = 'default', di
         variant === 'fullscreen'
           ? 'm-0 h-dvh max-h-none w-dvw max-w-none rounded-none border-0 bg-slate-900 p-0 text-white backdrop:bg-slate-900'
           : cn(
-              'm-auto w-[calc(100%-2rem)] rounded-lg border border-line bg-white p-0 shadow-xl backdrop:bg-slate-900/40',
+              'm-auto w-[calc(100%-2rem)] rounded-lg border border-line bg-surface p-0 shadow-xl backdrop:bg-slate-900/40',
               variant === 'wide'
                 ? 'max-w-4xl max-sm:m-0 max-sm:h-dvh max-sm:max-h-none max-sm:w-dvw max-sm:max-w-none max-sm:rounded-none max-sm:border-0'
                 : 'max-w-md',
@@ -66,7 +66,7 @@ export function Dialog({ open, onClose, title, children, variant = 'default', di
       {open && variant !== 'fullscreen' && (
         <div className={cn('flex flex-col', variant === 'wide' ? 'h-[85dvh] max-sm:h-dvh' : 'max-h-[85dvh]')}>
           <div className="flex items-center justify-between border-b border-line px-5 py-4">
-            <h2 className="text-base font-semibold text-slate-900">{title}</h2>
+            <h2 className="text-base font-semibold text-fg">{title}</h2>
             {dismissible && (
               <Button variant="ghost" size="icon" aria-label="Close" onClick={onClose}>
                 <X className="h-5 w-5" />

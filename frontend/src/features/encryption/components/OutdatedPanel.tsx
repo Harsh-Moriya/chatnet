@@ -10,7 +10,7 @@ export function OutdatedPanel() {
 
   return (
     <div className="space-y-3">
-      <p className="text-xs text-slate-500">
+      <p className="text-xs text-fg-muted">
         Your encryption keys were renewed on another device, because a device was removed from your account. Enter your recovery passphrase
         to bring the new keys to this browser. Nothing is lost: you stay signed in as this device.
       </p>

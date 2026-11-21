@@ -24,20 +24,20 @@ export function UploadChips({ items, onRemove }: UploadChipsProps) {
           <li
             key={item.id}
             className={cn(
-              'flex w-56 max-w-full items-center gap-2 rounded-lg border bg-white p-1.5 text-xs',
+              'flex w-56 max-w-full items-center gap-2 rounded-lg border bg-surface p-1.5 text-xs',
               failed ? 'border-red-400' : 'border-line',
             )}
           >
             {imageTypeOf(item.file.type) !== null ? (
               <PreviewImage file={item.file} alt="" className="h-10 w-10 shrink-0 rounded-lg object-cover" />
             ) : (
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-subtle text-fg-muted">
                 <AttachmentIcon contentType={item.file.type} className="h-5 w-5" />
               </span>
             )}
 
             <span className="min-w-0 flex-1">
-              <span className="block truncate font-medium text-slate-900">{item.file.name}</span>
+              <span className="block truncate font-medium text-fg">{item.file.name}</span>
 
               {item.status === 'uploading' && (
                 <span
@@ -46,16 +46,16 @@ export function UploadChips({ items, onRemove }: UploadChipsProps) {
                   aria-valuemin={0}
                   aria-valuemax={100}
                   aria-valuenow={Math.round(item.progress * 100)}
-                  className="mt-1 block h-1 overflow-hidden rounded-full bg-slate-200"
+                  className="mt-1 block h-1 overflow-hidden rounded-full bg-strong"
                 >
                   <span className="block h-full bg-blue-600" style={{ width: `${Math.round(item.progress * 100)}%` }} />
                 </span>
               )}
 
-              {item.status === 'ready' && <span className="text-slate-500">{formatFileSize(item.file.size)}</span>}
+              {item.status === 'ready' && <span className="text-fg-muted">{formatFileSize(item.file.size)}</span>}
 
               {failed && (
-                <span className="flex items-start gap-1 text-red-500" role="alert">
+                <span className="flex items-start gap-1 text-danger-fg" role="alert">
                   <AlertCircle className="mt-0.5 h-3 w-3 shrink-0" aria-hidden="true" />
                   <span>{item.error}</span>
                 </span>

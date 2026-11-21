@@ -18,7 +18,7 @@ export function KeyChangedBanner({ conversationId }: { conversationId: string })
   if (people.length === 0) return null
 
   return (
-    <div role="alert" className="shrink-0 space-y-1 border-b border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
+    <div role="alert" className="shrink-0 space-y-1 border-b border-warn-line bg-warn-soft px-4 py-2 text-sm text-warn-fg">
       {people.map((person) => (
         <div key={person.userId} className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <TriangleAlert className="h-4 w-4 shrink-0" aria-hidden="true" />

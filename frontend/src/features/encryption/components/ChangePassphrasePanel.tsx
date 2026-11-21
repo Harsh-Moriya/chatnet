@@ -16,7 +16,7 @@ export function ChangePassphrasePanel() {
     return (
       <div className="space-y-2">
         {changed && (
-          <p role="status" className="flex items-center gap-2 text-xs text-emerald-700">
+          <p role="status" className="flex items-center gap-2 text-xs text-ok-fg">
             <CircleCheck className="h-3.5 w-3.5" aria-hidden="true" />
             Your recovery passphrase was changed.
           </p>
@@ -37,7 +37,7 @@ export function ChangePassphrasePanel() {
 
   return (
     <div className="space-y-3">
-      <h4 className="text-sm font-medium text-slate-700">Change recovery passphrase</h4>
+      <h4 className="text-sm font-medium text-fg-soft">Change recovery passphrase</h4>
       <Problem message={problem} />
       <PassphraseForm
         idPrefix="change"

@@ -39,7 +39,7 @@ export function DeleteMessageDialog({ open, someoneElses, onConfirm, onClose }: 
   return (
     <Dialog open={open} onClose={close} title="Delete message">
       <div className="space-y-4 px-5 py-4">
-        <p className="text-sm text-slate-700">
+        <p className="text-sm text-fg-soft">
           {someoneElses
             ? 'This message disappears for everyone in the conversation. The person who sent it is not asked.'
             : 'This message disappears for everyone in the conversation.'}{' '}
@@ -49,7 +49,7 @@ export function DeleteMessageDialog({ open, someoneElses, onConfirm, onClose }: 
         {error && (
           <div
             role="alert"
-            className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-500"
+            className="flex items-start gap-2 rounded-lg border border-danger-line bg-danger-soft px-3 py-2 text-sm text-danger-fg"
           >
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
             <span>{error}</span>

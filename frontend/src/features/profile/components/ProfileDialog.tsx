@@ -59,7 +59,7 @@ function Profile() {
   return (
     <div className="flex min-h-0 flex-col gap-5 overflow-y-auto p-5">
       {error && (
-        <div role="alert" className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
+        <div role="alert" className="flex items-start gap-2 rounded-lg border border-danger-line bg-danger-soft px-3 py-2 text-sm text-danger-fg">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
           <span>{error}</span>
         </div>
@@ -74,7 +74,7 @@ function Profile() {
       />
 
       <form onSubmit={(event) => void save(event)} className="space-y-1.5">
-        <label htmlFor="display-name" className="block text-sm font-medium text-slate-700">
+        <label htmlFor="display-name" className="block text-sm font-medium text-fg-soft">
           Display name
         </label>
         <div className="flex items-start gap-2">
@@ -88,7 +88,7 @@ function Profile() {
             Save
           </Button>
         </div>
-        <p className="text-xs text-slate-500">@{user?.userName} is your handle and does not change.</p>
+        <p className="text-xs text-fg-muted">@{user?.userName} is your handle and does not change.</p>
       </form>
 
       <PushSwitch />

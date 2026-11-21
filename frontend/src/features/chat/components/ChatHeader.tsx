@@ -73,7 +73,7 @@ export function ChatHeader({ conversation }: { conversation: Conversation }) {
   }
 
   return (
-    <header className="flex h-16 shrink-0 items-center gap-3 border-b border-line bg-white px-4">
+    <header className="flex h-16 shrink-0 items-center gap-3 border-b border-line bg-surface px-4">
       {/* On a phone the list and the conversation are separate screens; this goes back to the list. */}
       <Button
         variant="ghost"
@@ -93,10 +93,10 @@ export function ChatHeader({ conversation }: { conversation: Conversation }) {
       />
 
       <div className="min-w-0">
-        <h1 className="truncate text-sm font-semibold text-slate-900">{conversation.name}</h1>
+        <h1 className="truncate text-sm font-semibold text-fg">{conversation.name}</h1>
         {/* Typing wins over presence: it is what is happening now. Where nothing is known about
             presence yet, the plain description of the conversation stays. */}
-        <p className={cn('truncate text-xs', muteError ? 'text-red-500' : 'text-slate-500')} aria-live="polite">
+        <p className={cn('truncate text-xs', muteError ? 'text-danger-fg' : 'text-fg-muted')} aria-live="polite">
           {muteError ?? (left ? 'You left this group' : (typing ?? presence ?? (isGroup ? 'Group conversation' : 'Direct message')))}
         </p>
       </div>
@@ -154,7 +154,7 @@ export function ChatHeader({ conversation }: { conversation: Conversation }) {
                   setSafetyOpen(true)
                 }}
               >
-                {verified ? <ShieldCheck className="h-5 w-5 text-blue-600" /> : <Fingerprint className="h-5 w-5" />}
+                {verified ? <ShieldCheck className="h-5 w-5 text-accent-fg" /> : <Fingerprint className="h-5 w-5" />}
               </Button>
             )}
 

@@ -9,7 +9,7 @@ export function SetUpPanel() {
 
   return (
     <div className="space-y-3">
-      <p className="text-xs text-slate-500">
+      <p className="text-xs text-fg-muted">
         Your keys are made in this browser and never leave it unencrypted. The passphrase you choose protects a backup of them that the
         server stores but cannot open. You need it to use your keys on another browser, and nobody can recover it for you.
       </p>

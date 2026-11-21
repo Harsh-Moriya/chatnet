@@ -36,8 +36,8 @@ export function ConversationListItem({ conversation, currentUserId, now }: Conve
         to={`/chat/${conversation.id}`}
         className={({ isActive }) =>
           cn(
-            'flex items-center gap-3 px-4 py-3 transition-colors hover:bg-slate-50',
-            isActive && 'bg-blue-50 hover:bg-blue-50',
+            'flex items-center gap-3 px-4 py-3 transition-colors hover:bg-hover',
+            isActive && 'bg-accent-soft hover:bg-accent-soft',
           )
         }
       >
@@ -52,26 +52,26 @@ export function ConversationListItem({ conversation, currentUserId, now }: Conve
 
             <div className="min-w-0 flex-1">
               <div className="flex items-baseline justify-between gap-2">
-                <p className="flex min-w-0 items-center gap-1.5 text-sm font-semibold text-slate-900">
+                <p className="flex min-w-0 items-center gap-1.5 text-sm font-semibold text-fg">
                   <span className="truncate">{conversation.name}</span>
                   {conversation.isMuted && (
-                    <BellOff className="h-3.5 w-3.5 shrink-0 text-slate-400" role="img" aria-label="Muted" />
+                    <BellOff className="h-3.5 w-3.5 shrink-0 text-fg-faint" role="img" aria-label="Muted" />
                   )}
                   {conversation.leftAt !== null && (
-                    <span className="shrink-0 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
+                    <span className="shrink-0 rounded-full bg-subtle px-1.5 py-0.5 text-[10px] font-medium text-fg-muted">
                       Left
                     </span>
                   )}
                 </p>
-                <time className="shrink-0 text-xs text-slate-500" dateTime={last?.createdAt ?? conversation.updatedAt}>
+                <time className="shrink-0 text-xs text-fg-muted" dateTime={last?.createdAt ?? conversation.updatedAt}>
                   {formatListTime(last?.createdAt ?? conversation.updatedAt, now)}
                 </time>
               </div>
 
               <div className="flex items-center justify-between gap-2">
-                <p className={cn('truncate text-sm', unread ? 'font-medium text-slate-900' : 'text-slate-500')}>
+                <p className={cn('truncate text-sm', unread ? 'font-medium text-fg' : 'text-fg-muted')}>
                   {typing ? (
-                    <span className="text-blue-600">{typing}</span>
+                    <span className="text-accent-fg">{typing}</span>
                   ) : last === null ? (
                     <span className="italic">No messages yet</span>
                   ) : last.kind === 'Call' && last.call ? (

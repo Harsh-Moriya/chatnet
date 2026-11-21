@@ -24,8 +24,8 @@ export function CallRow({ call, own, onCallBack }: CallRowProps) {
     <div className="my-2 flex justify-center">
       <span
         className={cn(
-          'inline-flex items-center gap-1.5 rounded-full bg-slate-200/70 px-3 py-1 text-xs font-medium',
-          missedByMe ? 'text-red-500' : 'text-slate-500',
+          'inline-flex items-center gap-1.5 rounded-full bg-strong/70 px-3 py-1 text-xs font-medium',
+          missedByMe ? 'text-danger-fg' : 'text-fg-muted',
         )}
       >
         <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
@@ -40,7 +40,7 @@ export function CallRow({ call, own, onCallBack }: CallRowProps) {
             variant="ghost"
             size="sm"
             onClick={onCallBack}
-            className="h-auto! rounded-full! px-2! py-0.5! text-xs font-semibold text-blue-600! hover:bg-blue-50!"
+            className="h-auto! rounded-full! px-2! py-0.5! text-xs font-semibold text-accent-fg! hover:bg-accent-soft!"
           >
             Call back
           </Button>

@@ -31,13 +31,13 @@ export function ApproveDevicePanel() {
 
   return (
     <div className="space-y-3">
-      <p className="text-xs text-slate-500">
+      <p className="text-xs text-fg-muted">
         To use your keys on another browser or phone, sign in there, choose Link from another device, and enter the code it shows.
       </p>
       <Problem message={problem} />
 
       {approved !== null && (
-        <p role="status" className="flex items-center gap-2 text-xs text-emerald-700">
+        <p role="status" className="flex items-center gap-2 text-xs text-ok-fg">
           <CircleCheck className="h-3.5 w-3.5" aria-hidden="true" />
           {approved} now has your keys.
         </p>
@@ -63,10 +63,10 @@ export function ApproveDevicePanel() {
         </form>
       ) : (
         <div className="space-y-3 rounded-lg border border-line p-3">
-          <p className="text-sm text-slate-900">
+          <p className="text-sm text-fg">
             <span className="font-medium">{found.name}</span> is asking for your keys.
           </p>
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-fg-muted">
             Approve only if you started this on a device you are holding and the code on its screen is the one you typed. Whoever you
             approve can read your messages.
           </p>

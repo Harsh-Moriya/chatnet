@@ -27,22 +27,22 @@ export function NotificationRow({ notification, now, onOpen, onDismiss }: Notifi
       <button
         type="button"
         onClick={() => onOpen(notification)}
-        className="flex min-w-0 flex-1 items-start gap-3 rounded-lg px-2 py-2 text-left transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+        className="flex min-w-0 flex-1 items-start gap-3 rounded-lg px-2 py-2 text-left transition-colors hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
       >
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-50 text-blue-600">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent-fg">
           <Icon className="h-4 w-4" aria-hidden="true" />
         </span>
 
         <span className="min-w-0 flex-1">
-          <span className="block text-sm text-slate-900">
+          <span className="block text-sm text-fg">
             <span className="font-semibold">{notification.actorDisplayName}</span>
             {mention ? ' mentioned you in ' : ' added you to '}
             <span className="font-semibold">{where}</span>
           </span>
           {notification.messagePreview && (
-            <span className="block truncate text-sm text-slate-500">{notification.messagePreview}</span>
+            <span className="block truncate text-sm text-fg-muted">{notification.messagePreview}</span>
           )}
-          <time className="block text-xs text-slate-500" dateTime={notification.createdAt}>
+          <time className="block text-xs text-fg-muted" dateTime={notification.createdAt}>
             {formatListTime(notification.createdAt, now)}
           </time>
         </span>

@@ -24,7 +24,7 @@ export function SearchBox({ value, onChange }: SearchBoxProps) {
               type="button"
               aria-label="Clear search"
               onClick={() => onChange('')}
-              className="rounded text-slate-400 transition-colors hover:text-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              className="rounded text-fg-faint transition-colors hover:text-fg-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
             >
               <X className="h-4 w-4" />
             </button>

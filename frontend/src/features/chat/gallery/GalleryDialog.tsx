@@ -50,7 +50,7 @@ function GalleryContent({ conversationId }: { conversationId: string }) {
   if (query.isPending) {
     return (
       <div role="status" aria-label="Loading" className="flex flex-1 items-center justify-center p-8">
-        <LoaderCircle className="h-8 w-8 animate-spin text-slate-500" aria-hidden="true" />
+        <LoaderCircle className="h-8 w-8 animate-spin text-fg-muted" aria-hidden="true" />
       </div>
     )
   }
@@ -64,7 +64,7 @@ function GalleryContent({ conversationId }: { conversationId: string }) {
   }
 
   if (items.length === 0 && !hasNextPage) {
-    return <p className="p-8 text-center text-sm text-slate-500">No pictures, videos or PDFs here yet.</p>
+    return <p className="p-8 text-center text-sm text-fg-muted">No pictures, videos or PDFs here yet.</p>
   }
 
   return (
@@ -82,7 +82,7 @@ function GalleryContent({ conversationId }: { conversationId: string }) {
         {isFetchNextPageError ? (
           <ErrorBanner message={getApiError(query.error)} onRetry={() => void fetchNextPage()} />
         ) : hasNextPage ? (
-          <LoaderCircle role="status" aria-label="Loading more" className="h-5 w-5 animate-spin text-slate-500" />
+          <LoaderCircle role="status" aria-label="Loading more" className="h-5 w-5 animate-spin text-fg-muted" />
         ) : null}
       </div>
     </div>
@@ -91,7 +91,7 @@ function GalleryContent({ conversationId }: { conversationId: string }) {
 
 function ErrorBanner({ message, onRetry }: { message: string; onRetry: () => void }) {
   return (
-    <div role="alert" className="flex w-full items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-500">
+    <div role="alert" className="flex w-full items-center gap-2 rounded-lg border border-danger-line bg-danger-soft px-3 py-2 text-sm text-danger-fg">
       <AlertCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
       <span className="min-w-0 flex-1">{message}</span>
       <Button variant="ghost" size="sm" onClick={onRetry}>
@@ -109,9 +109,9 @@ function GalleryTile({ item, scroller, onOpen }: { item: ViewerItem; scroller: E
   const [state, retry] = useFileObject(thumbnail ? item.source : null, thumbnail && near)
 
   return (
-    <div ref={attach} className="relative aspect-square overflow-hidden rounded-lg bg-slate-100">
+    <div ref={attach} className="relative aspect-square overflow-hidden rounded-lg bg-subtle">
       {state.status === 'failed' ? (
-        <Button variant="ghost" className="h-full w-full flex-col gap-1 rounded-lg px-1! py-1! text-xs text-slate-500" onClick={retry}>
+        <Button variant="ghost" className="h-full w-full flex-col gap-1 rounded-lg px-1! py-1! text-xs text-fg-muted" onClick={retry}>
           <AlertCircle className="h-4 w-4" aria-hidden="true" />
           <span>Couldn&apos;t load. Try again.</span>
         </Button>
@@ -119,7 +119,7 @@ function GalleryTile({ item, scroller, onOpen }: { item: ViewerItem; scroller: E
         <Button
           variant="ghost"
           aria-label={`Open ${item.name}`}
-          className={cn('h-full w-full rounded-lg', state.status === 'ready' ? 'px-0! py-0! hover:bg-transparent active:bg-transparent' : 'flex-col gap-1 px-2! py-2! text-xs text-slate-500')}
+          className={cn('h-full w-full rounded-lg', state.status === 'ready' ? 'px-0! py-0! hover:bg-transparent active:bg-transparent' : 'flex-col gap-1 px-2! py-2! text-xs text-fg-muted')}
           onClick={onOpen}
         >
           {state.status === 'ready' ? (
@@ -129,7 +129,7 @@ function GalleryTile({ item, scroller, onOpen }: { item: ViewerItem; scroller: E
           ) : (
             <>
               <KindIcon kind={item.kind} />
-              <span className="line-clamp-2 w-full break-words px-1 text-center font-medium text-slate-900">{item.name}</span>
+              <span className="line-clamp-2 w-full break-words px-1 text-center font-medium text-fg">{item.name}</span>
               <span>{formatFileSize(item.size)}</span>
             </>
           )}
