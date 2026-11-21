@@ -68,7 +68,7 @@ export function ConversationList({ filter, onNewConversation }: ConversationList
 
   return (
     <nav aria-label="Conversations" className="flex-1 overflow-y-auto">
-      <ul className="divide-y divide-line-subtle">
+      <ul className="space-y-0.5 py-2">
         {shown.map((conversation) => (
           <ConversationListItem
             key={conversation.id}
@@ -87,7 +87,7 @@ function ListSkeleton() {
     <div className="space-y-1 p-4" aria-hidden="true">
       {Array.from({ length: 6 }, (_, index) => (
         <div key={index} className="flex animate-pulse items-center gap-3 py-2">
-          <div className="h-10 w-10 shrink-0 rounded-full bg-strong" />
+          <div className="h-11 w-11 shrink-0 rounded-full bg-strong" />
           <div className="flex-1 space-y-2">
             <div className="h-3 w-1/2 rounded bg-strong" />
             <div className="h-3 w-3/4 rounded bg-subtle" />
