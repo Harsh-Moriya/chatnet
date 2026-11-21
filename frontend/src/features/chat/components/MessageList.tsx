@@ -297,6 +297,7 @@ export function MessageList({ conversation, isLoading, errorMessage, onRetry, ol
               selfUserName={user?.userName}
               own
               continuing={item.continuing}
+              endsRun={item.endsRun}
               content={item.pending.content}
               attachments={
                 item.pending.attachments.length > 0 ? (
@@ -312,6 +313,13 @@ export function MessageList({ conversation, isLoading, errorMessage, onRetry, ol
         }
 
         const message = item.message
+        // In a group, someone else's messages have the sender's picture beside the first of a run and room for it beside the rest.
+        const leading =
+          conversation.type !== 'Group' || item.own
+            ? undefined
+            : item.showSender
+              ? { name: message.senderDisplayName, src: members?.find((m) => m.userId === message.senderId)?.avatarUrl ?? null }
+              : ('indent' as const)
         const selfId = user?.userId ?? ''
         const actions: MenuItem[] = []
         // A group the reader left is only read: nothing in it can be changed by them any more.
@@ -339,6 +347,8 @@ export function MessageList({ conversation, isLoading, errorMessage, onRetry, ol
             selfUserName={user?.userName}
             own={item.own}
             continuing={item.continuing}
+            endsRun={item.endsRun}
+            leading={leading}
             senderName={item.showSender ? item.message.senderDisplayName : undefined}
             content={item.message.content}
             unreadable={item.message.unreadable}

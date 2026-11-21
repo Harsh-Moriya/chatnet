@@ -184,7 +184,7 @@ export function ChatHeader({ conversation }: { conversation: Conversation }) {
       />
 
       <div className="min-w-0">
-        <h1 className="truncate text-sm font-semibold text-fg">{conversation.name}</h1>
+        <h1 className="truncate text-base font-semibold tracking-tight text-fg">{conversation.name}</h1>
         {/* Typing wins over presence: it is what is happening now. Where nothing is known about
             presence yet, the plain description of the conversation stays. */}
         <p className={cn('truncate text-xs', muteError ? 'text-danger-fg' : 'text-fg-muted')} aria-live="polite">
