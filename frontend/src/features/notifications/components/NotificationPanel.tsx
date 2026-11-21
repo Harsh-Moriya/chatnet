@@ -59,7 +59,7 @@ export function NotificationPanel({ id, onClose }: NotificationPanelProps) {
   }
 
   return (
-    <section id={id} aria-label="Notifications" className="absolute inset-x-0 bottom-0 top-16 z-20 flex flex-col bg-surface">
+    <section id={id} aria-label="Notifications" className="absolute inset-0 z-20 flex flex-col bg-surface">
       <div className="flex shrink-0 items-center justify-between gap-2 border-b border-line px-4 py-2">
         <h2 className="text-sm font-semibold text-fg">Notifications</h2>
         <div className="flex items-center gap-1">
