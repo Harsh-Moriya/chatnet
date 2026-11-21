@@ -6,7 +6,10 @@ import { cn } from '../../../lib/cn'
 import { getApiError } from '../../../lib/errors'
 import { useDebouncedValue } from '../../../lib/useDebouncedValue'
 import { useUserSearch } from '../api/useUserSearch'
+import { newPeopleFirst } from '../peopleOrder'
 import type { UserSummary } from '../types'
+
+const NO_ONE: ReadonlySet<string> = new Set()
 
 interface PeoplePickerProps {
   onPick: (person: UserSummary) => void
@@ -15,16 +18,20 @@ interface PeoplePickerProps {
   // People who are not offered, such as those who are in the group already.
   excludeIds?: ReadonlySet<string>
   disabled?: boolean
+  // The people already chatted with: they are tagged, and listed after the people there is no conversation with yet.
+  contactIds?: ReadonlySet<string>
+  // What is in the box when it first appears, for a search carried over from somewhere else.
+  initialTerm?: string
 }
 
 // A search box over the people of the app and the list of what it finds. Searching, and what is shown while it runs, is
 // the same wherever people are chosen: starting a chat, making a group, adding to one.
-export function PeoplePicker({ onPick, selectedIds, excludeIds, disabled = false }: PeoplePickerProps) {
-  const [term, setTerm] = useState('')
+export function PeoplePicker({ onPick, selectedIds, excludeIds, disabled = false, contactIds, initialTerm = '' }: PeoplePickerProps) {
+  const [term, setTerm] = useState(initialTerm)
   const search = useUserSearch(useDebouncedValue(term, 250))
 
   const enoughToSearch = term.trim().length >= 2
-  const results = (search.data ?? []).filter((person) => !excludeIds?.has(person.id))
+  const results = newPeopleFirst((search.data ?? []).filter((person) => !excludeIds?.has(person.id)), contactIds ?? NO_ONE)
 
   return (
     <>
@@ -51,6 +58,7 @@ export function PeoplePicker({ onPick, selectedIds, excludeIds, disabled = false
           <ul className={cn('transition-opacity', search.isFetching && 'opacity-60')}>
             {results.map((person) => {
               const selected = selectedIds?.has(person.id) ?? false
+              const chatted = contactIds?.has(person.id) ?? false
 
               return (
                 <li key={person.id}>
@@ -59,14 +67,28 @@ export function PeoplePicker({ onPick, selectedIds, excludeIds, disabled = false
                     disabled={disabled}
                     onClick={() => onPick(person)}
                     aria-pressed={selectedIds ? selected : undefined}
-                    className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition-colors hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-50"
+                    className={cn(
+                      'flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-50',
+                      selected ? 'bg-accent-soft' : 'hover:bg-hover',
+                    )}
                   >
                     <Avatar name={person.displayName} src={person.avatarUrl} />
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-medium text-fg">{person.displayName}</span>
                       <span className="block truncate text-xs text-fg-muted">@{person.userName}</span>
                     </span>
-                    {selected && <Check className="h-4 w-4 shrink-0 text-accent-fg" />}
+                    {chatted && <span className="shrink-0 rounded-full bg-subtle px-2 py-0.5 text-[11px] text-fg-muted">In your chats</span>}
+                    {selectedIds && (
+                      <span
+                        aria-hidden="true"
+                        className={cn(
+                          'flex h-5 w-5 shrink-0 items-center justify-center rounded-md border',
+                          selected ? 'border-blue-600 bg-blue-600 text-white' : 'border-line',
+                        )}
+                      >
+                        {selected && <Check className="h-3.5 w-3.5" />}
+                      </span>
+                    )}
                   </button>
                 </li>
               )
