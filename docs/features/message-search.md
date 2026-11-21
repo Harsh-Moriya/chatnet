@@ -4,7 +4,7 @@ Messages are sealed, so the server cannot search them. Search runs in the browse
 
 ## Using it
 
-The search box sits above the list of conversations. While it holds text, the list is replaced by the results; clearing the box (the cross, or Escape) brings the list back.
+Message search is one of the three panels of the web client's sidebar, chosen with the magnifier in the bar at its foot. Its search box is the one at the top of the panel; while it holds text the results are shown, and clearing it (the cross, or Escape) brings back a hint. The box over the list of conversations is a different thing: it filters the conversations by name and does not look at messages.
 
 - At least 2 and at most 100 characters, after trimming.
 - Results are the newest messages first, 20 at a time, with "Show more results" for the rest.

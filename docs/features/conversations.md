@@ -10,6 +10,7 @@ Direct (1:1) and group conversations share one model. A conversation is a row; w
 - **One conversation.** `GET /api/conversations/{id}` returns the same object as a list entry.
 - **Live creation.** When a conversation is created, its members are told with `AddedToConversation` (the creator's other tabs too), and each client then calls `JoinConversation` so the connection joins the group. Only the request that created a direct chat announces it.
 - **User search.** `GET /api/users?query=` returns up to 20 people whose handle or display name starts with the query (at least 2 characters), never the caller. It uses trigram indexes (`pg_trgm`) on the handle and the display name instead of reading every user, and the text searched for is never written to the log.
+- **In the web client** the sidebar has a bar of three icons at its foot: the conversations (a box over the list filters them by name, in the browser), a panel for starting one, and message search (see [message search](message-search.md)). The panel for starting one uses the user search: people are ticked; one gives a direct conversation and two or more a group with a name. People the caller already has a direct conversation with are listed after the others and tagged "In your chats", and `POST /api/conversations/direct` for such a person returns the conversation that exists, so ticking only a contact opens it.
 - **Mute.** `PUT /api/conversations/{id}/mute` sets the caller's own choice. See [notifications](notifications.md).
 
 ## Access rules
