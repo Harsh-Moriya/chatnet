@@ -1,7 +1,10 @@
 {
+  "id": "/chat",
   "name": "ChatNET",
   "short_name": "ChatNET",
   "description": "Private chat, calls and files with your people.",
+  "lang": "en",
+  "categories": ["social"],
   "start_url": "/chat",
   "scope": "/",
   "display": "standalone",
