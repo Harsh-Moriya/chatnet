@@ -1,5 +1,4 @@
 import { type FormEvent, useState } from 'react'
-import { AlertCircle } from 'lucide-react'
 import { AvatarPicker } from '../../../components/ui/AvatarPicker'
 import { Button } from '../../../components/ui/Button'
 import { Dialog } from '../../../components/ui/Dialog'
@@ -11,6 +10,7 @@ import { PushSwitch } from '../../push/components/PushSwitch'
 import { ThemeSwitch } from '../../theme/components/ThemeSwitch'
 import { removePicture, setPicture, updateDisplayName } from '../api/profileApi'
 import { prepareAvatar } from '../avatarImage'
+import { Alert } from '../../../components/ui/Alert'
 
 // The longest name the server keeps (the limit registration has).
 const MAX_DISPLAY_NAME_LENGTH = 100
@@ -60,10 +60,7 @@ function Profile() {
   return (
     <div className="flex min-h-0 flex-col gap-5 overflow-y-auto p-5">
       {error && (
-        <div role="alert" className="flex items-start gap-2 rounded-lg border border-danger-line bg-danger-soft px-3 py-2 text-sm text-danger-fg">
-          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-          <span>{error}</span>
-        </div>
+        <Alert role="alert">{error}</Alert>
       )}
 
       <AvatarPicker

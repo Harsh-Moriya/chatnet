@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { AlertCircle, BellRing, CheckCheck, LoaderCircle, X } from 'lucide-react'
+import { BellRing, CheckCheck, LoaderCircle, X } from 'lucide-react'
+import { Alert } from '../../../components/ui/Alert'
 import { Button } from '../../../components/ui/Button'
 import { getApiError } from '../../../lib/errors'
 import { useNow } from '../../../lib/useNow'
@@ -95,13 +96,9 @@ export function NotificationPanel({ id, onClose }: NotificationPanelProps) {
       )}
 
       {problem && (
-        <div
-          className="m-3 flex shrink-0 items-start gap-2 rounded-lg border border-danger-line bg-danger-soft px-3 py-2 text-sm text-danger-fg"
-          role="alert"
-        >
-          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-          <span>{problem}</span>
-        </div>
+        <Alert role="alert" className="m-3 shrink-0">
+          {problem}
+        </Alert>
       )}
 
       <div className="flex-1 overflow-y-auto">

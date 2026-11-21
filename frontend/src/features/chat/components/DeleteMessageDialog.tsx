@@ -1,8 +1,8 @@
-import { AlertCircle } from 'lucide-react'
 import { useState } from 'react'
 import { Button } from '../../../components/ui/Button'
 import { Dialog } from '../../../components/ui/Dialog'
 import { getApiError } from '../../../lib/errors'
+import { Alert } from '../../../components/ui/Alert'
 
 interface DeleteMessageDialogProps {
   open: boolean
@@ -47,13 +47,7 @@ export function DeleteMessageDialog({ open, someoneElses, onConfirm, onClose }: 
         </p>
 
         {error && (
-          <div
-            role="alert"
-            className="flex items-start gap-2 rounded-lg border border-danger-line bg-danger-soft px-3 py-2 text-sm text-danger-fg"
-          >
-            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-            <span>{error}</span>
-          </div>
+          <Alert role="alert">{error}</Alert>
         )}
 
         <div className="flex justify-end gap-2">

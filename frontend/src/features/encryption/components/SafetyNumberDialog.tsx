@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { ShieldCheck, TriangleAlert } from 'lucide-react'
+import { ShieldCheck } from 'lucide-react'
+import { Alert } from '../../../components/ui/Alert'
 import { Button } from '../../../components/ui/Button'
 import { Dialog } from '../../../components/ui/Dialog'
 import { acceptIdentity, verifyPerson, viewSafetyNumber } from '../safetyController'
@@ -57,13 +58,10 @@ function Comparing({ contactId, contactName, onDone }: { contactId: string; cont
       {view === null && loadProblem === null && <p className="text-sm text-fg-muted">Working out the number…</p>}
 
       {view?.changedTo != null && (
-        <div role="alert" className="flex items-start gap-2 rounded-lg border border-warn-line bg-warn-soft px-3 py-2 text-sm text-warn-fg">
-          <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-          <p>
-            {contactName} has a different security key from the one this browser trusted before. That happens when they reset their
-            encryption. It could also mean someone is between you. Compare the number below with {contactName} before you accept it.
-          </p>
-        </div>
+        <Alert kind="warning" role="alert">
+          {contactName} has a different security key from the one this browser trusted before. That happens when they reset their
+          encryption. It could also mean someone is between you. Compare the number below with {contactName} before you accept it.
+        </Alert>
       )}
 
       {view && (

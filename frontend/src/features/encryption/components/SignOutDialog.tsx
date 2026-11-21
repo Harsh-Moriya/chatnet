@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Alert } from '../../../components/ui/Alert'
 import { Button } from '../../../components/ui/Button'
 import { Dialog } from '../../../components/ui/Dialog'
 import { session } from '../../auth/session'
@@ -43,10 +44,10 @@ function Asking({ onCancel }: { onCancel: () => void }) {
         passphrase, or another device where you are signed in.
       </p>
       {onlyDevice !== false && (
-        <p role="alert" className="rounded-lg border border-warn-line bg-warn-soft px-3 py-2 text-sm text-warn-fg">
+        <Alert kind="warning" role="alert">
           {onlyDevice === true ? 'This is the only device with your keys. ' : 'This may be the only device with your keys. '}
           Without your recovery passphrase, your messages could not be read again.
-        </p>
+        </Alert>
       )}
       <div className="flex justify-end gap-2">
         <Button variant="secondary" onClick={onCancel}>

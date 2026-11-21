@@ -1,5 +1,5 @@
 import { type FormEvent, useState } from 'react'
-import { AlertCircle, Crown, Fingerprint, LogOut, ShieldCheck, User, UserMinus, UserPlus, X } from 'lucide-react'
+import { Crown, Fingerprint, LogOut, ShieldCheck, User, UserMinus, UserPlus, X } from 'lucide-react'
 import { Avatar } from '../../../components/ui/Avatar'
 import { AvatarPicker } from '../../../components/ui/AvatarPicker'
 import { Button } from '../../../components/ui/Button'
@@ -17,6 +17,7 @@ import { MAX_GROUP_NAME_LENGTH, canManage, memberActions, roleOf, roomLeft } fro
 import { useChatStore } from '../store/chatStore'
 import type { Conversation, Member, UserSummary } from '../types'
 import { PeoplePicker } from './PeoplePicker'
+import { Alert } from '../../../components/ui/Alert'
 
 interface GroupInfoDialogProps {
   conversation: Conversation
@@ -155,10 +156,7 @@ function GroupInfo({ conversation, onDone }: { conversation: Conversation; onDon
   return (
     <div className="flex min-h-0 flex-col gap-4 overflow-y-auto p-5">
       {error && (
-        <div role="alert" className="flex items-start gap-2 rounded-lg border border-danger-line bg-danger-soft px-3 py-2 text-sm text-danger-fg">
-          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-          <span>{error}</span>
-        </div>
+        <Alert role="alert">{error}</Alert>
       )}
 
       {manager ? (

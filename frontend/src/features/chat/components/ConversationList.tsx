@@ -1,5 +1,4 @@
 import { useMemo } from 'react'
-import { AlertCircle } from 'lucide-react'
 import { Button } from '../../../components/ui/Button'
 import { getApiError } from '../../../lib/errors'
 import { useNow } from '../../../lib/useNow'
@@ -8,6 +7,7 @@ import { useConversations } from '../api/useConversations'
 import { filterConversations } from '../conversationFilter'
 import { sortedConversations, useChatStore } from '../store/chatStore'
 import { ConversationListItem } from './ConversationListItem'
+import { Alert } from '../../../components/ui/Alert'
 
 interface ConversationListProps {
   // What is typed in the box above the list: only the conversations with it in their name are shown.
@@ -33,10 +33,7 @@ export function ConversationList({ filter, onNewConversation }: ConversationList
     if (query.isError) {
       return (
         <div className="flex flex-col items-center gap-3 p-6 text-center">
-          <div className="flex items-start gap-2 rounded-lg border border-danger-line bg-danger-soft px-3 py-2 text-sm text-danger-fg">
-            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-            <span>{getApiError(query.error)}</span>
-          </div>
+          <Alert>{getApiError(query.error)}</Alert>
           <Button variant="ghost" size="sm" onClick={() => void query.refetch()}>
             Try again
           </Button>

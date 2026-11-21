@@ -1,6 +1,7 @@
-import { AlertCircle, BellOff, BellRing } from 'lucide-react'
+import { BellOff, BellRing } from 'lucide-react'
 import { Button } from '../../../components/ui/Button'
 import { usePushSwitch } from '../hooks/usePushSwitch'
+import { Alert } from '../../../components/ui/Alert'
 
 // The switch for alerts while the application is closed, in the profile. It is left out until the server has said it can send them
 // (a server without push keys has nothing to offer), and says why when this browser cannot.
@@ -43,13 +44,7 @@ export function PushSwitch() {
       )}
 
       {problem && (
-        <div
-          role="alert"
-          className="flex items-start gap-2 rounded-lg border border-danger-line bg-danger-soft px-3 py-2 text-xs text-danger-fg"
-        >
-          <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-          <span>{problem}</span>
-        </div>
+        <Alert role="alert" size="sm">{problem}</Alert>
       )}
     </section>
   )

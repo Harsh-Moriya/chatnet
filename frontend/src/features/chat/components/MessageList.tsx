@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { AlertCircle, ChevronDown, LoaderCircle, Pencil, Trash2 } from 'lucide-react'
+import { ChevronDown, LoaderCircle, Pencil, Trash2 } from 'lucide-react'
 import { Button } from '../../../components/ui/Button'
 import { useStartCall } from '../../calls/useStartCall'
 import type { MenuItem } from '../../../components/ui/Menu'
@@ -22,6 +22,7 @@ import { DeleteMessageDialog } from './DeleteMessageDialog'
 import { MessageBubble } from './MessageBubble'
 import { MessageEditor } from './MessageEditor'
 import { PendingAttachments } from './PendingAttachments'
+import { Alert } from '../../../components/ui/Alert'
 
 // How long the message a notification pointed at keeps its ring.
 const HIGHLIGHT_MS = 2500
@@ -239,10 +240,7 @@ export function MessageList({ conversation, isLoading, errorMessage, onRetry, ol
 
       {!nothingToShow && !loadingOlder && olderError && (
         <div className="mb-2 flex flex-col items-center gap-2 text-center">
-          <div className="flex items-start gap-2 rounded-lg border border-danger-line bg-danger-soft px-3 py-2 text-sm text-danger-fg">
-            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-            <span>{olderError}</span>
-          </div>
+          <Alert>{olderError}</Alert>
           <Button variant="secondary" size="sm" onClick={loadOlder}>
             Try again
           </Button>
@@ -262,10 +260,7 @@ export function MessageList({ conversation, isLoading, errorMessage, onRetry, ol
 
       {nothingToShow && !isLoading && errorMessage && (
         <div className="mx-auto mt-8 flex max-w-sm flex-col items-center gap-3 text-center">
-          <div className="flex items-start gap-2 rounded-lg border border-danger-line bg-danger-soft px-3 py-2 text-sm text-danger-fg">
-            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-            <span>{errorMessage}</span>
-          </div>
+          <Alert>{errorMessage}</Alert>
           <Button variant="secondary" size="sm" onClick={onRetry}>
             Try again
           </Button>
@@ -389,10 +384,7 @@ export function MessageList({ conversation, isLoading, errorMessage, onRetry, ol
 
       {inWindow && !loadingNewer && newerError && (
         <div className="mt-2 flex flex-col items-center gap-2 text-center">
-          <div className="flex items-start gap-2 rounded-lg border border-danger-line bg-danger-soft px-3 py-2 text-sm text-danger-fg">
-            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-            <span>{newerError}</span>
-          </div>
+          <Alert>{newerError}</Alert>
           <Button variant="secondary" size="sm" onClick={loadNewer}>
             Try again
           </Button>

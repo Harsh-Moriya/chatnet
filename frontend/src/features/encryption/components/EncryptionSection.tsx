@@ -1,11 +1,11 @@
 import { useEffect } from 'react'
-import { AlertCircle } from 'lucide-react'
 import { Button } from '../../../components/ui/Button'
 import { loadEncryption } from '../controller'
 import { useEncryptionStore } from '../store'
 import { ApproveDevicePanel } from './ApproveDevicePanel'
 import { ChangePassphrasePanel } from './ChangePassphrasePanel'
 import { DevicesPanel } from './DevicesPanel'
+import { Alert } from '../../../components/ui/Alert'
 
 // The encryption keys of the signed-in person, in the profile: hand them to another device, see and remove devices, change the
 // passphrase that protects the backup. This browser holds the keys by the time the profile can be opened (the gate before the chat
@@ -27,10 +27,7 @@ export function EncryptionSection() {
 
       {status === 'error' && (
         <div className="space-y-2">
-          <div role="alert" className="flex items-start gap-2 rounded-lg border border-danger-line bg-danger-soft px-3 py-2 text-xs text-danger-fg">
-            <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-            <span>Your keys could not be checked. Check your connection and try again.</span>
-          </div>
+          <Alert role="alert" size="sm">Your keys could not be checked. Check your connection and try again.</Alert>
           <Button variant="ghost" size="sm" onClick={() => void loadEncryption()}>
             Try again
           </Button>
