@@ -21,6 +21,8 @@ interface MessageBubbleProps {
   selfUserName?: string
   own: boolean
   continuing: boolean
+  // Came in since the reader last looked: it is drawn with a short entrance.
+  arriving?: boolean
   // The last message of a run: its corner toward the sender is small, and it is the one that shows the time.
   endsRun: boolean
   // In a group, for a message of someone else: the sender's picture beside the first message of a run, and room for it beside the rest.
@@ -56,6 +58,7 @@ export function MessageBubble({
   selfUserName,
   own,
   continuing,
+  arriving = false,
   endsRun,
   leading,
   senderName,
@@ -84,7 +87,7 @@ export function MessageBubble({
   return (
     <div
       id={messageId ? messageDomId(messageId) : undefined}
-      className={cn('relative flex flex-col', own ? 'items-end' : 'items-start', continuing ? 'mt-0.5' : 'mt-4', leading && 'pl-9')}
+      className={cn('relative flex flex-col', own ? 'items-end' : 'items-start', continuing ? 'mt-0.5' : 'mt-4', leading && 'pl-9', arriving && 'animate-message-in')}
     >
       {leading && leading !== 'indent' && (
         <div className="absolute left-0 top-0">
