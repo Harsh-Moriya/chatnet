@@ -5,7 +5,7 @@ import { Logo } from '../../../components/Logo'
 
 function BrandPanel() {
   return (
-    <div className="hidden lg:flex lg:w-[45%] flex-col justify-between bg-gradient-to-br from-blue-700 to-sky-500 p-10 text-white">
+    <div className="hidden lg:flex lg:w-[45%] flex-col justify-between bg-gradient-to-br from-blue-700 to-sky-700 p-10 text-white">
       <div className="flex items-center gap-2.5">
         <Logo size={32} className="text-white" />
         <span className="text-base font-semibold tracking-tight">ChatNET</span>
@@ -15,12 +15,12 @@ function BrandPanel() {
         <h1 className="text-3xl font-bold leading-snug">
           Say hi.<br />Keep it between you.
         </h1>
-        <p className="mt-3 max-w-xs text-sm leading-relaxed text-blue-100">
+        <p className="mt-3 max-w-xs text-sm leading-relaxed text-white">
           Chats, calls and files with your people, end-to-end encrypted. No work talk required.
         </p>
       </div>
 
-      <p className="text-xs text-blue-200/60">© 2026 ChatNET</p>
+      <p className="text-xs text-white">© 2026 ChatNET</p>
     </div>
   )
 }
