@@ -299,7 +299,7 @@ describe('an epoch that is not what it claims', () => {
     // Ana resets her encryption: the same account, new keys.
     const reset = await createAccountSecrets()
     server.registerBundle(ana.id, 1, await bundleOf(ana.id, reset))
-    const anaAfter = personFrom(server.as(ana.id), ana.id, reset)
+    const anaAfter = personFrom(server, ana.id, reset)
     server.requireRotation(conversationId)
     await ensureEpoch(anaAfter.deps, conversationId)
 
@@ -606,7 +606,7 @@ describe('a person whose account key changed', () => {
     const [ana, ben] = [await newPerson(server), await newPerson(server)]
     const rotated = await rotateAccountKey(ben.secrets)
     server.registerBundle(ben.id, 2, toBase64Url(await signBundle(ben.id, rotated.identity, currentAccountKey(rotated))))
-    const benNow = personFrom(server.as(ben.id), ben.id, rotated)
+    const benNow = personFrom(server, ben.id, rotated)
     const conversationId = await start(server, ana, [benNow])
 
     const loaded = await loadEpochKeys(benNow.deps, conversationId)

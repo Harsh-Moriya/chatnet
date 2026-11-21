@@ -22,13 +22,15 @@ export async function newPerson(server: FakeEpochServer, options: { register?: b
   const id = crypto.randomUUID()
   const secrets = await createAccountSecrets()
   if (options.register !== false) server.registerBundle(id, 1, await bundleOf(id, secrets))
-  return personFrom(server.as(id), id, secrets)
+  return personFrom(server, id, secrets)
 }
 
-export function personFrom(api: EpochApi, id: string, secrets: AccountSecrets): Person {
+// The person reads the fake server's clock, not the real one: the server dates the epochs it stores, and a person who compared those dates
+// with today's would find every key older than a week as soon as the real date had moved on from the one the server starts at.
+export function personFrom(server: FakeEpochServer, id: string, secrets: AccountSecrets): Person {
   const keys = new MemoryEpochKeyStore()
   const pins = new MemoryPinStore()
-  return { id, secrets, keys, pins, deps: { api, keys, pins, self: { userId: id, secrets } } }
+  return { id, secrets, keys, pins, deps: { api: server.as(id), keys, pins, self: { userId: id, secrets }, now: () => server.now } }
 }
 
 // A conversation started by `creator` for these people, as a browser starts one.
