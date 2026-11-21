@@ -9,6 +9,7 @@ import {
 } from 'react'
 import { AlertCircle, Lock, Paperclip, Send } from 'lucide-react'
 import { Button } from '../../../components/ui/Button'
+import { Tooltip } from '../../../components/ui/Tooltip'
 import { Textarea } from '../../../components/ui/Textarea'
 import { cn } from '../../../lib/cn'
 import { useAuth } from '../../auth/hooks/useAuth'
@@ -223,7 +224,15 @@ export function MessageComposer({ conversationId }: { conversationId: string }) 
 
       {uploads.items.length > 0 && <UploadChips items={uploads.items} onRemove={uploads.remove} />}
 
-      <div className="flex items-end gap-2">
+      {/* One bar: the attach button, the box and the send button share a container, a height (36 px) and the focus ring. The buttons
+          stay at the bottom edge as the box grows. */}
+      <div
+        className={cn(
+          'flex items-end gap-1 rounded-2xl border border-line bg-surface p-1.5 transition-colors',
+          'focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/20',
+          blocked && 'opacity-60',
+        )}
+      >
         <input
           ref={picker}
           type="file"
@@ -233,19 +242,21 @@ export function MessageComposer({ conversationId }: { conversationId: string }) 
           aria-label="Choose files to attach"
           onChange={handlePicked}
         />
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label="Attach files"
-          title={`Attach files (up to ${MAX_FILES_PER_MESSAGE})`}
-          disabled={blocked || uploads.items.length >= MAX_FILES_PER_MESSAGE}
-          onClick={() => picker.current?.click()}
-          className="mb-0.5 h-10 w-10"
-        >
-          <Paperclip className="h-4 w-4" />
-        </Button>
+        <Tooltip side="top" label={`Attach files (up to ${MAX_FILES_PER_MESSAGE})`}>
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Attach files"
+            disabled={blocked || uploads.items.length >= MAX_FILES_PER_MESSAGE}
+            onClick={() => picker.current?.click()}
+            className="rounded-xl"
+          >
+            <Paperclip className="h-4 w-4" />
+          </Button>
+        </Tooltip>
 
         <Textarea
+          bare
           ref={box}
           rows={1}
           value={text}
@@ -268,13 +279,7 @@ export function MessageComposer({ conversationId }: { conversationId: string }) 
             typing.stop()
           }}
         />
-        <Button
-          size="icon"
-          aria-label="Send message"
-          disabled={!sendable}
-          onClick={submit}
-          className="mb-0.5 h-10 w-10"
-        >
+        <Button size="icon" aria-label="Send message" disabled={!sendable} onClick={submit} className="rounded-xl">
           <Send className="h-4 w-4" />
         </Button>
       </div>
