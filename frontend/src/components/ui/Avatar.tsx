@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Users } from 'lucide-react'
 import { cn } from '../../lib/cn'
+import { colourFor } from './avatarColour'
 
 interface AvatarProps {
   name: string
@@ -12,15 +13,6 @@ interface AvatarProps {
   online?: boolean
 }
 
-// Colours stay inside the design tokens (blue, sky, slate). The same name always gets the same one,
-// so a person keeps their colour everywhere.
-const PALETTE = [
-  'bg-accent-soft-strong text-accent-fg',
-  'bg-sky-100 text-sky-700',
-  'bg-strong text-fg-soft',
-  'bg-blue-200 text-blue-800',
-]
-
 function initials(name: string): string {
   const words = name.trim().split(/\s+/).filter(Boolean)
   if (words.length === 0) return '?'
@@ -28,12 +20,6 @@ function initials(name: string): string {
   const first = words[0][0]
   const last = words.length > 1 ? words[words.length - 1][0] : ''
   return (first + last).toUpperCase()
-}
-
-function colourFor(name: string): string {
-  let hash = 0
-  for (const char of name) hash = (hash * 31 + char.codePointAt(0)!) >>> 0
-  return PALETTE[hash % PALETTE.length]
 }
 
 const BOX = { sm: 'h-8 w-8 text-xs', md: 'h-10 w-10 text-sm', lg: 'h-20 w-20 text-2xl' }

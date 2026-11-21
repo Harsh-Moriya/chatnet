@@ -8,6 +8,7 @@ import { getApiError } from '../../../lib/errors'
 import { useAuth } from '../../auth/hooks/useAuth'
 import { EncryptionSection } from '../../encryption/components/EncryptionSection'
 import { PushSwitch } from '../../push/components/PushSwitch'
+import { ThemeSwitch } from '../../theme/components/ThemeSwitch'
 import { removePicture, setPicture, updateDisplayName } from '../api/profileApi'
 import { prepareAvatar } from '../avatarImage'
 
@@ -90,6 +91,8 @@ function Profile() {
         </div>
         <p className="text-xs text-fg-muted">@{user?.userName} is your handle and does not change.</p>
       </form>
+
+      <ThemeSwitch />
 
       <PushSwitch />
 

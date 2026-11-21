@@ -99,9 +99,9 @@ export function MessageBubble({
           )}
         >
           {deleted ? (
-            <p className={cn('italic', own ? 'text-blue-100' : 'text-fg-faint')}>This message was deleted</p>
+            <p className={cn('italic', own ? 'text-blue-50' : 'text-fg-faint')}>This message was deleted</p>
           ) : unreadable ? (
-            <p className={cn('flex items-center gap-1.5 italic', own ? 'text-blue-100' : 'text-fg-muted')}>
+            <p className={cn('flex items-center gap-1.5 italic', own ? 'text-blue-50' : 'text-fg-muted')}>
               <Lock className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
               {unreadableText(unreadable)}
             </p>
@@ -120,7 +120,7 @@ export function MessageBubble({
           <p
             className={cn(
               'mt-1 flex items-center justify-end gap-1 text-[11px] leading-none',
-              own && !failed && !editing ? 'text-blue-100' : 'text-fg-faint',
+              own && !failed && !editing ? 'text-blue-50' : 'text-fg-faint',
             )}
           >
             {status === 'sending' ? (
