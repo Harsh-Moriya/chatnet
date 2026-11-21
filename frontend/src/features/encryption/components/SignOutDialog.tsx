@@ -21,8 +21,9 @@ export function SignOutDialog({ open, onClose }: SignOutDialogProps) {
 }
 
 function Asking({ onCancel }: { onCancel: () => void }) {
-  // Unknown until the server has answered, and when it cannot be reached: the warning for the worst case is shown then.
-  const [onlyDevice, setOnlyDevice] = useState<boolean | null>(null)
+  // `checking` until the server has answered, when nothing is said (a warning shown for a moment and then taken back reads as a glitch);
+  // `unknown` when it cannot be reached, which gets the warning for the worst case.
+  const [onlyDevice, setOnlyDevice] = useState<boolean | 'checking' | 'unknown'>('checking')
 
   useEffect(() => {
     let current = true
@@ -30,7 +31,9 @@ function Asking({ onCancel }: { onCancel: () => void }) {
       (devices) => {
         if (current) setOnlyDevice(devices.length <= 1)
       },
-      () => undefined,
+      () => {
+        if (current) setOnlyDevice('unknown')
+      },
     )
     return () => {
       current = false
@@ -43,7 +46,7 @@ function Asking({ onCancel }: { onCancel: () => void }) {
         Signing out deletes your encryption keys from this browser. To read your messages here again you will need your recovery
         passphrase, or another device where you are signed in.
       </p>
-      {onlyDevice !== false && (
+      {(onlyDevice === true || onlyDevice === 'unknown') && (
         <Alert kind="warning" role="alert">
           {onlyDevice === true ? 'This is the only device with your keys. ' : 'This may be the only device with your keys. '}
           Without your recovery passphrase, your messages could not be read again.
