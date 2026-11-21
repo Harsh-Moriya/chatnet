@@ -108,9 +108,12 @@ describe('showing a push', () => {
     expect(worker.scope.registration.showNotification).toHaveBeenCalledExactlyOnceWith('Alice in Team', {
       body: 'see you at 5',
       tag: `conversation-${CONVERSATION}`,
+      renotify: true,
       data: { conversationId: CONVERSATION, messageId: MESSAGE },
       icon: '/icons/icon-192.png',
       badge: '/icons/badge-96.png',
+      vibrate: expect.any(Array),
+      timestamp: expect.any(Number),
     })
   })
 
@@ -168,10 +171,9 @@ describe('showing a push', () => {
 
     await worker.push({ ...alert, tag: undefined })
 
-    expect(worker.scope.registration.showNotification).toHaveBeenCalledWith(
-      'Alice in Team',
-      expect.objectContaining({ tag: undefined }),
-    )
+    const [, options] = worker.scope.registration.showNotification.mock.calls[0] as unknown as [string, Record<string, unknown>]
+    expect(options).not.toHaveProperty('tag')
+    expect(options).not.toHaveProperty('renotify')
   })
 
   it('shows an alert with no words at all as the title alone', async () => {

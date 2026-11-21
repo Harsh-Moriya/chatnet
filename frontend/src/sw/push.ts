@@ -5,6 +5,8 @@
 const OPEN_CONVERSATION = 'open-conversation'
 const ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
+import { ALERT_BADGE, ALERT_ICON, type AlertOptions, alertOptions } from '../lib/alertLook'
+
 // The parts of a window the worker uses, and of the worker's scope: what the browser gives it, stated here so that this file is the same
 // under the types of a page and of a worker, and so that a test can stand in for them.
 export interface WindowLike {
@@ -22,10 +24,7 @@ export interface PushScope {
     openWindow: (url: string) => Promise<unknown>
   }
   registration: {
-    showNotification: (
-      title: string,
-      options?: { body?: string; tag?: string; data?: unknown; requireInteraction?: boolean; icon?: string; badge?: string },
-    ) => Promise<void>
+    showNotification: (title: string, options?: Partial<AlertOptions>) => Promise<void>
   }
 }
 
@@ -78,9 +77,6 @@ export function readAlert(event: PushEventLike): Alert | null {
   }
 }
 
-// The picture beside an alert, and the small single-colour one an Android phone shows in its status bar (white on transparent).
-const LOOK = { icon: '/icons/icon-192.png', badge: '/icons/badge-96.png' }
-
 export async function showAlert(scope: PushScope, alert: Alert | null): Promise<void> {
   // The person is looking at the application right now: it shows what happened itself, and an alert on top of it would only be
   // in the way. A browser lets a worker show nothing for a push only in this case.
@@ -89,19 +85,23 @@ export async function showAlert(scope: PushScope, alert: Alert | null): Promise<
 
   // A push that cannot be read still gets an alert: browsers withdraw the permission of a site that is pushed to and shows nothing.
   if (alert === null) {
-    await scope.registration.showNotification('ChatNET', { body: 'Something new is waiting for you.', tag: 'chatnet', ...LOOK })
+    await scope.registration.showNotification('ChatNET', {
+      body: 'Something new is waiting for you.',
+      tag: 'chatnet',
+      icon: ALERT_ICON,
+      badge: ALERT_BADGE,
+    })
     return
   }
 
-  await scope.registration.showNotification(alert.title, {
-    body: alert.body,
-    // Alerts with the same tag replace each other, so a conversation shows one at a time.
-    tag: alert.tag === '' ? undefined : alert.tag,
-    data: { conversationId: alert.conversationId, messageId: alert.messageId },
-    ...LOOK,
-    // A call that is ringing stays on the screen until it is dealt with, as an incoming call does on a phone.
-    ...(alert.type === 'call' ? { requireInteraction: true } : {}),
-  })
+  // The same look as an alert the page raises itself (see lib/alertLook.ts); a call that is ringing stays on the screen until it is dealt with.
+  await scope.registration.showNotification(
+    alert.title,
+    alertOptions(
+      { body: alert.body, tag: alert.tag, ringing: alert.type === 'call', conversationId: alert.conversationId, messageId: alert.messageId },
+      Date.now(),
+    ),
+  )
 }
 
 export async function openConversation(scope: PushScope, data: unknown): Promise<void> {
