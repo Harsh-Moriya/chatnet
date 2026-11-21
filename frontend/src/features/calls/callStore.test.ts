@@ -128,6 +128,18 @@ describe('what the person controls and is told', () => {
     expect(store().minimised).toBe(false)
   })
 
+  it.each(['starting', 'outgoing', 'connecting', 'active'] as const)('can be minimised while %s', (phase) => {
+    store().begin(people)
+    if (phase !== 'starting') store().calling('call-1', 'x')
+    if (phase === 'connecting' || phase === 'active') store().answered(1)
+    if (phase === 'active') store().connected()
+    expect(store().phase).toBe(phase)
+
+    store().setMinimised(true)
+
+    expect(store().minimised).toBe(true)
+  })
+
   it('cannot minimise a call that is ringing, has not begun or has ended', () => {
     store().setMinimised(true)
     expect(store().minimised).toBe(false)
