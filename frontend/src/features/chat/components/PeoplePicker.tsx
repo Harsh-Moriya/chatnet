@@ -5,6 +5,7 @@ import { Input } from '../../../components/ui/Input'
 import { cn } from '../../../lib/cn'
 import { getApiError } from '../../../lib/errors'
 import { useDebouncedValue } from '../../../lib/useDebouncedValue'
+import { SearchRow } from '../../search/components/SearchBox'
 import { useUserSearch } from '../api/useUserSearch'
 import { newPeopleFirst } from '../peopleOrder'
 import type { UserSummary } from '../types'
@@ -22,28 +23,35 @@ interface PeoplePickerProps {
   contactIds?: ReadonlySet<string>
   // What is in the box when it first appears, for a search carried over from somewhere else.
   initialTerm?: string
+  // Set in a sidebar panel: the box sits in the row every panel has at its top, and the list is inset to match. Left out (a dialog), the
+  // box and the list are plain.
+  inPanel?: boolean
 }
 
 // A search box over the people of the app and the list of what it finds. Searching, and what is shown while it runs, is
 // the same wherever people are chosen: starting a chat, making a group, adding to one.
-export function PeoplePicker({ onPick, selectedIds, excludeIds, disabled = false, contactIds, initialTerm = '' }: PeoplePickerProps) {
+export function PeoplePicker({ onPick, selectedIds, excludeIds, disabled = false, contactIds, initialTerm = '', inPanel = false }: PeoplePickerProps) {
   const [term, setTerm] = useState(initialTerm)
   const search = useUserSearch(useDebouncedValue(term, 250))
 
   const enoughToSearch = term.trim().length >= 2
   const results = newPeopleFirst((search.data ?? []).filter((person) => !excludeIds?.has(person.id)), contactIds ?? NO_ONE)
 
+  const box = (
+    <Input
+      aria-label="Search people"
+      placeholder="Search by name or username"
+      leftIcon={<Search className="h-4 w-4" />}
+      value={term}
+      onChange={(event) => setTerm(event.target.value)}
+    />
+  )
+
   return (
     <>
-      <Input
-        aria-label="Search people"
-        placeholder="Search by name or username"
-        leftIcon={<Search className="h-4 w-4" />}
-        value={term}
-        onChange={(event) => setTerm(event.target.value)}
-      />
+      {inPanel ? <SearchRow>{box}</SearchRow> : box}
 
-      <div className="min-h-24 flex-1 overflow-y-auto">
+      <div className={cn('min-h-24 flex-1 overflow-y-auto', inPanel && 'px-4')}>
         {!enoughToSearch && <p className="py-4 text-center text-sm text-fg-muted">Type at least 2 letters.</p>}
 
         {enoughToSearch && search.isError && (

@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { Search, X } from 'lucide-react'
 import { Input } from '../../../components/ui/Input'
 import { MAX_TERM_LENGTH } from '../searchRules'
@@ -9,10 +10,19 @@ interface SearchBoxProps {
   label?: string
 }
 
+// The row that holds the search box at the top of every sidebar panel, so the box is in the same place in each of them.
+export function SearchRow({ children }: { children: ReactNode }) {
+  return (
+    <div role="search" className="shrink-0 border-b border-line px-4 py-3">
+      {children}
+    </div>
+  )
+}
+
 // The box at the top of a sidebar panel. Escape, or the cross, empties it.
 export function SearchBox({ value, onChange, label = 'Search messages' }: SearchBoxProps) {
   return (
-    <div role="search" className="shrink-0 border-b border-line px-4 py-3">
+    <SearchRow>
       <Input
         aria-label={label}
         placeholder={label}
@@ -38,6 +48,6 @@ export function SearchBox({ value, onChange, label = 'Search messages' }: Search
           if (event.key === 'Escape') onChange('')
         }}
       />
-    </div>
+    </SearchRow>
   )
 }

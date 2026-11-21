@@ -59,14 +59,7 @@ export function NewConversationPanel({ onDone, seed }: NewConversationPanelProps
   const nameOf = (userId: string) => members.find((p) => p.id === userId)?.displayName ?? 'Someone'
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3 p-4">
-      {failure && (
-        <div role="alert" className="flex items-start gap-2 rounded-lg border border-danger-line bg-danger-soft px-3 py-2 text-sm text-danger-fg">
-          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-          <span>{describeKeyFailure(failure, nameOf) ?? getApiError(failure)}</span>
-        </div>
-      )}
-
+    <div className="flex min-h-0 flex-1 flex-col">
       <PeoplePicker
         key={`${round}:${seed?.round ?? 0}`}
         initialTerm={seed?.term ?? ''}
@@ -74,44 +67,56 @@ export function NewConversationPanel({ onDone, seed }: NewConversationPanelProps
         selectedIds={selectedIds}
         contactIds={contactIdsOf(conversations)}
         disabled={busy}
+        inPanel
       />
 
-      {members.length > 0 && (
-        <div className="flex shrink-0 flex-col gap-3 border-t border-line pt-3">
-          <ul className="flex flex-wrap gap-2" aria-label="Selected people">
-            {members.map((member) => (
-              <li key={member.id} className="flex items-center gap-1 rounded-full bg-accent-soft py-1 pl-3 pr-1 text-xs text-accent-fg">
-                {member.displayName}
-                <button
-                  type="button"
-                  aria-label={`Remove ${member.displayName}`}
-                  className="rounded-full p-1 hover:bg-accent-soft-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                  onClick={() => toggle(member)}
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              </li>
-            ))}
-          </ul>
-
-          {isGroup && (
-            <Input
-              aria-label="Group name"
-              placeholder="Group name"
-              maxLength={100}
-              value={groupName}
-              onChange={(event) => setGroupName(event.target.value)}
-            />
+      {(failure || members.length > 0) && (
+        <div className="flex shrink-0 flex-col gap-3 border-t border-line p-4">
+          {failure && (
+            <div role="alert" className="flex items-start gap-2 rounded-lg border border-danger-line bg-danger-soft px-3 py-2 text-sm text-danger-fg">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>{describeKeyFailure(failure, nameOf) ?? getApiError(failure)}</span>
+            </div>
           )}
 
-          <Button
-            fullWidth
-            isLoading={busy}
-            disabled={isGroup && groupName.trim() === ''}
-            onClick={start}
-          >
-            {isGroup ? `Create group with ${members.length} people` : `Message ${members[0].displayName}`}
-          </Button>
+          {members.length > 0 && (
+            <>
+              <ul className="flex flex-wrap gap-2" aria-label="Selected people">
+                {members.map((member) => (
+                  <li key={member.id} className="flex items-center gap-1 rounded-full bg-accent-soft py-1 pl-3 pr-1 text-xs text-accent-fg">
+                    {member.displayName}
+                    <button
+                      type="button"
+                      aria-label={`Remove ${member.displayName}`}
+                      className="rounded-full p-1 hover:bg-accent-soft-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                      onClick={() => toggle(member)}
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+
+              {isGroup && (
+                <Input
+                  aria-label="Group name"
+                  placeholder="Group name"
+                  maxLength={100}
+                  value={groupName}
+                  onChange={(event) => setGroupName(event.target.value)}
+                />
+              )}
+
+              <Button
+                fullWidth
+                isLoading={busy}
+                disabled={isGroup && groupName.trim() === ''}
+                onClick={start}
+              >
+                {isGroup ? `Create group with ${members.length} people` : `Message ${members[0].displayName}`}
+              </Button>
+            </>
+          )}
         </div>
       )}
     </div>
