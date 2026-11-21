@@ -1,8 +1,10 @@
+<p align="center"><img src="frontend/public/icons/icon.svg" alt="The ChatNET logo: a speech bubble drawn as a C" width="96" height="96"></p>
+
 # ChatNET
 
 [![CI](https://github.com/Harsh-Moriya/chatnet/actions/workflows/ci.yml/badge.svg)](https://github.com/Harsh-Moriya/chatnet/actions/workflows/ci.yml)
 
-A real-time, multi-user chat application with direct (1:1) and group conversations. The backend is **ASP.NET Core (.NET 10)** with **SignalR**, the frontend is **React 19 and TypeScript**, data is in **PostgreSQL**, and **Redis** carries live state between server instances. Messages and files are **end-to-end encrypted**: they are encrypted in the browser, and the server stores and relays ciphertext it cannot read.
+A real-time, multi-user chat application with direct (1:1) and group conversations. The backend is **ASP.NET Core (.NET 10)** with **SignalR**, the frontend is **React 19 and TypeScript**, data is in **PostgreSQL**, and **Redis** carries live state between server instances. Messages and files are **end-to-end encrypted**: they are encrypted in the browser, and the server stores and relays ciphertext it cannot read. Calls are encrypted between the two browsers too, and each side signs its call with its identity key, so a relay cannot put itself in the middle.
 
 ## Features
 
